@@ -1,0 +1,332 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-IMG-
+| Next Error Code: 14    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Image_Update_Dimensions" PARAMETERS = "image var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.feature_count"		VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_image', l.modules ) }">
+
+	<MvIF EXPR = "{ l.feature_count }">
+		<MvASSIGN NAME = "l.image_loaded"	VALUE = "{ Image_Load_ID( l.image:id, l.original_image ) }">		
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Images
+					      SET
+							width	= ?,
+							height	= ?
+						  WHERE
+							id		= ?' }"
+			 FIELDS	= "l.image:width, l.image:height, 
+			 		   l.image:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.feature_count AND l.image_loaded }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.feature_count }">
+			<MvIF EXPR = "{ l.module:api_ver GE 10.00 }">
+				<MvASSIGN NAME = "l.null"	VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Image_Update( l.module, l.original_image, l.image ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Update_PathAndHash" PARAMETERS = "image var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.feature_count"		VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_image', l.modules ) }">
+
+	<MvIF EXPR = "{ l.feature_count }">
+		<MvASSIGN NAME = "l.image_loaded"	VALUE = "{ Image_Load_ID( l.image:id, l.original_image ) }">		
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Images
+					      SET
+							image		= ?,
+							image_md5	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.image:image, l.image:image_md5, 
+			 		   l.image:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.feature_count AND l.image_loaded }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.feature_count }">
+			<MvIF EXPR = "{ l.module:api_ver GE 10.00 }">
+				<MvASSIGN NAME = "l.null"	VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Image_Update( l.module, l.original_image, l.image ) }">	
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Delete" PARAMETERS = "image_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.feature_count"		VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_image', l.modules ) }">
+
+	<MvIF EXPR = "{ l.feature_count }">
+		<MvASSIGN NAME = "l.image_loaded"	VALUE = "{ Image_Load_ID( l.image_id, l.image ) }">		
+	</MvIF>
+
+	<MvIF EXPR = "{ l.feature_count AND l.image_loaded }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.feature_count }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Image_Delete( l.module, l.image ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ProductImage_Delete_All_Image( l.image_id )													OR
+					NOT GeneratedImage_Delete_All_Image( l.image_id )												OR
+                    NOT [ g.Module_Feature_TUI_DB ].ManagedPropertyImageReference_Delete_All_Image( l.image_id )	OR
+					NOT Image_Delete_LowLevel( l.image_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_FindOrInsert_ExistingFile" PARAMETERS = "image_filepath, image var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( ':' IN l.image_filepath ) OR
+					( ( '/' IN l.image_filepath ) EQ 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00001', 'Image filepaths must be local and relative to the Base Directory for Graphics' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions( g.imageroot $ l.image_filepath, 'script', l.width, l.height ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Image_FindOrInsert_ExistingFile_With_ImageDimensions( l.image_filepath, l.width, l.height, l.image ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_FindOrInsert_ExistingFile_With_ImageDimensions" PARAMETERS = "image_filepath, width, height, image var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( ':' IN l.image_filepath ) OR
+					( ( '/' IN l.image_filepath ) EQ 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00006', 'Image filepaths must be local and relative to the Base Directory for Graphics' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Image_Load_File( l.image_filepath, l.image ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ schmod( g.imageroot $ l.image_filepath, '0644' ) }">
+	<MvASSIGN NAME = "l.image:width"	VALUE = "{ l.width }">
+	<MvASSIGN NAME = "l.image:height"	VALUE = "{ l.height }">
+	<MvASSIGN NAME = "l.image:image"	VALUE = "{ l.image_filepath }">
+
+	<MvIF EXPR = "{ NOT Image_Insert_LowLevel( l.image ) }">
+		<MvIF EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = "{ Image_Load_File( l.image_filepath, l.image ) }">
+		<MvELSE>																								<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_image', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Image_Insert( l.module, l.image ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_FindOrInsert_RenameFile_NoDuplicates" PARAMETERS = "filepath var, sourcefile_path, sourcefile_location, sourcefile_size, sourcefile_md5, image var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.extension"			VALUE = "{ [ g.Library_Filename_Utilities ].Extension( l.filepath ) }">
+	<MvASSIGN NAME = "l.filepath_noext"		VALUE = "{ substring( l.filepath, 1, len( l.filepath ) - len( l.extension ) ) }">
+	<MvASSIGN NAME = "l.test_file_data"		VALUE = "{ 'Image_FindOrInsert_RenameFile_NoDuplicates;' $ s.process_id $ ';' $ l.sourcefile_path $ ';' $ l.sourcefile_md5 }">
+
+	<MvIF EXPR = "{ NOT StoreKey_Load( 'Images', l.storekey ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.imagedir"			VALUE = "{ 'graphics/' $ padl( g.Store:id, 8, '0' ) $ '/' $ ( floor( ( l.storekey:maxvalue + 1 ) / 2500 ) + 1 ) $ '/' }">
+
+	<MvIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_Type_From_Header( l.sourcefile_path, l.sourcefile_location, l.type ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions_From_Header( l.sourcefile_path, l.sourcefile_location, l.type, l.width, l.height ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions_From_GD( l.sourcefile_path, l.sourcefile_location, l.type, l.width, l.height ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_Type_From_Extension( l.filepath, l.type ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions_From_GD( l.sourcefile_path, l.sourcefile_location, l.type, l.width, l.height ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00007', 'Failed to determine image type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].EnsurePathExists( 'script', g.imageroot $ l.imagedir ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOR INDEX = "l.attempt" COUNT = "{ 100 }">
+		<MvIF EXPR = "{ l.attempt GT 1 }">
+			<MvASSIGN NAME = "l.filepath"	VALUE = "{ l.filepath_noext $ '_' $ l.attempt $ l.extension }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.destfile_path"	VALUE = "{ g.imageroot $ l.imagedir $ l.filepath }">
+
+		<MvCOMMENT>
+		|
+		| file_create atomically either creates the file or tells us it already exists.  We write
+		| fairly arbitrary data to the file--its contents will be overwritten below.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.file_exists"	VALUE = "{ file_create( l.destfile_path, 'script', l.test_file_data ) LT 0 }">
+		<MvIF EXPR = "{ l.file_exists }">
+			<MvCOMMENT>
+			|
+			| If the size or MD5 sum of an existing file does not match the new file,
+			| we must rename the new file.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ ssize( l.destfile_path ) NE l.sourcefile_size }">						<MvFORCONTINUE>	</MvIF>
+			<MvIF EXPR = "{ NOT crypto_md5_file( l.destfile_path, 'script', l.existing_md5 ) }">	<MvFORCONTINUE>	</MvIF>
+			<MvIF EXPR = "{ l.existing_md5 NE l.sourcefile_md5 }">									<MvFORCONTINUE>	</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| If we reach this point, we are ready to rename the file (if it does not already exists) and create
+		| an Image record.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.file_exists }">
+			<MvIF EXPR = "{ l.sourcefile_location EQ 'data' }">			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.sourcefile_path ) }">
+			<MvELSEIF EXPR = "{ l.sourcefile_location EQ 'script' }">	<MvASSIGN NAME = "l.null"	VALUE = "{ sdelete( l.sourcefile_path ) }">
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00002', 'Unsupported location "' $ l.sourcefile_location $ '"' ) }">
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| To prevent needlessly using up Image IDs, we make a single attempt to locate
+			| an existing Image record.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ Image_Load_File( l.imagedir $ l.filepath, l.image ) }">				<MvFUNCTIONRETURN VALUE = 1>
+			<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">											<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ l.sourcefile_location EQ 'data' }">			<MvASSIGN NAME = "l.result"	VALUE = "{ fsrename( l.sourcefile_path, l.destfile_path ) }">
+			<MvELSEIF EXPR = "{ l.sourcefile_location EQ 'script' }">	<MvASSIGN NAME = "l.result"	VALUE = "{ srename( l.sourcefile_path, l.destfile_path ) }">
+			<MvELSE>	
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00003', 'Unsupported location "' $ l.sourcefile_location $ '"' ) }">
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| If the rename failed we need to delete the temporary file we created above
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT l.result }">
+				<MvASSIGN NAME = "l.file_last_error"	VALUE = "{ file_last_error() }">
+				<MvASSIGN NAME = "l.null"				VALUE = "{ sdelete( l.destfile_path ) }">
+
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00004', 'Unable to rename temporary image file "' $ l.sourcefile_path $ '" to "' $ l.destfile_path $ '": ' $ l.file_last_error ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Image_FindOrInsert_ExistingFile will handle preventing duplicate sNN_Images records for us
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT Image_FindOrInsert_ExistingFile_With_ImageDimensions( l.imagedir $ l.filepath, l.width, l.height, l.image ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvFOR>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00005', 'Unable to generate a unique image filename after 100 attempts' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_FindOrInsert_CreateFile" PARAMETERS = "filepath var, file_content var, image var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.directory"			VALUE = "{ [ g.Library_Filename_Utilities ].BasePath( l.filepath ) }">
+	<MvASSIGN NAME = "l.extension"			VALUE = "{ [ g.Library_Filename_Utilities ].Extension( l.filepath ) }">
+	<MvASSIGN NAME = "l.filepath_noext"		VALUE = "{ substring( l.filepath, 1, len( l.filepath ) - len( l.extension ) ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].EnsurePathExists( 'script', g.imageroot $ l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.destfile_path" VALUE = "{ g.imageroot $ l.filepath }">
+
+	<MvCOMMENT>
+	|
+	| file_create atomically either creates the file or tells us it already exists.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.file_exists" VALUE = "{ file_create( l.destfile_path, 'script', l.file_content ) LT 0 }">
+
+	<MvIF EXPR = "{ l.file_exists }">
+		<MvIF EXPR = "{ NOT crypto_md5_file( l.destfile_path, 'script', l.existing_md5 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00011', 'Unable to calculate MD5 of existing file' ) }">
+		<MvELSEIF EXPR = "{ l.existing_md5 NE crypto_md5( l.file_content ) }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00012', 'File already exists' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Image_Load_File( l.filepath, l.image ) }">	<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">					<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_Type_From_Header( l.destfile_path, 'script', l.type ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions_From_Header( l.destfile_path, 'script', l.type, l.width, l.height ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions_From_GD( l.destfile_path, 'script', l.type, l.width, l.height ) }">
+				<MvIF EXPR = "{ NOT l.file_exists }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( l.destfile_path ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_Type_From_Extension( l.destfile_path, l.type ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Dimensions_From_GD( l.destfile_path, 'script', l.type, l.width, l.height ) }">
+			<MvIF EXPR = "{ NOT l.file_exists }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( l.destfile_path ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT l.file_exists }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( l.destfile_path ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-IMG-00013', 'Failed to determine image type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Image_FindOrInsert_ExistingFile_With_ImageDimensions( l.filepath, l.width, l.height, l.image ) }">
+		<MvIF EXPR = "{ NOT l.file_exists }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( l.destfile_path ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

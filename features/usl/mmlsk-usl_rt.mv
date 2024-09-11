@@ -1,0 +1,324 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-USL-RNT-
+| Next Error Code: 3    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Action_AddUpsoldProductToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Checkout_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'checkout_invalid_session' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_Code( g.Product_Code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ miva_array_collapse( g.Product_Attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Validate_Attributes_DetermineVariant( l.product, g.Attributes NE 0, g.Product_Attributes, l.attribute_count, l.basketoptions, l.basketoption_count, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'upsell_attributes' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'upsell_invalid_variant' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.product, l.variant_id, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_USL_DB ].Upsell_Load_Product( l.product:id, l.upsell ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Delete_Upsold( g.Basket:basket_id )	OR
+					NOT [ g.Module_Library_DB ].Basket_Update_SubCount( g.Basket:basket_id )			OR
+					NOT [ g.Module_Library_DB ].Basket_Load_ID( g.Basket:basket_id, g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Basket_Quantity( g.Basket:basket_id, l.product:id ) EQ 0 }">
+		<MvASSIGN NAME = "l.basketitem:basket_id"		VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketitem:group_id"		VALUE = "">
+		<MvASSIGN NAME = "l.basketitem:product_id"		VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.basketitem:variant_id"		VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.basketitem:code"			VALUE = "{ l.product:code }">
+		<MvASSIGN NAME = "l.basketitem:name"			VALUE = "{ l.product:name }">
+		<MvASSIGN NAME = "l.basketitem:retail"			VALUE = "{ l.product:price }">
+		<MvASSIGN NAME = "l.basketitem:base_price"		VALUE = "{ Upsell_Price( l.product, l.upsell ) }">
+		<MvASSIGN NAME = "l.basketitem:price"			VALUE = "{ l.basketitem:base_price }">
+		<MvASSIGN NAME = "l.basketitem:weight"			VALUE = "{ l.product:weight }">
+		<MvASSIGN NAME = "l.basketitem:taxable"			VALUE = "{ l.product:taxable }">
+		<MvASSIGN NAME = "l.basketitem:upsold"			VALUE = 1>
+		<MvASSIGN NAME = "l.basketitem:quantity"		VALUE = 1>
+
+		<MvASSIGN NAME = "l.part_count"					VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.parts ) }">
+
+		<MvIF EXPR = "{ l.variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.product:sku }">
+		<MvELSEIF EXPR = "{ l.part_count NE 1 }">					<MvASSIGN NAME = "l.basketitem:sku" VALUE = "">
+		<MvELSE>													<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Insert( l.product, l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ l.basketoption_count }">
+			<MvASSIGN NAME = "l.basketoption:basket_id"	VALUE = "{ g.Basket:basket_id }">
+			<MvASSIGN NAME = "l.basketoption:line_id"	VALUE = "{ l.basketitem:line_id }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketOption_Insert( l.basketoption ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddMultipleUpsoldProductsToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Checkout_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'checkout_invalid_session' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate total selected quantity: This is done separately to make the process flow a little easier for the user,
+	| otherwise (with the default templates), they would lose their attribute selection if they selected too many items.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_USL_DB ].UpsellOptions_Load_Cached( l.upselloptions ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.upselloptions:prod_sell NE 0 }">
+		<MvIF EXPR = "{ miva_array_filter_ref( g.Upsell_Selected, 1, l.selected, 'l.selected NE 0', l.null ) GT l.upselloptions:prod_sell }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'upsell_toomanyselected' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate selected attributes and variants
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.selected_products"			VALUE = "">
+	<MvASSIGN NAME = "l.selected_product_count"		VALUE = 0>
+
+	<MvFOREACH INDEX = "l.pos" ITERATOR = "l.input_product" ARRAY = "g.Product">
+		<MvIF EXPR = "{ NOT g.Upsell_Selected[ l.pos ] }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.selected_product"		VALUE = "">
+		<MvASSIGN NAME = "l.parts"					VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_Code( l.input_product:code, l.selected_product:product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Basket_Quantity( g.Basket:basket_id, l.selected_product:product:id ) GT 0 }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_USL_DB ].Upsell_Load_Product( l.selected_product:product:id, l.selected_product:upsell ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.attribute_count"		VALUE = "{ miva_array_collapse( l.input_product:Attributes ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Validate_Attributes_DetermineVariant( l.selected_product:product, g.Attributes NE 0, l.input_product:Attributes, l.attribute_count,
+																								 l.selected_product:basketoptions, l.selected_product:basketoption_count, l.selected_product:variant_id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'upsell_attributes_multiple' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.selected_product:variant_id EQ -1 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'upsell_invalid_variant_multiple' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.part_count"				VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.selected_product:product:id, l.selected_product:variant_id, l.parts ) }">
+
+		<MvIF EXPR = "{ l.selected_product:variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.selected_product:sku" VALUE = "{ l.selected_product:product:sku }">
+		<MvELSEIF EXPR = "{ l.part_count NE 1 }">										<MvASSIGN NAME = "l.selected_product:sku" VALUE = "">
+		<MvELSE>																		<MvASSIGN NAME = "l.selected_product:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.selected_product_count"	VALUE = "{ miva_array_insert_var( l.selected_products, l.selected_product, -1 ) }">
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Check inventory and add any in-stock products to the basket
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Delete_Upsold( g.Basket:basket_id )	OR
+					NOT [ g.Module_Library_DB ].Basket_Update_SubCount( g.Basket:basket_id )			OR
+					NOT [ g.Module_Library_DB ].Basket_Load_ID( g.Basket:basket_id, g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.selected_product" ARRAY = "l.selected_products" COUNT = "{ l.selected_product_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.selected_product:product, l.selected_product:variant_id, 1 ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:basket_id"		VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketitem:group_id"		VALUE = "">
+		<MvASSIGN NAME = "l.basketitem:product_id"		VALUE = "{ l.selected_product:product:id }">
+		<MvASSIGN NAME = "l.basketitem:variant_id"		VALUE = "{ l.selected_product:variant_id }">
+		<MvASSIGN NAME = "l.basketitem:code"			VALUE = "{ l.selected_product:product:code }">
+		<MvASSIGN NAME = "l.basketitem:name"			VALUE = "{ l.selected_product:product:name }">
+		<MvASSIGN NAME = "l.basketitem:sku"				VALUE = "{ l.selected_product:sku }">
+		<MvASSIGN NAME = "l.basketitem:retail"			VALUE = "{ l.selected_product:product:price }">
+		<MvASSIGN NAME = "l.basketitem:base_price"		VALUE = "{ Upsell_Price( l.selected_product:product, l.selected_product:upsell ) }">
+		<MvASSIGN NAME = "l.basketitem:price"			VALUE = "{ l.basketitem:base_price }">
+		<MvASSIGN NAME = "l.basketitem:weight"			VALUE = "{ l.selected_product:product:weight }">
+		<MvASSIGN NAME = "l.basketitem:taxable"			VALUE = "{ l.selected_product:product:taxable }">
+		<MvASSIGN NAME = "l.basketitem:upsold"			VALUE = 1>
+		<MvASSIGN NAME = "l.basketitem:quantity"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Insert( l.selected_product:product, l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.selected_product:basketoptions" COUNT = "{ l.selected_product:basketoption_count }">
+			<MvASSIGN NAME = "l.basketoption:basket_id"	VALUE = "{ g.Basket:basket_id }">
+			<MvASSIGN NAME = "l.basketoption:line_id"	VALUE = "{ l.basketitem:line_id }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketOption_Insert( l.basketoption ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Upsell_Price" PARAMETERS = "product var, upsell var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.upsell:pmode EQ 'C' }">		<MvFUNCTIONRETURN VALUE = "{ l.product:cost }">
+	<MvELSEIF EXPR = "{ l.upsell:pmode EQ 'A' }">	<MvFUNCTIONRETURN VALUE = "{ l.upsell:price }">
+	<MvELSEIF EXPR = "{ l.upsell:pmode EQ 'p' }">	<MvFUNCTIONRETURN VALUE = "{ l.product:price * ( l.upsell:price / 100 ) }">
+	<MvELSEIF EXPR = "{ l.upsell:pmode EQ 'c' }">	<MvFUNCTIONRETURN VALUE = "{ l.product:cost * ( l.upsell:price / 100 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.product:price }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_UpsoldProductList_Load_Basket_Eligible" PARAMETERS = "basket var, upsold_products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.upsold_products"		VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Basket_Quantity_Upsold( l.basket:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-USL-RNT-00002', 0 ) }">
+	<MvELSEIF EXPR = "{ [ g.Module_Library_DB ].BasketInfo_Load( l.basket:basket_id, 0, 'upsold_products', l.basketinfo ) }">
+		<MvASSIGN NAME = "l.upsold_products"	VALUE = "{ l.basketinfo:info }">
+		<MvFUNCTIONRETURN VALUE = "{ miva_array_elements( l.upsold_products ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_USL_DB ].UpsellOptions_Load_Cached( l.upselloptions ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_subtotal"		VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( l.basket:basket_id ) }">
+	<MvASSIGN NAME = "l.upsold_product_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.upsell_product" ARRAY = "l.upsell_products" COUNT = "{ [ g.Feature_Filename_USL_DB ].Runtime_UpsoldProductList_Load( l.upsell_products ) }">
+		<MvASSIGN NAME = "l.upsell_product:upsell_price"	VALUE = "{ Upsell_Price( l.upsell_product, l.upsell_product:upsell ) }">
+
+		<MvCOMMENT>
+		|
+		| Process basket total requirements before executing other database queries
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ ( l.upsell_product:upsell:dmode EQ 'T' ) AND ( l.basket_subtotal LT l.upsell_product:upsell:req_amount ) }">													<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.upsell_product:upsell:dmode EQ 'P' ) AND ( ( l.basket_subtotal * ( l.upsell_product:upsell:req_amount / 100 ) ) LE l.upsell_product:upsell_price )  }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Products that are already in the basket are not eligible
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket_Product( l.basket:basket_id, l.upsell_product:id, l.null ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Check for at least one required product in the basket, if applicable
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.upsell_product:upsell:rprdcount }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_USL_DB ].UpsellXProduct_Load_Basket( l.basket:basket_id, l.upsell_product:id, l.null ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFOREACHCONTINUE>
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| At this point the product is eligible
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.upsold_product_count"			VALUE = "{ miva_array_insert_var( l.upsold_products, l.upsell_product, -1 ) }">
+
+		<MvIF EXPR = "{ l.upselloptions:prod_shown AND ( l.upsold_product_count EQ l.upselloptions:prod_shown ) }">
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Increment the score of presented products
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.upsold_product" ARRAY = "l.upsold_products" COUNT = "{ l.upsold_product_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_USL_DB ].Upsell_Increment_Score( l.upsold_product:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0 >
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Cache the results in sNN_BasketInfo to prevent changes if this list needs to be reloaded
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.basketinfo:basket_id"	VALUE = "{ l.basket:basket_id }">
+	<MvASSIGN NAME = "l.basketinfo:module_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.basketinfo:type"		VALUE = "upsold_products">
+	<MvASSIGN NAME = "l.basketinfo:clronmod"	VALUE = 1>
+	<MvASSIGN NAME = "l.basketinfo:orderinfo"	VALUE = 0>
+	<MvASSIGN NAME = "l.basketinfo:info"		VALUE = "{ l.upsold_products }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketInfo_Insert( l.basketinfo ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-USL-RNT-00001', l.upsold_product_count ) }">
+</MvFUNCTION>

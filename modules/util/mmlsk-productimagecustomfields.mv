@@ -1,0 +1,118 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-UTL-PICF-
+| Next Error Code: 9    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-productimagecustomfields">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Product Image Custom Fields">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to enable custom fields for importing images in bulk.  For example, you could create Image Types \"Front\" and \"Back\" to distinguish front and back images of a product.  These custom fields will appear as columns in your product spreadsheet template from Utilities > Import Data.  See the Miva Merchant PR8 Reference guide for details on the Additional Images Import feature.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "util, fields_prod">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Fields" PARAMETERS = "module var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.imagetype_count"	VALUE = "{ [ g.Module_Library_DB ].ImageTypeList_Load_All( l.imagetypes ) }">
+
+	<MvFOREACH INDEX = "l.field_pos" ITERATOR = "l.imagetype" ARRAY = "l.imagetypes" COUNT = "{ l.imagetype_count }">
+		<MvASSIGN NAME = "l.fields" INDEX = "{ l.field_pos }" MEMBER = "code"	VALUE = "{ l.imagetype:code }">
+		<MvASSIGN NAME = "l.fields" INDEX = "{ l.field_pos }" MEMBER = "name"	VALUE = "{ 'Image Type: ' $ l.imagetype:descrip }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.imagetype_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Field_Name" PARAMETERS = "module var, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].ImageType_Load_Code( l.code, l.imagetype ) }">
+		<MvFUNCTIONRETURN VALUE = "{ 'Image Type: ' $ l.imagetype:descrip }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Field_Value" PARAMETERS = "module var, product_id, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session:cache:productimagecustomfields:productimage:product_id NE l.product_id }">
+		<MvASSIGN NAME = "g.Session:cache:productimagecustomfields:productimage"			VALUE = "">
+		<MvASSIGN NAME = "g.Session:cache:productimagecustomfields:productimage:product_id"	VALUE = "{ l.product_id }">
+		
+		<MvFOREACH ITERATOR = "l.imagedata" ARRAY = "g.Session:cache:productimagecustomfields:productimage:imagedata" COUNT = "{ [ g.Module_Library_DB ].ProductImageDataList_Load_Product( l.product_id, g.Session:cache:productimagecustomfields:productimage:imagedata ) }">
+			<MvIF EXPR = "{ NOT ISNULL l.imagedata:imagetype:code }">
+				<MvASSIGNARRAY NAME = "g.Session:cache:productimagecustomfields:productimage:by_imagetype" VALUE = "{ l.imagedata:image:image }">
+					<MvMEMBER NAME = "{ l.imagedata:imagetype:code }">
+				</MvASSIGNARRAY>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.image" VARIABLE = "g.Session:cache:productimagecustomfields:productimage">
+		<MvMEMBER NAME = "by_imagetype">
+		<MvMEMBER NAME = "{ l.code }">
+	</MvREFERENCEARRAY>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.image }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Set_Field" PARAMETERS = "module var, product_id, code, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Session:cache:productimagecustomfields:imagetype:loaded }">
+		<MvASSIGN NAME = "g.Session:cache:productimagecustomfields:imagetype:loaded"	VALUE = 1>
+
+		<MvFOREACH ITERATOR = "l.imagetype" ARRAY = "g.Session:cache:productimagecustomfields:imagetype:imagetypes" COUNT = "{ [ g.Module_Library_DB ].ImageTypeList_Load_All( g.Session:cache:productimagecustomfields:imagetype:imagetypes ) }">
+			<MvASSIGN NAME = "g.Session:cache:productimagecustomfields:imagetype:id_lookup" MEMBER = "{ l.imagetype:code }" VALUE = "{ l.imagetype:id }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.type_id" VARIABLE = "g.Session:cache:productimagecustomfields:imagetype">
+		<MvMEMBER NAME = "id_lookup">
+		<MvMEMBER NAME = "{ l.code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.type_id EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.value"	VALUE = "{ trim( l.value ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.value }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ProductImage_Replace_Type_ExistingFile( l.product_id, l.value, l.type_id, l.productimage ) }">
+	<MvELSEIF EXPR = "{ [ g.Module_Library_DB ].ProductImage_Load_Type( l.product_id, l.type_id, l.productimage ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ProductImage_Delete( l.productimage ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation"  PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

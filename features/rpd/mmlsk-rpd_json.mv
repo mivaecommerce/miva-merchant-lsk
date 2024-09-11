@@ -1,0 +1,362 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-RPD-JSN-
+| Next Error Code: 16    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_RelatedProduct_Load" PARAMETERS = "relatedproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'RelatedProduct_ID', l.relatedproduct_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( l.relatedproduct_id, l.relatedproduct ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-JSN-00008', 'Related product not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_RelatedProduct', l.relatedproduct_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.relatedproduct_code, l.relatedproduct ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-JSN-00009', 'Related product not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'RelatedProduct_Code', l.relatedproduct_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.relatedproduct_code, l.relatedproduct ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-JSN-00010', 'Related product not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-JSN-00011', 'Unable to load related product: One of RelatedProduct_ID, Edit_RelatedProduct, or RelatedProduct_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_RelatedProductIndex_Load_ID" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "">
+	<MvASSIGN NAME = "l.record"		VALUE = "">
+	<MvASSIGN NAME = "l.filter"		VALUE = "">
+	<MvASSIGN NAME = "l.sort"		VALUE = "">
+	<MvASSIGN NAME = "l.assigned"	VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.master_product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer( 'R', 'RelatedProduct_ID', l.relatedproduct_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',		l.sort )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.assigned AND NOT l.unassigned }">	<MvASSIGN NAME = "l.default_sort" VALUE = "relp.disp_order">
+	<MvELSE>											<MvASSIGN NAME = "l.default_sort" VALUE = "prod.disp_order">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( l.relatedproduct_id, l.record:prod ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPD-JSN-00005', 'Product ' $ l.relatedproduct_id $ ' not found' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_BaseProductIndex_Load_ID( l.filter, l.sort, l.default_sort, l.query, l.record ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Module_Feature_RPD_DB ].RelatedProduct_Load_Product( l.master_product:id, l.record:prod:id, l.record:relp ) }">
+
+	<MvIF EXPR = "{ l.assigned AND l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'RelatedProducts', 'relp', 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.master_product:id ) ) }">
+	<MvELSEIF EXPR = "{ l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'RelatedProducts', 'relp', 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.master_product:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'relp.relprod_id IS NULL', '' ) }">
+	<MvELSEIF EXPR = "{ l.assigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'RelatedProducts', 'relp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.master_product:id ) ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+		{
+			"index": -1
+		}
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id <> ?', [ g.Module_Library_DB ].SQL_Query_Field( l.master_product:id ) ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_SQL_Query_Index_With_CustomFields( l.query, l.record, l.index, l.record:prod:id, g.Module_JSON, 'JSON_Product_CustomFields_Query_Index' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"index":	<MvEVAL EXPR = "{ int( l.index ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_RelatedProductList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.offset"			VALUE = 0>
+	<MvASSIGN NAME = "l.count"			VALUE = 0>
+	<MvASSIGN NAME = "l.assigned"		VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"		VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+	<MvASSIGN NAME = "l.count_query"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',		l.sort )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',		l.offset )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',		l.count )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.assigned AND NOT l.unassigned }">	<MvASSIGN NAME = "l.default_sort" VALUE = "relp.disp_order">
+	<MvELSE>											<MvASSIGN NAME = "l.default_sort" VALUE = "prod.disp_order">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Load_Query( l.filter, l.sort, l.default_sort, l.search_query, l.count_query, l.ondemandcolumns ) }">
+	
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'relp.relprod_id AS assigned' ) }">
+
+	<MvIF EXPR = "{ l.assigned AND l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'RelatedProducts', 'relp', 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+	<MvELSEIF EXPR = "{ l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'RelatedProducts', 'relp', 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'relp.relprod_id IS NULL', '' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'prod', g.Store_Table_Prefix $ 'RelatedProducts', 'relp', 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'relp.relprod_id IS NULL', '' ) }">
+	<MvELSEIF EXPR = "{ l.assigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'RelatedProducts', 'relp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.count_query, g.Store_Table_Prefix $ 'RelatedProducts', 'relp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'relp.product_id = ? AND relp.relprod_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'prod.id <> ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query,	'prod.id <> ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.count_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Load_Query_QueryCustomFields( l.search_query, l.filter, l.count, l.total_count ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPD-JSN-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_CustomFields_Initialize( l.filter, l.customfield_state ) }">	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data": 
+		[
+		<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.product_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Product_Read( l.product, l.ondemandcolumns ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.product_count ) }">
+				 "assigned": <MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( Products.d.assigned ) }">,
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_OnDemandColumns( l.product, l.ondemandcolumns ) }">
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_CustomFields_With_Query( l.search_query, l.customfield_state, Products.d.id, 'Products' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_RelatedProduct_Update_Assigned" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.parent_product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_RelatedProduct_Load( l.related_product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Boolean( 'R', 'Assigned', l.assigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.parent_product:id EQ l.related_product:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPD-JSN-00007', 'A product may not be related to itself' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.assigned }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Load_Product( l.parent_product:id, l.related_product:id, l.null ) }">
+			<MvASSIGN NAME = "l.relatedproduct:product_id"	VALUE = "{ l.parent_product:id }">
+			<MvASSIGN NAME = "l.relatedproduct:relprod_id"	VALUE = "{ l.related_product:id }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Insert( l.relatedproduct ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ [ g.Module_Feature_RPD_DB ].RelatedProduct_Load_Product( l.parent_product:id, l.related_product:id, l.null ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Delete( l.parent_product:id, l.related_product:id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_RelatedProductList_Update_Assigned" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.parent_product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer_Array(	'R', 'RelatedProduct_IDs',	l.related_product_ids, l.related_product_id_count ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'R', 'Assigned',			l.assigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.related_product_id" ARRAY = "l.related_product_ids" COUNT = "{ l.related_product_id_count }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( l.related_product_id, l.related_product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.related_product_id, 'MER-RPD-JSN-00012', 'Related Product not found', l.errors ) }">
+		<MvELSEIF EXPR = "{ l.parent_product:id EQ l.related_product:id }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.related_product_id, 'MER-RPD-JSN-00013', 'A product may not be related to itself', l.errors ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ l.assigned }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Load_Product( l.parent_product:id, l.related_product:id, l.null ) }">
+					<MvASSIGN NAME = "l.relatedproduct:product_id"	VALUE = "{ l.parent_product:id }">
+					<MvASSIGN NAME = "l.relatedproduct:relprod_id"	VALUE = "{ l.related_product:id }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Insert( l.relatedproduct ) }">
+						<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.related_product_id, g.Error_Code, g.Error_Message, l.errors ) }">
+					</MvIF>
+
+					<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-RPD-JSN-00014', 'Related Product \'' $ l.related_product:code $ '\' assigned to product \'' $ l.parent_product:code $ '\'' ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ [ g.Module_Feature_RPD_DB ].RelatedProduct_Load_Product( l.parent_product:id, l.related_product:id, l.null ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Delete( l.parent_product:id, l.related_product:id ) }">
+						<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.related_product_id, g.Error_Code, g.Error_Message, l.errors ) }">
+					</MvIF>
+
+					<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-RPD-JSN-00015', 'Related Product \'' $ l.related_product:code $ '\' removed from product \'' $ l.parent_product:code $ '\'' ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_RelatedProductList_DisplayOrder_Update" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.relatedproduct_order" ARRAY = "g.RelatedProduct_Order" INDEX = "l.pos">
+		<MvASSIGN NAME = "l.relatedproduct_order:id"				VALUE = "{ int( l.relatedproduct_order:id ) }">
+		<MvASSIGN NAME = "l.relatedproduct_order:offset"			VALUE = "{ int( l.relatedproduct_order:offset ) }">
+		<MvASSIGN NAME = "l.relatedproduct_order:original_offset"	VALUE = "{ int( l.relatedproduct_order:original_offset ) }">
+
+		<MvASSIGN NAME = "l.relatedproduct_order:relprod_id"		VALUE = "{ l.relatedproduct_order:id }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( l.relatedproduct_order:offset ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'RelatedProduct_Order[' $ l.pos $ ']', g.Validation_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.change_count"								VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.relatedproduct_order" ARRAY = "g.RelatedProduct_Order">
+		<MvASSIGN NAME = "l.change_count"							VALUE = "{ l.change_count + 1 }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }"	VALUE = "{ l.relatedproduct_order }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.change_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Update_Offsets( l.product:id, l.changes ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-RPD-JSN-00004', 'Related Product sort order updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>

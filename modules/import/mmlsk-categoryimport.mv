@@ -1,0 +1,682 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-CAT-
+| Next Error Code: 7    
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| API Functions for Feature "import"
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"        VALUE = "mmlsk-categoryimport">
+	<MvASSIGN NAME = "l.module:name"        VALUE = "Category Import">
+	<MvASSIGN NAME = "l.module:provider"    VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0801">
+	<MvASSIGN NAME = "l.module:api_ver"     VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:features"    VALUE = "import">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:screen"                VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:persistent"            VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:format"                VALUE = "delimited">
+	<MvASSIGN NAME = "l.capabilities:persistent_provision"  VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Build_Column_Info( l.import, l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.fields"    VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed', 'Records Processed:', 0 ) }">
+
+	<MvIF EXPR = "{ l.import:config:categories EQ 'add' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'update' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'addupdate' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'replace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'addreplace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped', 'Records Skipped:', 0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 1 }">
+		<MvCOMMENT> Validate columns when automatically mapped </MvCOMMENT>
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present, l.error_code, l.error_msg ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, l.error_msg ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.list_pos"   VALUE = 0>
+	<MvASSIGN NAME = "l.cf_pos"     VALUE = 0>
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ Build_Column_Info( l.import, l.run_data:columns_all ) }">
+		<MvIF EXPR = "{ miva_variable_value( 'l.run_data:columns_present:' $ l.column:field ) }">
+			<MvASSIGN NAME = "l.column:present"                 VALUE = 1>
+			<MvASSIGN NAME = "l.list_pos"                       VALUE = "{ l.list_pos + 1 }">
+			<MvREFERENCE NAME = "l.run_data:columns_list"       INDEX = "{ l.list_pos }"        VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+			<MvREFERENCE NAME = "l.run_data:columns_present"    MEMBER = "{ l.column:field }"   VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+			<MvIF EXPR = "{ NOT ( ISNULL l.column:module ) }">
+				<MvASSIGN NAME = "l.cf_pos"                     VALUE = "{ l.cf_pos + 1 }">
+				<MvREFERENCE NAME = "l.run_data:custom_fields"  INDEX = "{ l.cf_pos }"          VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.run_data:columns_present:code, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ignore" VALUE = "{ [ g.Module_Library_DB ].Category_Load_Code( l.record:code, l.existing_category ) }">
+
+	<MvIF EXPR = "{ l.import:config:categories EQ 'add' }">
+		<MvIF EXPR = "{ NOT Import_Add_Only( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'update' }">
+		<MvIF EXPR = "{ NOT Import_Update_Only( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'addupdate' }">
+		<MvIF EXPR = "{ NOT Import_Add_And_Update( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'replace' }">
+		<MvIF EXPR = "{ NOT Import_Replace_Only( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:categories EQ 'addreplace' }">
+		<MvIF EXPR = "{ NOT Import_Add_And_Replace( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:id }">
+		<MvASSIGN NAME = "g.Import_Category_Categories"				VALUE = "{ l.import:config:categories }">
+		<MvASSIGN NAME = "g.Import_Category_CustomFields"			VALUE = "{ l.import:config:custom }">
+		<MvASSIGN NAME = "g.Import_Category_CanonicalURIHandling"	VALUE = "{ l.import:config:canonicalurihandling }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Import_Category_Categories"				VALUE = "addupdate">
+		<MvASSIGN NAME = "g.Import_Category_CustomFields"			VALUE = "retain">
+		<MvASSIGN NAME = "g.Import_Category_CanonicalURIHandling"	VALUE = "301">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "categories,custom,canonicalurihandling">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'categories' }">					<MvFUNCTIONRETURN VALUE = "{ g.Import_Category_Categories_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">					<MvFUNCTIONRETURN VALUE = "{ g.Import_Category_CustomFields_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'canonicalurihandling' }">	<MvFUNCTIONRETURN VALUE = "{ g.Import_Category_CanonicalURIHandling_Invalid }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'categories' }">					<MvFUNCTIONRETURN VALUE = "<b>Categories:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">					<MvFUNCTIONRETURN VALUE = "<b>Custom Fields:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'canonicalurihandling' }">	<MvFUNCTIONRETURN VALUE = "<b>Canonical URI Handling:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'categories' }">
+		<select name="Import_Category_Categories">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'add',         g.Import_Category_Categories,   'Add New Categories Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'update',      g.Import_Category_Categories,   'Update Existing Categories Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addupdate',   g.Import_Category_Categories,   'Add New and Update Existing Categories' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',     g.Import_Category_Categories,   'Replace Existing Categories Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addreplace',  g.Import_Category_Categories,   'Add New and Replace Existing Categories' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">
+		<select name="Import_Category_CustomFields">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'retain',  g.Import_Category_CustomFields, 'Retain Existing Data When Imported Data Is Empty' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'delete',  g.Import_Category_CustomFields, 'Delete Existing Data When Imported Data Is Empty' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'canonicalurihandling' }">
+		<select name="Import_Category_CanonicalURIHandling">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '',	g.Import_Category_CanonicalURIHandling, 'Delete Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '301',	g.Import_Category_CanonicalURIHandling, '301 Redirect Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '302',	g.Import_Category_CanonicalURIHandling, '302 Redirect Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '303',	g.Import_Category_CanonicalURIHandling, '303 Redirect Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '307',	g.Import_Category_CanonicalURIHandling, '307 Redirect Old Canonical' ) }">
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"                                              VALUE = 1>
+
+	<MvASSIGN NAME = "g.Import_Category_Categories_Invalid"                 VALUE = 0>
+	<MvASSIGN NAME = "g.Import_Category_CustomFields_Invalid"               VALUE = 0>
+	<MvASSIGN NAME = "g.Import_Category_CanonicalURIHandling_Invalid"		VALUE = 0>
+
+	<MvASSIGN NAME = "g.Import_Category_Categories"                         VALUE = "{ trim( g.Import_Category_Categories ) }">
+	<MvASSIGN NAME = "g.Import_Category_CustomFields"                       VALUE = "{ trim( g.Import_Category_CustomFields ) }">
+	<MvASSIGN NAME = "g.Import_Category_CanonicalURIHandling"				VALUE = "{ trim( g.Import_Category_CanonicalURIHandling ) }">
+
+	<MvIF EXPR = "{ ( g.Import_Category_Categories NE 'add' ) AND
+					( g.Import_Category_Categories NE 'update' ) AND
+					( g.Import_Category_Categories NE 'addupdate' ) AND
+					( g.Import_Category_Categories NE 'replace' ) AND
+					( g.Import_Category_Categories NE 'addreplace' ) }">
+		<MvASSIGN NAME = "l.valid"                                          VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Category_Categories_Invalid"             VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Category_CustomFields NE 'retain' ) AND
+					( g.Import_Category_CustomFields NE 'delete' ) }">
+		<MvASSIGN NAME = "l.valid"                                          VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Category_CustomFields_Invalid"           VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Category_CanonicalURIHandling NE '' ) 		AND
+					( g.Import_Category_CanonicalURIHandling NE '301' ) 	AND
+					( g.Import_Category_CanonicalURIHandling NE '302' ) 	AND
+					( g.Import_Category_CanonicalURIHandling NE '303' ) 	AND
+					( g.Import_Category_CanonicalURIHandling NE '307' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Category_CanonicalURIHandlings_Invalid"	VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvCOMMENT> Validate columns when manually mapped </MvCOMMENT>
+		<MvEVAL EXPR = "{ Store_Config( l.import:config ) }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present, l.error_code, l.error_msg ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductImport_File', l.error_msg ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Store_Config( l.import:config ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Categories',			l.import:config:categories,				'add,update,addupdate,replace,addreplace',
+																																						'add,update,addupdate,replace,addreplace' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'CustomFields',			l.import:config:custom,					'retain,delete',
+																																						'retain,delete' )							OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'CanonicalURIHandling',	l.import:config:canonicalurihandling,	'delete,301,302,303,307',
+																																						',301,302,303,307' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvCOMMENT> Validate columns when manually mapped </MvCOMMENT>
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present, l.error_code, l.error_msg ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, l.error_msg ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Mode Specific Single Record Import Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Add_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.existing_category:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' already exists.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_Category( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_category:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Category( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Update" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_category:id }">
+		<MvIF EXPR = "{ NOT Import_Create_Category( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Update_Category( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_category:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Replace_Category( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Replace" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_category:id }">
+		<MvIF EXPR = "{ NOT Import_Create_Category( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Replace_Category( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Functions To Actually Import a Single Record
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Create_Category" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Validate_Alternate_Page_Code( l.record, l.session ) }">
+		<MvASSIGN NAME = "l.record:page_code" VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Prepare_Parent_ID_For_Create( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:agrpcount"   VALUE = 0>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Insert( l.record ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CAT-00006', 'CategoryImport Category \'' $ l.record:code $ '\' created' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' failed to create: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_CanonicalURI( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Category" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Update( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Validate_Alternate_Page_Code( l.record, l.session ) }">
+		<MvASSIGN NAME = "l.record:page_code"			VALUE = "{ l.existing_category:page_code }">
+	</MvIF>
+
+	<MvIF EXPR = "{ len( l.record:name ) }">            		<MvASSIGN NAME = "l.existing_category:name"			VALUE = "{ l.record:name }">		</MvIF>
+	<MvIF EXPR = "{ len( l.record:active ) }">          		<MvASSIGN NAME = "l.existing_category:active"		VALUE = "{ l.record:active }">		</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:page_title }">   <MvASSIGN NAME = "l.existing_category:page_title"	VALUE = "{ l.record:page_title }">	</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:page_code }">	<MvASSIGN NAME = "l.existing_category:page_code"	VALUE = "{ l.record:page_code }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT Prepare_Parent_ID_For_Update( l.import, l.session, l.record, l.run_data, l.existing_category ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:id"                      VALUE = "{ l.existing_category:id }">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Update( l.existing_category ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CAT-00001', 'CategoryImport Category \'' $ l.existing_category:code $ '\' updated' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_updated', 1 ) }">
+
+	<MvELSE>
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' failed to update: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:id"                      VALUE = "{ l.existing_category:id }">
+	<MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_CanonicalURI( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Category" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Validate_Alternate_Page_Code( l.record, l.session ) }">
+		<MvASSIGN NAME = "l.record:page_code" VALUE = "{ l.existing_category:page_code }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Prepare_Parent_ID_For_Create( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:agrpcount"   VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Delete( l.existing_category ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' failed to replace: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CAT-00002', 'CategoryImport Category \'' $ l.existing_category:code $ '\' deleted' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Insert( l.record ) }">
+			<MvEVAL EXPR = "{ Record_Skip( l.session, 'category \'' $ l.record:code $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CAT-00003', 'CategoryImport Category \'' $ l.category:code $ '\' created' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Category_Transfer( l.existing_category:id, l.record:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_CanonicalURI( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Custom_Fields" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:custom_fields">
+		<MvREFERENCE    NAME = "l.field"    VARIABLE = "{ 'l.record:' $ l.column:field }">
+
+		<MvIF EXPR = "{ l.import:config:custom EQ 'delete' }">
+			<MvDO   FILE = "{ g.Module_Root $ l.column:module:module }"
+					NAME = "l.set_var"
+					VALUE = "{ Module_Category_Set_Field( l.column:module, l.record:id, l.column:code, l.field ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ len( l.field ) GT 0 }">
+				<MvDO   FILE = "{ g.Module_Root $ l.column:module:module }"
+						NAME = "l.set_var"
+						VALUE = "{ Module_Category_Set_Field( l.column:module, l.record:id, l.column:code, l.field ) }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Create_CanonicalURI" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.run_data:columns_present:canonicaluri OR ISNULL l.record:canonicaluri }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Generate_Category_New( l.record ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for category \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_URI( l.record:canonicaluri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for category \'' $ l.record:code $ '\'. Error Message: ' $ g.Validation_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.uri:uri"			VALUE = "{ substring_var( l.record:canonicaluri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"			VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"		VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"			VALUE = "{ l.record:id }">
+	<MvASSIGN NAME = "l.uri:product_id"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Regenerate_Replace( l.import:config:canonicalurihandling, l.uri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for category \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_CanonicalURI" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.run_data:columns_present:canonicaluri OR ISNULL l.record:canonicaluri }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Generate_Category_Update( l.record ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for category \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_URI( l.record:canonicaluri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for category \'' $ l.record:code $ '\'. Error Message: ' $ g.Validation_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.uri:uri"			VALUE = "{ substring_var( l.record:canonicaluri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"			VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"		VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"			VALUE = "{ l.record:id }">
+	<MvASSIGN NAME = "l.uri:product_id"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Regenerate_Replace( l.import:config:canonicalurihandling, l.uri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for category \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT> A zero return here does not indicate error - just that the record should be skipped. </MvCOMMENT>
+<MvFUNCTION NAME = "Prepare_Parent_ID_For_Create" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.record:parent_id"	VALUE = 0>
+	<MvIF EXPR = "{ l.run_data:columns_present:parent_code }">
+		<MvIF EXPR = "{ len( l.record:parent_code ) NE 0 }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Load_Code( l.record:parent_code, l.parent_category ) }">
+				<MvASSIGN NAME = "l.record:parent_id"	VALUE = "{ l.parent_category:id }">
+			<MvELSE>
+				<MvEVAL EXPR = "{ Record_Skip( l.session, 'Parent Category Code of \'' $ l.record:parent_code $ '\' does not exist.' ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT> A zero return here does not indicate error - just that the record should be skipped. </MvCOMMENT>
+<MvFUNCTION NAME = "Prepare_Parent_ID_For_Update" PARAMETERS = "import var, session var, record var, run_data var, existing_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.run_data:columns_present:parent_code }">
+		<MvIF EXPR = "{ len( l.record:parent_code ) EQ 0 }">
+			<MvASSIGN NAME = "l.existing_category:parent_id"	VALUE = 0>
+		<MvELSEIF EXPR = "{ [ g.Module_Library_DB ].Category_Load_Code( l.record:parent_code, l.parent_category ) }">
+			<MvASSIGN NAME = "l.existing_category:parent_id"	VALUE = "{ l.parent_category:id }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ Record_Skip( l.session, 'Parent Category Code of \'' $ l.record:parent_code $ '\' does not exist.' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Validation Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var, error_code var, error_msg var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.columns_present:code }">
+		<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-CAT-00004">
+		<MvASSIGN NAME = "l.error_msg" VALUE = "The Category Code field must be assigned to an import file column">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:categories NE 'update' }">
+		<MvIF EXPR = "{ NOT l.columns_present:name }">
+			<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-CAT-00005">
+			<MvASSIGN NAME = "l.error_msg" VALUE = "The Category Name field must be assigned to an import file column">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Create" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT> Validate the contents of the fields that are present. </MvCOMMENT>
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT> Apply defaults (when appropriate) to all fields, present or not. </MvCOMMENT>
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvEVAL EXPR = "{ Set_Field_Default( l.session, l.record, l.run_data, l.column ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Update" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, 0 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Miscellaneous Utility Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Build_Column_Info" PARAMETERS = "import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.columns"    VALUE = "">
+
+	<MvCOMMENT>                                       field            name                        header                   	required    default     validation       </MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'code',          'Category Code',            'CATEGORY_CODE',         	1,          '',         'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'name',          'Category Name',            'CATEGORY_NAME',         	1,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'page_title',    'Category Page Title',      'CATEGORY_PAGE_TITLE',   	0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'active',        'Category Active',          'CATEGORY_ACTIVE',       	0,          1,          'bool' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'parent_code',   'Category Parent Code',     'CATEGORY_PARENT_CODE',  	0,          '',         'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'page_code',	   'Alternate Display Page',   'ALTERNATE_DISPLAY_PAGE',	0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'canonicaluri',  'Category Canonical URI',   'CATEGORY_CANONICAL_URI',	0,			'',			'string' ) }">
+
+	<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ [ g.Module_Library_Utilities ].CategoryCustomFieldList_Load( l.customfields ) }">
+		<MvEVAL EXPR = "{ Add_Custom_Field_Column( l.columns, l.customfield, l.customfield:module ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Config" PARAMETERS = "config var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.config:categories"				VALUE = "{ g.Import_Category_Categories }">
+	<MvASSIGN NAME = "l.config:custom"					VALUE = "{ g.Import_Category_CustomFields }">
+	<MvASSIGN NAME = "l.config:canonicalurihandling"	VALUE = "{ g.Import_Category_CanonicalURIHandling }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Problem" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Record Problem - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'record_problems', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Alternate_Page_Code" PARAMETERS = "record var, session var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Optional_Code( l.record:page_code ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Value: \'' $ l.record:page_code $ '\' set for AlternateDisplayPage was invalid. Import continued, but an Alternate Display Page was NOT assigned' ) }">
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

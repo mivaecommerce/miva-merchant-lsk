@@ -1,0 +1,236 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DSC-MUP-
+| Next Error Code: 1   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-discount_costmarkup">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Markup from Cost">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0005">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.01">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "discount">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Discounting Subsystem Feature (discount)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DiscountModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:items"					VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:basket"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:shipping"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:tax"					VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:provision_settings"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Fields" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.pricegroup:id }">
+		<MvASSIGN NAME = "g.Cost_Markup" VALUE = "{ l.pricegroup:config:markup ROUND 2 }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Cost_Markup" VALUE = 0.00>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "cost_markup">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'cost_markup' }">
+		<MvFUNCTIONRETURN VALUE = "<b>Markup:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'cost_markup' }">
+		<input type="text" size="5" name="Cost_Markup" value="{ encodeentities( g.Cost_Markup ) }"> % of Product Cost
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Validate" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Cost_Markup" VALUE = "{ trim( g.Cost_Markup ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( g.Cost_Markup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Cost_Markup', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Update" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pricegroup:config:markup" VALUE = "{ g.Cost_Markup }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Discount_Items" PARAMETERS = "module var, pricegroup var, discount_state var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Eligible_Items( l.discount_state, l.items ) }">
+		<MvASSIGN NAME = "l.product"							VALUE = "">
+		<MvASSIGN NAME = "l.pricing"							VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.item:code, l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ProductVariantPricing_Load_Variant( l.product:id, l.item:variant_id, l.pricing ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.pricing OR l.pricing:method EQ 0 }">
+			<MvIF EXPR = "{ l.product:cost EQ 0 }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.item_adjustment"				VALUE = "{ l.product:price - ( l.product:cost + ( l.product:cost * l.pricegroup:config:markup / 100 ) ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Add_Item_Discount( l.discount_state, l.item, l.item_adjustment ) }">
+
+			<MvFOREACH ITERATOR = "l.item_option" ARRAY = "l.item:options" COUNT = "{ l.item:option_count }">
+				<MvASSIGN NAME = "l.attribute"					VALUE = "">
+				<MvASSIGN NAME = "l.option"						VALUE = "">
+				<MvASSIGN NAME = "l.attribute_template"			VALUE = "">
+				<MvASSIGN NAME = "l.attribute_type"				VALUE = "">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Attribute_Load_ID( l.item_option:attr_id, l.attribute ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.attribute_type"				VALUE = "{ l.attribute:type }">
+
+				<MvIF EXPR = "{ l.attribute_type EQ 'template' }">
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplateAttr_Load_ID( l.item_option:attmpat_id, l.attribute_template ) }">
+						<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+
+						<MvFOREACHCONTINUE>
+					</MvIF>
+					
+					<MvASSIGN NAME = "l.attribute_type"			VALUE = "{ l.attribute_template:type }">
+				</MvIF>
+
+				<MvIF EXPR = "{ l.attribute_type EQ 'checkbox' OR l.attribute_type EQ 'text' OR l.attribute_type EQ 'memo' }">
+					<MvIF EXPR = "{ NOT ISNULL l.attribute_template }">
+						<MvASSIGN NAME = "l.option_cost"		VALUE = "{ l.attribute_template:cost }">
+						<MvASSIGN NAME = "l.option_price"		VALUE = "{ l.attribute_template:price }">
+					<MvELSE>
+						<MvASSIGN NAME = "l.option_cost"		VALUE = "{ l.attribute:cost }">
+						<MvASSIGN NAME = "l.option_price"		VALUE = "{ l.attribute:price }">
+					</MvIF>
+				<MvELSE>
+					<MvIF EXPR = "{ l.item_option:attmpat_id }">
+						<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplateOption_Load_ID( l.item_option:option_id, l.attribute_template_option ) }">
+							<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+								<MvFUNCTIONRETURN VALUE = 0>
+							</MvIF>
+
+							<MvFOREACHCONTINUE>
+						</MvIF>
+
+						<MvASSIGN NAME = "l.option_cost"		VALUE = "{ l.attribute_template_option:cost }">
+						<MvASSIGN NAME = "l.option_price"		VALUE = "{ l.attribute_template_option:price }">
+					<MvELSEIF EXPR = "{ l.item_option:option_id }">
+						<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Option_Load_ID( l.item_option:option_id, l.option ) }">
+							<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+								<MvFUNCTIONRETURN VALUE = 0>
+							</MvIF>
+							
+							<MvFOREACHCONTINUE>
+						</MvIF>
+
+						<MvASSIGN NAME = "l.option_cost"		VALUE = "{ l.option:cost }">
+						<MvASSIGN NAME = "l.option_price"		VALUE = "{ l.option:price }">
+					<MvELSE>
+						<MvFOREACHCONTINUE>
+					</MvIF>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.option_adjustment"		VALUE = "{ l.option_price - ( l.option_cost + ( l.option_cost * l.pricegroup:config:markup / 100 ) ) }">
+
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Add_Option_Discount( l.discount_state, l.item, l.item_option, l.option_adjustment ) }">
+			</MvFOREACH>
+
+			<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ l.pricing:method EQ 1 }">
+			<MvIF EXPR = "{ l.pricing:cost EQ 0 }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.adjusted_price"				VALUE = "{ l.pricing:price - ( l.pricing:cost + ( l.pricing:cost * l.pricegroup:config:markup / 100 ) ) }">
+		<MvELSEIF EXPR = "{ l.pricing:method EQ 2 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ProductVariant_Sum_Pricing( l.product:id, l.item:variant_id, l.sum_price, l.sum_cost, l.sum_weight ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.sum_cost EQ 0 }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.adjusted_price"				VALUE = "{ l.sum_price - ( l.sum_cost + ( l.sum_cost * l.pricegroup:config:markup / 100 ) ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.adjusted_price LE 0 }">
+			<MvASSIGN NAME = "l.adjusted_price"				VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.item, l.item:quantity, l.adjusted_price ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Provision_Settings" PARAMETERS = "module var, pricegroup var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.pricegroup:module_id NE l.module:id }">
+		<MvASSIGN NAME = "l.pricegroup:config:markup" VALUE = 0.00>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'o', l.provide_xml, 'Markup', l.pricegroup:config:markup, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( l.pricegroup:config:markup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for Markup: ' $ g.Validation_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_PriceGroup_Delete" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+

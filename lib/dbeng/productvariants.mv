@@ -1,0 +1,1268 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-PVN-
+| Next Error Code: 26   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ProductVariant_Load_Attributes" PARAMETERS = "product_id, attributes var, attribute_count, productvariant var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.attribute_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00001' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.table_list"				VALUE = "{ g.Store_Table_Prefix $ 'ProductVariants pv1' }">
+	<MvASSIGN NAME = "l.where_clause"			VALUE = "( pv1.product_id = ? AND pv1.dimensions = ? AND pv1.attr_id = ? AND pv1.attmpat_id = ? AND pv1.option_id = ? )">
+	<MvASSIGN NAME = "l.fields"					VALUE = "l.product_id, l.attribute_count, l.attributes[ 1 ]:attr_id, l.attributes[ 1 ]:attmpat_id, l.attributes[ 1 ]:option_id">
+
+	<MvASSIGN NAME = "l.attribute_pos"			VALUE = 2>
+	<MvWHILE EXPR = "{ l.attribute_pos LE l.attribute_count }">
+		<MvASSIGN NAME = "l.table_list"			VALUE = "{ l.table_list $ ', ' $ g.Store_Table_Prefix $ 'ProductVariants pv' $ l.attribute_pos }">
+		<MvASSIGN NAME = "l.where_clause"		VALUE = "{ l.where_clause $ ' AND ( pv' $ l.attribute_pos $ '.product_id = ? AND pv' $ l.attribute_pos $ '.variant_id = pv' $ ( l.attribute_pos - 1 ) $ '.variant_id AND pv' $ l.attribute_pos $ '.dimensions = ? AND pv' $ l.attribute_pos $ '.attr_id = ? AND pv' $ l.attribute_pos $ '.attmpat_id = ? AND pv' $ l.attribute_pos $ '.option_id = ? )' }">
+		<MvASSIGN NAME = "l.fields"				VALUE = "{ l.fields $ ', l.product_id, l.attribute_count, l.attributes[ ' $ l.attribute_pos $ ' ]:attr_id, l.attributes[ ' $ l.attribute_pos $ ' ]:attmpat_id, l.attributes[ ' $ l.attribute_pos $ ' ]:option_id' }">
+
+		<MvASSIGN NAME = "l.attribute_pos"		VALUE = "{ l.attribute_pos + 1 }">
+	</MvWHILE>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductVariants"
+				QUERY	= "{ 'SELECT pv1.product_id, pv1.variant_id, pv1.dimensions, pv1.part_count FROM ' $ l.table_list $ ' WHERE ' $ l.where_clause }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductVariants.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00003' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ProductVariant_Read( l.productvariant ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Load_Attributes_WithInventory" PARAMETERS = "product_id, attributes var, attribute_count, productvariant var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Load_Attributes_WithInventory_Facets( l.product_id, l.attributes, l.attribute_count, l.null, 0, l.productvariant ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Load_Attributes_WithInventory_Facets" PARAMETERS = "product_id, attributes var, attribute_count, facets var, facet_count, productvariant var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.attribute_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00004' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, 'pv1.product_id, pv1.variant_id, pv1.dimensions, pv1.part_count' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" INDEX = "l.index" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.correlation"            VALUE = "{ 'pv' $ l.index }">
+
+		<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants', l.correlation ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.product_id 	= ?', SQL_Query_Field( l.product_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.dimensions	= ?', SQL_Query_Field( l.attribute_count ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attr_id		= ?', SQL_Query_Field( l.attribute:attr_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attmpat_id	= ?', SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.option_id		= ?', SQL_Query_Field( l.attribute:option_id ) ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.previous_correlation }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.variant_id	= ' $ l.previous_correlation $ '.variant_id', 	'' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+
+		<MvASSIGN NAME = "l.previous_correlation"   VALUE = "{ l.correlation }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.sub_query, 'COUNT( DISTINCT pvp.part_id )' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'ProductVariantParts',    'pvp' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'InventorySettings',      'iset' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'Products',               'prod' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc',   'ipc.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.sub_query, 'pvp.product_id = pv1.product_id    AND
+													 pvp.variant_id = pv1.variant_id    AND
+													 prod.id        = pvp.part_id       AND
+													 (
+														( ( iset.active = 0 ) OR ( ips.active IS NULL ) OR ( ips.active = 0 ) ) OR
+														(
+															( ( ips.out_hide = \'d\' ) AND ( iset.out_hide = 0 ) ) OR
+															( ips.out_hide = \'n\' ) OR     
+															(                   
+																( ( ips.out_lvl_d = 1 ) AND ( ipc.inventory >= iset.out_level + pvp.quantity ) ) OR
+																( ( ips.out_lvl_d = 0 ) AND ( ipc.inventory >= ips.out_level + pvp.quantity ) )
+															)
+														)
+													 )', '' ) }">
+
+   <MvFOREACH ITERATOR = "l.part_facet" ARRAY = "l.part_facets" COUNT = "{ miva_array_filter_ref( l.facets, 1, l.facet, 'l.facet:variant_source EQ \'parts\'', l.part_facets ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Query_Search_Variants( l.part_facet:module, l.sub_query, l.part_facet, l.part_facet:input_values ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.sub_query_sql" VALUE = "{ SQL_Query_Build( l.sub_query, l.sub_query_fields ) }">
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv1.part_count = ( ' $ l.sub_query_sql $ ' )', l.sub_query_fields ) }">
+
+	<MvASSIGN NAME = "l.fields" VALUE = "">
+	<MvASSIGN NAME = "l.sql"    VALUE = "{ SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvOPENVIEW NAME    = "Merchant"
+				VIEW    = "ProductVariants"
+				QUERY   = "{ l.sql }"
+				FIELDS  = "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductVariants.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00006' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ProductVariant_Read( l.productvariant ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Is_Possible" PARAMETERS = "product_id, attributes var, attribute_count" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Is_Possible_Facets( l.product_id, l.attributes, l.attribute_count, l.null, 0 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Is_Possible_Facets" PARAMETERS = "product_id, attributes var, attribute_count, facets var, facet_count"  STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.attribute_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00007' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query,    'pv1.product_id,
+													 pv1.variant_id,
+													 pv1.dimensions,
+													 pv1.part_count' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" INDEX = "l.index" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.correlation"            VALUE = "{ 'pv' $ l.index }">
+
+		<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants', l.correlation ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.product_id	= ?', SQL_Query_Field( l.product_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attr_id		= ?', SQL_Query_Field( l.attribute:attr_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attmpat_id	= ?', SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.option_id		= ?', SQL_Query_Field( l.attribute:option_id ) ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.previous_correlation }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.variant_id	= ' $ l.previous_correlation $ '.variant_id', '' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+
+		<MvASSIGN NAME = "l.previous_correlation"   VALUE = "{ l.correlation }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.sub_query, 'COUNT( DISTINCT pvp.part_id )' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'ProductVariantParts',    'pvp' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'InventorySettings',      'iset' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'Products',               'prod' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc',   'ipc.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.sub_query, 'pvp.product_id = pv1.product_id    AND
+													 pvp.variant_id = pv1.variant_id    AND
+													 prod.id        = pvp.part_id       AND
+													 (
+														( ( iset.active = 0 ) OR ( ips.active IS NULL ) OR ( ips.active = 0 ) ) OR
+														(
+															( ( ips.out_hide = \'d\' ) AND ( iset.out_hide = 0 ) ) OR
+															( ips.out_hide = \'n\' ) OR     
+															(                   
+																( ( ips.out_lvl_d = 1 ) AND ( ipc.inventory >= iset.out_level + pvp.quantity ) ) OR
+																( ( ips.out_lvl_d = 0 ) AND ( ipc.inventory >= ips.out_level + pvp.quantity ) )
+															)
+														)
+													 )', '' ) }">
+
+   <MvFOREACH ITERATOR = "l.part_facet" ARRAY = "l.part_facets" COUNT = "{ miva_array_filter_ref( l.facets, 1, l.facet, 'l.facet:variant_source EQ \'parts\'', l.part_facets ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Query_Search_Variants( l.part_facet:module, l.sub_query, l.part_facet, l.part_facet:input_values ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv1.part_count = ( ' $ SQL_Query_Build( l.sub_query, l.sub_query_fields ) $ ' )', l.sub_query_fields ) }">
+
+	<MvASSIGN NAME = "l.fields" VALUE = "">
+	<MvASSIGN NAME = "l.sql"    VALUE = "{ SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ProductVariants', l.sql, l.fields, 0, 1 ) }">        
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductVariants.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00009' ) }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OptionList_Load_ProductVariant_Possible" PARAMETERS = "product_id, attr_id, attmpat_id, attributes var, attribute_count, possible_options var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ OptionList_Load_ProductVariant_Possible_Facets( l.product_id, l.attr_id, l.attmpat_id, l.attributes, l.attribute_count, l.null, 0, l.possible_options ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OptionList_Load_ProductVariant_Possible_Facets" PARAMETERS = "product_id, attr_id, attmpat_id, attributes var, attribute_count, facets var, facet_count, possible_options var"  STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">   
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants',    'pv' ) }">
+
+	<MvIF EXPR = "{ l.attmpat_id EQ 0 }">
+		<MvEVAL EXPR = "{ SQL_Query_SELECT_DISTINCT( l.query, 'pv.option_id AS option_id, o.disp_order AS disp_order' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'Options', 'o',  'o.product_id = pv.product_id AND o.attr_id = pv.attr_id AND o.id = pv.option_id',  '' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, 'disp_order, option_id', '' ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ SQL_Query_SELECT_DISTINCT( l.query, 'pv.option_id AS option_id, ato.disporder AS disp_order' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'AttributeTemplateOptions', 'ato', 'ato.attmpat_id = pv.attmpat_id AND ato.id = pv.option_id',   '' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, 'disp_order, option_id', '' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.product_id  = ? AND pv.attr_id = ? AND pv.attmpat_id = ?', SQL_Query_Field( l.product_id ) $ ',' $ SQL_Query_Field( l.attr_id ) $ ',' $ SQL_Query_Field( l.attmpat_id ) ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" INDEX = "l.index" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.correlation"            VALUE = "{ 'pv' $ l.index }">
+
+		<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants', l.correlation ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.product_id	= ?', SQL_Query_Field( l.product_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attr_id		= ?', SQL_Query_Field( l.attribute:attr_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attmpat_id	= ?', SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.option_id		= ?', SQL_Query_Field( l.attribute:option_id ) ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.previous_correlation }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.variant_id 	= ' $ l.previous_correlation $ '.variant_id', '' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+
+		<MvIF EXPR = "{ ISNULL l.previous_correlation }">
+			<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.product_id = ' $ l.correlation $ '.product_id',	'' ) }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.variant_id = ' $ l.correlation $ '.variant_id',	'' ) }">
+			<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.attr_id		<> ' $ l.correlation $ '.attr_id',		'' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.attmpat_id	<> ' $ l.correlation $ '.attmpat_id',	'' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+
+		<MvASSIGN NAME = "l.previous_correlation"       VALUE = "{ l.correlation }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.sub_query, 'COUNT( DISTINCT pvp.part_id )' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'InventorySettings', 'iset' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc',   'ipc.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.sub_query, 'pvp.product_id = pv.product_id     AND
+													 pvp.variant_id = pv.variant_id     AND
+													 prod.id        = pvp.part_id       AND
+													 (
+														( ( iset.active = 0 ) OR ( ips.active IS NULL ) OR ( ips.active = 0 ) ) OR
+														(
+															( ( ips.out_hide = \'d\' ) AND ( iset.out_hide = 0 ) ) OR
+															( ips.out_hide = \'n\' ) OR     
+															(                   
+																( ( ips.out_lvl_d = 1 ) AND ( ipc.inventory >= iset.out_level + pvp.quantity ) ) OR
+																( ( ips.out_lvl_d = 0 ) AND ( ipc.inventory >= ips.out_level + pvp.quantity ) )
+															)
+														)
+													 )', '' ) }">
+
+   <MvFOREACH ITERATOR = "l.part_facet" ARRAY = "l.part_facets" COUNT = "{ miva_array_filter_ref( l.facets, 1, l.facet, 'l.facet:variant_source EQ \'parts\'', l.part_facets ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Query_Search_Variants( l.part_facet:module, l.sub_query, l.part_facet, l.part_facet:input_values ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.part_count = ( ' $ SQL_Query_Build( l.sub_query, l.sub_query_fields ) $ ' )', l.sub_query_fields ) }">
+
+	<MvASSIGN NAME = "l.fields" VALUE = "">
+	<MvASSIGN NAME = "l.sql"    VALUE = "{ SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvOPENVIEW NAME    = "Merchant"
+				VIEW    = "Options"
+				QUERY   = "{ l.sql }"
+				FIELDS  = "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.possible_option_count"                                      VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Options.d.EOF }">
+		<MvASSIGN NAME = "l.possible_option_count"                                  VALUE = "{ l.possible_option_count + 1 }">
+		<MvASSIGN NAME = "l.possible_options" INDEX = "{ l.possible_option_count }" VALUE = "{ Options.d.option_id }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Options">
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PVN-00011', l.possible_option_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeList_Load_ProductVariant_Possible" PARAMETERS = "product_id, attributes var, attribute_count, possible_attributes var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ AttributeList_Load_ProductVariant_Possible_Facets( l.product_id, l.attributes, l.attribute_count, l.null, 0, l.possible_attributes ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeList_Load_ProductVariant_Possible_Facets" PARAMETERS = "product_id, attributes var, attribute_count, facets var, facet_count, possible_attributes var"  STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT_DISTINCT( l.query, 'pv.attr_id       AS attr_id,
+														   pv.attmpat_id    AS attmpat_id,
+														   pv.option_id     AS option_id,
+														   o.disp_order     AS option_disp_order,
+														   ato.disporder    AS ato_disp_order' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants',    'pv' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'Options',                   'o',    'pv.attmpat_id = 0 AND o.product_id = pv.product_id AND o.attr_id = pv.attr_id AND o.id = pv.option_id',    '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'AttributeTemplateOptions',  'ato',  'pv.attmpat_id <> 0 AND ato.attmpat_id = pv.attmpat_id AND ato.id = pv.option_id',  '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.product_id = ?', SQL_Query_Field( l.product_id ) ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" INDEX = "l.index" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.correlation"            VALUE = "{ 'pv' $ l.index }">
+
+		<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants', l.correlation ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.product_id	= ?', SQL_Query_Field( l.product_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attr_id		= ?', SQL_Query_Field( l.attribute:attr_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.attmpat_id	= ?', SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.option_id		= ?', SQL_Query_Field( l.attribute:option_id ) ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.previous_correlation }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.correlation $ '.variant_id 	= ' $ l.previous_correlation $ '.variant_id', '' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+
+		<MvIF EXPR = "{ ISNULL l.previous_correlation }">
+			<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.product_id = ' $ l.correlation $ '.product_id',	'' ) }">
+			<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.variant_id = ' $ l.correlation $ '.variant_id',	'' ) }">
+			<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.attr_id		<> ' $ l.correlation $ '.attr_id',		'' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.attmpat_id	<> ' $ l.correlation $ '.attmpat_id',	'' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+
+		<MvASSIGN NAME = "l.previous_correlation"       VALUE = "{ l.correlation }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.sub_query, 'COUNT( DISTINCT pvp.part_id )' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'InventorySettings', 'iset' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.sub_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.sub_query, 'prod', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc', 'ipc.product_id = prod.id',   '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.sub_query, 'pvp.product_id = pv.product_id AND
+													 pvp.variant_id = pv.variant_id AND
+													 prod.id        = pvp.part_id   AND
+													 (
+														( ( iset.active = 0 ) OR ( ips.active IS NULL ) OR ( ips.active = 0 ) ) OR
+														(
+															( ( ips.out_hide = \'d\' ) AND ( iset.out_hide = 0 ) ) OR
+															( ips.out_hide = \'n\' ) OR     
+															(                   
+																( ( ips.out_lvl_d = 1 ) AND ( ipc.inventory >= iset.out_level + pvp.quantity ) ) OR
+																( ( ips.out_lvl_d = 0 ) AND ( ipc.inventory >= ips.out_level + pvp.quantity ) )
+															)
+														)
+													 )', '' ) }">
+
+   <MvFOREACH ITERATOR = "l.part_facet" ARRAY = "l.part_facets" COUNT = "{ miva_array_filter_ref( l.facets, 1, l.facet, 'l.facet:variant_source EQ \'parts\'', l.part_facets ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Query_Search_Variants( l.part_facet:module, l.sub_query, l.part_facet, l.part_facet:input_values ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'pv.part_count = ( ' $ SQL_Query_Build( l.sub_query, l.sub_query_fields ) $ ' )', l.sub_query_fields ) }">
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, 'attr_id, attmpat_id, option_disp_order, ato_disp_order, option_id', '' ) }">
+
+	<MvASSIGN NAME = "l.fields" VALUE = "">
+	<MvASSIGN NAME = "l.sql"    VALUE = "{ SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvOPENVIEW NAME    = "Merchant"
+				VIEW    = "Attributes"
+				QUERY   = "{ l.sql }"
+				FIELDS  = "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.possible_attribute_count"               VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Attributes.d.EOF }">
+		<MvASSIGN NAME = "l.possible_attribute_count"           VALUE = "{ l.possible_attribute_count + 1 }">
+
+		<MvREFERENCEARRAY NAME = "l.possible_attribute" VARIABLE = "l.possible_attributes">
+			<MvDIMENSION INDEX = "{ l.possible_attribute_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.possible_attribute:attr_id"         VALUE = "{ Attributes.d.attr_id }">
+		<MvASSIGN NAME = "l.possible_attribute:attmpat_id"      VALUE = "{ Attributes.d.attmpat_id }">
+		<MvASSIGN NAME = "l.possible_attribute:option_count"    VALUE = 0>
+
+		<MvWHILE EXPR = "{ ( NOT Attributes.d.EOF ) AND
+						   ( Attributes.d.attr_id EQ l.possible_attribute:attr_id ) AND
+						   ( Attributes.d.attmpat_id EQ l.possible_attribute:attmpat_id ) }">
+			<MvASSIGN NAME = "l.possible_attribute:option_count"                                            VALUE = "{ l.possible_attribute:option_count + 1 }">
+			<MvASSIGN NAME = "l.possible_attribute:options" INDEX = "{ l.possible_attribute:option_count }" VALUE = "{ Attributes.d.option_id }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Attributes">
+		</MvWHILE>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PVN-00013', l.possible_attribute_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Variant" PARAMETERS = "product_id, variant_id, products var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								prod.disp_order	AS sort_order,
+								pvp.quantity	AS pvp_quantity,
+								ipc.inventory	AS ipc_inventory,
+								ips.active		AS ips_active,
+								ips.in_long		AS ips_in_long,
+								ips.in_short	AS ips_in_short,
+								ips.low_level	AS ips_low_level,
+								ips.low_long	AS ips_low_long,
+								ips.low_lvl_d	AS ips_low_lvl_d,
+								ips.low_short	AS ips_low_short,
+								ips.low_track	AS ips_low_track,
+								ips.out_level	AS ips_out_level,
+								ips.out_long	AS ips_out_long,
+								ips.out_lvl_d	AS ips_out_lvl_d,
+								ips.out_short	AS ips_out_short,
+								ips.out_track	AS ips_out_track,
+								iset.active		AS iset_active,
+								iset.in_long	AS iset_in_long,
+								iset.in_short	AS iset_in_short,
+								iset.low_level	AS iset_low_level,
+								iset.low_long	AS iset_low_long,
+								iset.low_short	AS iset_low_short,
+								iset.low_track	AS iset_low_track,
+								iset.out_level	AS iset_out_level,
+								iset.out_long	AS iset_out_long,
+								iset.out_short	AS iset_out_short,
+								iset.out_track	AS iset_out_track
+							  FROM ' $
+								g.Store_Table_Prefix $ 'ProductVariantParts pvp, ' $
+								g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+								g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								pvp.product_id	= ?					AND
+								pvp.variant_id	= ?					AND
+								prod.id			= pvp.part_id
+							  ORDER BY
+								prod.disp_order' }"
+				FIELDS	= "l.product_id, l.variant_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "quantity"	VALUE = "{ Products.d.pvp_quantity }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PVN-00015', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariantList_Load_Product" PARAMETERS = "product_id, product_variants var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.product_variants"											VALUE = "">
+	<MvASSIGN NAME = "l.product_variant_count"										VALUE = 0>
+	<MvASSIGN NAME = "g.Session:cache:productvariantlist_load_product:product_id"	VALUE = "{ l.product_id }">
+
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.search_query,
+										'p.*,
+										 pvp.product_id		AS product_id,
+										 pvp.variant_id		AS variant_id,
+										 p.disp_order		AS part_disp_order,
+										 pvp.quantity		AS part_quantity,
+										 ipc.inventory		AS ipc_inventory,
+										 ips.active			AS ips_active,
+										 ips.in_long		AS ips_in_long,
+										 ips.in_short		AS ips_in_short,
+										 ips.low_level		AS ips_low_level,
+										 ips.low_long		AS ips_low_long,
+										 ips.low_lvl_d		AS ips_low_lvl_d,
+										 ips.low_short		AS ips_low_short,
+										 ips.low_track		AS ips_low_track,
+										 ips.out_level		AS ips_out_level,
+										 ips.out_long		AS ips_out_long,
+										 ips.out_lvl_d		AS ips_out_lvl_d,
+										 ips.out_short		AS ips_out_short,
+										 ips.out_track		AS ips_out_track,
+										 iset.active		AS iset_active,
+										 iset.in_long		AS iset_in_long,
+										 iset.in_short		AS iset_in_short,
+										 iset.low_level		AS iset_low_level,
+										 iset.low_long		AS iset_low_long,
+										 iset.low_short		AS iset_low_short,
+										 iset.low_track		AS iset_low_track,
+										 iset.out_level		AS iset_out_level,
+										 iset.out_long		AS iset_out_long,
+										 iset.out_short		AS iset_out_short,
+										 iset.out_track		AS iset_out_track' ) }">
+
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'InventorySettings', 'iset' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Products', 'p' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'p', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = p.id', '' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'p', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc', 'ipc.product_id = p.id', '' ) }">
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.search_query,
+									   'pvp.product_id	= ? AND
+									    p.id			= pvp.part_id',
+									   'g.Session:cache:productvariantlist_load_product:product_id' ) }">
+
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.search_query, 'variant_id', 'ASC' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.search_query, 'part_disp_order', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products', l.search_sql, l.search_fields, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-PVN-00024', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvASSIGN NAME = "l.variant"					VALUE = "">
+		<MvASSIGN NAME = "l.variant:product_id" 		VALUE = "{ Products.d.product_id }">
+		<MvASSIGN NAME = "l.variant:variant_id" 		VALUE = "{ Products.d.variant_id }">
+		<MvASSIGN NAME = "l.variant:parts"				VALUE = "">
+		<MvASSIGN NAME = "l.variant:part_count"			VALUE = 0>
+
+		<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( Products.d.variant_id EQ l.variant:variant_id ) }">
+			<MvEVAL EXPR = "{ Product_Read( l.part ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.part ) }">
+
+			<MvASSIGN NAME = "l.part:quantity"			VALUE = "{ Products.d.pvp_quantity }">
+			<MvASSIGN NAME = "l.variant:part_count"		VALUE = "{ miva_array_insert( l.variant:parts, l.part, -1 ) }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+
+		<MvASSIGN NAME = "l.product_variant_count"		VALUE = "{ miva_array_insert( l.product_variants, l.variant, -1 ) }">
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PVN-00025', l.product_variant_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductIDList_Load_Product_Option" PARAMETERS = "product_id, attr_id, attmpat_id, option_id, product_ids var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductVariantParts"
+				QUERY	= "{ 'SELECT DISTINCT
+								pvp.part_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'ProductVariants pv,
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp
+							  WHERE
+								pv.product_id		= ?	AND
+								pv.attr_id			= ?	AND
+								pv.attmpat_id		= ? AND
+								pv.option_id		= ? AND
+								pv.product_id		= pvp.product_id AND
+								pv.variant_id		= pvp.variant_id' }"
+				FIELDS	= "l.product_id, l.attr_id, l.attmpat_id, l.option_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productid_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT ProductVariantParts.d.EOF }">
+		<MvASSIGN NAME = "l.product_ids" INDEX = "{ ++l.productid_count }" VALUE = "{ ProductVariantParts.d.part_id }">
+		<MvSKIP NAME = "Merchant" VIEW = "ProductVariantParts" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariantParts">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PVN-00021', l.productid_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Option_HasVariantParts" PARAMETERS = "product_id, attr_id, attmpat_id, option_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.POHVP_Product_ID"						VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "g.POHVP_Attribute_ID"						VALUE = "{ l.attr_id }">
+	<MvASSIGN NAME = "g.POHVP_AttributeTemplateAttribute_ID"	VALUE = "{ l.attmpat_id }">
+	<MvASSIGN NAME = "g.POHVP_Option_ID"						VALUE = "{ l.option_id }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ProductVariantParts',
+																			   'SELECT
+																					pvp.part_id
+																			    FROM
+																					' $ g.Store_Table_Prefix $ 'ProductVariants pv,
+																					' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp
+																			    WHERE
+																					pv.product_id		= ?	AND
+																					pv.attr_id			= ?	AND
+																					pv.attmpat_id		= ? AND
+																					pv.option_id		= ? AND
+																					pv.product_id		= pvp.product_id AND
+																					pv.variant_id		= pvp.variant_id',
+																			   'g.POHVP_Product_ID, g.POHVP_Attribute_ID, g.POHVP_AttributeTemplateAttribute_ID, g.POHVP_Option_ID',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductVariantParts.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariantParts">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PVN-00023' ) }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariantParts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Delete_All_Product_LowLevel( l.product_id )	AND
+								 ProductVariantPart_Delete_All_Product( l.product_id )		AND
+								 ProductVariantPricing_Delete_All_Product( l.product_id )	AND
+								 [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Product( l.product_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete_All_Product_NotDefault" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Delete_All_Product_NotDefault_LowLevel( l.product_id )	AND
+								 ProductVariantPart_Delete_All_Product_NotDefault( l.product_id )		AND
+								 ProductVariantPricing_Delete_All_Product_NotDefault( l.product_id )	AND
+								 [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Product( l.product_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete_All_Product_Attribute" PARAMETERS = "product_id, attr_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productvariant_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.productvariant_count"	VALUE = "{ ProductVariantList_Load_Product_Attribute( l.product_id, l.attr_id, l.productvariants ) }">
+
+	<MvWHILE EXPR = "{ l.productvariant_pos LE l.productvariant_count }">
+		<MvIF EXPR = "{ NOT ProductVariant_Delete( l.productvariants[ l.productvariant_pos ]:product_id, l.productvariants[ l.productvariant_pos ]:variant_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productvariant_pos"	VALUE = "{ l.productvariant_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete_All_Product_Option" PARAMETERS = "product_id, attr_id, option_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productvariant_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.productvariant_count"	VALUE = "{ ProductVariantList_Load_Product_Option( l.product_id, l.attr_id, l.option_id, l.productvariants ) }">
+
+	<MvWHILE EXPR = "{ l.productvariant_pos LE l.productvariant_count }">
+		<MvIF EXPR = "{ NOT ProductVariant_Delete( l.productvariants[ l.productvariant_pos ]:product_id, l.productvariants[ l.productvariant_pos ]:variant_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productvariant_pos"	VALUE = "{ l.productvariant_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete_All_AttributeTemplateAttribute" PARAMETERS = "attmpat_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productvariant_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.productvariant_count"	VALUE = "{ ProductVariantList_Load_AttributeTemplateAttribute( l.attmpat_id, l.productvariants ) }">
+
+	<MvWHILE EXPR = "{ l.productvariant_pos LE l.productvariant_count }">
+		<MvIF EXPR = "{ NOT ProductVariant_Delete( l.productvariants[ l.productvariant_pos ]:product_id, l.productvariants[ l.productvariant_pos ]:variant_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productvariant_pos"	VALUE = "{ l.productvariant_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete_All_AttributeTemplateOption" PARAMETERS = "attmpat_id, option_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productvariant_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.productvariant_count"	VALUE = "{ ProductVariantList_Load_AttributeTemplateOption( l.attmpat_id, l.option_id, l.productvariants ) }">
+
+	<MvWHILE EXPR = "{ l.productvariant_pos LE l.productvariant_count }">
+		<MvIF EXPR = "{ NOT ProductVariant_Delete( l.productvariants[ l.productvariant_pos ]:product_id, l.productvariants[ l.productvariant_pos ]:variant_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productvariant_pos"	VALUE = "{ l.productvariant_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Delete" PARAMETERS = "product_id, variant_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Delete_LowLevel( l.product_id, l.variant_id )			AND
+								 ProductVariantPart_Delete_All_Variant( l.product_id, l.variant_id )	AND
+								 ProductVariantPricing_Delete_Variant( l.product_id, l.variant_id )		AND
+								 [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Variant( l.product_id, l.variant_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariantPart_Delete_All_Part" PARAMETERS = "part_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productvariant_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.productvariant_count"	VALUE = "{ ProductVariantList_Load_Part( l.part_id, l.productvariants ) }">
+
+	<MvWHILE EXPR = "{ l.productvariant_pos LE l.productvariant_count }">
+		<MvIF EXPR = "{ l.productvariants[ l.productvariant_pos ]:part_count GT 1 }">
+			<MvIF EXPR = "{ NOT ProductVariant_Decrement_Part_Count( l.productvariants[ l.productvariant_pos ]:product_id, l.productvariants[ l.productvariant_pos ]:variant_id, 1 ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT ProductVariant_Delete( l.productvariants[ l.productvariant_pos ]:product_id, l.productvariants[ l.productvariant_pos ]:variant_id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productvariant_pos"	VALUE = "{ l.productvariant_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Product_Part( l.part_id ) AND
+								 ProductVariantPart_Delete_All_Part_LowLevel( l.part_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeTree_Load_Product" PARAMETERS = "product_id, attributes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Attributes"
+				QUERY	= "{ 'SELECT
+								a.id			AS attr_id,
+								a.disp_order	AS attr_order,
+								a.type			AS attr_type,
+								a.required		AS attr_required,
+								a.code			AS attr_code,
+								a.price			AS attr_price,
+								a.cost			AS attr_cost,
+								a.weight		AS attr_weight,
+								0				AS attmpat_id,
+								0				AS attmpat_order,
+								o.id			AS option_id,
+								o.code			AS option_code,
+								o.price			AS option_price,
+								o.cost			AS option_cost,
+								o.weight		AS option_weight,
+								o.disp_order	AS option_order
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Options o ON o.product_id = a.product_id AND o.attr_id = a.id
+							  WHERE
+								a.product_id	= ? AND
+								a.inventory		= 1 AND
+								( a.type <> \'template\' )
+							  UNION ALL
+							  SELECT
+								a.id			AS attr_id,
+								a.disp_order	AS attr_order,
+								ata.type		AS attr_type,
+								ata.required	AS attr_required,
+								ata.code		AS attr_code,
+								ata.price		AS attr_price,
+								ata.cost		AS attr_cost,
+								ata.weight		AS attr_weight,
+								ata.id			AS attmpat_id,
+								ata.disporder	AS attmpat_order,
+								ato.id			AS option_id,
+								ato.code		AS option_code,
+								ato.price		AS option_price,
+								ato.cost		AS option_cost,
+								ato.weight		AS option_weight,
+								ato.disporder	AS option_order
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata ON ata.attemp_id = a.attemp_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AttributeTemplateOptions ato ON ato.attemp_id = a.attemp_id AND ato.attmpat_id = ata.id
+							  WHERE
+								a.product_id	= ? AND
+								ata.inventory	= 1 AND
+								( a.type = \'template\' )
+							  ORDER BY
+								attr_order, attmpat_order, option_order' }"
+				FIELDS	= "l.product_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"				VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Attributes.d.EOF }">
+		<MvASSIGN NAME = "l.attribute_count"			VALUE = "{ l.attribute_count + 1 }">
+		<MvREFERENCEARRAY NAME = "l.attribute" VARIABLE = "l.attributes">
+			<MvDIMENSION INDEX = "{ l.attribute_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.attribute:id"				VALUE = "{ Attributes.d.attr_id }">
+		<MvASSIGN NAME = "l.attribute:code"				VALUE = "{ Attributes.d.attr_code }">
+		<MvASSIGN NAME = "l.attribute:attmpat_id"		VALUE = "{ Attributes.d.attmpat_id }">
+		<MvASSIGN NAME = "l.attribute:type"				VALUE = "{ Attributes.d.attr_type }">
+		<MvASSIGN NAME = "l.attribute:required"			VALUE = "{ Attributes.d.attr_required }">
+		<MvASSIGN NAME = "l.attribute:option_count"		VALUE = 0>
+
+		<MvIF EXPR = "{ len( Attributes.d.option_id ) }">
+			<MvASSIGN NAME = "l.attribute:price"		VALUE = 0.00>
+			<MvASSIGN NAME = "l.attribute:cost"			VALUE = 0.00>
+			<MvASSIGN NAME = "l.attribute:weight"		VALUE = 0.00>
+		<MvELSE>
+			<MvASSIGN NAME = "l.attribute:price"		VALUE = "{ Attributes.d.attr_price }">
+			<MvASSIGN NAME = "l.attribute:cost"			VALUE = "{ Attributes.d.attr_cost }">
+			<MvASSIGN NAME = "l.attribute:weight"		VALUE = "{ Attributes.d.attr_weight }">
+		</MvIF>
+
+		<MvWHILE EXPR = "{ ( NOT Attributes.d.EOF ) AND
+						   ( Attributes.d.attr_id EQ l.attribute:id ) AND
+						   ( Attributes.d.attmpat_id EQ l.attribute:attmpat_id ) }">
+			<MvIF EXPR = "{ len( Attributes.d.option_id ) }">
+				<MvASSIGN NAME = "l.attribute:option_count"	VALUE = "{ l.attribute:option_count + 1 }">
+				<MvREFERENCEARRAY NAME = "l.option" VARIABLE = "l.attribute">
+					<MvMEMBER NAME = "options">
+					<MvDIMENSION INDEX = "{ l.attribute:option_count }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.option:id"				VALUE = "{ Attributes.d.option_id }">
+				<MvASSIGN NAME = "l.option:code"			VALUE = "{ Attributes.d.option_code }">
+				<MvASSIGN NAME = "l.option:price"			VALUE = "{ Attributes.d.option_price }">
+				<MvASSIGN NAME = "l.option:cost"			VALUE = "{ Attributes.d.option_cost }">
+				<MvASSIGN NAME = "l.option:weight"			VALUE = "{ Attributes.d.option_weight }">
+			</MvIF>
+
+			<MvSKIP NAME = "Merchant" VIEW = "Attributes" ROWS = 1>
+		</MvWHILE>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PVN-00017', l.attribute_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Insert_Attributes" PARAMETERS = "product_id, variant_id, part_count, attributes var, attribute_count, productvariant var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productvariant:product_id"		VALUE = "{ l.product_id }">
+
+	<MvIF EXPR = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.productvariant:variant_id"	VALUE = "{ l.variant_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.productvariant:variant_id"	VALUE = "{ StoreKey_Generate( 'ProductVariants' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productvariant:dimensions"		VALUE = "{ l.attribute_count }">
+	<MvASSIGN NAME = "l.productvariant:part_count"		VALUE = "{ l.part_count }">
+
+	<MvASSIGN NAME = "l.attribute_pos"					VALUE = 1>
+	<MvWHILE EXPR = "{ l.attribute_pos LE l.attribute_count }">
+		<MvASSIGN NAME = "l.productvariant:attr_id"		VALUE = "{ l.attributes[ l.attribute_pos ]:attr_id }">
+		<MvASSIGN NAME = "l.productvariant:attmpat_id"	VALUE = "{ l.attributes[ l.attribute_pos ]:attmpat_id }">
+		<MvASSIGN NAME = "l.productvariant:option_id"	VALUE = "{ l.attributes[ l.attribute_pos ]:option_id }">
+
+		<MvIF EXPR = "{ NOT ProductVariant_Insert_LowLevel( l.productvariant ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.attribute_pos"				VALUE = "{ l.attribute_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Generate" PARAMETERS = "product var, pricing_method" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Generate_Delimiter( l.product, l.pricing_method, '_' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Generate_Delimiter" PARAMETERS = "product var, pricing_method, delimiter" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductVariant_Delete_All_Product_NotDefault( l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ AttributeTree_Load_Product( l.product:id, l.attributes ) }">
+
+	<MvIF EXPR = "{ l.attribute_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.variants"			VALUE = "">
+	<MvASSIGN NAME = "l.parts"				VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.attribute" INDEX = "l.attribute_pos" ARRAY = "l.attributes" COUNT = "{ l.attribute_count - 1 }">
+		<MvIF EXPR = "{ l.attribute:required OR l.attribute:type EQ 'text' OR l.attribute:type EQ 'memo' OR l.attribute:type EQ 'checkbox' }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+		
+		<MvFOREACH ITERATOR = "l.next_attribute" ARRAY = "l.attributes" FIRST = "{ l.attribute_pos + 1 }" LAST = "{ l.attribute_count }">
+			<MvCOMMENT>
+			|
+			| If we hit a required or boolean attribute, we can stop because its presence will ensure a unique generated code.
+			|
+			</MvCOMMENT>
+			
+			<MvIF EXPR = "{ l.next_attribute:required OR l.next_attribute:type EQ 'text' OR l.next_attribute:type EQ 'memo' OR l.next_attribute:type EQ 'checkbox' }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		
+			<MvCOMMENT>
+			|
+			| Adjacent optional multi-option attributes detected, process options
+			|
+			</MvCOMMENT>
+		
+			<MvFOREACH ITERATOR = "l.option" ARRAY = "l.attribute:options" COUNT = "{ l.attribute:option_count }">
+				<MvIF EXPR = "{ miva_array_search( l.next_attribute:options, 1, l.next_option, 'tolower( l.next_option:code ) EQ tolower( l.option:code )' ) }">
+					<MvCOMMENT>
+					|
+					| Duplicate option detected
+					|
+					</MvCOMMENT>
+				
+					<MvASSIGN NAME = "l.next_option:adjacent_duplicate" VALUE = 1>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Generate_Recursive( l.product, l.pricing_method, l.delimiter, 1, l.attribute_count, l.attributes, l.variants, 0, 0 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Generate_Recursive" PARAMETERS = "product var, pricing_method, delimiter, attribute_pos, attribute_count, attributes var, variants var, variant_count, dimensions" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.attribute_pos GT l.attribute_count }">
+		<MvIF EXPR = "{ l.variant_count EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Insert the variant components
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.variant_id"			VALUE = "{ StoreKey_Generate( 'ProductVariants' ) }">
+
+		<MvASSIGN NAME = "l.variant_pos"		VALUE = 1>
+		<MvWHILE EXPR = "{ l.variant_pos LE l.variant_count }">
+			<MvASSIGN NAME = "l.variants" INDEX = "{ l.variant_pos }" MEMBER = "variant_id"	VALUE = "{ l.variant_id }">
+			<MvASSIGN NAME = "l.variants" INDEX = "{ l.variant_pos }" MEMBER = "dimensions"	VALUE = "{ l.dimensions }">
+			<MvASSIGN NAME = "l.variants" INDEX = "{ l.variant_pos }" MEMBER = "part_count"	VALUE = 1>
+
+			<MvIF EXPR = "{ NOT ProductVariant_Insert_LowLevel( l.variants[ l.variant_pos ] ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.variant_pos"	VALUE = "{ l.variant_pos + 1 }">
+		</MvWHILE>
+
+		<MvCOMMENT>
+		|
+		| Insert a ProductVariantPricing record, if required
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.pricing_method NE 0 }">
+			<MvASSIGN NAME = "l.pricing:product_id"	VALUE = "{ l.product:id }">
+			<MvASSIGN NAME = "l.pricing:variant_id"	VALUE = "{ l.variant_id }">
+			<MvASSIGN NAME = "l.pricing:method"		VALUE = "{ l.pricing_method }">
+			<MvASSIGN NAME = "l.pricing:price"		VALUE = "{ l.variants[ l.variant_count ]:price }">
+			<MvASSIGN NAME = "l.pricing:cost"		VALUE = "{ l.variants[ l.variant_count ]:cost }">
+			<MvASSIGN NAME = "l.pricing:weight"		VALUE = "{ l.variants[ l.variant_count ]:weight }">
+
+			<MvIF EXPR = "{ NOT ProductVariantPricing_Insert( l.pricing ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Create or load a part for this combination
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ProductVariant_Generate_Part_Delimiter( l.product, l.delimiter, l.variant_id, l.variants, l.variant_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.attribute" VARIABLE = "l.attributes">
+		<MvDIMENSION INDEX = "{ l.attribute_pos }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.variant_count EQ 0 }">
+		<MvASSIGN NAME = "l.variant_base_price"			VALUE = "{ l.product:price }">
+		<MvASSIGN NAME = "l.variant_base_cost"			VALUE = "{ l.product:cost }">
+		<MvASSIGN NAME = "l.variant_base_weight"		VALUE = "{ l.product:weight }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.variant_base_price"			VALUE = "{ l.variants[ l.variant_count ]:price }">
+		<MvASSIGN NAME = "l.variant_base_cost"			VALUE = "{ l.variants[ l.variant_count ]:cost }">
+		<MvASSIGN NAME = "l.variant_base_weight"		VALUE = "{ l.variants[ l.variant_count ]:weight }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Boolean options (checkbox, text, memo) always have a "present" variant component, with option_id 1.  If the
+	| option is not requred, it also gets a "not present" variant component, with option_id 0.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.attribute:type EQ 'text' ) OR
+					( l.attribute:type EQ 'memo' ) OR
+					( l.attribute:type EQ 'checkbox' ) }">
+		<MvASSIGN NAME = "l.variant_count"					VALUE = "{ l.variant_count + 1 }">
+		<MvREFERENCEARRAY NAME = "l.variant" VARIABLE = "l.variants">
+			<MvDIMENSION INDEX = "{ l.variant_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.variant:product_id"				VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.variant:attr_id"				VALUE = "{ l.attribute:id }">
+		<MvASSIGN NAME = "l.variant:attmpat_id"				VALUE = "{ l.attribute:attmpat_id }">
+
+		<MvCOMMENT>
+		|
+		| Insert the "present" component.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.variant:option_id"				VALUE = 1>
+		<MvASSIGN NAME = "l.variant:option_code"			VALUE = "{ l.attribute:code $ 'Y' }">
+		<MvASSIGN NAME = "l.variant:price"					VALUE = "{ l.variant_base_price + l.attribute:price }">
+		<MvASSIGN NAME = "l.variant:cost"					VALUE = "{ l.variant_base_cost + l.attribute:cost }">
+		<MvASSIGN NAME = "l.variant:weight"					VALUE = "{ l.variant_base_weight + l.attribute:weight }">
+
+		<MvIF EXPR = "{ l.attribute:type EQ 'checkbox' }">
+			<MvASSIGN NAME = "l.variant:option_name"		VALUE = "{ l.attribute:code $ ':Checked' }">
+		<MvELSEIF EXPR = "{ ( l.attribute:type EQ 'text' ) OR ( l.attribute:type EQ 'memo' ) }">
+			<MvASSIGN NAME = "l.variant:option_name"		VALUE = "{ l.attribute:code $ ':Text Present' }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ProductVariant_Generate_Recursive( l.product, l.pricing_method, l.delimiter, l.attribute_pos + 1, l.attribute_count, l.attributes, l.variants, l.variant_count, l.dimensions + 1 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Insert the "not present" component if the option is not required.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT l.attribute:required }">
+			<MvASSIGN NAME = "l.variant:option_id"			VALUE = 0>
+			<MvASSIGN NAME = "l.variant:option_code"		VALUE = "{ l.attribute:code $ 'N' }">
+			<MvASSIGN NAME = "l.variant:price"				VALUE = "{ l.variant_base_price }">
+			<MvASSIGN NAME = "l.variant:cost"				VALUE = "{ l.variant_base_cost }">
+			<MvASSIGN NAME = "l.variant:weight"				VALUE = "{ l.variant_base_weight }">
+
+			<MvIF EXPR = "{ l.attribute:type EQ 'checkbox' }">
+				<MvASSIGN NAME = "l.variant:option_name"	VALUE = "{ l.attribute:code $ ':Not Checked' }">
+			<MvELSEIF EXPR = "{ ( l.attribute:type EQ 'text' ) OR ( l.attribute:type EQ 'memo' ) }">
+				<MvASSIGN NAME = "l.variant:option_name"	VALUE = "{ l.attribute:code $ ':Empty' }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ProductVariant_Generate_Recursive( l.product, l.pricing_method, l.delimiter, l.attribute_pos + 1, l.attribute_count, l.attributes, l.variants, l.variant_count, l.dimensions + 1 ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| The following processing is for radio or select options.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.attribute:required }">
+		<MvCOMMENT>
+		|
+		| Recurse without this attribute to handle the "empty" value
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ProductVariant_Generate_Recursive( l.product, l.pricing_method, l.delimiter, l.attribute_pos + 1, l.attribute_count, l.attributes, l.variants, l.variant_count, l.dimensions ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Set up a ProductVariant record and recurse once for each option
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.variant_count"				VALUE = "{ l.variant_count + 1 }">
+	<MvREFERENCEARRAY NAME = "l.variant" VARIABLE = "l.variants">
+		<MvDIMENSION INDEX = "{ l.variant_count }">
+	</MvREFERENCEARRAY>
+
+	<MvASSIGN NAME = "l.variant:product_id"			VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.variant:attr_id"			VALUE = "{ l.attribute:id }">
+	<MvASSIGN NAME = "l.variant:attmpat_id"			VALUE = "{ l.attribute:attmpat_id }">
+
+	<MvASSIGN NAME = "l.option_pos"					VALUE = 1>
+	<MvWHILE EXPR = "{ l.option_pos LE l.attribute:option_count }">
+		<MvREFERENCEARRAY NAME = "l.option" VARIABLE = "l.attribute">
+			<MvMEMBER NAME = "options">
+			<MvDIMENSION INDEX = "{ l.option_pos }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.variant:option_id"      	VALUE = "{ l.option:id }">
+
+		<MvIF EXPR = "{ l.option:adjacent_duplicate }">
+			<MvASSIGN NAME = "l.variant:option_code"    VALUE = "{ l.attribute:code $ l.delimiter $ l.option:code }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.variant:option_code"    VALUE = "{ l.option:code }">
+		</MvIF>
+			
+		<MvASSIGN NAME = "l.variant:option_name" 		VALUE = "{ l.attribute:code $ ':' $ l.option:code }">
+		<MvASSIGN NAME = "l.variant:price"          	VALUE = "{ l.variant_base_price + l.option:price }">
+		<MvASSIGN NAME = "l.variant:cost"           	VALUE = "{ l.variant_base_cost + l.option:cost }">
+		<MvASSIGN NAME = "l.variant:weight"         	VALUE = "{ l.variant_base_weight + l.option:weight }">
+
+		<MvCOMMENT>
+		|
+		| Recurse
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ProductVariant_Generate_Recursive( l.product, l.pricing_method, l.delimiter, l.attribute_pos + 1, l.attribute_count, l.attributes, l.variants, l.variant_count, l.dimensions + 1 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.option_pos"			VALUE = "{ l.option_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Generate_Part" PARAMETERS = "product var, variant_id, variants var, variant_count" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariant_Generate_Part_Delimiter( l.product, '_', l.variant_id, l.variants, l.variant_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Generate_Part_Delimiter" PARAMETERS = "product var, delimiter, variant_id, variants var, variant_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.variant_count LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00019', 'Invalid number of variant dimensions specified' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Generate the part part_product code by appending the option codes to the original part_product code
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.part_product:code"				VALUE = "{ l.product:code }">
+	<MvASSIGN NAME = "l.variant_pos"					VALUE = 1>
+
+	<MvWHILE EXPR = "{ l.variant_pos LE l.variant_count }">
+		<MvIF EXPR = "{ len( l.variants[ l.variant_pos ]:option_code ) }">
+			<MvASSIGN NAME = "l.part_product:code"		VALUE = "{ l.part_product:code $ l.delimiter $ l.variants[ l.variant_pos ]:option_code }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.variant_pos"				VALUE = "{ l.variant_pos + 1 }">
+	</MvWHILE>
+
+	<MvIF EXPR = "{ len_var( l.part_product:code ) GT 50 }">
+		<MvASSIGN NAME = "l.part_product:code"			VALUE = "{ crypto_md5( l.part_product:code ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Product_Load_Code( l.part_product:code, l.part_product ) }">
+		<MvASSIGN NAME = "l.part_product:name"			VALUE = "{ l.product:name }">
+		<MvASSIGN NAME = "l.part_product:thumbnail"		VALUE = "">
+		<MvASSIGN NAME = "l.part_product:image"			VALUE = "">
+		<MvASSIGN NAME = "l.part_product:price"			VALUE = "{ l.variants[ l.variant_count ]:price }">
+		<MvASSIGN NAME = "l.part_product:cost"			VALUE = "{ l.variants[ l.variant_count ]:cost }">
+		<MvASSIGN NAME = "l.part_product:descrip"		VALUE = "">
+		<MvASSIGN NAME = "l.part_product:weight"		VALUE = "{ l.variants[ l.variant_count ]:weight }">
+		<MvASSIGN NAME = "l.part_product:taxable"		VALUE = 1>
+		<MvASSIGN NAME = "l.part_product:active"		VALUE = 0>
+		<MvASSIGN NAME = "l.variant_pos"				VALUE = 1>
+
+		<MvWHILE EXPR = "{ l.variant_pos LE l.variant_count }">
+			<MvIF EXPR = "{ len( l.variants[ l.variant_pos ]:option_name ) }">
+				<MvASSIGN NAME = "l.part_product:name"	VALUE = "{ l.part_product:name $ ' ' $ l.variants[ l.variant_pos ]:option_name }">
+			</MvIF>
+			
+			<MvASSIGN NAME = "l.variant_pos"			VALUE = "{ l.variant_pos + 1 }">
+		</MvWHILE>
+	
+		<MvASSIGN NAME = "l.part_product:name"			VALUE = "{ substring_var( l.part_product:name, 1, 100 ) }">
+
+		<MvIF EXPR = "{ NOT Product_Insert( l.part_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.invsettings ) }">
+
+		<MvASSIGN NAME = "l.invsettings:product_id"		VALUE = "{ l.part_product:id }">
+		<MvASSIGN NAME = "l.invsettings:active"			VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Insert( l.invsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Insert( l.part_product:id, 0 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.part:product_id"	VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.part:variant_id"	VALUE = "{ l.variant_id }">
+	<MvASSIGN NAME = "l.part:part_id"		VALUE = "{ l.part_product:id }">
+	<MvASSIGN NAME = "l.part:quantity"		VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductVariantPart_Insert( l.part ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductVariant_Sum_Pricing" PARAMETERS = "product_id, variant_id, price var, cost var, weight var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.price"	VALUE = 0.00>
+	<MvASSIGN NAME = "l.cost"	VALUE = 0.00>
+	<MvASSIGN NAME = "l.weight"	VALUE = 0.00>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								p.price, p.cost, p.weight, pvp.quantity
+							  FROM
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+								' $ g.Store_Table_Prefix $ 'Products p
+							  WHERE
+								pvp.product_id	= ?				AND
+								pvp.variant_id	= ?				AND
+								p.id			= pvp.part_id' }"
+				FIELDS	= "l.product_id, l.variant_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PVN-00018', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvASSIGN NAME = "l.price"	VALUE = "{ l.price + ( Products.d.price * Products.d.quantity ) }">
+		<MvASSIGN NAME = "l.cost"	VALUE = "{ l.cost + ( Products.d.cost * Products.d.quantity ) }">
+		<MvASSIGN NAME = "l.weight"	VALUE = "{ l.weight + ( Products.d.weight * Products.d.quantity ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products">
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

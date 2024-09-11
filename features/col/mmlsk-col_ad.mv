@@ -1,0 +1,316 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-COL-AD-
+| Next Error Code: 5   
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| Catalog Display
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Collections_Catalog_Tabs" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "COLS:Collections">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collections_Catalog_Head" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Tab EQ 'COLS' }">
+		<MvEVAL EXPR = "{ Element_CollectionList_CSS() }">
+
+		<MvIF EXPR = "{ Element_Feature_COL_JavaScript_Combined_Begin() }">
+			<MvEVAL EXPR = "{ Element_CollectionList_JavaScript() }">
+			<MvEVAL EXPR = "{ Element_Feature_COL_JavaScript_Combined_End() }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collections_Catalog_Content" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Tab EQ 'COLS' }">
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new CollectionList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_CollectionList_HTML() }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Collection Display
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Action_Collection_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Admin_Open_Store }">							<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+
+	<MvASSIGN NAME = "g.Collection_Code"									VALUE = "{ trim( g.Collection_Code ) }">
+	<MvASSIGN NAME = "g.Collection_Name"									VALUE = "{ trim( g.Collection_Name ) }">
+	<MvASSIGN NAME = "g.Collection_RebuildFrequency"						VALUE = "{ trim( g.Collection_RebuildFrequency ) }">
+	<MvASSIGN NAME = "g.Collection_RebuildKey"								VALUE = "{ trim( g.Collection_RebuildKey ) }">
+	<MvASSIGN NAME = "g.Collection_Filter"									VALUE = "{ trim( g.Collection_Filter ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Load_Code( g.Edit_Collection, l.collection ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].Screen_NotFound( 'MER-COL-AD-00001', 'Collection not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_collection" VALUE = "{ l.collection }">
+
+	<MvCOMMENT>
+	|
+	| Validate Collection
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code( g.Collection_Code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_Code', g.Validation_Message ) }">
+	<MvELSEIF EXPR = "{ [ g.Feature_Filename_COL_DB ].Collection_Load_Code( g.Collection_Code, l.existing_collection ) AND l.existing_collection:id NE l.collection:id }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_Code', 'Collection code \'' $ l.existing_collection:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Collection_Name }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_Name', 'Collection name cannot be blank' ) }">
+	<MvELSEIF EXPR = "{ len_var( g.Collection_Name ) GT 100 }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_Name', 'Collection must be 100 characters or less' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Value_In_List( g.Collection_RebuildFrequency, 'immediate,scheduled,manual' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_RebuildFrequency', 'Please select a valid Rebuild Frequency' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Collection_RebuildFrequency EQ 'scheduled' ) AND ( ISNULL g.Collection_RebuildKey ) }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_RebuildKey', 'Please specify a rebuild key' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Collection_Filter }">
+		<MvASSIGN NAME = "l.collection:filter"	VALUE = "">
+	<MvELSEIF EXPR = "{ NOT miva_json_decode( g.Collection_Filter, l.collection:filter ) }">
+		<MvFUNCTIONRETURN VALUE = "{ NOT [ g.Module_Admin ].FieldError( 'DASH', 'Collection_Filter', 'Invalid filter: ' $ miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Determine if the filter changed. If so, we issue a rebuild to either generate
+	| the new list of products, or (in the case of removing the filter) remove all
+	| automatically assigned products from the collection and propagate downstream.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.existing_filter"		VALUE = "{ miva_json_encode( l.original_collection:filter, '' ) }">
+	<MvASSIGN NAME = "l.normalized_filter"		VALUE = "{ miva_json_encode( l.collection:filter, '' ) }">
+	<MvASSIGN NAME = "l.rebuild_collection"		VALUE = "{ strcmp( l.existing_filter, l.normalized_filter ) NE 0 }">
+
+	<MvCOMMENT>
+	|
+	| Update Collection
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.collection:code"			VALUE = "{ g.Collection_Code }">
+	<MvASSIGN NAME = "l.collection:name"			VALUE = "{ g.Collection_Name }">
+
+	<MvIF EXPR = "{ g.Collection_RebuildFrequency EQ 'immediate' }">
+		<MvASSIGN NAME = "l.collection:immediate"	VALUE = 1>
+		<MvASSIGN NAME = "l.collection:rebuildkey"	VALUE = "">
+	<MvELSEIF EXPR = "{ g.Collection_RebuildFrequency EQ 'scheduled' }">
+		<MvASSIGN NAME = "l.collection:immediate"	VALUE = 0>
+		<MvASSIGN NAME = "l.collection:rebuildkey"	VALUE = "{ g.Collection_RebuildKey }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.collection:immediate"	VALUE = 0>
+		<MvASSIGN NAME = "l.collection:rebuildkey"	VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Update( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.rebuild_collection }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_COL_UT ].Collection_Rebuild_Products( l.collection ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Original_Edit_Collection"	VALUE = "{ g.Edit_Collection }">
+	<MvASSIGN NAME = "g.Edit_Collection"			VALUE = "{ g.Collection_Code }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Collection_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Admin_Open_Store }">							<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Load_Code( g.Edit_Collection, l.collection ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].Screen_NotFound( 'MER-COL-AD-00002', 'Collection not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Delete( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-AD-00003', 'Collection \'' $ l.collection:code $ '\' deleted' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Message( 'Collection \'' $ l.collection:name $ '\' deleted' ) }">
+
+	<MvASSIGN NAME = "g.Edit_Collection"	VALUE = "">
+	<MvASSIGN NAME = "g.Screen"				VALUE = "CTLG">
+	<MvASSIGN NAME = "g.Tab"				VALUE = "COLS">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Screen_Collections" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ ISNULL g.Admin_Open_Store }">							<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+
+	<MvASSIGN NAME = "l.can_modify"											VALUE = "{ [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">
+
+	<MvASSIGN NAME = "g.Edit_Collection"									VALUE = "{ trim( g.Edit_Collection ) }">
+	<MvASSIGN NAME = "g.Collection_Code"									VALUE = "{ trim( g.Collection_Code ) }">
+	<MvASSIGN NAME = "g.Collection_Name"									VALUE = "{ trim( g.Collection_Name ) }">
+	<MvASSIGN NAME = "g.Collection_RebuildFrequency"						VALUE = "{ trim( g.Collection_RebuildFrequency ) }">
+	<MvASSIGN NAME = "g.Collection_RebuildKey"								VALUE = "{ trim( g.Collection_RebuildKey ) }">
+	<MvASSIGN NAME = "g.Collection_Filter"									VALUE = "{ trim( g.Collection_Filter ) }">
+	<MvASSIGN NAME = "g.Collection_Original_Filter"							VALUE = "{ trim( g.Collection_Original_Filter ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Load_Code( g.Edit_Collection, l.collection ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].Screen_NotFound( 'MER-COL-AD-00004', 'Collection not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.title"												VALUE = "{ 'Edit Collection: ' $ encodeentities( l.collection:name ) }">
+	<MvASSIGN NAME = "l.tabs"												VALUE = "DASH:Collection Details">
+	<MvASSIGN NAME = "l.context"											VALUE = "">
+	<MvASSIGN NAME = "l.context:collection"									VALUE = "{ l.collection }">
+	<MvASSIGN NAME = "l.context:collection_fields"							VALUE = "">
+
+	<MvIF EXPR = "{ NOT g.Load_Fields }">
+		<MvASSIGN NAME = "l.context:collection_fields:code"					VALUE = "{ g.Collection_Code }">
+		<MvASSIGN NAME = "l.context:collection_fields:name"					VALUE = "{ g.Collection_Name }">
+		<MvASSIGN NAME = "l.context:collection_fields:rebuild_frequency"	VALUE = "{ g.Collection_RebuildFrequency }">
+		<MvASSIGN NAME = "l.context:collection_fields:rebuildkey"			VALUE = "{ g.Collection_RebuildKey }">
+		<MvASSIGN NAME = "l.context:collection_fields:filter"				VALUE = "{ g.Collection_Filter }">
+		<MvASSIGN NAME = "l.context:collection_fields:first_load"			VALUE = 0>
+		<MvASSIGN NAME = "l.context:collection_fields:original_filter"		VALUE = "{ g.Collection_Original_Filter }">
+		<MvASSIGN NAME = "l.context:collection_fields:filter_changed"		VALUE = "{ g.Collection_Filter NE g.Collection_Original_Filter }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.context:collection_fields:code"					VALUE = "{ l.collection:code }">
+		<MvASSIGN NAME = "l.context:collection_fields:name"					VALUE = "{ l.collection:name }">
+		<MvASSIGN NAME = "l.context:collection_fields:rebuildkey"			VALUE = "{ l.collection:rebuildkey }">
+		<MvASSIGN NAME = "l.context:collection_fields:first_load"			VALUE = 1>
+		<MvASSIGN NAME = "l.context:collection_fields:filter_changed"		VALUE = 0>
+
+		<MvIF EXPR = "{ ISNULL l.collection:filter }">				<MvASSIGN NAME = "l.context:collection_fields:filter"				VALUE = "">
+		<MvELSE>													<MvASSIGN NAME = "l.context:collection_fields:filter"				VALUE = "{ miva_json_encode( l.collection:filter, '' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.context:collection_fields:original_filter"		VALUE = "{ l.context:collection_fields:filter }">
+
+		<MvIF EXPR = "{ l.collection:immediate }">					<MvASSIGN NAME = "l.context:collection_fields:rebuild_frequency"	VALUE = "immediate">
+		<MvELSEIF EXPR = "{ NOT ISNULL l.collection:rebuildkey }">	<MvASSIGN NAME = "l.context:collection_fields:rebuild_frequency"	VALUE = "scheduled">
+		<MvELSE>													<MvASSIGN NAME = "l.context:collection_fields:rebuild_frequency"	VALUE = "manual">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].TabIsValid( g.Tab, l.tabs ) }">
+		<MvASSIGN NAME = "g.Tab"											VALUE = "{ [ g.Module_Admin ].DetermineDefaultTab( l.tabs ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( l.title, '', '' ) }">
+
+	<MvIF EXPR = "{ g.Tab EQ 'DASH' }">
+		<MvEVAL EXPR = "{ Element_Collection_Dashboard_CSS() }">
+
+		<MvIF EXPR = "{ Element_Feature_COL_JavaScript_Combined_Begin() }">
+			<MvEVAL EXPR = "{ Element_Collection_Dashboard_JavaScript() }">
+			<MvEVAL EXPR = "{ Element_Feature_COL_JavaScript_Combined_End() }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Context_SetNavigationGroup( l.context, 'catalog' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Context( l.context ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( l.title, '', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginContent() }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawTabs( '', l.tabs ) }">
+
+	<MvHIDE FIELDS = "g.Edit_Collection">
+	<input type="hidden" name="Original_Edit_Collection" value="{ encodeentities( g.Original_Edit_Collection ) }" disabled />
+
+	<MvIF EXPR = "{ g.Tab EQ 'DASH' }">
+		<script type="text/javascript">
+			MMScreen_LoadFinished( () => { window.collection_dashboard = new Collection_Dashboard( MMScreenContext.collection, MMScreenContext.collection_fields ); } );
+
+			function Collection_Dashboard_Update( button )
+			{
+				window.collection_dashboard.Save( button );
+			}
+
+			function Collection_Dashboard_Delete( button )
+			{
+				window.collection_dashboard.Delete( button );
+			}
+		</script>
+
+		<MvEVAL EXPR = "{ Element_Collection_Dashboard_HTML() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons( 'UCOL:[UPDATE];Collection_Dashboard_Update( this ):PROD:0:1:0,DCOL:Delete Collection;Collection_Dashboard_Delete( this ):PROD:0:1:0' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "features/col/functions.mv">
+<MvINCLUDE FILE = "features/col/basecollectionlist.mv">
+<MvINCLUDE FILE = "features/col/collectionlist.mv">
+<MvINCLUDE FILE = "features/col/collectionlookupdialog.mv">
+<MvINCLUDE FILE = "features/col/collectionproductlist.mv">
+<MvINCLUDE FILE = "features/col/collectionproductdialog.mv">
+<MvINCLUDE FILE = "features/col/collectionadddialog.mv">
+<MvINCLUDE FILE = "features/col/collectionsaveconfirmationdialog.mv">
+<MvINCLUDE FILE = "features/col/collectiondeleteconfirmationdialog.mv">
+<MvINCLUDE FILE = "features/col/collectionassignmentconfirmationdialog.mv">
+<MvINCLUDE FILE = "features/col/dashboard.mv">
+
+<MvINCLUDE FILE = "features/col/combined.mv">

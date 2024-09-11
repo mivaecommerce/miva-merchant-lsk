@@ -1,0 +1,489 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-UTIL-OHN-
+| Next Error Code: 3
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-orderhistorynotes">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Order History Notes">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.04">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to track modifications made to orders.  When enabled, all changes to an order -- adding items, deleting items, changing order status ('pending' to 'processing' to 'shipping'), changing prices, etc. -- are logged in the Notes section with the date & time, the username of the person who made the change, and a descriptive note of the change.  Disabling the module does not erase the Notes history but no new log entries will appear.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "util, not_order, not_orderitem, not_orderreturn, not_ordershpmnt">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store Utilities Feature (util)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation" PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Order Status Change Notification Feature (not_order)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_Order_Insert" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 	VALUE = "Created order">
+	<MvASSIGN NAME = "l.null" 			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Order_Delete" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 	VALUE = "Deleted order">
+	<MvASSIGN NAME = "l.null" 			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Order_StatusChange" PARAMETERS = "module var, original_status, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session:cache:orderhistorynotes:last_order_id EQ l.order:id }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:orderhistorynotes:last_order_id" 	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.original_status" 								VALUE = "{ Convert_Status( l.original_status ) }">
+	<MvASSIGN NAME = "l.status" 										VALUE = "{ Convert_Status( l.order:status ) }">
+
+	<MvASSIGN NAME = "l.note"											VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 									VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 									VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 									VALUE = "{ 'Changed order status from ' $ Add_Quotes( l.original_status ) $ ' to ' $ Add_Quotes( l.status ) }">
+	<MvASSIGN NAME = "l.null" 											VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Order_BatchChange" PARAMETERS = "module var, order_count, original_orders var, orders var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.order" ARRAY = "l.orders" INDEX = "l.pos" COUNT = "{ l.order_count }">
+		<MvASSIGN NAME = "l.original_order" VALUE = "{ l.original_orders[ l.pos ] }">
+
+		<MvIF EXPR = "{ NOT l.order:batch_id AND l.original_order:batch_id }">
+			<MvIF EXPR = "{ NOT Batch_Load_ID_Cached( l.original_order:batch_id, l.batch ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.batch:name }">				<MvASSIGN NAME = "l.text" VALUE = "{ Add_Quotes( l.batch:name ) }">
+			<MvELSE>												<MvASSIGN NAME = "l.text" VALUE = "{ '#' $ l.batch:id }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.entry" VALUE = "{ 'Removed order from batch ' $ l.text }">
+		<MvELSEIF EXPR = "{ l.order:batch_id AND NOT l.original_order:batch_id }">
+			<MvIF EXPR = "{ NOT Batch_Load_ID_Cached( l.order:batch_id, l.batch ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.batch:name }">				<MvASSIGN NAME = "l.text" VALUE = "{ Add_Quotes( l.batch:name ) }">
+			<MvELSE>												<MvASSIGN NAME = "l.text" VALUE = "{ '#' $ l.batch:id }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.entry" VALUE = "{ 'Added order to batch ' $ l.text }">
+		<MvELSEIF EXPR = "{ l.order:batch_id AND l.original_order:batch_id }">
+			<MvIF EXPR = "{ NOT Batch_Load_ID_Cached( l.order:batch_id, l.batch ) OR
+							NOT Batch_Load_ID_Cached( l.original_order:batch_id, l.original_batch ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.batch:name }">				<MvASSIGN NAME = "l.text" VALUE = "{ Add_Quotes( l.batch:name ) }">
+			<MvELSE>												<MvASSIGN NAME = "l.text" VALUE = "{ '#' $ l.batch:id }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.original_batch:name }">	<MvASSIGN NAME = "l.original_text" VALUE = "{ Add_Quotes( l.original_batch:name ) }">
+			<MvELSE>												<MvASSIGN NAME = "l.original_text" VALUE = "{ '#' $ l.original_batch:id }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.entry" VALUE = "{ 'Moved order from batch ' $ l.original_text $ ' to batch ' $ l.text }">
+		<MvELSE>
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.note"			VALUE = "">
+		<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+		<MvASSIGN NAME = "l.note:notetext" 	VALUE = "{ l.entry }">
+		<MvASSIGN NAME = "l.null" 			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| OrderItem Status Change Notification Feature (not_orderitem)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_OrderItem_Insert" PARAMETERS = "module var, orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderitem:order_id, l.order ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id"	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id"	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext"	VALUE = "{ 'Added order item ' $ Add_Quotes( l.orderitem:code ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderItem_Update" PARAMETERS = "module var, original_orderitem, orderitem" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderitem:order_id, l.order ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_code" 		VALUE = "{ l.original_orderitem:code }">
+	<MvASSIGN NAME = "l.code" 				VALUE = "{ l.orderitem:code }">
+	<MvASSIGN NAME = "l.original_name" 		VALUE = "{ l.original_orderitem:name }">
+	<MvASSIGN NAME = "l.name" 				VALUE = "{ l.orderitem:name }">
+	<MvASSIGN NAME = "l.original_quantity" 	VALUE = "{ l.original_orderitem:quantity }">
+	<MvASSIGN NAME = "l.quantity" 			VALUE = "{ l.orderitem:quantity }">
+	<MvASSIGN NAME = "l.original_weight" 	VALUE = "{ l.original_orderitem:weight }">
+	<MvASSIGN NAME = "l.weight" 			VALUE = "{ l.orderitem:weight }">
+	<MvASSIGN NAME = "l.original_price" 	VALUE = "{ l.original_orderitem:price }">
+	<MvASSIGN NAME = "l.price" 				VALUE = "{ l.orderitem:price }">
+	<MvASSIGN NAME = "l.original_taxable" 	VALUE = "{ l.original_orderitem:taxable }">
+	<MvASSIGN NAME = "l.taxable" 			VALUE = "{ l.orderitem:taxable }">
+
+	<MvIF EXPR = "{ l.original_code NE l.code }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ miva_array_insert( l.changed, ' Original Code: ' $ l.original_code $ ', Updated Code: ' $ l.code, -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_name NE l.name }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ miva_array_insert( l.changed, ' Original Name: ' $ l.original_name $ ', Updated Name: ' $ l.name, -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_quantity NE l.quantity }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ miva_array_insert( l.changed, ' Original Quantity: ' $ l.original_quantity $ ', Updated Quantity: ' $ l.quantity, -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_weight NE l.weight }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ miva_array_insert( l.changed, ' Original Weight: ' $ ( l.original_weight ROUND 2 ) $ ', Updated Weight: ' $ ( l.weight ROUND 2 ), -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_price NE l.price }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ miva_array_insert( l.changed, ' Original Price: ' $ ( l.original_price ROUND 2 ) $ ', Updated Price: ' $ ( l.price ROUND 2 ), -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_taxable NE l.taxable }">
+		<MvIF EXPR = "{ l.original_taxable }">	<MvASSIGN NAME = "l.original_word" VALUE = "Yes">
+		<MvELSE>								<MvASSIGN NAME = "l.original_word" VALUE = "No">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.taxable }">			<MvASSIGN NAME = "l.word" VALUE = "Yes">
+		<MvELSE>								<MvASSIGN NAME = "l.word" VALUE = "No">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.count" VALUE = "{ miva_array_insert( l.changed, ' Originally Taxable: ' $ l.original_word $ ', Updated Taxable: ' $ l.word, -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.count }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.orderitem:order_id }">
+	<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 	VALUE = "{ 'Changed the values of order item ' $ Add_Quotes( l.original_orderitem:code ) $ ': ' $ trim( l.changed ) }">
+	<MvASSIGN NAME = "l.null" 			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderItem_Delete" PARAMETERS = "module var, orderitem_count, original_orderitems var, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.orderitem_count }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderitem:order_id, l.order ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.orderitem_codes, l.orderitem:code, -1 ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 	VALUE = "{ 'Deleted order ' $ [ g.Module_Library_Utilities ].Plural( l.orderitem_count, 'item', 'items' ) $ ' ' $ Add_Quotes( l.orderitem_codes ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderItem_StatusChange" PARAMETERS = "module var, orderitem_count, original_orderitems var, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" INDEX = "l.pos" COUNT = "{ l.orderitem_count }">
+		<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderitem:order_id, l.order ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_orderitem" VALUE = "{ l.original_orderitems[ l.pos ] }">
+
+		<MvCOMMENT>
+		|
+		| We ignore certain order item status codes in order to cut down on duplicate notes
+		|
+		| 		 	Ignore order items that have the same status
+		| 0-100:	Ignore items going from the pending state to picking state 		- Module_Notify_OrderShipment_Insert will handle this
+		| 100-200:	Ignore items going from the picking state to shipped state 		- Module_Notify_OrderShipment_StatusChange will handle this
+		| 200-500:	Ignore items going from the shipped state to RMA issued state 	- Module_Notify_OrderReturn_Insert will handle this
+		| 500-600:	Ignore items going from the RMA issued state to Returned state	- Module_Notify_OrderReturn_StatusChange will handle this
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ ( l.orderitem:status EQ l.original_orderitem:status ) 					OR
+						( l.original_orderitem:status EQ 0 		AND l.orderitem:status EQ 100 ) OR
+						( l.original_orderitem:status EQ 100 	AND l.orderitem:status EQ 200 )	OR
+						( l.original_orderitem:status EQ 200 	AND l.orderitem:status EQ 500 )	OR
+						( l.original_orderitem:status EQ 500 	AND l.orderitem:status EQ 600 ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_status"	VALUE = "{ Convert_Status( l.original_orderitem:status ) }">
+		<MvASSIGN NAME = "l.status"				VALUE = "{ Convert_Status( l.orderitem:status ) }">
+
+		<MvASSIGN NAME = "l.note"				VALUE = "">
+		<MvASSIGN NAME = "l.note:order_id" 		VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.note:cust_id" 		VALUE = "{ l.order:cust_id }">
+		<MvASSIGN NAME = "l.note:notetext" 		VALUE = "{ 'Changed the status of order item ' $ Add_Quotes( l.orderitem:code ) $ ' from ' $ Add_Quotes( l.original_status ) $ ' to ' $ Add_Quotes( l.status ) }">
+		<MvASSIGN NAME = "l.null" 				VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| OrderReturn Status Change Notification Feature (not_orderreturn)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_OrderReturn_Insert" PARAMETERS = "module var, orderreturn var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderreturn:order_id, l.order ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ [ g.Module_Library_DB ].OrderItemList_Load_Return( l.orderreturn:id, l.orderitems ) }">
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvASSIGN NAME = "l.null" 			VALUE = "{ miva_array_insert_var( l.orderitem_codes, l.orderitem:code, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.orderitem_count }">	<MvASSIGN NAME = "l.text" VALUE = "{ 'Created return ' $ Add_Quotes( l.orderreturn:code ) }">
+	<MvELSE>									<MvASSIGN NAME = "l.text" VALUE = "{ 'Created return ' $ Add_Quotes( l.orderreturn:code ) $ ' with order ' $ [ g.Module_Library_Utilities ].Plural( l.orderitem_count, 'item', 'items' ) $ ' ' $ Add_Quotes( l.orderitem_codes ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.note"				VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 		VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 		VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 		VALUE = "{ l.text }">
+	<MvASSIGN NAME = "l.null" 				VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderReturn_Delete" PARAMETERS = "module var, orderreturn var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderreturn:order_id, l.order ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 	VALUE = "{ 'Deleted order return ' $ Add_Quotes( l.orderreturn:code ) }">
+	<MvASSIGN NAME = "l.null" 			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderReturn_StatusChange" PARAMETERS = "module var, orderreturn_count, original_orderreturns var, orderreturns var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.orderreturn" ARRAY = "l.orderreturns" COUNT = "{ l.orderreturn_count }">
+		<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.orderreturn:order_id, l.order ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_status"		VALUE = "{ Convert_Status( l.original_orderreturn:status ) }">
+		<MvASSIGN NAME = "l.status"					VALUE = "{ Convert_Status( l.orderreturn:status ) }">
+
+		<MvASSIGN NAME = "l.note"					VALUE = "">
+		<MvASSIGN NAME = "l.note:order_id" 			VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.note:cust_id" 			VALUE = "{ l.order:cust_id }">
+		<MvASSIGN NAME = "l.note:notetext" 			VALUE = "{ 'Changed status of order return ' $ Add_Quotes( l.orderreturn:code ) $ ' from ' $ Add_Quotes( l.original_status ) $ ' to ' $ Add_Quotes( l.status ) }">
+		<MvASSIGN NAME = "l.null" 					VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| OrderShipment Status Change Notification Feature (not_ordershpmnt)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_OrderShipment_Insert" PARAMETERS = "module var, ordershipment var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.ordershipment:order_id, l.order ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ [ g.Module_Library_DB ].OrderItemList_Load_Shipment( l.ordershipment:id, l.orderitems ) }">
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvASSIGN NAME = "l.null" 			VALUE = "{ miva_array_insert_var( l.orderitem_codes, l.orderitem:code, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.orderitem_count }">	<MvASSIGN NAME = "l.text" VALUE = "{ 'Created shipment ' $ Add_Quotes( l.ordershipment:code ) }">
+	<MvELSE>									<MvASSIGN NAME = "l.text" VALUE = "{ 'Created shipment ' $ Add_Quotes( l.ordershipment:code ) $ ' with order ' $ [ g.Module_Library_Utilities ].Plural( l.orderitem_count, 'item', 'items' ) $ ' ' $ Add_Quotes( l.orderitem_codes ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.note"				VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 		VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 		VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 		VALUE = "{ l.text }">
+	<MvASSIGN NAME = "l.null" 				VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderShipment_Delete" PARAMETERS = "module var, ordershipment var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.ordershipment:order_id, l.order ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.note"			VALUE = "">
+	<MvASSIGN NAME = "l.note:order_id" 	VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.note:cust_id" 	VALUE = "{ l.order:cust_id }">
+	<MvASSIGN NAME = "l.note:notetext" 	VALUE = "{ 'Deleted shipment ' $ Add_Quotes( l.ordershipment:code ) }">
+	<MvASSIGN NAME = "l.null" 			VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_OrderShipment_StatusChange" PARAMETERS = "module var, ordershipment_count, original_ordershipments var, ordershipments var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.ordershipment" ARRAY = "l.ordershipments" INDEX = "l.pos" COUNT = "{ l.ordershipment_count }">
+		<MvIF EXPR = "{ NOT Order_Load_ID_Cached( l.ordershipment:order_id, l.order ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_ordershipment" VALUE = "{ l.original_ordershipments[ l.pos ] }">
+		<MvASSIGN NAME = "l.original_status"		VALUE = "{ Convert_OrderShipment_Status( l.original_ordershipment:status ) }">
+		<MvASSIGN NAME = "l.status"					VALUE = "{ Convert_OrderShipment_Status( l.ordershipment:status ) }">
+
+		<MvASSIGN NAME = "l.note"					VALUE = "">
+		<MvASSIGN NAME = "l.note:order_id" 			VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.note:cust_id" 			VALUE = "{ l.order:cust_id }">
+		<MvASSIGN NAME = "l.note:notetext" 			VALUE = "{ 'Changed status of shipment ' $ Add_Quotes( l.ordershipment:code ) $ ' from ' $ Add_Quotes( l.original_status ) $ ' to ' $ Add_Quotes( l.status ) }">
+		<MvASSIGN NAME = "l.null" 					VALUE = "{ [ g.Module_Library_DB ].Note_Insert( l.note ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Add_Quotes" PARAMETERS = "string" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ '\'' $ l.string $ '\'' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_ID_Cached" PARAMETERS = "id, order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.id"								VALUE = "{ int( l.id ) }">
+
+	<MvIF EXPR = "{ l.id LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTIL-OHN-00001' ) }">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.cache"					VARIABLE = "g.Session:cache:orderhistorynotes:orders">
+		<MvDIMENSION INDEX = "{ l.id }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.cache }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ [ g.Module_Library_DB ].Order_Load_ID( l.id, l.cache:order ) }">
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order"							VALUE = "{ l.cache:order }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Batch_Load_ID_Cached" PARAMETERS = "id, batch var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.id"								VALUE = "{ int( l.id ) }">
+
+	<MvIF EXPR = "{ l.id LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTIL-OHN-00002' ) }">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.cache"					VARIABLE = "g.Session:cache:orderhistorynotes:batches">
+		<MvDIMENSION INDEX = "{ l.id }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.cache }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ [ g.Module_Library_DB ].Batch_Load_ID( l.id, l.cache:batch ) }">
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.batch"							VALUE = "{ l.cache:batch }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Convert_Status" PARAMETERS = "status" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.status EQ 0 }">		<MvFUNCTIONRETURN VALUE = "Pending">
+	<MvELSEIF EXPR = "{ l.status EQ 100 }">	<MvFUNCTIONRETURN VALUE = "Processing">
+	<MvELSEIF EXPR = "{ l.status EQ 200 }">	<MvFUNCTIONRETURN VALUE = "Shipped">
+	<MvELSEIF EXPR = "{ l.status EQ 201 }">	<MvFUNCTIONRETURN VALUE = "Partially Shipped">
+	<MvELSEIF EXPR = "{ l.status EQ 300 }">	<MvFUNCTIONRETURN VALUE = "Cancelled">
+	<MvELSEIF EXPR = "{ l.status EQ 400 }">	<MvFUNCTIONRETURN VALUE = "Backordered">
+	<MvELSEIF EXPR = "{ l.status EQ 500 }">	<MvFUNCTIONRETURN VALUE = "RMA Issued">
+	<MvELSEIF EXPR = "{ l.status EQ 600 }">	<MvFUNCTIONRETURN VALUE = "Returned">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Convert_OrderShipment_Status" PARAMETERS = "status" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.status EQ 0 }">		<MvFUNCTIONRETURN VALUE = "Pending">
+	<MvELSEIF EXPR = "{ l.status EQ 100 }">	<MvFUNCTIONRETURN VALUE = "Picking">
+	<MvELSEIF EXPR = "{ l.status EQ 200 }">	<MvFUNCTIONRETURN VALUE = "Shipped">
+	</MvIF>
+</MvFUNCTION>

@@ -1,0 +1,1691 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-PRD-
+| Next Error Code: 73   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Product_Transaction_Begin" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Session:cache:product_transaction"			VALUE = "">
+	<MvASSIGN NAME = "g.Session:cache:product_transaction:active"	VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Transaction_Commit" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Session:cache:product_transaction:active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Session:cache:product_transaction:type EQ 'insert' }">		<MvASSIGN NAME = "l.null" VALUE = "{ Product_Transaction_Finalize_Insert( g.Session:cache:product_transaction:product ) }">
+	<MvELSEIF EXPR = "{ g.Session:cache:product_transaction:type EQ 'update' }">	<MvASSIGN NAME = "l.null" VALUE = "{ Product_Transaction_Finalize_Update( g.Session:cache:product_transaction:product ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:product_transaction" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Transaction_Commit_PreserveError" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.error_is_eof"	VALUE = "{ g.Error_DB_EOF }">
+	<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+	<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ Product_Transaction_Commit() }">
+
+	<MvASSIGN NAME = "g.Error_DB_EOF"	VALUE = "{ l.error_is_eof }">
+	<MvASSIGN NAME = "g.Error_Code"		VALUE = "{ l.error_code }">
+	<MvASSIGN NAME = "g.Error_Message"	VALUE = "{ l.error_message }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Transaction_Finalize_Insert" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Product_Insert( l.module, l.product ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_COL_UT ].Product_Evaluate_Collections( l.product ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'precalcprices' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Transaction_Finalize_Update" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prod', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Product_Update( l.module, l.product ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_COL_UT ].Product_Evaluate_Collections( l.product ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'precalcprices' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Insert" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Product_Insert_LowLevel( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Store_Update_CacheVersion( g.Store ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Session:cache:product_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Product_Transaction_Finalize_Insert( l.product ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Session:cache:product_transaction:type"			VALUE = "insert">
+		<MvREFERENCE NAME = "g.Session:cache:product_transaction:product"	VARIABLE = "l.product">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Update" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.product:original_active AND ( NOT l.product:active ) }">
+		<MvIF EXPR = "{ NOT CachedProductList_Decrement_ProductCount_Product( l.product:id ) OR
+						NOT CachedProductListXProduct_Delete_All_Product( l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].DiscountPrice_Delete_All_Product( l.product:id ) OR
+					NOT [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Product( l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Product_Update_LowLevel( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Session:cache:product_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Product_Transaction_Finalize_Update( l.product ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ ( l.product:id NE g.Session:cache:product_transaction:product:id ) OR ( g.Session:cache:product_transaction:type NE 'insert' ) }">
+			<MvASSIGN NAME = "g.Session:cache:product_transaction:type" VALUE = "update">
+		</MvIF>
+
+		<MvREFERENCE NAME = "g.Session:cache:product_transaction:product" VARIABLE = "l.product">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Update_LastUpdated_RelatedProduct" PARAMETERS = "relprod_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dt_updated" VALUE = "{ s.dyn_time_t }">
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'Products p
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'RelatedProducts rp ON p.id = rp.product_id AND rp.relprod_id = ?
+							  SET
+								p.dt_updated = ?' }"
+				 FIELDS	= "l.relprod_id, l.dt_updated">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-PRD-00063', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'UPDATE
+				 				' $ g.Store_Table_Prefix $ 'Products p
+				 			  SET
+				 			  	dt_updated		= ?
+				 			  FROM
+				 			  	' $ g.Store_Table_Prefix $ 'RelatedProducts rp
+				 			  WHERE
+				 			  	rp.product_id	= p.id AND
+				 			  	rp.relprod_id	= ?' }"
+				 FIELDS = "l.dt_updated, l.relprod_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-PRD-00071', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Delete" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Product_Delete( l.module, l.product ) }">
+	</MvFOREACH>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Delete_All_Product( l.product:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:catcount }">
+		<MvIF EXPR = "{ NOT Category_Update_LastUpdated_CategoryXProduct_Product( l.product:id ) OR
+						NOT CategoryXProduct_Delete_All_Product_LowLevel( l.product:id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:agrpcount }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].AvailGroupXProduct_Delete_All_Product( l.product:id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:pgrpcount }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Delete_All_Product( l.product:id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplate_Decrement_ReferenceCount_Product( l.product:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Attribute_Delete_All_Product( l.product:id )															OR
+					NOT Option_Delete_All_Product( l.product:id )																OR
+					NOT [ g.Module_Feature_USL_DB ].Upsell_Delete_Product( l.product:id )										OR
+					NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Delete( l.product:id )								OR
+					NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Delete( l.product:id )								OR
+					NOT [ g.Module_Feature_RPD_DB ].RelatedProduct_Delete_ProductOrRelatedProduct( l.product:id )				OR
+					NOT [ g.Module_Feature_PGR_DB ].DiscountPrice_Delete_All_Product( l.product:id )							OR
+					NOT [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Product( l.product:id )						OR
+					NOT ProductKit_Delete_All_Product( l.product:id )															OR
+					NOT ProductKit_Delete_All_Part( l.product:id )																OR
+					NOT ProductVariant_Delete_All_Product( l.product:id )														OR
+					NOT ProductVariantPart_Delete_All_Part( l.product:id )														OR
+					NOT ProductVariantPricing_Delete_All_Product( l.product:id )												OR
+					NOT ProductImage_Delete_All_Product( l.product:id )															OR
+					NOT [ g.Module_Feature_WSH_DB ].WishListItems_Delete_All_Product( l.product:id )							OR
+					NOT [ g.Module_Feature_GFT_DB ].GiftCertificateSales_Delete_Product( l.product:id )							OR
+					NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Delete_Product( l.product:id )							OR
+					NOT [ g.Module_Feature_PAY_DB ].ProductPaymentMethod_Delete_All_Product( l.product:id )						OR
+					NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Delete_Product( l.product:id )							OR
+					NOT [ g.Module_Feature_SHP_DB ].ProductShippingMethod_Delete_All_Product( l.product:id )					OR
+					NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Delete_Product( l.product:id )					OR
+					NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionTerms_Delete_Product( l.product:id )						OR
+					NOT [ g.Module_Feature_URI_UT ].URI_Product_Delete( l.product )												OR
+					NOT [ g.Module_Feature_DDL_DB ].DigitalDownloadProductSetting_Delete( l.product:id )						OR
+					NOT [ g.Module_Feature_DDL_DB ].DigitalDownload_Delete_All_Product( l.product:id )							OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedProduct_Delete_All_Product( l.product:id )				OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXProductSubscription_Delete_All_Product( l.product:id )			OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedProductSubscription_Delete_All_Product( l.product:id )	OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingProduct_Delete_All_Product( l.product:id )				OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingProductSubscription_Delete_All_Product( l.product:id )	OR
+					NOT CachedProductList_Decrement_ProductCount_Product( l.product:id )										OR
+					NOT CachedProductListXProduct_Delete_All_Product( l.product:id )											OR
+					NOT [ g.Module_Feature_TUI_DB ].ManagedProperty_Delete_All_Product( l.product:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Product_Delete_ID( l.product:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Store_Update_CacheVersion( g.Store ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Decrement_AvailabilityGroupCount_All" PARAMETERS = "agrp_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products
+					      SET
+							agrpcount	= agrpcount - 1
+					      WHERE
+						    id IN ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct WHERE agrp_id = ? )' }"
+			 FIELDS	= "l.agrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Decrement_PriceGroupCount_All" PARAMETERS = "pgrp_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products
+					      SET
+							pgrpcount	= pgrpcount - 1
+					      WHERE
+						    id IN ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct WHERE pgrp_id = ? )' }"
+			 FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Decrement_CategoryCount_All" PARAMETERS = "cat_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products
+					      SET
+							catcount	= catcount - 1
+					      WHERE
+						    id IN ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE cat_id = ? )' }"
+			 FIELDS	= "l.cat_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00072', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'Products', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00032', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Active" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products WHERE active = 1' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'Products', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00056', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00057', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Uncategorized" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products WHERE catcount = 0' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'Products', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00033', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Category_All" PARAMETERS = "cat_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_Category_All_Cat_ID"	VALUE = "{ l.cat_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_Category_All_Cat_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*,
+													cxp.cat_id AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON ( prod.id = cxp.product_id and cxp.cat_id = ? )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "assigned" VALUE = "{ Products.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00034', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Category_Assigned" PARAMETERS = "cat_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_Category_Assigned_Cat_ID"	VALUE = "{ l.cat_id }">
+	
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_Category_Assigned_Cat_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'CategoryXProduct cxp, ' $
+													g.Store_Table_Prefix $ 'Products prod
+												WHERE
+													cxp.cat_id	= ?					AND
+													prod.id		= cxp.product_id' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY cxp.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00006', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00035', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Category_Unassigned" PARAMETERS = "cat_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_Category_Unassigned_Cat_ID"	VALUE = "{ l.cat_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_Category_Unassigned_Cat_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON cxp.cat_id = ? AND cxp.product_id = prod.id
+												WHERE
+													cxp.product_id IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00036', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_AvailabilityGroup_Unassigned" PARAMETERS = "agrp_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_AvailabilityGroup_Unassigned_Agrp_ID"	VALUE = "{ l.agrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_AvailabilityGroup_Unassigned_Agrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp ON agxp.agrp_id = ? AND agxp.product_id = prod.id
+												WHERE
+													agxp.product_id IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00037', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_AvailabilityGroup_All" PARAMETERS = "agrp_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_AvailabilityGroup_All_Agrp_ID"	VALUE = "{ l.agrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_AvailabilityGroup_All_Agrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*,
+													agxc.agrp_id AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxc ON ( prod.id = agxc.product_id and agxc.agrp_id = ? )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "assigned" VALUE = "{ Products.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00038', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_AvailabilityGroup_Assigned" PARAMETERS = "agrp_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_AvailabilityGroup_Assigned_Agrp_ID"	VALUE = "{ l.agrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_AvailabilityGroup_Assigned_Agrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod, ' $
+													g.Store_Table_Prefix $ 'AvailGroupXProduct agxc
+												WHERE
+													prod.id			= agxc.product_id AND
+													agxc.agrp_id	= ?' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00039', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_PriceGroup_Unassigned" PARAMETERS = "pgrp_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_PriceGroup_Unassigned_Pgrp_ID"	VALUE = "{ l.pgrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_PriceGroup_Unassigned_Pgrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp ON pgxp.pgrp_id = ? AND pgxp.product_id = prod.id
+												WHERE
+													pgxp.product_id IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00040', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_PriceGroup_All" PARAMETERS = "pgrp_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_PriceGroup_All_Pgrp_ID"	VALUE = "{ l.pgrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_PriceGroup_All_Pgrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*,
+													pgxc.pgrp_id AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxc ON ( prod.id = pgxc.product_id and pgxc.pgrp_id = ? )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "assigned" VALUE = "{ Products.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00041', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_PriceGroup_Assigned" PARAMETERS = "pgrp_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_PriceGroup_Assigned_Pgrp_ID"	VALUE = "{ l.pgrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_PriceGroup_Assigned_Pgrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod, ' $
+													g.Store_Table_Prefix $ 'PriceGroupXProduct pgxc
+												WHERE
+													prod.id			= pgxc.product_id AND
+													pgxc.pgrp_id	= ?' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00042', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Upsell_Unassigned" PARAMETERS = "product_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_Upsell_Unassigned_Product_ID"	VALUE = "{ l.product_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_Upsell_Unassigned_Product_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'UpsellXProduct uxp ON uxp.product_id = ? AND uxp.req_prod = prod.id
+												WHERE
+													uxp.req_prod IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00043', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Upsell_All" PARAMETERS = "product_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_Upsell_All_Product_ID"	VALUE = "{ l.product_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_Upsell_All_Product_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*,
+													usxp.req_prod AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'UpsellXProduct usxp ON ( prod.id = usxp.req_prod and usxp.product_id = ? )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "assigned" VALUE = "{ Products.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00044', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_Upsell_Assigned" PARAMETERS = "product_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_Upsell_Assigned_Product_ID"	VALUE = "{ l.product_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_Upsell_Assigned_Product_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod, ' $
+													g.Store_Table_Prefix $ 'UpsellXProduct usxp
+												WHERE
+													prod.id			= usxp.req_prod AND
+													usxp.product_id	= ?' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00045', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_UpsellXProduct_Required" PARAMETERS = "req_prod, offset, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_UpsellXProduct_Required_Req_Prod"	VALUE = "{ l.req_prod }">
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod, ' $
+													g.Store_Table_Prefix $ 'UpsellXProduct usxp
+												WHERE
+													prod.id			= usxp.product_id AND
+													usxp.req_prod	= ?' }">
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, 'g.ProductList_Load_Offset_UpsellXProduct_Required_Req_Prod',
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00046', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_RelatedProducts_Offset_Unassigned" PARAMETERS = "prod_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_RelatedProducts_Offset_Unassigned_Prod_ID"	VALUE = "{ l.prod_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_RelatedProducts_Offset_Unassigned_Prod_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'RelatedProducts rp ON rp.product_id = ? AND rp.relprod_id = prod.id
+												WHERE
+													rp.relprod_id IS NULL' }">
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00018', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00047', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Offset_RelatedProducts_All" PARAMETERS = "prod_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_Offset_RelatedProducts_All_Prod_ID"	VALUE = "{ l.prod_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_Offset_RelatedProducts_All_Prod_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*,
+													relp.product_id AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'RelatedProducts relp ON ( prod.id = relp.relprod_id and relp.product_id = ? )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00019', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "assigned" VALUE = "{ Products.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00048', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_RelatedProducts_Offset_Assigned" PARAMETERS = "prod_id, offset, search, searchable_fields, max, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ProductList_Load_RelatedProducts_Offset_Assigned_Prod_ID"	VALUE = "{ l.prod_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.ProductList_Load_RelatedProducts_Offset_Assigned_Prod_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													prod.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Products prod, ' $
+													g.Store_Table_Prefix $ 'RelatedProducts relp
+												WHERE
+													prod.id			= relp.relprod_id AND
+													relp.product_id	= ?' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'prod', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY relp.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.product_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00049', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Load_First" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products ORDER BY disp_order ASC',
+																			   '',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00021', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PRD-00050' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Product_Read( l.product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Load_Next" PARAMETERS = "product var, next_product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Product_Load_Next_Display_Order"		VALUE = "{ l.product:disp_order }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products WHERE disp_order > ? ORDER BY disp_order ASC',
+																			   'g.Product_Load_Next_Display_Order',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PRD-00051' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Product_Read( l.next_product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Load_Previous" PARAMETERS = "product var, prev_product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Product_Load_Previous_Display_Order"	VALUE = "{ l.product:disp_order }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products WHERE disp_order < ? ORDER BY disp_order DESC',
+																			   'g.Product_Load_Previous_Display_Order',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00023', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PRD-00052' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Product_Read( l.prev_product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Load_Last" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Products ORDER BY disp_order DESC',
+																			   '',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00024', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PRD-00053' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Product_Read( l.product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Update_Offsets" PARAMETERS = "products var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"						VALUE = 0>
+
+	<MvASSIGN NAME = "l.product_pos"						VALUE = 1>
+	<MvASSIGN NAME = "l.product_count"						VALUE = "{ miva_array_elements( l.products ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.products, l.product_count ) }">
+
+	<MvWHILE EXPR = "{ l.product_pos LE l.product_count }">
+		<MvASSIGN NAME = "g.Products_Order_ProductID" 	VALUE = "{ l.products[ l.product_pos ]:id }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current product at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				 'Products',
+																				 'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'Products WHERE id <> ? ORDER BY disp_order',
+																				 'g.Products_Order_ProductID',
+																				 l.products[ l.product_pos ]:offset - 1,
+																				 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00028', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Products.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.products[ l.product_pos ] }">
+
+			<MvASSIGN NAME = "l.product_pos"	VALUE = "{ l.product_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+			<MvIF EXPR = "{ NOT Products_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ Products.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting products after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'Products 
+													SET 
+														disp_order = disp_order + 1 
+													WHERE 
+														disp_order >= ?' }" 
+													FIELDS = "l.disp_order">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00029', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'ProductDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the product in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'Products 
+													SET 
+														disp_order = ? 
+													WHERE 
+														id = ?' }" 
+													FIELDS = "l.disp_order, g.Products_Order_ProductID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00030', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.product_pos"	VALUE = "{ l.product_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT Products_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Update_CacheVersion( g.Store ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Products_Update_Offsets_PastEnd" PARAMETERS = "pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.Products_Order_ProductID" 	VALUE = "{ l.pastend[ l.pastend_pos ]:id }">
+		<MvASSIGN NAME = "l.disp_order"					VALUE = "{ StoreKey_Generate( 'ProductDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+													$ g.Store_Table_Prefix $ 'Products 
+												SET 
+													disp_order = ? 
+												WHERE 
+													id = ?' }" 
+												FIELDS = "l.disp_order, g.Products_Order_ProductID">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00031', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Load_ID_WithRuntimeInventory" PARAMETERS = "id, product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								ipc.inventory	AS ipc_inventory,
+								ips.active		AS ips_active,
+								ips.in_long		AS ips_in_long,
+								ips.in_short	AS ips_in_short,
+								ips.low_level	AS ips_low_level,
+								ips.low_long	AS ips_low_long,
+								ips.low_lvl_d	AS ips_low_lvl_d,
+								ips.low_short	AS ips_low_short,
+								ips.low_track	AS ips_low_track,
+								ips.out_level	AS ips_out_level,
+								ips.out_long	AS ips_out_long,
+								ips.out_lvl_d	AS ips_out_lvl_d,
+								ips.out_short	AS ips_out_short,
+								ips.out_track	AS ips_out_track,
+								iset.active		AS iset_active,
+								iset.in_long	AS iset_in_long,
+								iset.in_short	AS iset_in_short,
+								iset.low_level	AS iset_low_level,
+								iset.low_long	AS iset_low_long,
+								iset.low_short	AS iset_low_short,
+								iset.low_track	AS iset_low_track,
+								iset.out_level	AS iset_out_level,
+								iset.out_long	AS iset_out_long,
+								iset.out_short	AS iset_out_short,
+								iset.out_track	AS iset_out_track
+							  FROM ' $
+								g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+								g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								prod.id	= ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00058', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PRD-00059' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Product_Read( l.product ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Load_Code_WithRuntimeInventory" PARAMETERS = "code, product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								ipc.inventory	AS ipc_inventory,
+								ips.active		AS ips_active,
+								ips.in_long		AS ips_in_long,
+								ips.in_short	AS ips_in_short,
+								ips.low_level	AS ips_low_level,
+								ips.low_long	AS ips_low_long,
+								ips.low_lvl_d	AS ips_low_lvl_d,
+								ips.low_short	AS ips_low_short,
+								ips.low_track	AS ips_low_track,
+								ips.out_level	AS ips_out_level,
+								ips.out_long	AS ips_out_long,
+								ips.out_lvl_d	AS ips_out_lvl_d,
+								ips.out_short	AS ips_out_short,
+								ips.out_track	AS ips_out_track,
+								iset.active		AS iset_active,
+								iset.in_long	AS iset_in_long,
+								iset.in_short	AS iset_in_short,
+								iset.low_level	AS iset_low_level,
+								iset.low_long	AS iset_low_long,
+								iset.low_short	AS iset_low_short,
+								iset.low_track	AS iset_low_track,
+								iset.out_level	AS iset_out_level,
+								iset.out_long	AS iset_out_long,
+								iset.out_short	AS iset_out_short,
+								iset.out_track	AS iset_out_track
+							  FROM ' $
+								g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+								g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( 'prod.code' ) $ ' = ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00054', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-PRD-00055' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Product_Read( l.product ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_SKU_WithRuntimeInventory" PARAMETERS = "sku, products var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								ipc.inventory	AS ipc_inventory,
+								ips.active		AS ips_active,
+								ips.in_long		AS ips_in_long,
+								ips.in_short	AS ips_in_short,
+								ips.low_level	AS ips_low_level,
+								ips.low_long	AS ips_low_long,
+								ips.low_lvl_d	AS ips_low_lvl_d,
+								ips.low_short	AS ips_low_short,
+								ips.low_track	AS ips_low_track,
+								ips.out_level	AS ips_out_level,
+								ips.out_long	AS ips_out_long,
+								ips.out_lvl_d	AS ips_out_lvl_d,
+								ips.out_short	AS ips_out_short,
+								ips.out_track	AS ips_out_track,
+								iset.active		AS iset_active,
+								iset.in_long	AS iset_in_long,
+								iset.in_short	AS iset_in_short,
+								iset.low_level	AS iset_low_level,
+								iset.low_long	AS iset_low_long,
+								iset.low_short	AS iset_low_short,
+								iset.low_track	AS iset_low_track,
+								iset.out_level	AS iset_out_level,
+								iset.out_long	AS iset_out_long,
+								iset.out_short	AS iset_out_short,
+								iset.out_track	AS iset_out_track
+							  FROM ' $
+								g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+								g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( 'prod.sku' ) $ ' = ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.sku">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00066', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvEVAL EXPR = "{ Product_Read( l.products[ ++l.product_count ] ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.products[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00067', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductAndBasketItemList_Load_Basket_WithRuntimeInventory" PARAMETERS = "basket_id, products var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00070', 0 ) }">
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								bi.basket_id	AS bi_basket_id,
+								bi.line_id		AS bi_line_id,
+								bi.group_id		AS bi_group_id,
+								bi.product_id	AS bi_product_id,
+								bi.variant_id	AS bi_variant_id,
+								bi.wish_id		AS bi_wish_id,
+								bi.subscrp_id	AS bi_subscrp_id,
+								bi.subterm_id	AS bi_subterm_id,
+								bi.code			AS bi_code,
+								bi.name			AS bi_name,
+								bi.sku			AS bi_sku,
+								bi.retail		AS bi_retail,
+								bi.base_price	AS bi_base_price,
+								bi.price		AS bi_price,
+								bi.weight		AS bi_weight,
+								bi.taxable		AS bi_taxable,
+								bi.upsold		AS bi_upsold,
+								bi.quantity		AS bi_quantity,
+								ipc.inventory	AS ipc_inventory,
+								ips.active		AS ips_active,
+								ips.in_long		AS ips_in_long,
+								ips.in_short	AS ips_in_short,
+								ips.low_level	AS ips_low_level,
+								ips.low_long	AS ips_low_long,
+								ips.low_lvl_d	AS ips_low_lvl_d,
+								ips.low_short	AS ips_low_short,
+								ips.low_track	AS ips_low_track,
+								ips.out_level	AS ips_out_level,
+								ips.out_long	AS ips_out_long,
+								ips.out_lvl_d	AS ips_out_lvl_d,
+								ips.out_short	AS ips_out_short,
+								ips.out_track	AS ips_out_track,
+								iset.active		AS iset_active,
+								iset.in_long	AS iset_in_long,
+								iset.in_short	AS iset_in_short,
+								iset.low_level	AS iset_low_level,
+								iset.low_long	AS iset_low_long,
+								iset.low_short	AS iset_low_short,
+								iset.low_track	AS iset_low_track,
+								iset.out_level	AS iset_out_level,
+								iset.out_long	AS iset_out_long,
+								iset.out_short	AS iset_out_short,
+								iset.out_track	AS iset_out_track
+							  FROM ' $
+								g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+								g.Store_Table_Prefix $ 'BasketItems bi, ' $
+								g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								bi.basket_id	= ? AND
+								prod.id			= bi.product_id' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00060', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"			VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvREFERENCEARRAY NAME = "l.product" VARIABLE = "l.products">
+			<MvDIMENSION INDEX = "{ ++l.product_count }">
+		</MvREFERENCEARRAY>
+
+		<MvEVAL EXPR = "{ Product_Read( l.product ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.product ) }">
+
+		<MvASSIGN NAME = "l.product:basketitem:basket_id"	VALUE = "{ Products.d.bi_basket_id }">
+		<MvASSIGN NAME = "l.product:basketitem:line_id"		VALUE = "{ Products.d.bi_line_id }">
+		<MvASSIGN NAME = "l.product:basketitem:group_id"	VALUE = "{ Products.d.bi_group_id }">
+		<MvASSIGN NAME = "l.product:basketitem:product_id"	VALUE = "{ Products.d.bi_product_id }">
+		<MvASSIGN NAME = "l.product:basketitem:variant_id"	VALUE = "{ Products.d.bi_variant_id }">
+		<MvASSIGN NAME = "l.product:basketitem:wish_id"		VALUE = "{ Products.d.bi_wish_id }">
+		<MvASSIGN NAME = "l.product:basketitem:subscrp_id"	VALUE = "{ Products.d.bi_subscrp_id }">
+		<MvASSIGN NAME = "l.product:basketitem:subterm_id"	VALUE = "{ Products.d.bi_subterm_id }">
+		<MvASSIGN NAME = "l.product:basketitem:code"		VALUE = "{ Products.d.bi_code }">
+		<MvASSIGN NAME = "l.product:basketitem:name"		VALUE = "{ Products.d.bi_name }">
+		<MvASSIGN NAME = "l.product:basketitem:sku"			VALUE = "{ Products.d.bi_sku }">
+		<MvASSIGN NAME = "l.product:basketitem:retail"		VALUE = "{ Products.d.bi_retail }">
+		<MvASSIGN NAME = "l.product:basketitem:base_price"	VALUE = "{ Products.d.bi_base_price }">
+		<MvASSIGN NAME = "l.product:basketitem:price"		VALUE = "{ Products.d.bi_price }">
+		<MvASSIGN NAME = "l.product:basketitem:weight"		VALUE = "{ Products.d.bi_weight }">
+		<MvASSIGN NAME = "l.product:basketitem:taxable"		VALUE = "{ Products.d.bi_taxable }">
+		<MvASSIGN NAME = "l.product:basketitem:upsold"		VALUE = "{ Products.d.bi_upsold }">
+		<MvASSIGN NAME = "l.product:basketitem:quantity"	VALUE = "{ Products.d.bi_quantity }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00061', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductList_Load_Related" PARAMETERS = "product_id, products var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.branch_id" VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() }">
+
+	<MvCOMMENT>
+	|
+	| This function uses a different VIEW name to avoid conflicts with the more commonly
+	| used "Products" view
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "RelatedProducts"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								' $ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( 'pbv.page_id', 0 ) $ ' AS page_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'RelatedProducts rpd,
+								' $ g.Store_Table_Prefix $ 'Products prod
+							  LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PageBranchVersions pbv ON prod.page_code <> \'\' AND pbv.branch_id = ? AND pbv.head = 1 AND ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pbv.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prod.page_code' ) $ '
+							  WHERE
+								rpd.product_id	= ? AND
+								prod.id			= rpd.relprod_id
+							  ORDER BY
+							  	rpd.disp_order' }"
+				FIELDS	= "l.branch_id, 
+						   l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PRD-00068', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT RelatedProducts.d.EOF }">
+		<MvREFERENCEARRAY NAME = "l.product" VARIABLE = "l.products">
+			<MvDIMENSION INDEX = "{ ++l.product_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.product:id"					VALUE = "{ RelatedProducts.d.id }">
+		<MvASSIGN NAME = "l.product:catcount"			VALUE = "{ RelatedProducts.d.catcount }">
+		<MvASSIGN NAME = "l.product:cancat_id"			VALUE = "{ RelatedProducts.d.cancat_id }">
+		<MvASSIGN NAME = "l.product:agrpcount"			VALUE = "{ RelatedProducts.d.agrpcount }">
+		<MvASSIGN NAME = "l.product:pgrpcount"			VALUE = "{ RelatedProducts.d.pgrpcount }">
+		<MvASSIGN NAME = "l.product:disp_order"			VALUE = "{ RelatedProducts.d.disp_order }">
+		<MvASSIGN NAME = "l.product:page_id"			VALUE = "{ RelatedProducts.d.page_id }">
+		<MvASSIGN NAME = "l.product:page_code"			VALUE = "{ RelatedProducts.d.page_code }">
+		<MvASSIGN NAME = "l.product:code"				VALUE = "{ RelatedProducts.d.code }">
+		<MvASSIGN NAME = "l.product:sku"				VALUE = "{ RelatedProducts.d.sku }">
+		<MvASSIGN NAME = "l.product:name"				VALUE = "{ RelatedProducts.d.name }">
+		<MvASSIGN NAME = "l.product:page_title"			VALUE = "{ RelatedProducts.d.page_title }">
+		<MvASSIGN NAME = "l.product:thumbnail"			VALUE = "{ RelatedProducts.d.thumbnail }">
+		<MvASSIGN NAME = "l.product:image"				VALUE = "{ RelatedProducts.d.image }">
+		<MvASSIGN NAME = "l.product:price"				VALUE = "{ RelatedProducts.d.price }">
+		<MvASSIGN NAME = "l.product:cost"				VALUE = "{ RelatedProducts.d.cost }">
+		<MvASSIGN NAME = "l.product:descrip"			VALUE = "{ RelatedProducts.d.descrip }">
+		<MvASSIGN NAME = "l.product:weight"				VALUE = "{ RelatedProducts.d.weight }">
+		<MvASSIGN NAME = "l.product:taxable"			VALUE = "{ RelatedProducts.d.taxable }">
+		<MvASSIGN NAME = "l.product:active"				VALUE = "{ RelatedProducts.d.active }">
+		<MvASSIGN NAME = "l.product:original_active"	VALUE = "{ RelatedProducts.d.active }">
+		<MvASSIGN NAME = "l.product:dt_created"			VALUE = "{ RelatedProducts.d.dt_created }">
+		<MvASSIGN NAME = "l.product:dt_updated"			VALUE = "{ RelatedProducts.d.dt_updated }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "RelatedProducts" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "RelatedProducts">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PRD-00069', l.product_count ) }">
+</MvFUNCTION>

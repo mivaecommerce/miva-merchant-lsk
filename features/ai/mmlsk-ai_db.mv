@@ -1,0 +1,135 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-AI-DB-
+| Next Error Code: 5
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AI_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| sNN_AISettings
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME   = "Merchant"
+			 QUERY  = "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AISettings
+						  (
+							enabled	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							token	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							engine	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.aisettings:enabled"	VALUE = 0>
+	<MvASSIGN NAME = "l.aisettings:token"	VALUE = "">
+	<MvASSIGN NAME = "l.aisettings:engine"	VALUE = "gpt-3.5-turbo">
+
+	<MvIF EXPR = "{ NOT AISettings_Insert( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AI_Store_Delete" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AISettings' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AISettings
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AISettings_Read" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.aisettings:enabled"	VALUE = "{ AISettings.d.enabled }">
+	<MvASSIGN NAME = "l.aisettings:token"	VALUE = "{ AISettings.d.token }">
+	<MvASSIGN NAME = "l.aisettings:engine"	VALUE = "{ AISettings.d.engine }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISettings_Load" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AISettings"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AISettings' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AISettings_Read( l.aisettings ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISettings">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISettings_Load_Cached" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:aisettings_load_cached">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ AISettings_Load( l.cache:aisettings ) }">
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ NOT l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.aisettings"					VALUE = "{ l.cache:aisettings }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISettings_Insert" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISettings
+					      ( enabled, token, engine )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.aisettings:enabled, l.aisettings:token, l.aisettings:engine">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISettings_Update" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AISettings
+					      SET
+							enabled	= ?,
+							token	= ?,
+							engine	= ?' }"
+			 FIELDS	= "l.aisettings:enabled, l.aisettings:token, l.aisettings:engine">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

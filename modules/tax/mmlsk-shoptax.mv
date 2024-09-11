@@ -1,0 +1,1087 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-TAX-SHP-
+| Next Error Code: 42   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-shoptax">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Shopper Selected Sales Tax">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.01">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "tax, vis_store, vis_order, provision_store, data_store, json, clientside, clientside_sri">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'ShopTaxOptions
+						  (
+							prompt	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 ) $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'ShopTaxRates
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							prompt		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )		$ ',
+							rate		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 3 )	$ ',
+							tax_ship	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'ShopTaxRates_1 ON ' $ g.Store_Table_Prefix $ 'ShopTaxRates ( prompt )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'ShopTaxRates_2 ON ' $ g.Store_Table_Prefix $ 'ShopTaxRates ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00027', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'ShopTaxRates', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.options:prompt"	VALUE = "Select One:">
+
+	<MvFUNCTIONRETURN VALUE = "{ ShopTaxOptions_Insert( l.options ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00028', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'ShopTaxOptions' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'ShopTaxRates' }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'ShopTaxRates' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sales Tax Calculation Feature (tax)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "TaxModule_Order_Hide_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<input type="hidden" name="ShopTax_Select" value="{ encodeentities( g.ShopTax_Select ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ShopTaxRate_Count() }">
+		<MvFUNCTIONRETURN VALUE = "shoptax">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'shoptax' AND NOT g.Basket:tax_exempt }">
+		<MvIF EXPR = "{ ShopTaxOptions_Load( l.options ) }">
+			<MvFUNCTIONRETURN VALUE = "{ l.options:prompt }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Required" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.field_id EQ 'shoptax' ) AND g.ShopTax_Select_Invalid }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'shoptax' AND NOT g.Basket:tax_exempt }">
+		<select name="ShopTax_Select">
+		<MvASSIGN NAME = "l.rate_pos"	VALUE = 1>
+		<MvASSIGN NAME = "l.rate_count"	VALUE = "{ ShopTaxRateList_Load( l.rates ) }">
+
+		<MvWHILE EXPR = "{ l.rate_pos LE l.rate_count }">
+			<MvIF EXPR = "{ l.rates[ l.rate_pos ]:prompt EQ g.ShopTax_Select }">
+				<option value="{ encodeentities( l.rates[ l.rate_pos ]:prompt ) }" selected><MvEVAL EXPR = "{ encodeentities( l.rates[ l.rate_pos ]:prompt ) }"></option>
+			<MvELSE>
+				<option value="{ encodeentities( l.rates[ l.rate_pos ]:prompt ) }"><MvEVAL EXPR = "{ encodeentities( l.rates[ l.rate_pos ]:prompt ) }"></option>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.rate_pos"	VALUE = "{ l.rate_pos + 1 }">
+		</MvWHILE>
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ShopTaxRate_Count() AND len( g.ShopTax_Select ) EQ 0 AND NOT g.Basket:tax_exempt }">
+		<MvASSIGN NAME = "g.ShopTax_Select_Invalid" VALUE = 1>
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Basket" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ShopTaxRate_Load( g.ShopTax_Select, l.rate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.rate }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketInfo_Delete( g.Basket:basket_id, l.module:id, l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.basketinfo"					VALUE = "">
+		<MvASSIGN NAME = "l.basketinfo:basket_id"		VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketinfo:module_id"		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketinfo:type"			VALUE = "{ l.module:code }">
+		<MvASSIGN NAME = "l.basketinfo:info"			VALUE = "">
+		<MvASSIGN NAME = "l.basketinfo:info:rate"		VALUE = "{ l.rate }">
+		<MvASSIGN NAME = "l.basketinfo:clronmod"		VALUE = 1>
+		<MvASSIGN NAME = "l.basketinfo:orderinfo"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketInfo_InsertOrUpdate( l.basketinfo ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Basket:tax_exempt }">
+		<MvIF EXPR = "{ NOT g.Store:req_tax }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.rate  }">
+		<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.tax" VALUE = 0.000>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ NOT l.basketitem:taxable }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem_price"			VALUE = "{ l.basketitem:price }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketoptions ) }">
+			<MvASSIGN NAME = "l.basketitem_price"		VALUE = "{ l.basketitem_price + l.basketoption:price }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.basketitem:tax"				VALUE = "{ ( l.basketitem_price * l.basketitem:quantity ) * ( l.rate:rate / 100 ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.basketitem:tax }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Update_Tax( l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+		<MvIF EXPR = "{ l.basketcharge:type EQ 'TAX' }">																	<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'SHIPPING' AND NOT l.rate:tax_ship ) OR l.basketcharge:tax_exempt }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = "{ l.basketcharge:amount * ( l.rate:rate / 100 ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.basketcharge:tax }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.tax"							VALUE = "{ max( 0.000, l.tax ) ROUND 3 }">
+
+	<MvASSIGN NAME = "l.basketcharge"					VALUE = "">
+	<MvASSIGN NAME = "l.basketcharge:basket_id" 		VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basketcharge:module_id" 		VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basketcharge:type" 				VALUE = "TAX">
+	<MvASSIGN NAME = "l.basketcharge:descrip" 			VALUE = "Sales Tax">
+	<MvASSIGN NAME = "l.basketcharge:amount" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.basketcharge:disp_amt" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.basketcharge:tax_exempt" 		VALUE = 0>
+	<MvASSIGN NAME = "l.basketcharge:tax"				VALUE = 0.00>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Order" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Load( l.order:id, l.module:id, l.module:code, l.orderinfo ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSEIF EXPR = "{ l.order:cust_id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].TaxExempt_Load_Customer_ID( l.order:cust_id, l.tax_exempt ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tax_exempt }">
+		<MvIF EXPR = "{ NOT g.Store:req_tax }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordercharge"				VALUE = "">
+		<MvASSIGN NAME = "l.ordercharge:order_id" 		VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.ordercharge:module_id" 		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.ordercharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.ordercharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.ordercharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.ordercharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.ordercharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Load_ID( l.orderinfo:info:rate:id, l.rate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| If the rate no longer exists fallback to using the
+		| rate stored in the sNN_OrderInfo
+		|
+		</MvCOMMENT>
+
+		<MvREFERENCE NAME = "l.rate" VARIABLE = "l.orderinfo:info:rate">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.tax" VALUE = 0.000>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+		<MvIF EXPR = "{ NOT l.orderitem:taxable }">			<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 300 }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.orderitem_price"			VALUE = "{ l.orderitem:price }">
+
+		<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ [ g.Module_Library_DB ].OrderOptionList_Load_Line( l.orderitem:line_id, l.orderoptions ) }">
+			<MvASSIGN NAME = "l.orderitem_price"		VALUE = "{ l.orderitem_price + l.orderoption:price }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.orderitem:tax"				VALUE = "{ ( l.orderitem_price * l.orderitem:quantity ) * ( l.rate:rate / 100 ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.orderitem:tax }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Tax( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Order( l.order:id, l.ordercharges ) }">
+		<MvIF EXPR = "{ l.ordercharge:type EQ 'TAX' }">																		<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.ordercharge:type EQ 'SHIPPING' AND NOT l.rate:tax_ship ) OR l.ordercharge:tax_exempt }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = "{ l.ordercharge:amount * ( l.rate:rate / 100 ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.ordercharge:tax }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.tax"							VALUE = "{ max( 0.000, l.tax ) ROUND 3 }">
+
+	<MvASSIGN NAME = "l.ordercharge"					VALUE = "">
+	<MvASSIGN NAME = "l.ordercharge:order_id" 			VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.ordercharge:module_id" 			VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.ordercharge:type" 				VALUE = "TAX">
+	<MvASSIGN NAME = "l.ordercharge:descrip" 			VALUE = "Sales Tax">
+	<MvASSIGN NAME = "l.ordercharge:amount" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.ordercharge:disp_amt" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.ordercharge:tax_exempt" 		VALUE = 0>
+	<MvASSIGN NAME = "l.ordercharge:tax"				VALUE = 0.00>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_ProcessOrder" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Edit Store Screen Feature (vis_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Store_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Store_ShopTax_Prompt" 		VALUE = "{ trim( g.Store_ShopTax_Prompt ) }">
+
+	<MvIF EXPR = "{ len( g.Store_ShopTax_Prompt ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'SHOPTAX', 'Store_ShopTax_Prompt', 'Please specify a prompt' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.options:prompt"	VALUE = "{ g.Store_ShopTax_Prompt }">
+
+	<MvIF EXPR = "{ NOT ShopTaxOptions_Update( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00020', 'ShopTax Configuration updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tabs" VALUE = "GT_STORE/SHOPTAX_PROMPT:Shopper Selected Sales Tax Prompt">
+
+	<MvIF EXPR = "{ [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">
+		<MvASSIGN NAME = "l.tabs" VALUE = "{ l.tabs $ ',SHOPTAX:Shopper Selected Sales Tax' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.tabs }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT ShopTaxOptions_Load( l.options ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Store_ShopTax_Prompt" 	VALUE = "{ l.options:prompt }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'SHOPTAX' }">
+		<MvEVAL EXPR = "{ Element_ShopTaxRateList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_ShopTax_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_ShopTaxRateList_JavaScript( l.module ) }"> 
+			<MvEVAL EXPR = "{ Element_ShopTax_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script language="JavaScript">
+			MMScreen_LoadFinished( function() { new ShopTaxRateList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_ShopTaxRateList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Tab_Visible( g.Tab, 'SHOPTAX_PROMPT' ) }">
+		<MvHIDE FIELDS = "g.Store_ShopTax_Prompt">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_STORE', 'SHOPTAX_PROMPT' ) }">
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+		<tr><td nowrap>
+			<b>Prompt:</b>
+		</td><td width="100%">
+			<input type="text" size="40" name="Store_ShopTax_Prompt" value="{ encodeentities( g.Store_ShopTax_Prompt ) }">
+		</td></tr>
+		</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Order Tabs Feature (vis_order)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "SHOPTAX:Shopper Selected Sales Tax">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Delete_Order" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ShopTax_Rate_ID" VALUE = "{ int( g.ShopTax_Rate_ID ) }">
+
+	<MvCOMMENT>
+	|
+	| -1 indiciates the rate tax record no longer exists so
+	| retain the existing record within sNN_OrderInfo
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.ShopTax_Rate_ID EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Load_ID( g.ShopTax_Rate_ID, l.rate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( g.Tab, 'ShopTax_Rate_ID', 'Select a valid rate' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.ShopTax_Rate_ID EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_ID( g.Edit_Order, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00039', 'Order not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Load_ID( g.ShopTax_Rate_ID, l.rate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00040', 'Rate not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderinfo"				VALUE = "">
+	<MvASSIGN NAME = "l.orderinfo:order_id"		VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.orderinfo:module_id"	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.orderinfo:type"			VALUE = "{ l.module:code }">
+	<MvASSIGN NAME = "l.orderinfo:info"			VALUE = "">
+	<MvASSIGN NAME = "l.orderinfo:info:rate"	VALUE = "{ l.rate }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Insert( l.orderinfo ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Update( l.orderinfo ) }">						<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Head" PARAMETERS = "module var, tab, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.tab NE 'SHOPTAX' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_UI_JavaScript() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_MMMenuButton_JavaScript() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_Modal_JavaScript() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab NE 'SHOPTAX' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_ID( g.Edit_Order, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00041', 'Order not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Load( l.order:id, l.module:id, l.module:code, l.orderinfo ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<table style="display: none;"></table> <MvCOMMENT> Add wrapper on legacy order processing </MvCOMMENT>
+
+	<MvCOMMENT>
+	|
+	| Add a height style which causes the iframe be at least big enough
+	| to display multiple rate options at one time
+	|
+	</MvCOMMENT>
+
+	<div style="height: 200px;">
+		<MvASSIGN NAME = "l.rate_count"			VALUE = "{ ShopTaxRateList_Load( l.rates ) }">
+		<MvASSIGN NAME = "l.selected_rate_id"	VALUE = "{ int( l.orderinfo:info:rate:id ) }">
+
+		<mm-select name="ShopTax_Rate_ID" title="Rate" select-class="mm_select_common whole_width">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption_SelectOne() }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.rates, ':rate', 1 ) }">
+
+			<MvFOREACH ITERATOR = "l.rate" ARRAY = "l.rates" COUNT = "{ l.rate_count }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption_Encode( l.rate:id, l.selected_rate_id, l.rate:prompt $ ' (' $ ( l.rate:rate ROUND 3 ) $ ')' ) }">
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.selected_rate_id }">
+				<MvIF EXPR = "{ NOT miva_array_search( l.rates, 1, l.rate, 'l.rate:id EQ l.selected_rate_id' ) }">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption_Encode( -1, -1, l.orderinfo:info:rate:prompt $ ' (' $ ( l.orderinfo:info:rate:rate ROUND 3 ) $ ')' ) }">
+				</MvIF>
+			</MvIF>
+		</mm-select>
+	</div>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'settings' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Settings( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'rate_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Rate_Delete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'rate_add' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Rate_Add( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ShopTaxOptions_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'O', l.provide_xml,	'Prompt',	l.settings:prompt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ShopTaxOptions_Update( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00024', 'ShopTax Configuration updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Rate_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'prompt', l.prompt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ShopTaxRate_Load( l.prompt, l.rate ) }">
+		<MvIF EXPR = "{ NOT ShopTaxRate_Delete( l.rate ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00025', 'ShopTax Rate \'' $ l.rate:prompt $ '\' deleted' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Rate_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.rate:tax_ship" VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 		'R', l.provide_xml, 'Prompt',		l.rate:prompt ) 		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 	'R', l.provide_xml, 'Rate',			l.rate:rate, 10, 3 ) 	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'TaxShipping',	l.rate:tax_ship ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ShopTaxRate_Load( l.rate:prompt, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Option \'' $ l.rate:prompt $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Insert( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00026', 'ShopTax Rate \'' $ l.rate:prompt $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_ShopTaxOptions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShopTaxOptions_Load" PARAMETERS = "options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ShopTaxOptions"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ShopTaxOptions' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.options:prompt"	VALUE = "{ ShopTaxOptions.d.prompt }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxOptions">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxOptions_Insert" PARAMETERS = "options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'ShopTaxOptions
+						  ( prompt )
+						  VALUES
+						  ( ? )' }"
+			 FIELDS	= "l.options:prompt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxOptions_Update" PARAMETERS = "options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ShopTaxOptions
+						  SET
+							prompt	= ?' }"
+			 FIELDS	= "l.options:prompt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_ShopTaxRates
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShopTaxRate_Read" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.rate:id"		VALUE = "{ ShopTaxRates.d.id }">
+	<MvASSIGN NAME = "l.rate:prompt"	VALUE = "{ ShopTaxRates.d.prompt }">
+	<MvASSIGN NAME = "l.rate:rate"		VALUE = "{ ShopTaxRates.d.rate }">
+	<MvASSIGN NAME = "l.rate:tax_ship"	VALUE = "{ ShopTaxRates.d.tax_ship }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRate_Count" PARAMETERS = "" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ShopTaxRates"
+				QUERY	= "{ 'SELECT COUNT( * ) AS rate_count FROM ' $ g.Store_Table_Prefix $ 'ShopTaxRates' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ShopTaxRates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-SHP-00013' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = "{ ShopTaxRates.d.rate_count }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].EOF_Return( l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRate_Load_ID" PARAMETERS = "id, rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ShopTaxRates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ShopTaxRates WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00029', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ShopTaxRates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-SHP-00030' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ShopTaxRate_Read( l.rate ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRate_Load" PARAMETERS = "prompt, shoptax_rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ShopTaxRates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ShopTaxRates WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prompt' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.prompt">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ShopTaxRates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-SHP-00014' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ShopTaxRate_Read( l.shoptax_rate ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRateList_Load" PARAMETERS = "rates var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ShopTaxRates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ShopTaxRates ORDER BY prompt' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rate_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT ShopTaxRates.d.EOF }">
+		<MvASSIGN NAME = "l.rate_count"	VALUE = "{ l.rate_count + 1 }">
+		<MvEVAL EXPR = "{ ShopTaxRate_Read( l.rates[ l.rate_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "ShopTaxRates" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-TAX-SHP-00015', l.rate_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRate_Insert" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.rate:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'ShopTaxRates' ) }">
+	
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'ShopTaxRates
+						  ( id, prompt, rate, tax_ship )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.rate:id, l.rate:prompt, l.rate:rate, l.rate:tax_ship">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRate_Update" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ShopTaxRates
+						  SET
+							prompt		= ?,
+							rate		= ?,
+							tax_ship	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.rate:prompt, l.rate:rate, l.rate:tax_ship,
+					   l.rate:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShopTaxRate_Delete" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'ShopTaxRates
+						  WHERE
+							id	= ?' }"
+			 FIELDS	= "l.rate:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature Clientside
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/tax/shoptax/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_ShopTax_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/shoptax/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/shoptax/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/shoptax/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature JSON
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'ShopTaxRateList_Load_Query' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_ShopTaxRateList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ShopTaxRate_Insert' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_ShopTaxRate_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ShopTaxRate_Update' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_ShopTaxRate_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ShopTaxRate_Delete' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_ShopTaxRate_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ShopTaxRate_Update_TaxShipping' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_ShopTaxRate_Update_TaxShipping( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRate" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":		<MvEVAL EXPR = "{ int( l.rate:id ) }">,
+	"prompt":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.rate:prompt ) }">",
+	"rate":		<MvEVAL EXPR = "{ l.rate:rate ROUND 3 }">,
+	"tax_ship":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.rate:tax_ship ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRate_Load" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Rate_ID"		VALUE = "{ int( g.Rate_ID ) }">
+	<MvASSIGN NAME = "g.Rate_Prompt"	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate_Prompt ) }">
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Load_ID( g.Rate_ID, l.rate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+		
+		<MvIF EXPR = "{ NOT ShopTaxRate_Load( g.Rate_Prompt, l.rate ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-SHP-00033', 'Unable to load rate' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRateList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Filter"						VALUE = "{ trim( g.Filter ) }">
+	<MvASSIGN NAME = "g.Sort"						VALUE = "{ trim( g.Sort ) }">
+	<MvASSIGN NAME = "g.Offset"						VALUE = "{ int( g.Offset ) }">
+	<MvASSIGN NAME = "g.Count"						VALUE = "{ int( g.Count ) }">
+	
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'ShopTaxRates', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, g.Filter, 'prompt,rate,tax_ship' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, g.Sort, 'rate,tax_ship', 'prompt' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" 				VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ShopTaxRates', l.search_sql, l.search_fields, g.Offset, g.Count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-SHP-00034', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.rate_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT ShopTaxRates.d.EOF ) AND ( ( g.Count EQ 0 ) OR ( l.rate_count LT g.Count ) ) }">
+			<MvEVAL EXPR = "{ ShopTaxRate_Read( l.rate ) }">
+			
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.rate_count ) }">
+				<MvEVAL EXPR = "{ JSON_ShopTaxRate( l.rate ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "ShopTaxRates" ROWS = 1>
+		</MvWHILE>
+		],
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( g.Offset ) }">
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopTaxRates">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRate_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Rate_Prompt"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate_Prompt ) }">
+	<MvASSIGN NAME = "g.Rate_Rate"				VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate_Rate ) }">
+	<MvASSIGN NAME = "g.Rate_TaxShipping"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Rate_TaxShipping ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Rate_Rate, 10, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate_Rate', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Rate_Prompt }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate_Prompt', 'Please specify a rate description' ) }">
+	<MvELSEIF EXPR = "{ ShopTaxRate_Load( g.Rate_Prompt, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate_Prompt', 'A rate with the text \'' $ g.Rate_Prompt $ '\' already exists' ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.rate:prompt" 	VALUE = "{ g.Rate_Prompt }">
+	<MvASSIGN NAME = "l.rate:rate" 		VALUE = "{ g.Rate_Rate }">
+	<MvASSIGN NAME = "l.rate:tax_ship" 	VALUE = "{ g.Rate_TaxShipping }">
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Insert( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00035', 'ShopTaxRate rate \'' $ l.rate:prompt $ '\' inserted' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRate_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Rate_Prompt"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate_Prompt ) }">
+	<MvASSIGN NAME = "g.Rate_Rate"				VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate_Rate ) }">
+	<MvASSIGN NAME = "g.Rate_TaxShipping"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Rate_TaxShipping ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Rate_Rate, 10, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate_Rate', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_ShopTaxRate_Load( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Rate_Prompt }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate_Prompt', 'Please specify a rate description' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ toupper( l.rate:prompt ) NE toupper( g.Rate_Prompt ) }">
+			<MvIF EXPR = "{ ShopTaxRate_Load( g.Rate_Prompt, l.null ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate_Prompt', 'A rate with the text \'' $ g.Rate_Prompt $ '\' already exists' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.rate:prompt" 	VALUE = "{ g.Rate_Prompt }">
+	<MvASSIGN NAME = "l.rate:rate" 		VALUE = "{ g.Rate_Rate }">
+	<MvASSIGN NAME = "l.rate:tax_ship" 	VALUE = "{ g.Rate_TaxShipping }">
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Update( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00036', 'ShopTaxRate rate \'' $ l.rate:prompt $ '\' updated' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRate_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ JSON_ShopTaxRate_Load( l.rate ) }">
+		<MvIF EXPR = "{ NOT ShopTaxRate_Delete( l.rate ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">	
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00037', 'ShopTaxRate rate \'' $ l.rate:prompt $ '\' deleted' ) }">
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ShopTaxRate_Update_TaxShipping" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Rate_TaxShipping"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Rate_TaxShipping ) }">
+
+	<MvIF EXPR = "{ NOT JSON_ShopTaxRate_Load( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rate:tax_ship"		VALUE = "{ g.Rate_TaxShipping }">
+
+	<MvIF EXPR = "{ NOT ShopTaxRate_Update( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-SHP-00038', 'ShopTaxRate rate \'' $ l.rate:prompt $ '\' updated' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/tax/shoptax/functions.mv">
+<MvINCLUDE FILE = "modules/tax/shoptax/list.mv">

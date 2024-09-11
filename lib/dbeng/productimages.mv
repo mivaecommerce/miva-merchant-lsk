@@ -1,0 +1,686 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-PIM-
+| Next Error Code: 16   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ProductImageList_Load_File" PARAMETERS = "product_id, image_filepath, productimages var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductImages"
+				QUERY	= "{ 'SELECT
+								pi.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'ProductImages pi,
+								' $ g.Store_Table_Prefix $ 'Images i
+							  WHERE
+								pi.product_id	= ?				AND
+								i.id			= pi.image_id	AND
+								i.image			= ?' }"
+			FIELDS = "l.product_id, l.image_filepath">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT ProductImages.d.EOF }">
+		<MvASSIGN NAME = "l.productimage_count" VALUE = "{ l.productimage_count + 1 }">
+
+		<MvEVAL EXPR = "{ ProductImage_Read( l.productimages[ l.productimage_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductImages" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PIM-00009', l.productimage_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Insert" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.productimage:type_id }">
+		<MvIF EXPR = "{ NOT ProductImage_Clear_Type( l.productimage:product_id, l.productimage:type_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ProductImage_Insert_LowLevel( l.productimage ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Image_Increment_RefCount( l.productimage:image_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Insert_Image" PARAMETERS = "product_id, image var, type_id, productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productimage:product_id"	VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "l.productimage:image_id"		VALUE = "{ l.image:id }">
+	<MvASSIGN NAME = "l.productimage:type_id"		VALUE = "{ l.type_id }">
+
+	<MvIF EXPR = "{ NOT ProductImage_Insert( l.productimage ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prodimage', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductImage_Insert( l.module, l.productimage ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Insert_ExistingFile" PARAMETERS = "product_id, image_filepath, type_id, productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Image_FindOrInsert_ExistingFile( l.image_filepath, l.image ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductImage_Insert_Image( l.product_id, l.image, l.type_id, l.productimage ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Insert_RenameFile_NoDuplicates" PARAMETERS = "product_id, filepath var, sourcefile_path, sourcefile_location, sourcefile_size, sourcefile_md5, type_id, productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Image_FindOrInsert_RenameFile_NoDuplicates( l.filepath, l.sourcefile_path, l.sourcefile_location, l.sourcefile_size, l.sourcefile_md5, l.image ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductImage_Insert_Image( l.product_id, l.image, l.type_id, l.productimage ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Replace_Type_ExistingFile" PARAMETERS = "product_id, image_filepath, type_id, productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Image_FindOrInsert_ExistingFile( l.image_filepath, l.image ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductImage_Replace_Type( l.product_id, l.image:id, l.type_id, l.productimage ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Replace_Type" PARAMETERS = "product_id, image_id, type_id, productimage var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductImage_Load_Type( l.product_id, l.type_id, l.existing_productimage ) }">
+		<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productimage:product_id"	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.productimage:image_id"		VALUE = "{ l.image_id }">
+		<MvASSIGN NAME = "l.productimage:type_id"		VALUE = "{ l.type_id }">
+
+		<MvIF EXPR = "{ NOT ProductImage_Insert_LowLevel( l.productimage ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Image_Increment_RefCount( l.productimage:image_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prodimage', l.modules ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductImage_Insert( l.module, l.productimage ) }">
+		</MvFOREACH>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.existing_productimage:image_id EQ l.image_id }">
+		<MvASSIGN NAME = "l.productimage"				VALUE = "{ l.existing_productimage }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET image_id = ? WHERE product_id = ? AND type_id = ?' }"
+			 FIELDS	= "l.image_id, l.product_id, l.type_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Image_Decrement_RefCount( l.existing_productimage:image_id ) OR
+					NOT Image_Increment_RefCount( l.image_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productimage"			VALUE = "{ l.existing_productimage }">
+	<MvASSIGN NAME = "l.productimage:image_id"	VALUE = "{ l.image_id }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prodimage', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductImage_Update( l.module, l.existing_productimage, l.productimage ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Update_Type" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module_count" VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_prodimage', l.modules ) }">
+
+	<MvIF EXPR = "{ l.module_count }">
+		<MvASSIGN NAME = "l.productimage_loaded" VALUE = "{ ProductImage_Load_ID( l.productimage:id, l.original_productimage ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productimage:type_id }">
+		<MvIF EXPR = "{ NOT ProductImage_Clear_Type( l.productimage:product_id, l.productimage:type_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET type_id = ? WHERE id = ?' }"
+			 FIELDS	= "l.productimage:type_id, l.productimage:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module_count AND l.productimage_loaded }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductImage_Update( l.module, l.original_productimage, l.productimage ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Delete" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductImage_Delete_LowLevel( l.productimage:id ) OR
+				    NOT Image_Decrement_RefCount( l.productimage:image_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_prodimage', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductImage_Delete( l.module, l.productimage ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.productimage" ARRAY = "l.productimages" COUNT = "{ ProductImageList_Load_Product( l.product_id, l.productimages ) }">
+		<MvIF EXPR = "{ NOT ProductImage_Delete( l.productimage ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageList_Update_Offsets_PastEnd" PARAMETERS = "pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.ProductImage_Order_ID"	VALUE = "{ l.pastend[ l.pastend_pos ]:id }">
+		<MvASSIGN NAME = "l.disp_order"				VALUE = "{ StoreKey_Generate( 'ProductImageDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET disp_order = ? WHERE id = ?' }" FIELDS = "l.disp_order, g.ProductImage_Order_ID">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00004', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageList_Update_Offsets" PARAMETERS = "productimages var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"		VALUE = 0>
+
+	<MvASSIGN NAME = "l.productimage_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.productimage_count"		VALUE = "{ miva_array_elements( l.productimages ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.productimages, l.productimage_count ) }">
+
+	<MvWHILE EXPR = "{ l.productimage_pos LE l.productimage_count }">
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current product image at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "g.ProductImage_Order_ID" 	 VALUE = "{ l.productimages[ l.productimage_pos ]:id }">
+		<MvASSIGN NAME = "g.ProductImage_Product_ID" VALUE = "{ l.productimages[ l.productimage_pos ]:product_id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				 'ProductImages',
+																				 'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'ProductImages WHERE id <> ? AND product_id = ? ORDER BY disp_order',
+																				 'g.ProductImage_Order_ID, g.ProductImage_Product_ID',
+																				 l.productimages[ l.productimage_pos ]:offset - 1,
+																				 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00005', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+		
+		<MvIF EXPR = "{ ProductImages.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+			
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.productimages[ l.productimage_pos ] }">
+
+			<MvASSIGN NAME = "l.productimage_pos"	VALUE = "{ l.productimage_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+
+			<MvIF EXPR = "{ NOT ProductImageList_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ ProductImages.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting image types after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET disp_order = disp_order + 1 WHERE disp_order >= ? AND product_id = ?' }" FIELDS = "l.disp_order, g.ProductImage_Product_ID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00006', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'ProductImageDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the product image in the newly created hole
+			|
+			</MvCOMMENT>
+		
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET disp_order = ? WHERE id = ?' }" FIELDS = "l.disp_order, g.ProductImage_Order_ID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00007', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.productimage_pos"	VALUE = "{ l.productimage_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT ProductImageList_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageDataList_Load_Product" PARAMETERS = "product_id, productimagedatalist var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductImageDataList_Load_Product_Constrained( l.product_id, l.null, 0, l.productimagedatalist ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageDataList_Load_Product_Constrained" PARAMETERS = "product_id, constraints var, constraint_count, productimagedatalist var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductImageDataList_Load_Product_TypeCodes_Constrained( l.product_id, l.null, 0, l.constraints, l.constraint_count, l.productimagedatalist ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageDataList_Load_Product_TypeCodes_Constrained" PARAMETERS = "product_id, imagetype_codes var, imagetypecode_count, constraints var, constraint_count, productimagedatalist var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME		= "l.query"
+			  VALUE		= "{ 'SELECT
+								pi.id			AS pi_id,
+								pi.product_id	AS pi_product_id,
+								pi.image_id		AS pi_image_id,
+								pi.type_id		AS pi_type_id,
+								pi.disp_order	AS pi_disp_order,
+								i.id			AS i_id,
+								i.image			AS i_image,
+								i.width			AS i_width,
+								i.height		AS i_height,
+								i.refcount		AS i_refcount,
+								it.id			AS it_id,
+								it.code			AS it_code,
+								it.descrip		AS it_descrip' }">
+		
+	<MvFOR INDEX = "l.gi" COUNT = "{ l.constraint_count }">
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $
+							 ',	gi' $ l.gi $ '.id		AS gi' $ l.gi $ '_id,
+								gi' $ l.gi $ '.image_id	AS gi' $ l.gi $ '_image_id,
+								gi' $ l.gi $ '.width	AS gi' $ l.gi $ '_width,
+								gi' $ l.gi $ '.height	AS gi' $ l.gi $ '_height,
+								gi' $ l.gi $ '.image	AS gi' $ l.gi $ '_image' }">
+	</MvFOR>
+
+	<MvASSIGN NAME			= "l.query"
+			  VALUE			= "{ l.query $ '
+								 FROM' }">
+
+	<MvIF EXPR = "{ l.imagetypecode_count }">
+		<MvASSIGN NAME		= "l.query"
+				  VALUE		= "{ l.query $ '
+									' $ g.Store_Table_Prefix $ 'ImageTypes it,
+									' $ g.Store_Table_Prefix $ 'ProductImages pi,
+									' $ g.Store_Table_Prefix $ 'Images i' }">
+	<MvELSE>
+		<MvASSIGN NAME		= "l.query"
+				  VALUE		= "{ l.query $ '
+									' $ g.Store_Table_Prefix $ 'ProductImages pi
+									LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ImageTypes it ON it.id = pi.type_id,
+									' $ g.Store_Table_Prefix $ 'Images i' }">
+	</MvIF>
+
+	<MvFOR INDEX = "l.gi" COUNT = "{ l.constraint_count }">
+		<MvASSIGN NAME		= "l.query"
+				  VALUE		= "{ l.query $ '
+									LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'GeneratedImages gi' $ l.gi $ ' ON gi' $ l.gi $ '.image_id = i.id AND ( ( gi' $ l.gi $ '.width = ? AND gi' $ l.gi $ '.height <= ? ) OR ( gi' $ l.gi $ '.height = ? AND gi' $ l.gi $ '.width <= ? ) )' }">
+		<MvASSIGN NAME		= "l.fields"					VALUE = "{ l.fields $ 'l.constraints[' $ l.gi $ ']:width, l.constraints[' $ l.gi $ ']:height, l.constraints[' $ l.gi $ ']:height, l.constraints[' $ l.gi $ ']:width, ' }">
+	</MvFOR>
+
+	<MvASSIGN NAME			= "l.fields"					VALUE = "{ l.fields $ 'l.product_id' }">
+	<MvASSIGN NAME			= "l.query"
+			  VALUE			= "{ l.query $ '
+								 WHERE
+									pi.product_id	= ?				AND
+									i.id			= pi.image_id' }">
+	
+	<MvIF EXPR = "{ l.imagetypecode_count }">
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ '
+								AND pi.type_id = it.id			AND
+								(' }">
+
+		<MvFOREACH INDEX = "l.imagetypecode_pos" ITERATOR = "l.imagetype_code" ARRAY = "l.imagetype_codes" COUNT = "{ l.imagetypecode_count }">
+			<MvASSIGN NAME = "l.fields"						VALUE = "{ l.fields $ ', l.imagetype_codes[' $ l.imagetypecode_pos $ ']' }">
+
+			<MvIF EXPR = "{ l.imagetypecode_pos GT 1 }">
+				<MvASSIGN NAME	= "l.query"
+						  VALUE	= "{ l.query $ ' OR' }">
+			</MvIF>
+
+			<MvASSIGN NAME		= "l.query"
+					  VALUE		= "{ l.query $ ' ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'it.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ ' )' }">
+	</MvIF>
+
+	<MvASSIGN NAME		= "l.query"
+			  VALUE		= "{ l.query $ '
+							 ORDER BY
+								pi_disp_order' }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductImageData"
+				QUERY	= "{ l.query }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.imagedata_count"					VALUE = 0>
+	<MvWHILE EXPR = "{ NOT ProductImageData.d.EOF }">
+		<MvASSIGN NAME = "l.imagedata_count"				VALUE = "{ l.imagedata_count + 1 }">
+
+		<MvREFERENCEARRAY NAME = "l.productimagedata" VARIABLE = "l.productimagedatalist">
+			<MvDIMENSION INDEX = "{ l.imagedata_count }">
+		</MvREFERENCEARRAY>
+
+		<MvREFERENCE NAME = "l.productimage"				VARIABLE = "l.productimagedata:productimage">
+		<MvREFERENCE NAME = "l.image"						VARIABLE = "l.productimagedata:image">
+		<MvREFERENCE NAME = "l.imagetype"					VARIABLE = "l.productimagedata:imagetype">
+
+		<MvASSIGN NAME = "l.productimage:id"				VALUE = "{ ProductImageData.d.pi_id }">
+		<MvASSIGN NAME = "l.productimage:product_id"		VALUE = "{ ProductImageData.d.pi_product_id }">
+		<MvASSIGN NAME = "l.productimage:image_id"			VALUE = "{ ProductImageData.d.pi_image_id }">
+		<MvASSIGN NAME = "l.productimage:type_id"			VALUE = "{ ProductImageData.d.pi_type_id }">
+		<MvASSIGN NAME = "l.productimage:disp_order"		VALUE = "{ ProductImageData.d.pi_disp_order }">
+
+		<MvASSIGN NAME = "l.image:id"						VALUE = "{ ProductImageData.d.i_id }">
+		<MvASSIGN NAME = "l.image:image"					VALUE = "{ ProductImageData.d.i_image }">
+		<MvASSIGN NAME = "l.image:width"					VALUE = "{ ProductImageData.d.i_width }">
+		<MvASSIGN NAME = "l.image:height"					VALUE = "{ ProductImageData.d.i_height }">
+		<MvASSIGN NAME = "l.image:refcount"					VALUE = "{ ProductImageData.d.i_refcount }">
+
+		<MvASSIGN NAME = "l.imagetype:id"					VALUE = "{ ProductImageData.d.it_id }">
+		<MvASSIGN NAME = "l.imagetype:code"					VALUE = "{ ProductImageData.d.it_code }">
+		<MvASSIGN NAME = "l.imagetype:descrip"				VALUE = "{ ProductImageData.d.it_descrip }">
+
+		<MvFOR INDEX = "l.gi" COUNT = "{ l.constraint_count }">
+			<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+				<MvDIMENSION INDEX = "{ l.gi }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.generatedimage:id"			VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_id' ) }">
+			<MvASSIGN NAME = "l.generatedimage:image_id"	VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_image_id' ) }">
+			<MvASSIGN NAME = "l.generatedimage:width"		VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_width' ) }">
+			<MvASSIGN NAME = "l.generatedimage:height"		VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_height' ) }">
+			<MvASSIGN NAME = "l.generatedimage:image"		VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_image' ) }">
+		</MvFOR>
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductImageData" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImageData">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PIM-00013', l.imagedata_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageDataList_Load_Product_Variant" PARAMETERS = "product_id, variant_id, productimagedatalist var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductImageDataList_Load_Product_Variant_Constrained( l.product_id, l.variant_id, l.null, 0, l.productimagedatalist ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageDataList_Load_Product_Variant_Constrained" PARAMETERS = "product_id, variant_id, constraints var, constraint_count, productimagedatalist var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ProductImageDataList_Load_Product_Variant_TypeCodes_Constrained( l.product_id, l.variant_id, l.imagetype_codes, l.imagetypecode_count, l.constraints, l.constraint_count, l.productimagedatalist ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageDataList_Load_Product_Variant_TypeCodes_Constrained" PARAMETERS = "product_id, variant_id, imagetype_codes var, imagetypecode_count, constraints var, constraint_count, productimagedatalist var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.imagedata_count"	VALUE = "{ ProductImageDataList_Load_Product_TypeCodes_Constrained( l.product_id, l.imagetype_codes, l.imagetypecode_count, l.constraints, l.constraint_count, l.productimagedatalist ) }">
+	<MvIF EXPR = "{ l.imagedata_count EQ 0 }">
+		<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.variant_id }">
+		<MvFUNCTIONRETURN VALUE = "{ l.imagedata_count }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load a collection of images for all variant parts.  If a type_id from a variant part
+	| matches a type_id from the master product, replace the master product image with the
+	| variant image, retaining the position in the master product list.
+	|
+	| Variant images which do not match a master image type_id are appended to the end of
+	| the list, in part product display_order, then product image display order
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME		= "l.query"
+			  VALUE		= "{ 'SELECT
+								p.disp_order	AS p_disp_order,
+								pi.id			AS pi_id,
+								pi.product_id	AS pi_product_id,
+								pi.image_id		AS pi_image_id,
+								pi.type_id		AS pi_type_id,
+								pi.disp_order	AS pi_disp_order,
+								i.id			AS i_id,
+								i.image			AS i_image,
+								i.width			AS i_width,
+								i.height		AS i_height,
+								i.refcount		AS i_refcount,
+								it.id			AS it_id,
+								it.code			AS it_code,
+								it.descrip		AS it_descrip' }">
+		
+	<MvFOR INDEX = "l.gi" COUNT = "{ l.constraint_count }">
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $
+							 ',	gi' $ l.gi $ '.id		AS gi' $ l.gi $ '_id,
+								gi' $ l.gi $ '.image_id	AS gi' $ l.gi $ '_image_id,
+								gi' $ l.gi $ '.width	AS gi' $ l.gi $ '_width,
+								gi' $ l.gi $ '.height	AS gi' $ l.gi $ '_height,
+								gi' $ l.gi $ '.image	AS gi' $ l.gi $ '_image' }">
+	</MvFOR>
+
+	<MvASSIGN NAME		= "l.query"
+			  VALUE		= "{ l.query $ '
+							 FROM
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+								' $ g.Store_Table_Prefix $ 'Products p,' }">
+
+	<MvIF EXPR = "{ l.imagetypecode_count }">
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ '
+								' $ g.Store_Table_Prefix $ 'ImageTypes it,
+								' $ g.Store_Table_Prefix $ 'ProductImages pi,
+								' $ g.Store_Table_Prefix $ 'Images i' }">
+	<MvELSE>
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ '
+								' $ g.Store_Table_Prefix $ 'ProductImages pi
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ImageTypes it ON it.id = pi.type_id,
+								' $ g.Store_Table_Prefix $ 'Images i' }">
+	</MvIF>
+
+	<MvFOR INDEX = "l.gi" COUNT = "{ l.constraint_count }">
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ '
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'GeneratedImages gi' $ l.gi $ ' ON gi' $ l.gi $ '.image_id = i.id AND ( ( gi' $ l.gi $ '.width = ? AND gi' $ l.gi $ '.height <= ? ) OR ( gi' $ l.gi $ '.height = ? AND gi' $ l.gi $ '.width <= ? ) )' }">
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.fields $ 'l.constraints[' $ l.gi $ ']:width, l.constraints[' $ l.gi $ ']:height, l.constraints[' $ l.gi $ ']:height, l.constraints[' $ l.gi $ ']:width, ' }">
+	</MvFOR>
+
+	<MvASSIGN NAME		= "l.fields"						VALUE = "{ l.fields $ 'l.product_id, l.variant_id' }">
+	<MvASSIGN NAME		= "l.query"
+			  VALUE		= "{ l.query $ '
+							 WHERE
+								pvp.product_id	= ?				AND
+								pvp.variant_id	= ?				AND
+								p.id			= pvp.part_id	AND
+								pi.product_id	= pvp.part_id	AND
+								i.id			= pi.image_id' }">
+
+	<MvIF EXPR = "{ l.imagetypecode_count }">
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ '
+								AND pi.type_id = it.id			AND
+								(' }">
+
+		<MvFOREACH INDEX = "l.imagetypecode_pos" ITERATOR = "l.imagetype_code" ARRAY = "l.imagetype_codes" COUNT = "{ l.imagetypecode_count }">
+			<MvASSIGN NAME = "l.fields"						VALUE = "{ l.fields $ ', l.imagetype_codes[' $ l.imagetypecode_pos $ ']' }">
+
+			<MvIF EXPR = "{ l.imagetypecode_pos GT 1 }">
+				<MvASSIGN NAME	= "l.query"
+						  VALUE	= "{ l.query $ ' OR' }">
+			</MvIF>
+
+			<MvASSIGN NAME		= "l.query"
+					  VALUE		= "{ l.query $ ' ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'it.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME	= "l.query"
+				  VALUE	= "{ l.query $ ' )' }">
+	</MvIF>
+
+	<MvASSIGN NAME		= "l.query"
+			  VALUE		= "{ l.query $ '
+							 ORDER BY
+								p_disp_order, pi_disp_order' }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductImageData"
+				QUERY	= "{ l.query }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-PIM-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.variant_count"						VALUE = 0>
+	<MvWHILE EXPR = "{ NOT ProductImageData.d.EOF }">
+		<MvREFERENCE NAME = "l.primary_imagedata"			VARIABLE = "l.null">
+
+		<MvIF EXPR = "{ ProductImageData.d.it_id }">
+			<MvFOREACH ITERATOR = "l.iter_imagedata" ARRAY = "l.productimagedatalist" COUNT = "{ l.imagedata_count }">
+				<MvIF EXPR = "{ ( l.iter_imagedata:imagetype:id EQ ProductImageData.d.it_id ) AND ( NOT l.iter_imagedata:replaced_by_variant ) }">
+					<MvASSIGN NAME = "l.iter_imagedata:replaced_by_variant"	VALUE = 1>
+					<MvREFERENCE NAME = "l.primary_imagedata"				VARIABLE = "l.iter_imagedata">
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL l.primary_imagedata:image:id }">
+			<MvREFERENCE NAME = "l.productimagedata"		VARIABLE = "l.primary_imagedata">
+		<MvELSE>
+			<MvASSIGN NAME = "l.variant_count"				VALUE = "{ l.variant_count + 1 }">
+
+			<MvREFERENCEARRAY NAME = "l.productimagedata" VARIABLE = "l.variant_imagedatalist">
+				<MvDIMENSION INDEX = "{ l.variant_count }">
+			</MvREFERENCEARRAY>
+		</MvIF>
+
+		<MvREFERENCE NAME = "l.productimage"				VARIABLE = "l.productimagedata:productimage">
+		<MvREFERENCE NAME = "l.image"						VARIABLE = "l.productimagedata:image">
+		<MvREFERENCE NAME = "l.imagetype"					VARIABLE = "l.productimagedata:imagetype">
+
+		<MvASSIGN NAME = "l.productimage:id"				VALUE = "{ ProductImageData.d.pi_id }">
+		<MvASSIGN NAME = "l.productimage:product_id"		VALUE = "{ ProductImageData.d.pi_product_id }">
+		<MvASSIGN NAME = "l.productimage:image_id"			VALUE = "{ ProductImageData.d.pi_image_id }">
+		<MvASSIGN NAME = "l.productimage:type_id"			VALUE = "{ ProductImageData.d.pi_type_id }">
+		<MvASSIGN NAME = "l.productimage:disp_order"		VALUE = "{ ProductImageData.d.pi_disp_order }">
+
+		<MvASSIGN NAME = "l.image:id"						VALUE = "{ ProductImageData.d.i_id }">
+		<MvASSIGN NAME = "l.image:image"					VALUE = "{ ProductImageData.d.i_image }">
+		<MvASSIGN NAME = "l.image:width"					VALUE = "{ ProductImageData.d.i_width }">
+		<MvASSIGN NAME = "l.image:height"					VALUE = "{ ProductImageData.d.i_height }">
+		<MvASSIGN NAME = "l.image:refcount"					VALUE = "{ ProductImageData.d.i_refcount }">
+
+		<MvASSIGN NAME = "l.imagetype:id"					VALUE = "{ ProductImageData.d.it_id }">
+		<MvASSIGN NAME = "l.imagetype:code"					VALUE = "{ ProductImageData.d.it_code }">
+		<MvASSIGN NAME = "l.imagetype:descrip"				VALUE = "{ ProductImageData.d.it_descrip }">
+
+		<MvFOR INDEX = "l.gi" COUNT = "{ l.constraint_count }">
+			<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+				<MvDIMENSION INDEX = "{ l.gi }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.generatedimage:id"			VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_id' ) }">
+			<MvASSIGN NAME = "l.generatedimage:image_id"	VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_image_id' ) }">
+			<MvASSIGN NAME = "l.generatedimage:width"		VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_width' ) }">
+			<MvASSIGN NAME = "l.generatedimage:height"		VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_height' ) }">
+			<MvASSIGN NAME = "l.generatedimage:image"		VALUE = "{ miva_variable_value( 'ProductImageData.d.gi' $ l.gi $ '_image' ) }">
+		</MvFOR>
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductImageData" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImageData">
+
+	<MvCOMMENT>
+	|
+	| Append the remaining variant images to the output array.
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.variant_imagedata" ARRAY = "l.variant_imagedatalist" COUNT = "{ l.variant_count }">
+		<MvASSIGN NAME = "l.imagedata_count"										VALUE = "{ l.imagedata_count + 1 }">
+		<MvASSIGN NAME = "l.productimagedatalist" INDEX = "{ l.imagedata_count }"	VALUE = "{ l.variant_imagedata }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-PIM-00015', l.imagedata_count ) }">
+</MvFUNCTION>

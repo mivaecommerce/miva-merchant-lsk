@@ -1,0 +1,680 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-SHP-BSU-
+| Next Error Code: 33   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-baseunit">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Base + Weight Shipping">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.61">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to generate simple shipping charges based on the weight of the order.  The Base Charge is a flat rate applied to all orders using this shipping method.  The Amount/Weight Unit is the price you want to charge per weight unit.  Set the weight unit (for example, pounds or kilograms) in the Edit Store > Settings tab > Weight Units drop-down list.  The total shipping charge is [base charge] + ([weight of order] X [shipping charge per unit weight])">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "shipping, vis_shipping, provision_store, data_store, json, clientside, clientside_sri">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'BaseUnitMethods
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+							method	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+							base	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ ',
+							rate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'BaseUnitMethods_1 ON ' $ g.Store_Table_Prefix $ 'BaseUnitMethods ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'BaseUnitMethods_2 ON ' $ g.Store_Table_Prefix $ 'BaseUnitMethods ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'BaseUnitMethods', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00026', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'BaseUnitMethods' ) }">
+
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'BaseUnitMethods' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/shipping/baseunit/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_BaseUnit_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/baseunit/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/baseunit/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/baseunit/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_BaseUnitMethod_Load" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'BaseUnitMethod_ID', l.method_id ) }">
+		<MvIF EXPR = "{ NOT BaseUnitMethod_Load_ID( l.method_id, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00027', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_BaseUnitMethod', l.code ) }">
+		<MvIF EXPR = "{ NOT BaseUnitMethod_Load_Code( l.code, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00028', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'BaseUnitMethod_Code', l.code ) }">
+		<MvIF EXPR = "{ NOT BaseUnitMethod_Load_Code( l.code, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00029', 'Method not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00030', 'Unable to load method: One of BaseUnitMethod_ID, Edit_BaseUnitMethod, or BaseUnitMethod_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseUnitMethodList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'code',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'method',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'base',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'rate',	'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'BaseUnitMethods', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'code,method,base,rate', 'method' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'BaseUnitMethods', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-SHP-BSU-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT BaseUnitMethods.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.method_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ BaseUnitMethod_Read( l.method ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.method_count ) }">
+				"id":		<MvEVAL EXPR = "{ int( l.method:id ) }">,
+				"code":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.method:code ) }">",
+				"method":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.method:method ) }">",
+				"base":		<MvEVAL EXPR = "{ l.method:base ROUND 2 }">,
+				"rate":		<MvEVAL EXPR = "{ l.method:rate ROUND 2 }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "BaseUnitMethods" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseUnitMethod_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }"> 	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'BaseUnitMethod_Code',		l.method:code )	OR
+					 NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'BaseUnitMethod_Method',	l.method:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'R',		'BaseUnitMethod_Base',		l.method:base )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'R',		'BaseUnitMethod_Rate',		l.method:rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BaseUnitMethod_Load_Code( l.method:code, l.existing_method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'BaseUnitMethod_Code', 'A method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-BSU-00018', 'BaseUnit Method \'' $ l.method:code $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseUnitMethod_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }"> 	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_BaseUnitMethod_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_method" VALUE = "{ l.method }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'BaseUnitMethod_Code',		l.method:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'BaseUnitMethod_Method',	l.method:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'O',		'BaseUnitMethod_Base',		l.method:base )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'BaseUnitMethod_Rate',		l.method:rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BaseUnitMethod_Load_Code( l.method:code, l.existing_method ) AND l.method:id NE l.existing_method:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'BaseUnitMethod_Code', 'A method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Update( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.original_method:code, l.method:code ) NE 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_UT ].ShippingMethod_Update_References( l.module, l.original_method:code, l.method:code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-BSU-00019', 'BaseUnit Method \'' $ l.method:code $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseUnitMethod_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_BaseUnitMethod_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Delete_ID( l.method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-BSU-00020', 'BaseUnit Method ' $ l.method:code $ ' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'BaseUnitMethodList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseUnitMethodList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'BaseUnitMethod_Insert' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseUnitMethod_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'BaseUnitMethod_Update' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseUnitMethod_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'BaseUnitMethod_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseUnitMethod_Delete( l.module ) }">	
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Calculation Feature (shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShippingModule_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ BaseUnitMethod_Load_Code( l.data, l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.method:method ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "method">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Label" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "Shipping Method:">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Value" PARAMETERS = "module var, field_id, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "{ ShippingModule_Description( l.module, l.data ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Shipping_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.weight"			VALUE = "{ [ g.Module_Library_DB ].Basket_Weight( g.Basket:basket_id ) }">
+
+	<MvFOREACH ITERATOR = "l.baseunitmethod" ARRAY = "l.baseunitmethods" COUNT = "{ BaseUnitMethodList_Load( l.baseunitmethods ) }">
+		<MvASSIGN NAME = "l.method"			VALUE = "">
+		<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.baseunitmethod:code }">
+		<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.baseunitmethod:method }">
+		<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.baseunitmethod:base + ( l.baseunitmethod:rate * l.weight ) }">
+
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Enabled_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.baseunitmethod" ARRAY = "l.baseunitmethods" COUNT = "{ BaseUnitMethodList_Load( l.baseunitmethods ) }">
+		<MvASSIGN NAME = "l.method"			VALUE = "">
+		<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.baseunitmethod:code }">
+		<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.baseunitmethod:method }">
+
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Calculate_Basket" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Load_Code( l.data, l.method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cost"						VALUE = "{ l.method:base + ( l.method:rate * [ g.Module_Library_DB ].Basket_Weight( g.Basket:basket_id ) ) }">
+	<MvASSIGN NAME = "l.basket_charge"				VALUE = "">
+	<MvASSIGN NAME = "l.basket_charge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basket_charge:module_id" 	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basket_charge:type" 		VALUE = "SHIPPING">
+	<MvASSIGN NAME = "l.basket_charge:descrip" 		VALUE = "{ 'Shipping: ' $ l.method:method }">
+	<MvASSIGN NAME = "l.basket_charge:amount" 		VALUE = "{ l.cost ROUND 2 }">
+	<MvASSIGN NAME = "l.basket_charge:disp_amt" 	VALUE = "{ l.cost ROUND 2 }">
+	<MvASSIGN NAME = "l.basket_charge:tax_exempt" 	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basket_charge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Settings Screen Feature (vis_shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Shipping_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "BASEUNIT:Base + Weight Shipping">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab NE 'BASEUNIT' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Element_BaseUnitMethod_List_CSS( l.module ) }">
+
+	<MvIF EXPR = "{ Element_BaseUnit_JavaScript_Combined_Begin( l.module ) }">
+		<MvEVAL EXPR = "{ Element_BaseUnitMethod_List_JavaScript( l.module ) }">
+		<MvEVAL EXPR = "{ Element_BaseUnit_JavaScript_Combined_End( l.module ) }">
+	</MvIF>
+
+	<script language="JavaScript">
+		MMScreen_LoadFinished( function() { new BaseUnitMethod_List(); } );
+	</script>
+	
+	<MvEVAL EXPR = "{ Element_BaseUnitMethod_List_HTML( l.module ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'method_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Delete( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'method_add' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Add( l.module, l.child_xml ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'method', l.method ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Load_Code( l.method, l.baseunitmethod ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Method \'' $ l.method $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Delete_ID( l.baseunitmethod:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-BSU-00015', 'BaseUnit Method \'' $ l.baseunitmethod:code $ '\' deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'O:100',	l.provide_xml,	'Code',		l.method:code )			OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'R:100',	l.provide_xml,	'Method',	l.method:method )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'R',		l.provide_xml,	'Base',		l.method:base, 10, 2 )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'R',		l.provide_xml,	'Rate',		l.method:rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BaseUnitMethod_Load_Code( l.method:code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A shipping method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BaseUnitMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>	
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-BSU-00016', 'BaseUnit Method \'' $ l.method:code $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_BaseUnitMethods
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Read" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"		VALUE = "{ BaseUnitMethods.d.id }">
+	<MvASSIGN NAME = "l.method:code"	VALUE = "{ BaseUnitMethods.d.code }">
+	<MvASSIGN NAME = "l.method:method"	VALUE = "{ BaseUnitMethods.d.method }">
+	<MvASSIGN NAME = "l.method:base"	VALUE = "{ BaseUnitMethods.d.base }">
+	<MvASSIGN NAME = "l.method:rate"	VALUE = "{ BaseUnitMethods.d.rate }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Load_ID" PARAMETERS = "id, method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BaseUnitMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BaseUnitMethods WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00023', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BaseUnitMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-BSU-00024' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ BaseUnitMethod_Read( l.method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Load_Method" PARAMETERS = "method, baseunit_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BaseUnitMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BaseUnitMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' ORDER BY id' }"
+				FIELDS	= "l.method">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BaseUnitMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-BSU-00009' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ BaseUnitMethod_Read( l.baseunit_method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Load_Code" PARAMETERS = "code, method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BaseUnitMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BaseUnitMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00031', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BaseUnitMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-BSU-00032' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ BaseUnitMethod_Read( l.method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethodList_Load" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BaseUnitMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BaseUnitMethods ORDER BY ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) }"
+				FIELDS	= "">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT BaseUnitMethods.d.EOF }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ l.method_count + 1 }">
+
+		<MvEVAL EXPR = "{ BaseUnitMethod_Read( l.methods[ l.method_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "BaseUnitMethods" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BaseUnitMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-BSU-00010', l.method_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Insert" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'BaseUnitMethods' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'BaseUnitMethods
+						  ( id, code, method, base, rate )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.method:id, l.method:code, l.method:method, l.method:base, l.method:rate">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Update" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'BaseUnitMethods
+						  SET
+							code	= ?,
+							method	= ?,
+							base	= ?,
+							rate	= ?
+						  WHERE
+							id		= ?' }"
+			 FIELDS	= "l.method:code, l.method:method, l.method:base, l.method:rate,
+					   l.method:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Delete_ID" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BaseUnitMethods WHERE id = ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00025', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BaseUnitMethod_Delete_Method" PARAMETERS = "method" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BaseUnitMethods
+						  WHERE
+							' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS	= "l.method">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-BSU-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/shipping/baseunit/functions.mv">
+<MvINCLUDE FILE = "modules/shipping/baseunit/methodlist.mv">

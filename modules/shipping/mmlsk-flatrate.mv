@@ -1,0 +1,651 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-SHP-FLT-
+| Next Error Code: 34
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-flatrate">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Flat Rate Shipping">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.61">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to apply a flat rate shipping charge, regardless of the weight or size of the order.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "shipping, vis_shipping, provision_store, data_store, json, clientside, clientside_sri">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'FlatRateMethods
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+							method	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+							cost	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'FlatRateMethods_1 ON ' $ g.Store_Table_Prefix $ 'FlatRateMethods ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'FlatRateMethods_2 ON ' $ g.Store_Table_Prefix $ 'FlatRateMethods ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'FlatRateMethods', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'FlatRateMethods' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'FlatRateMethods' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Calculation Feature (shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShippingModule_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ FlatRateMethod_Load( l.data, l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.method:method ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "method">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Label" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "Shipping Method:">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Value" PARAMETERS = "module var, field_id, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "{ ShippingModule_Description( l.module, l.data ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Shipping_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.flatratemethod" ARRAY = "l.flatratemethods" COUNT = "{ FlatRateMethodList_Load( l.flatratemethods ) }">
+		<MvASSIGN NAME = "l.method"			VALUE = "">
+		<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.flatratemethod:code }">
+		<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.flatratemethod:method }">
+		<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.flatratemethod:cost }">
+
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Enabled_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.flatratemethod" ARRAY = "l.flatratemethods" COUNT = "{ FlatRateMethodList_Load( l.flatratemethods ) }">
+		<MvASSIGN NAME = "l.method"			VALUE = "">
+		<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.flatratemethod:code }">
+		<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.flatratemethod:method }">
+
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Calculate_Basket" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT FlatRateMethod_Load( l.data, l.method ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_charge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basket_charge:module_id" 	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basket_charge:type" 		VALUE = "SHIPPING">
+	<MvASSIGN NAME = "l.basket_charge:descrip" 		VALUE = "{ 'Shipping: ' $ l.method:method }">
+	<MvASSIGN NAME = "l.basket_charge:amount" 		VALUE = "{ l.method:cost ROUND 2 }">
+	<MvASSIGN NAME = "l.basket_charge:disp_amt" 	VALUE = "{ l.method:cost ROUND 2 }">
+	<MvASSIGN NAME = "l.basket_charge:tax_exempt" 	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basket_charge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Settings Screen Feature (vis_shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Shipping_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "FLATRATE:Flat Rate Shipping">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ ISNULL g.Admin_Open_Store }">							<MvFUNCTIONRETURN VALUE = 1>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = 1>	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'FLATRATE' }">
+		<MvEVAL EXPR = "{ Element_FlatRateList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_FlatRate_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_FlatRateList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_FlatRate_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script language="JavaScript">
+			MMScreen_LoadFinished( function() { new FlatRateList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_FlatRateList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'method_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Delete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'method_add' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Add( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml,	'method', l.method ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FlatRateMethod_Load( l.method, l.flatratemethod ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Method \'' $ l.method $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FlatRateMethod_Delete_ID( l.flatratemethod:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-FLT-00015', 'FlatRate Method \'' $ l.flatratemethod:code $ '\' deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'O:100',	l.provide_xml,	'Code',		l.method:code )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'R:100',	l.provide_xml,	'Method',	l.method:method )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(	'R',		l.provide_xml,	'Cost',		l.method:cost, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ FlatRateMethod_Load( l.method:code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A shipping method with the name \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FlatRateMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-FLT-00016', 'FlatRate Method \'' $ l.method:code $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_FlatRateMethods
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "FlatRateMethod_Read" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"		VALUE = "{ FlatRateMethods.d.id }">
+	<MvASSIGN NAME = "l.method:code"	VALUE = "{ FlatRateMethods.d.code }">
+	<MvASSIGN NAME = "l.method:method"	VALUE = "{ FlatRateMethods.d.method }">
+	<MvASSIGN NAME = "l.method:cost"	VALUE = "{ FlatRateMethods.d.cost }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatRateMethod_Load" PARAMETERS = "code, flatrate_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "FlatRateMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'FlatRateMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ FlatRateMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "FlatRateMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-FLT-00009' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ FlatRateMethod_Read( l.flatrate_method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "FlatRateMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatRateMethod_Load_ID" PARAMETERS = "id, flatrate_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "FlatRateMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'FlatRateMethods WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00019', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ FlatRateMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "FlatRateMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-FLT-00020' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ FlatRateMethod_Read( l.flatrate_method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "FlatRateMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatRateMethodList_Load" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "FlatRateMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'FlatRateMethods ORDER BY ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT FlatRateMethods.d.EOF }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ l.method_count + 1 }">
+
+		<MvEVAL EXPR = "{ FlatRateMethod_Read( l.methods[ l.method_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "FlatRateMethods" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "FlatRateMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-FLT-00010', l.method_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatRateMethod_Insert" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'FlatRateMethods' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'FlatRateMethods
+						  ( id, code, method, cost )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.method:id, l.method:code, l.method:method, l.method:cost">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatRateMethod_Update_ID" PARAMETERS = "id, flatrate_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'FlatRateMethods
+						  SET
+						  	code	= ?,
+							method	= ?,
+							cost	= ?
+						  WHERE
+							id		= ?' }"
+			 FIELDS	= "l.flatrate_method:code, l.flatrate_method:method, l.flatrate_method:cost,
+					   l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatRateMethod_Delete_ID" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'FlatRateMethods
+						  WHERE
+							id = ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00022', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature Clientside
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/shipping/flatrate/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_FlatRate_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/flatrate/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/flatrate/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/flatrate/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature JSON
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'FlatRateMethodList_Load_Query' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_FlatRateMethodList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'FlatRateMethod_Insert' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_FlatRateMethod_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'FlatRateMethod_Update' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_FlatRateMethod_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'FlatRateMethod_Delete' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_FlatRateMethod_Delete( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_FlatRateMethod" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":		<MvEVAL EXPR = "{ int( l.method:id ) }">,
+	"code":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.method:code ) }">",
+	"method":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.method:method ) }">",
+	"cost":		<MvEVAL EXPR = "{ l.method:cost ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_FlatRateMethod_Load" PARAMETERS = "flatratemethod var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Method_ID', l.method_id ) }">
+		<MvIF EXPR = "{ NOT FlatRateMethod_Load_ID( l.method_id, l.flatratemethod ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00023', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_Method', l.code ) }">
+		<MvIF EXPR = "{ NOT FlatRateMethod_Load( l.code, l.flatratemethod ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00031', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Method_Code', l.code ) }">
+		<MvIF EXPR = "{ NOT FlatRateMethod_Load( l.code, l.flatratemethod ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00032', 'Method not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-FLT-00033', 'Unable to load method: One of Method_ID, Edit_Method, or Method_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_FlatRateMethodList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'code',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'method',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'cost',	'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'FlatRateMethods', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'code,method,cost', 'method' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'FlatRateMethods', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-SHP-FLT-00027', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.flatrate_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT FlatRateMethods.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.flatrate_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ FlatRateMethod_Read( l.method ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.flatrate_count ) }">
+				<MvEVAL EXPR = "{ JSON_FlatRateMethod( l.method ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "FlatRateMethods" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "FlatRateMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_FlatRateMethod_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Code',		l.code )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'Method',	l.method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'R:nonneg',	'Cost',		l.cost ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.code }">
+		<MvASSIGN NAME = "l.code" VALUE = "{ l.method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ FlatRateMethod_Load( l.code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A method with the code \'' $ l.code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.flatratemethod"			VALUE = "">
+	<MvASSIGN NAME = "l.flatratemethod:code"	VALUE = "{ l.code }">
+	<MvASSIGN NAME = "l.flatratemethod:method" 	VALUE = "{ l.method }">
+	<MvASSIGN NAME = "l.flatratemethod:cost" 	VALUE = "{ l.cost }">
+
+	<MvIF EXPR = "{ NOT FlatRateMethod_Insert( l.flatratemethod ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-FLT-00028', 'Inserted Flat Rate Shipping Method \'' $ l.flatratemethod:code $ '\'' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_FlatRateMethod_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_FlatRateMethod_Load( l.flatratemethod ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_flatratemethod" VALUE = "{ l.flatratemethod }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Code',		l.flatratemethod:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Method',	l.flatratemethod:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'O:nonneg',	'Cost',		l.flatratemethod:cost ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ FlatRateMethod_Load( l.flatratemethod:code, l.existing_flatratemethod ) AND l.flatratemethod:id NE l.existing_flatratemethod:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A method with the code \'' $ l.flatratemethod:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FlatRateMethod_Update_ID( l.flatratemethod:id, l.flatratemethod ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.original_flatratemethod:code, l.flatratemethod:code ) NE 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_UT ].ShippingMethod_Update_References( l.module, l.original_flatratemethod:code, l.flatratemethod:code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-FLT-00029', 'Updated Flat Rate Shipping Method \'' $ l.flatratemethod:code $ '\'' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_FlatRateMethod_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ JSON_FlatRateMethod_Load( l.flatratemethod ) }">
+		<MvIF EXPR = "{ NOT FlatRateMethod_Delete_ID( l.flatratemethod:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-FLT-00030', 'Deleted Flat Rate Shipping Method \'' $ l.flatratemethod:code $ '\'' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/shipping/flatrate/functions.mv">
+<MvINCLUDE FILE = "modules/shipping/flatrate/list.mv">

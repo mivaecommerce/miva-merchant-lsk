@@ -1,0 +1,1537 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-SHP-UTL-
+| Next Error Code: 5    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "HandlingCharge_CalculateAndApplyToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].HandlingCharge_Load( l.handlingcharge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Delete_All_Type( g.Basket:basket_id, 'HANDLING' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT HandlingCharge_AppliesToBasket( l.handlingcharge ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.amount"		VALUE = "{ HandlingCharge_CalculateBasket( l.handlingcharge ) }">
+	<MvIF EXPR = "{ l.amount EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Attempt to add the handling charge to an existing SHIPPING BasketCharge in the following
+	| order:
+	|
+	|	1. Add the method to the first SHIPPING charge with a module_id equal to basket:ship_id
+	|	2. Add the method to the first SHIPPING charge
+	|	3. If there are no SHIPPING charges, add a standalone handling charge
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.handlingcharge:separate }">
+		<MvASSIGN NAME = "l.basketcharge_count"			VALUE = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Type( g.Basket:basket_id, 'SHIPPING', l.basketcharges ) }">
+
+		<MvIF EXPR = "{ l.basketcharge_count EQ 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Fall through to the separate logic below, per no. 3 above
+			|
+			</MvCOMMENT>
+		<MvELSE>
+			<MvREFERENCEARRAY NAME = "l.basketcharge" VARIABLE = "l.basketcharges">
+				<MvDIMENSION INDEX = 1>
+			</MvREFERENCEARRAY>
+
+			<MvFOR INDEX = "l.pos" FIRST = 2 LAST = "{ l.basketcharge_count }">
+				<MvIF EXPR = "{ l.basketcharges[ l.pos ]:module_id EQ g.Basket:ship_id }">
+					<MvREFERENCEARRAY NAME = "l.basketcharge" VARIABLE = "l.basketcharges">
+						<MvDIMENSION INDEX = "{ l.pos }">
+					</MvREFERENCEARRAY>
+
+					<MvFORSTOP>
+				</MvIF>
+			</MvFOR>
+
+			<MvASSIGN NAME = "l.basketcharge:amount"	VALUE = "{ l.basketcharge:amount + l.amount }">
+			<MvASSIGN NAME = "l.basketcharge:disp_amt"	VALUE = "{ l.basketcharge:disp_amt + l.amount }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Update( l.basketcharge ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge:basket_id"			VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basketcharge:module_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.basketcharge:type"				VALUE = "HANDLING">
+	<MvASSIGN NAME = "l.basketcharge:descrip"			VALUE = "{ l.handlingcharge:descrip }">
+	<MvASSIGN NAME = "l.basketcharge:tax_exempt"		VALUE = "{ l.handlingcharge:tax_exempt }">
+	<MvASSIGN NAME = "l.basketcharge:amount"			VALUE = "{ l.amount }">
+	<MvASSIGN NAME = "l.basketcharge:disp_amt"			VALUE = "{ l.amount }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "HandlingCharge_AppliesToBasket" PARAMETERS = "handlingcharge var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.handlingcharge:type EQ 'subtotal' ) AND ( ISNULL g.Basket:subtotal ) }">		<MvASSIGN NAME = "g.Basket:subtotal"	VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+	<MvELSEIF EXPR = "{ ( l.handlingcharge:type EQ 'quantity' ) AND ( ISNULL g.Basket:quantity ) }">	<MvASSIGN NAME = "g.Basket:quantity"	VALUE = "{ [ g.Module_Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) }">
+	<MvELSEIF EXPR = "{ ( l.handlingcharge:type EQ 'weight' ) AND ( ISNULL g.Basket:weight ) }">		<MvASSIGN NAME = "g.Basket:weight"		VALUE = "{ [ g.Module_Library_DB ].Basket_Weight( g.Basket:basket_id ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ HandlingCharge_Applies( l.handlingcharge, g.Basket:subtotal, g.Basket:quantity, g.Basket:weight ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "HandlingCharge_Applies" PARAMETERS = "handlingcharge var, subtotal, quantity, weight" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.handlingcharge:type EQ 'disabled' }">																<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.handlingcharge:type EQ 'always' }">															<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.handlingcharge:type EQ 'subtotal' }">	<MvASSIGN NAME = "l.value" VALUE = "{ l.subtotal }">
+	<MvELSEIF EXPR = "{ l.handlingcharge:type EQ 'quantity' }">	<MvASSIGN NAME = "l.value" VALUE = "{ l.quantity }">
+	<MvELSEIF EXPR = "{ l.handlingcharge:type EQ 'weight' }">	<MvASSIGN NAME = "l.value" VALUE = "{ l.weight }">
+	<MvELSE>																											<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.value LT l.handlingcharge:min_value }">															<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ ( l.handlingcharge:min_value EQ 0 ) AND ( l.value GT l.handlingcharge:max_value ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.handlingcharge:max_value AND ( l.value GT l.handlingcharge:max_value ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>																											<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "HandlingCharge_CalculateBasket" PARAMETERS = "handlingcharge var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.handlingcharge:amt_type EQ 'pctship' }">												<MvASSIGN NAME = "l.shipping"			VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Total_Type( g.Basket:basket_id, 'SHIPPING' ) }">
+	<MvELSEIF EXPR = "{ ( l.handlingcharge:amt_type EQ 'pctsubtotal' ) AND ( ISNULL g.Basket:subtotal ) }">	<MvASSIGN NAME = "g.Basket:subtotal"	VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ HandlingCharge_Calculate( l.handlingcharge, l.shipping, g.Basket:subtotal ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "HandlingCharge_Calculate" PARAMETERS = "handlingcharge var, shipping, subtotal" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.handlingcharge:amt_type EQ 'fixed' }">			<MvFUNCTIONRETURN VALUE = "{ l.handlingcharge:amount }">
+	<MvELSEIF EXPR = "{ l.handlingcharge:amt_type EQ 'pctship' }">		<MvFUNCTIONRETURN VALUE = "{ ( l.shipping * ( l.handlingcharge:amount / 100 ) ) ROUND 2 }">
+	<MvELSEIF EXPR = "{ l.handlingcharge:amt_type EQ 'pctsubtotal' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.subtotal * ( l.handlingcharge:amount / 100 ) ) ROUND 2 }">
+	<MvELSE>															<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodRules_Exclude" PARAMETERS = "shippingmethodrules var, cust_id, subtotal, quantity, weight, addr1, addr2, state, zip, country" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.subtotal LT l.shippingmethodrules:min_subtot }">												<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.shippingmethodrules:max_subtot AND ( l.subtotal GT l.shippingmethodrules:max_subtot ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.quantity LT l.shippingmethodrules:min_quan }">											<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.shippingmethodrules:max_quan AND ( l.quantity GT l.shippingmethodrules:max_quan ) }">		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.weight LT l.shippingmethodrules:min_weight }">											<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.shippingmethodrules:max_weight AND ( l.weight GT l.shippingmethodrules:max_weight ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:states }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.shippingmethodrules:states, l.state ) }">							<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:zips }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].ZipInList( l.shippingmethodrules:zips, l.zip ) }">		<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:countries }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.shippingmethodrules:countries, l.country ) }">					<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.shippingmethodrules:exclude_po }">
+		<MvIF EXPR = "{ NOT ISNULL l.addr1 }">
+			<MvIF EXPR = "{ Address_Is_POBox( l.addr1 ) }">															<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL l.addr2 }">
+			<MvIF EXPR = "{ Address_Is_POBox( l.addr2 ) }">															<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.shippingmethodrules:agrpcount }">
+		<MvIF EXPR = "{ NOT l.cust_id }">																			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].AvailabilityGroupList_Load_ShippingMethod_And_Customer( l.shippingmethodrules:mod_code, l.shippingmethodrules:meth_code, l.cust_id, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Load_Enabled" PARAMETERS = "shippingmethods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.shippingmethod_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.legacymodule_count"			VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'shipping', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver LT 5.61 }">
+			<MvASSIGN NAME = "l.legacymodule_count"										VALUE = "{ l.legacymodule_count + 1 }">
+			<MvASSIGN NAME = "l.legacy_modules" INDEX = "{ l.legacymodule_count }"		VALUE = "{ l.module }">
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Enabled_Methods( l.module, l.methods ) }">
+			<MvASSIGN NAME = "l.method:module"											VALUE = "{ l.module }">
+			<MvASSIGN NAME = "l.method:module_id"										VALUE = "{ l.module:id }">
+
+			<MvASSIGN NAME = "l.shippingmethod_count"									VALUE = "{ l.shippingmethod_count + 1 }">
+			<MvASSIGN NAME = "l.shippingmethods" INDEX = "{ l.shippingmethod_count }"	VALUE = "{ l.method }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.legacymodule_count }">
+		<MvASSIGN NAME = "l.temp_basket:cust_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.temp_basket:order_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.temp_basket:order_proc"	VALUE = 0>
+		<MvASSIGN NAME = "l.temp_basket:ship_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.temp_basket:session_id"	VALUE = "{ MakeSessionID() }">
+		<MvASSIGN NAME = "l.temp_basket:lastupdate"	VALUE = "{ s.dyn_time_t }">
+
+		<MvASSIGN NAME = "l.temp_basket:ship_fname"	VALUE = "Miva">
+		<MvASSIGN NAME = "l.temp_basket:ship_lname"	VALUE = "Merchant">
+		<MvASSIGN NAME = "l.temp_basket:ship_email"	VALUE = "support@miva.com">
+		<MvASSIGN NAME = "l.temp_basket:ship_comp"	VALUE = "Miva Merchant Corporation">
+		<MvASSIGN NAME = "l.temp_basket:ship_phone"	VALUE = "858-490-2570">
+		<MvASSIGN NAME = "l.temp_basket:ship_fax"	VALUE = "858-731-4200">
+		<MvASSIGN NAME = "l.temp_basket:ship_addr"	VALUE = "5060 Shoreham Place">
+		<MvASSIGN NAME = "l.temp_basket:ship_addr2"	VALUE = "Suite 330">
+		<MvASSIGN NAME = "l.temp_basket:ship_city"	VALUE = "San Diego">
+		<MvASSIGN NAME = "l.temp_basket:ship_state"	VALUE = "CA">
+		<MvASSIGN NAME = "l.temp_basket:ship_zip"	VALUE = "92122-5903">
+		<MvASSIGN NAME = "l.temp_basket:ship_cntry"	VALUE = "US">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Insert( l.temp_basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.item:basket_id"			VALUE = "{ l.temp_basket:basket_id }">
+		<MvASSIGN NAME = "l.item:group_id"			VALUE = "">
+		<MvASSIGN NAME = "l.item:product_id"		VALUE = 0>
+		<MvASSIGN NAME = "l.item:code"				VALUE = "shipmethlist_load_enabled">
+		<MvASSIGN NAME = "l.item:name"				VALUE = "ShippingMethodList_Load_Enabled Product">
+		<MvASSIGN NAME = "l.item:price"				VALUE = 1.00>
+		<MvASSIGN NAME = "l.item:weight"			VALUE = 1.00>
+		<MvASSIGN NAME = "l.item:taxable"			VALUE = 1>
+		<MvASSIGN NAME = "l.item:upsold"			VALUE = 0>
+		<MvASSIGN NAME = "l.item:quantity"			VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Insert( l.item ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_basket"		VALUE = "{ g.Basket }">
+		<MvASSIGN NAME = "g.Basket"					VALUE = "{ l.temp_basket }">
+
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.legacy_modules" COUNT = "{ l.legacymodule_count }">
+			<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Shipping_Methods( l.module, l.methods ) }">
+				<MvASSIGN NAME = "l.method:module"											VALUE = "{ l.module }">
+				<MvASSIGN NAME = "l.method:module_id"										VALUE = "{ l.module:id }">
+
+				<MvASSIGN NAME = "l.shippingmethod_count"									VALUE = "{ l.shippingmethod_count + 1 }">
+				<MvASSIGN NAME = "l.shippingmethods" INDEX = "{ l.shippingmethod_count }"	VALUE = "{ l.method }">
+			</MvFOREACH>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "g.Basket"					VALUE = "{ l.original_basket }">
+		<MvASSIGN NAME = "l.null"					VALUE = "{ [ g.Module_Library_DB ].Basket_Reset( l.temp_basket ) }">
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-UTL-00001', l.shippingmethod_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Runtime_Sort_Callback" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:priority LT l.right:priority }">				<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:priority GT l.right:priority }">			<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.left:module:code LT l.right:module:code }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:module:code GT l.right:module:code }">	<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:code LT l.right:code }">					<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:code GT l.right:code }">					<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Runtime_Sort" PARAMETERS = "method_list var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_sort( l.method_list, 'ShippingMethodList_Runtime_Sort_Callback', l.null ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_Valid_ForBasket" PARAMETERS = "module var, method_code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.method_code }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module:api_ver LT 5.61 }">	<MvASSIGN NAME = "l.module_method_count" VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Shipping_Methods( l.module, l.module_methods ) }">
+	<MvELSE>										<MvASSIGN NAME = "l.module_method_count" VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Enabled_Methods( l.module, l.module_methods ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.module_methods, 1, l.module_method, 'l.module_method:code EQ l.method_code' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingMethodRules_Load_MethodOrDefault_Cached( l.module:code, l.method_code, l.shippingmethodrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate the global shipping method rules
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ISNULL g.Basket:subtotal }">				<MvASSIGN NAME = "g.Basket:subtotal"				VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">											</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:subtotal_with_discounts }">	<MvASSIGN NAME = "g.Basket:subtotal_with_discounts"	VALUE = "{ g.Basket:subtotal + [ g.Module_Library_DB ].BasketCharge_Total_Type( g.Basket:basket_id, 'DISCOUNT' ) }">	</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:quantity }">				<MvASSIGN NAME = "g.Basket:quantity"				VALUE = "{ [ g.Module_Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) }">										</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:weight }">					<MvASSIGN NAME = "g.Basket:weight"					VALUE = "{ [ g.Module_Library_DB ].Basket_Weight( g.Basket:basket_id ) }">												</MvIF>
+
+	<MvIF EXPR = "{ ShippingMethodRules_Exclude( l.shippingmethodrules, g.Basket:cust_id, g.Basket:subtotal_with_discounts, g.Basket:quantity, g.Basket:weight, g.Basket:ship_addr1, g.Basket:ship_addr2, g.Basket:ship_state, g.Basket:ship_zip, g.Basket:ship_cntry ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate the product-level shipping method rules
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].PackagingRules_Load( l.packagingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.merged_shippingmethod_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.restricted_product_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.separate_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.packable_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem_count"				VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT ProductShippingRules_Merge_BasketItem( l.packagingrules, l.basketitem,
+																   l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count,
+																   l.separate_items, l.separate_item_count,
+																   l.packable_items, l.packable_item_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT ProductShippingRules_Finalize_ShippingMethods( l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count, l.method_lookup ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.restricted_product_count }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.method_lookup, l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.module_method_lookup" VARIABLE = "l.method_lookup">
+			<MvMEMBER NAME = "{ l.module:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT miva_member_exists( l.module_method_lookup, l.method_code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "module"	VALUE = "{ l.module }">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "code"		VALUE = "{ l.method_code }">
+
+	<MvIF EXPR = "{ NOT ShippingMethodList_Filter_ExcludeByDefault( l.methods, 1, l.basketitems, l.basketitem_count, l.null, l.filtered_methods_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.filtered_methods_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_ApplyToBasket" PARAMETERS = "module_code, method_code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code( l.module_code, l.module ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Load( l.module:id, 'shipping', l.storemodule ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-UTL-00002', 'The specified shipping module is inactive' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ShippingMethod_ApplyToBasket_LowLevel( l.module, l.method_code ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_ApplyToBasket_LowLevel" PARAMETERS = "module var, method_code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingMethodRules_Load_MethodOrDefault( l.module:code, l.method_code, l.shippingmethodrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate the global shipping method rules
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ISNULL g.Basket:subtotal }">				<MvASSIGN NAME = "g.Basket:subtotal"				VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">											</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:subtotal_with_discounts }">	<MvASSIGN NAME = "g.Basket:subtotal_with_discounts"	VALUE = "{ g.Basket:subtotal + [ g.Module_Library_DB ].BasketCharge_Total_Type( g.Basket:basket_id, 'DISCOUNT' ) }">	</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:quantity }">				<MvASSIGN NAME = "g.Basket:quantity"				VALUE = "{ [ g.Module_Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) }">										</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:weight }">					<MvASSIGN NAME = "g.Basket:weight"					VALUE = "{ [ g.Module_Library_DB ].Basket_Weight( g.Basket:basket_id ) }">												</MvIF>
+
+	<MvIF EXPR = "{ ShippingMethodRules_Exclude( l.shippingmethodrules, g.Basket:cust_id, g.Basket:subtotal_with_discounts, g.Basket:quantity, g.Basket:weight, g.Basket:ship_addr1, g.Basket:ship_addr2, g.Basket:ship_state, g.Basket:ship_zip, g.Basket:ship_cntry ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate the product-level shipping method rules
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].PackagingRules_Load( l.packagingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.merged_shippingmethod_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.restricted_product_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.separate_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.packable_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem_count"				VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT ProductShippingRules_Merge_BasketItem( l.packagingrules, l.basketitem,
+																   l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count,
+																   l.separate_items, l.separate_item_count,
+																   l.packable_items, l.packable_item_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT ProductShippingRules_Finalize_ShippingMethods( l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count, l.method_lookup ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.restricted_product_count }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.method_lookup, l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.module_method_lookup" VARIABLE = "l.method_lookup">
+			<MvMEMBER NAME = "{ l.module:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT miva_member_exists( l.module_method_lookup, l.method_code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "module"	VALUE = "{ l.module }">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "code"		VALUE = "{ l.method_code }">
+
+	<MvIF EXPR = "{ NOT ShippingMethodList_Filter_ExcludeByDefault( l.methods, 1, l.basketitems, l.basketitem_count, l.null, l.filtered_methods_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.filtered_methods_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load a list of SHIPPING charges that exist prior to calculation to avoid
+	| renaming or adjusting their prices.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ISNULL l.shippingmethodrules:descrip ) AND
+					( ISNULL l.shippingmethodrules:adjusttype ) }">
+		<MvASSIGN NAME = "l.adjust_charges"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.adjust_charges"	VALUE = 1>
+
+		<MvASSIGN NAME = "l.before_count"	VALUE = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Type( g.Basket:basket_id, 'SHIPPING', l.before_basketcharges ) }">
+		<MvIF EXPR = "{ l.before_count EQ 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Calculate shipping
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ShippingModule_Calculate_Basket( l.module, l.method_code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Basket:ship_id"		VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "g.Basket:ship_data"	VALUE = "{ l.method_code }">
+
+	<MvCOMMENT>
+	|
+	| If we are not adjusting or renaming any charges, return early
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.adjust_charges }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+	
+	<MvCOMMENT>
+	|
+	| Load the SHIPPING charges and filter out any that existed prior
+	| to calling ShippingModule_Calculate_Basket
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.after_count" VALUE = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Type( g.Basket:basket_id, 'SHIPPING', l.after_basketcharges ) }">
+	<MvIF EXPR = "{ l.after_count EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+	
+	<MvFOREACH ITERATOR = "l.after" ARRAY = "l.after_basketcharges" COUNT = "{ l.after_count }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.before_basketcharges, 1, l.before, 'l.before:charge_id EQ l.after:charge_id' ) }">
+			<MvASSIGN NAME = "l.basketcharges" INDEX = "{ ++l.basketcharge_count }" VALUE = "{ l.after }">
+		</MvIF>
+	</MvFOREACH>
+	
+	<MvIF EXPR = "{ l.basketcharge_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply shipping method rate adjustments
+	|
+	</MvCOMMENT>
+
+	<MvFUNCTIONRETURN VALUE = "{ ShippingMethod_ApplyAdjustments( l.shippingmethodrules, l.basketcharges, l.basketcharge_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_ApplyAdjustments" PARAMETERS = "shippingmethodrules var, basketcharges var, basketcharge_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.total_amount" 			VALUE = 0>
+	<MvASSIGN NAME = "l.total_disp_amount" 		VALUE = 0>
+	<MvASSIGN NAME = "l.adjusted_amount" 		VALUE = 0>
+	<MvASSIGN NAME = "l.adjusted_disp_amount" 	VALUE = 0>
+
+	<MvIF EXPR = "{ l.shippingmethodrules:adjusttype EQ 'fixed' }">
+		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+			<MvASSIGN NAME = "l.total_amount" 				VALUE = "{ l.total_amount + l.basketcharge:amount }">
+			<MvASSIGN NAME = "l.total_disp_amount" 			VALUE = "{ l.total_disp_amount + l.basketcharge:disp_amt }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.total_difference" 								VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_amount ) - l.total_amount }">
+		<MvASSIGN NAME = "l.total_disp_difference" 							VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_disp_amount ) - l.total_disp_amount }">
+
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "amount" 		VALUE = "{ l.basketcharges[ 1 ]:amount + l.total_difference }">
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "disp_amt" 	VALUE = "{ l.basketcharges[ 1 ]:disp_amt + l.total_disp_difference }">
+	<MvELSEIF EXPR = "{ l.shippingmethodrules:adjusttype EQ 'percent' }">
+		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" INDEX = "l.pos" COUNT = "{ l.basketcharge_count }">
+			<MvASSIGN NAME = "l.total_amount" 				VALUE = "{ l.total_amount + l.basketcharge:amount }">
+			<MvASSIGN NAME = "l.total_disp_amount" 			VALUE = "{ l.total_disp_amount + l.basketcharge:disp_amt }">
+			<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.basketcharge:amount ) }">
+			<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.basketcharge:disp_amt ) }">
+			<MvASSIGN NAME = "l.adjusted_amount" 			VALUE = "{ l.adjusted_amount + l.basketcharge:amount }">
+			<MvASSIGN NAME = "l.adjusted_disp_amount" 		VALUE = "{ l.adjusted_disp_amount + l.basketcharge:disp_amt }">
+			
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update( l.basketcharge ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+		
+		<MvASSIGN NAME = "l.total_difference" 								VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_amount ) - l.adjusted_amount }">
+		<MvASSIGN NAME = "l.total_disp_difference" 							VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_disp_amount ) - l.adjusted_disp_amount }">
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "amount" 		VALUE = "{ l.basketcharges[ 1 ]:amount + l.total_difference }">
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "disp_amt" 	VALUE = "{ l.basketcharges[ 1 ]:disp_amt + l.total_disp_difference }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| The first charge created by the module gets the renamed description,
+	| if applicable
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:descrip }">
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "descrip"		VALUE = "{ 'Shipping: ' $ l.shippingmethodrules:descrip }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update( l.basketcharges[ 1 ] ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Load_Basket" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method_count"		VALUE = "{ ShippingMethodList_Load_Basket_Undiscounted( l.methods ) }">
+
+	<MvIF EXPR = "{ l.method_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].Discount_ShippingMethodList( g.Basket, l.methods, l.method_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Load_Basket_Undiscounted" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method_count"		VALUE = "{ ShippingMethodList_Load_Basket_LowLevel( l.methods ) }">
+
+	<MvIF EXPR = "{ l.method_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].HandlingCharge_Load( l.handlingcharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.handlingcharge:separate }">
+			<MvIF EXPR = "{ HandlingCharge_Applies( l.handlingcharge, g.Basket:subtotal, g.Basket:quantity, g.Basket:weight ) }">
+				<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+					<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.method:price + HandlingCharge_Calculate( l.handlingcharge, l.method:price, g.Basket:subtotal ) }">
+				</MvFOREACH>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Load_Basket_LowLevel" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].PackagingRules_Load( l.packagingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Basket:subtotal }">				<MvASSIGN NAME = "g.Basket:subtotal"				VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">											</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:subtotal_with_discounts }">	<MvASSIGN NAME = "g.Basket:subtotal_with_discounts"	VALUE = "{ g.Basket:subtotal + [ g.Module_Library_DB ].BasketCharge_Total_Type( g.Basket:basket_id, 'DISCOUNT' ) }">	</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:quantity }">				<MvASSIGN NAME = "g.Basket:quantity"				VALUE = "{ [ g.Module_Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) }">										</MvIF>
+	<MvIF EXPR = "{ ISNULL g.Basket:weight }">					<MvASSIGN NAME = "g.Basket:weight"					VALUE = "{ [ g.Module_Library_DB ].Basket_Weight( g.Basket:basket_id ) }">												</MvIF>
+
+	<MvASSIGN NAME = "l.merged_shippingmethod_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.restricted_product_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.separate_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.packable_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem_count"				VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT ProductShippingRules_Merge_BasketItem( l.packagingrules, l.basketitem,
+																   l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count,
+																   l.separate_items, l.separate_item_count,
+																   l.packable_items, l.packable_item_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT ProductShippingRules_Finalize_ShippingMethods( l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count, l.method_lookup ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.package_count"	VALUE = "{ ProductShippingRules_Finalize_Packing( l.packagingrules,
+																						  l.separate_items, l.separate_item_count,
+																						  l.packable_items, l.packable_item_count,
+																						  l.packages ) }">
+
+	<MvASSIGN NAME = "l.method_count"					VALUE = 0>
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'shipping', l.modules ) }">
+		<MvIF EXPR = "{ l.restricted_product_count }">
+			<MvIF EXPR = "{ NOT miva_member_exists( l.method_lookup, l.module:code ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.module_method_lookup" VARIABLE = "l.method_lookup">
+				<MvMEMBER NAME = "{ l.module:code }">
+			</MvREFERENCEARRAY>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:api_ver LT 5.71 }">
+			<MvASSIGN NAME = "l.module_method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Shipping_Methods( l.module, l.module_methods ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.module_method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Basket_Methods( l.module, l.packages, l.package_count, l.module_methods ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.method" ARRAY = "l.module_methods" COUNT = "{ l.module_method_count }">
+			<MvIF EXPR = "{ l.restricted_product_count }">
+				<MvIF EXPR = "{ NOT miva_member_exists( l.module_method_lookup, l.method:code ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method:module"			VALUE = "{ l.module }">
+
+			<MvASSIGN NAME = "l.method_count"							VALUE = "{ l.method_count + 1 }">
+			<MvASSIGN NAME = "l.methods" INDEX = "{ l.method_count }"	VALUE = "{ l.method }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT ShippingMethodList_Filter_ExcludeByDefault( l.methods, l.method_count, l.basketitems, l.basketitem_count, l.filtered_methods, l.filtered_methods_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.methods" 		VALUE = "{ l.filtered_methods }">
+	<MvASSIGN NAME = "l.method_count"	VALUE = "{ l.filtered_methods_count }">
+
+	<MvFUNCTIONRETURN VALUE = "{ ShippingMethodList_Apply_Rules( l.methods, l.method_count,
+																 g.Basket:cust_id, g.Basket:subtotal_with_discounts, g.Basket:quantity, g.Basket:weight,
+																 g.Basket:ship_addr1, g.Basket:ship_addr2, g.Basket:ship_state, g.Basket:ship_zip, g.Basket:ship_cntry ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Filter_ExcludeByDefault" PARAMETERS = "methods var, method_count, basketitems var, basketitem_count, filtered_methods var, filtered_methods_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.filtered_methods"									VALUE = "">
+	<MvASSIGN NAME = "l.filtered_methods_count"								VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_SHP_DB ].ShippingMethodRules_Load_MethodOrDefault( l.method:module:code, l.method:code, l.shippingmethodrules ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.shippingmethodrules:exclude_df }">
+			<MvASSIGN NAME = "l.filtered_methods_count" 					VALUE = "{ miva_array_insert_var( l.filtered_methods, l.method, -1 ) }">
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+			<MvASSIGN NAME = "l.valid_product" 								VALUE = 0>
+
+			<MvCOMMENT>
+			|
+			| Verify that the master product has been permitted to be shipped by the current method
+			|
+			</MvCOMMENT>
+
+			<MvFOREACH ITERATOR = "l.productshippingmethod" ARRAY = "l.productshippingmethods" COUNT = "{ [ g.Feature_Filename_SHP_DB ].ProductShippingMethodList_Load_Product_Cached( l.basketitem:product_id, l.productshippingmethods ) }">
+				<MvIF EXPR = "{ l.productshippingmethod:mod_code EQ l.method:module:code AND l.productshippingmethod:meth_code EQ l.method:code }">
+					<MvASSIGN NAME = "l.valid_product" 						VALUE = 1>
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT l.valid_product }">
+				<MvASSIGN NAME = "l.productvariantparts_count"				VALUE = "{ [ g.Module_Library_DB ].ProductVariantPartList_Load_Variant( l.basketitem:product_id, l.basketitem:variant_id, l.productvariantparts ) }">
+
+				<MvCOMMENT>
+				|
+				| If part products exist but master is not permitted check if all part products have been permitted to be shipped by the current method
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ l.productvariantparts_count }">
+					<MvASSIGN NAME = "l.part_product_matches" 				VALUE = 0>
+
+					<MvFOREACH ITERATOR = "l.productvariantpart" ARRAY = "l.productvariantparts" COUNT = "{ l.productvariantparts_count }">
+						<MvASSIGN NAME = "l.valid_part"						VALUE = 0>
+
+						<MvFOREACH ITERATOR = "l.productshippingmethod" ARRAY = "l.productshippingmethods" COUNT = "{ [ g.Feature_Filename_SHP_DB ].ProductShippingMethodList_Load_Product_Cached( l.productvariantpart:part_id, l.productshippingmethods ) }">
+							<MvIF EXPR = "{ l.productshippingmethod:mod_code EQ l.method:module:code AND l.productshippingmethod:meth_code EQ l.method:code }">
+								<MvASSIGN NAME = "l.part_product_matches"	VALUE = "{ l.part_product_matches + 1 }">
+								<MvASSIGN NAME = "l.valid_part"				VALUE = 1>
+
+								<MvFOREACHSTOP>
+							</MvIF>
+						</MvFOREACH>
+
+						<MvIF EXPR = "{ NOT l.valid_part }">
+							<MvFOREACHSTOP>
+						</MvIF>
+					</MvFOREACH>
+
+					<MvIF EXPR = "{ l.part_product_matches EQ l.productvariantparts_count }">
+						<MvASSIGN NAME = "l.valid_product"					VALUE = 1>
+
+						<MvFOREACHSTOP>
+					</MvIF>
+				<MvELSE>
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.valid_product }">
+			<MvASSIGN NAME = "l.filtered_methods_count"						VALUE = "{ miva_array_insert_var( l.filtered_methods, l.method, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodList_Apply_Rules" PARAMETERS = "methods var, method_count,
+																  cust_id, subtotal, quantity, weight,
+																  addr1, addr2, state, zip, country" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Apply Shipping Method Rules
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingMethodRules_Load_MethodOrDefault( l.method:module:code, l.method:code, l.shippingmethodrules ) }">
+			<MvASSIGN NAME = "l.method:excluded"	VALUE = 0>
+			<MvASSIGN NAME = "l.method:priority"	VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.method:excluded"	VALUE = "{ ShippingMethodRules_Exclude( l.shippingmethodrules, l.cust_id, l.subtotal, l.quantity, l.weight, l.addr1, l.addr2, l.state, l.zip, l.country ) }">
+			<MvASSIGN NAME = "l.method:priority"	VALUE = "{ l.shippingmethodrules:priority }">
+
+			<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:descrip }">
+				<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.shippingmethodrules:descrip }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method:price" 		VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.method:price ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Sort by priority descending
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ ShippingMethodList_Runtime_Sort( l.methods ) }">
+
+	<MvCOMMENT>
+	|
+	| Apply inter-method exclusions.  Circular exclusions are consistently resolved by
+	| always applying exclusions by descending priority
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ l.method:excluded }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.exclusion" ARRAY = "l.exclusions" COUNT = "{ [ g.Module_Feature_SHP_DB ].ShippingMethodExclusionList_Load_Excluder( l.method:module:code, l.method:code, l.exclusions ) }">
+			<MvFOREACH ITERATOR = "l.inner_method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+				<MvIF EXPR = "{ ( l.inner_method:module:code EQ l.exclusion:excludedmo ) AND
+								( l.inner_method:code EQ l.exclusion:excludedme ) }">
+					<MvASSIGN NAME = "l.inner_method:excluded"	VALUE = 1>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Eliminate excluded methods
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.collapsed_count"									VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ NOT l.method:excluded }">
+			<MvASSIGN NAME = "l.collapsed_count"							VALUE = "{ l.collapsed_count + 1 }">
+			<MvASSIGN NAME = "l.collapsed" INDEX = "{ l.collapsed_count }"	VALUE = "{ l.method }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.methods"											VALUE = "{ l.collapsed }">
+	<MvFUNCTIONRETURN VALUE = "{ l.collapsed_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FallbackShippingMethod_Valid_ForBasket" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_SHP_DB ].ShippingRules_Load_Cached( l.shippingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.shippingrules:fb_excldpo }">
+		<MvIF EXPR = "{ NOT ISNULL g.Basket:ship_addr1 }">
+			<MvIF EXPR = "{ Address_Is_POBox( g.Basket:ship_addr1 ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL g.Basket:ship_addr2 }">
+			<MvIF EXPR = "{ Address_Is_POBox( g.Basket:ship_addr2 ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FallbackShippingMethod_ApplyToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_SHP_DB ].ShippingRules_Load_Cached( l.shippingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+	<MvASSIGN NAME = "l.basketcharge:basket_id"		VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basketcharge:module_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.basketcharge:type"			VALUE = "SHIPPING">
+	<MvASSIGN NAME = "l.basketcharge:descrip"		VALUE = "{ l.shippingrules:fb_descrip }">
+	<MvASSIGN NAME = "l.basketcharge:tax_exempt"	VALUE = 0>
+
+	<MvIF EXPR = "{ l.shippingrules:fb_type EQ 'fixed' }">
+		<MvASSIGN NAME = "l.basketcharge:amount"	VALUE = "{ l.shippingrules:fb_amount }">
+	<MvELSEIF EXPR = "{ l.shippingrules:fb_type EQ 'percent' }">
+		<MvIF EXPR = "{ ISNULL g.Basket:subtotal }">
+			<MvASSIGN NAME = "g.Basket:subtotal"	VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge:amount"	VALUE = "{ ( g.Basket:subtotal * ( l.shippingrules:fb_amount / 100 ) ) ROUND 2 }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-UTL-00003', 'Unsupported fallback shipping method type \'' $ l.shippingrules:fb_type $ '\'' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge:disp_amt"		VALUE = "{ l.basketcharge:amount }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Basket:ship_id"				VALUE = 0>
+	<MvASSIGN NAME = "g.Basket:ship_data"			VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FallbackShippingMethod_Load_Basket" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_SHP_DB ].ShippingRules_Load_Cached( l.shippingrules ) OR
+					NOT [ g.Feature_Filename_SHP_DB ].HandlingCharge_Load( l.handlingcharge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.shippingrules:fb_type EQ 'fixed' }">
+		<MvASSIGN NAME = "l.amount" VALUE = "{ l.shippingrules:fb_amount }">
+	<MvELSEIF EXPR = "{ l.shippingrules:fb_type EQ 'percent' }">
+		<MvIF EXPR = "{ ISNULL g.Basket:subtotal }">
+			<MvASSIGN NAME = "g.Basket:subtotal" VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.amount" VALUE = "{ ( g.Basket:subtotal * ( l.shippingrules:fb_amount / 100 ) ) ROUND 2 }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-UTL-00004', 'Unsupported fallback shipping method type \'' $ l.shippingrules:fb_type $ '\'' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.handlingcharge:separate }">
+		<MvIF EXPR = "{ HandlingCharge_AppliesToBasket( l.handlingcharge ) }">
+			<MvASSIGN NAME = "l.amount" VALUE = "{ l.amount + HandlingCharge_CalculateBasket( l.handlingcharge ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method"			VALUE = "">
+	<MvASSIGN NAME = "l.method:module"	VALUE = "">
+	<MvASSIGN NAME = "l.method:code"	VALUE = "">
+	<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.shippingrules:fb_descrip }">
+	<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.amount }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_ApplyInventoryVariantPackagingRules" PARAMETERS = "packagingrules var, itemtype, item var,
+																							merged_shippingmethods var, merged_shippingmethod_count var, restricted_product_count var,
+																							separate_items var, separate_item_count var,
+																							packable_items var, packable_item_count var,
+																							part_products var, part_count var,
+																							weight var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.packagingrules:vp_mode EQ 'parts' }">
+		<MvFOREACH ITERATOR = "l.part_product" ARRAY = "l.part_products" COUNT = "{ l.part_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Load_ProductOrDefault( l.part_product:id, l.partshippingrules ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.partshippingrules:limitmeths }">
+				<MvEVAL EXPR = "{ ProductShippingRules_Merge_ProductShippingMethods( l.part_product:id,
+																					 l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ ProductShippingRules_Merge_Packing( l.packagingrules,
+																  l.part_product, l.itemtype, l.item,
+																  l.item:quantity * l.part_product:quantity, l.part_product:weight, l.partshippingrules,
+																  l.separate_items, l.separate_item_count,
+																  l.packable_items, l.packable_item_count ) }">
+		</MvFOREACH>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.part_total_weight"			VALUE = 0.00>
+	<MvASSIGN NAME = "l.part_total_count"			VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.part_product" ARRAY = "l.part_products" COUNT = "{ l.part_count }">
+		<MvASSIGN NAME = "l.part_total_count"		VALUE = "{ l.part_total_count + l.part_product:quantity }">
+		<MvASSIGN NAME = "l.part_total_weight"		VALUE = "{ l.part_total_weight + ( l.part_product:weight * l.part_product:quantity ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.part_total_weight"			VALUE = "{ miva_ieee754_normalize( 2, l.part_total_weight ) ROUND 2 }">
+	<MvASSIGN NAME = "l.part_weight_offset"			VALUE = "{ ( l.weight - l.part_total_weight ) / l.part_total_count }">
+
+	<MvFOREACH ITERATOR = "l.part_product" ARRAY = "l.part_products" COUNT = "{ l.part_count }">
+		<MvASSIGN NAME =  "l.part_weight"			VALUE = "{ l.part_product:weight }">
+
+		<MvIF EXPR = "{ ( l.packagingrules:vp_mode EQ 'parts_proportional' ) AND ( l.part_total_weight NE 0 ) }">
+			<MvASSIGN NAME = "l.part_weight_offset"	VALUE = "{ ( l.weight * ( l.part_product:weight / l.part_total_weight ) ) - l.part_product:weight }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( l.part_weight_offset GT 0 ) AND l.packagingrules:vp_part_up }">
+			<MvASSIGN NAME = "l.part_weight"		VALUE = "{ l.part_weight + l.part_weight_offset }">
+		<MvELSEIF EXPR = "{ ( l.part_weight_offset LT 0 ) AND l.packagingrules:vp_part_dn }">
+			<MvASSIGN NAME = "l.part_weight"		VALUE = "{ l.part_weight + l.part_weight_offset }">
+
+			<MvIF EXPR = "{ ( l.part_weight LT 0 ) AND ( NOT l.packagingrules:vp_part_ng ) }">
+				<MvASSIGN NAME = "l.part_weight"	VALUE = 0.00>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Load_ProductOrDefault( l.part_product:id, l.partshippingrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.partshippingrules:limitmeths }">
+			<MvEVAL EXPR = "{ ProductShippingRules_Merge_ProductShippingMethods( l.part_product:id,
+																				 l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ ProductShippingRules_Merge_Packing( l.packagingrules,
+															  l.part_product, l.itemtype, l.item,
+															  l.item:quantity * l.part_product:quantity, l.part_weight, l.partshippingrules,
+															  l.separate_items, l.separate_item_count,
+															  l.packable_items, l.packable_item_count ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodRules_Adjustted_Price" PARAMETERS = "shippingmethodrules var, price" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.price ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethodRules_Adjusted_Price" PARAMETERS = "shippingmethodrules var, price" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.shippingmethodrules:adjusttype EQ 'percent' }">
+		<MvASSIGN NAME = "l.price"			VALUE = "{ l.price + ( l.price * ( l.shippingmethodrules:adjustamnt / 100 ) ) }">
+	<MvELSEIF EXPR = "{ l.shippingmethodrules:adjusttype EQ 'fixed' }">
+		<MvCOMMENT>
+		|
+		| Negative price adjustments are never applied to a price that is already negative, and will not reduce
+		| a non-negative price below 0.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.shippingmethodrules:adjustamnt GT 0 }">
+			<MvASSIGN NAME = "l.price"		VALUE = "{ l.price + l.shippingmethodrules:adjustamnt }">
+		<MvELSEIF EXPR = "{ l.price GT 0 }">
+			<MvASSIGN NAME = "l.price"		VALUE = "{ l.price + l.shippingmethodrules:adjustamnt }">
+			<MvIF EXPR = "{ l.price LT 0 }">
+				<MvASSIGN NAME = "l.price"	VALUE = 0.00>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ l.price ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Merge_BasketItem" PARAMETERS = "packagingrules var, basketitem var,
+																		 merged_shippingmethods var, merged_shippingmethod_count var, restricted_product_count var,
+																		 separate_items var, separate_item_count var,
+																		 packable_items var, packable_item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Check the master product first
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Load_ProductOrDefault( l.basketitem:product_id, l.mastershippingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.mastershippingrules:limitmeths }">
+		<MvEVAL EXPR = "{ ProductShippingRules_Merge_ProductShippingMethods( l.basketitem:product_id,
+																			 l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there are parts, the master product is not considered "packable".  If there are parts,
+	| any difference between the basketitem weight and the total weight of the parts is evenly
+	| distributed across the parts.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.weight"							VALUE = "{ l.basketitem:weight + [ g.Module_Library_DB ].BasketOption_Line_Weight( l.basketitem:line_id ) }">
+	<MvASSIGN NAME = "l.part_count"						VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.basketitem:product_id, l.basketitem:variant_id, l.part_products ) }">
+
+	<MvIF EXPR = "{ ( l.part_count EQ 0 ) OR ( l.packagingrules:vp_mode EQ 'master' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( l.basketitem:product_id, l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.product:id"				VALUE = "{ l.basketitem:product_id }">
+			<MvASSIGN NAME = "l.product:code"			VALUE = "{ l.basketitem:code }">
+			<MvASSIGN NAME = "l.product:name"			VALUE = "{ l.basketitem:name }">
+			<MvASSIGN NAME = "l.product:price"			VALUE = "{ l.basketitem:price }">
+			<MvASSIGN NAME = "l.product:weight"			VALUE = "{ l.weight }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ ProductShippingRules_Merge_Packing( l.packagingrules,
+															  l.product, 'basketitem', l.basketitem,
+															  l.basketitem:quantity, l.weight, l.mastershippingrules,
+															  l.separate_items, l.separate_item_count,
+															  l.packable_items, l.packable_item_count ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT ProductShippingRules_ApplyInventoryVariantPackagingRules( l.packagingrules, 'basketitem', l.basketitem,
+																					  l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count,
+																					  l.separate_items, l.separate_item_count,
+																					  l.packable_items, l.packable_item_count,
+																					  l.part_products, l.part_count,
+																					  l.weight ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Merge_OrderItem" PARAMETERS = "packagingrules var, orderitem var,
+																		merged_shippingmethods var, merged_shippingmethod_count var, restricted_product_count var,
+																		separate_items var, separate_item_count var,
+																		packable_items var, packable_item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant( l.orderitem, l.product, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Check the master product first, if there is one
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.weight"							VALUE = "{ l.orderitem:weight + [ g.Module_Library_DB ].OrderOption_Line_Weight( l.orderitem:line_id ) }">
+
+	<MvIF EXPR = "{ NOT l.product:id }">
+		<MvASSIGN NAME = "l.product:code"				VALUE = "{ l.orderitem:code }">
+		<MvASSIGN NAME = "l.product:name"				VALUE = "{ l.orderitem:name }">
+		<MvASSIGN NAME = "l.product:price"				VALUE = "{ l.orderitem:price }">
+		<MvASSIGN NAME = "l.product:weight"				VALUE = "{ l.weight }">
+
+		<MvASSIGN NAME = "l.part_count"					VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Load_ProductOrDefault( l.product:id, l.mastershippingrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.mastershippingrules:limitmeths }">
+			<MvEVAL EXPR = "{ ProductShippingRules_Merge_ProductShippingMethods( l.product:id,
+																				 l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.part_count"					VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.part_products ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there are parts, the master product is not considered "packable".  If there are parts,
+	| any difference between the orderitem weight and the total weight of the parts is evenly
+	| distributed across the parts.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.part_count EQ 0 ) OR ( l.packagingrules:vp_mode EQ 'master' ) }">
+		<MvEVAL EXPR = "{ ProductShippingRules_Merge_Packing( l.packagingrules,
+															  l.product, 'orderitem', l.orderitem,
+															  l.orderitem:quantity, l.weight, l.mastershippingrules,
+															  l.separate_items, l.separate_item_count,
+															  l.packable_items, l.packable_item_count ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT ProductShippingRules_ApplyInventoryVariantPackagingRules( l.packagingrules, 'orderitem', l.orderitem,
+																					  l.merged_shippingmethods, l.merged_shippingmethod_count, l.restricted_product_count,
+																					  l.separate_items, l.separate_item_count,
+																					  l.packable_items, l.packable_item_count,
+																					  l.part_products, l.part_count,
+																					  l.weight ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Merge_ProductShippingMethods" PARAMETERS = "product_id,
+																					 merged_shippingmethods var, merged_shippingmethod_count var, restricted_product_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.restricted_product_count"							VALUE = "{ l.restricted_product_count + 1 }">
+
+	<MvFOREACH ITERATOR = "l.productshippingmethod" ARRAY = "l.productshippingmethods" COUNT = "{ [ g.Module_Feature_SHP_DB ].ProductShippingMethodList_Load_Product_Cached( l.product_id, l.productshippingmethods ) }">
+		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.merged_shippingmethod" ARRAY = "l.merged_shippingmethods" COUNT = "{ l.merged_shippingmethod_count }">
+			<MvIF EXPR = "{ ( l.productshippingmethod:mod_code EQ l.merged_shippingmethod:mod_code ) AND
+							( l.productshippingmethod:meth_code EQ l.merged_shippingmethod:meth_code ) }">
+				<MvASSIGN NAME = "l.merged_shippingmethod:product_count"	VALUE = "{ l.merged_shippingmethod:product_count + 1 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.pos GT l.merged_shippingmethod_count }">
+			<MvASSIGN NAME = "l.productshippingmethod:product_count"								VALUE = 1>
+			<MvASSIGN NAME = "l.merged_shippingmethod_count"										VALUE = "{ l.merged_shippingmethod_count + 1 }">
+			<MvASSIGN NAME = "l.merged_shippingmethods" INDEX = "{ l.merged_shippingmethod_count }"	VALUE = "{ l.productshippingmethod }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Merge_Packing" PARAMETERS = "packagingrules var, product var, item_type, item var,
+																	  quantity, weight, productshippingrules var,
+																	  separate_items var, separate_item_count var,
+																	  packable_items var, packable_item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.productshippingrules:ownpackage }">
+		<MvREFERENCE NAME = "l.items"		VARIABLE = "l.separate_items">
+		<MvREFERENCE NAME = "l.item_count"	VARIABLE = "l.separate_item_count">
+	<MvELSE>
+		<MvREFERENCE NAME = "l.items"		VARIABLE = "l.packable_items">
+		<MvREFERENCE NAME = "l.item_count"	VARIABLE = "l.packable_item_count">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.quantity LE l.packagingrules:pack_max }">
+		<MvFOR COUNT = "{ l.quantity }">
+			<MvASSIGN NAME = "l.item_count"														VALUE = "{ l.item_count + 1 }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "product"			VALUE = "{ l.product }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "{ l.item_type }"	VALUE = "{ l.item }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "width"				VALUE = "{ l.productshippingrules:width }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "length"				VALUE = "{ l.productshippingrules:length }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "height"				VALUE = "{ l.productshippingrules:height }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "weight"				VALUE = "{ l.weight }">
+		</MvFOR>
+	<MvELSE>
+		<MvASSIGN NAME = "l.item_count"															VALUE = "{ l.item_count + 1 }">
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "product"				VALUE = "{ l.product }">
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "{ l.item_type }"		VALUE = "{ l.item }">
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "width"					VALUE = "{ l.productshippingrules:width }">
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "length"					VALUE = "{ l.productshippingrules:length }">
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "height"					VALUE = "{ l.productshippingrules:height }">
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "weight"					VALUE = "{ l.quantity * l.weight }">
+
+		<MvASSIGNARRAY NAME = "l.items" VALUE = "{ l.product:name $ ' x ' $ l.quantity }">
+			<MvDIMENSION INDEX = "{ l.item_count }">
+			<MvMEMBER NAME = "product">
+			<MvMEMBER NAME = "name">
+		</MvASSIGNARRAY>
+
+		<MvASSIGNARRAY NAME = "l.items" VALUE = "{ l.item:name $ ' x ' $ l.quantity }">
+			<MvDIMENSION INDEX = "{ l.item_count }">
+			<MvMEMBER NAME = "{ l.item_type }">
+			<MvMEMBER NAME = "name">
+		</MvASSIGNARRAY>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Finalize_ShippingMethods" PARAMETERS = "merged_shippingmethods var, merged_shippingmethod_count, restricted_product_count,
+																				 method_lookup var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Merge allowed shipping methods
+	|
+	</MvCOMMENT>
+	
+	<MvASSIGN NAME = "l.method_lookup"				VALUE = "">
+	<MvASSIGN NAME = "l.output_method_count"		VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.shippingmethod" ARRAY = "l.merged_shippingmethods" COUNT = "{ l.merged_shippingmethod_count }">
+		<MvIF EXPR = "{ l.shippingmethod:product_count EQ l.restricted_product_count }">
+			<MvASSIGNARRAY NAME = "l.method_lookup" VALUE = 1>
+				<MvMEMBER NAME = "{ l.shippingmethod:mod_code }">
+				<MvMEMBER NAME = "{ l.shippingmethod:meth_code }">
+			</MvASSIGNARRAY>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Finalize_Packing" PARAMETERS = "packagingrules var,
+																		 separate_items var, separate_item_count,
+																		 packable_items var, packable_item_count,
+																		 packages var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Create a packaging solution
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.package_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.packages"					VALUE = "">
+
+	<MvCOMMENT>
+	|
+	| Add separately packaged products to the packaging solution
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.separate_item" ARRAY = "l.separate_items" COUNT = "{ l.separate_item_count }">
+		<MvASSIGN NAME = "l.package_count"				VALUE = "{ l.package_count + 1 }">
+		<MvREFERENCEARRAY NAME = "l.package" VARIABLE = "l.packages">
+			<MvDIMENSION INDEX = "{ l.package_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.package:weight"				VALUE = "{ l.separate_item:weight }">
+		<MvASSIGN NAME = "l.package:width"				VALUE = "{ l.separate_item:width }">
+		<MvASSIGN NAME = "l.package:length"				VALUE = "{ l.separate_item:length }">
+		<MvASSIGN NAME = "l.package:height"				VALUE = "{ l.separate_item:height }">
+		<MvASSIGN NAME = "l.package:items" INDEX = 1	VALUE = "{ l.separate_item }">
+		<MvASSIGN NAME = "l.package:item_count"			VALUE = 1>
+
+		<MvEVAL EXPR = "{ ProductShippingRules_BuildProductIDArray( l.package ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.packable_item_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ l.package_count }">
+	<MvELSEIF EXPR = "{ g.Store:boxpack_id AND g.Store:boxpack_mod:active }">
+		<MvASSIGN NAME = "l.module_package_count"	VALUE = "{ [ g.Module_Root $ g.Store:boxpack_mod:module ].BoxPackingModule_Pack_Items( g.Store:boxpack_mod, l.packable_items, l.packable_item_count, l.module_packages ) }">
+		<MvIF EXPR = "{ l.module_package_count }">
+			<MvFOREACH ITERATOR = "l.module_package" ARRAY = "l.module_packages" COUNT = "{ l.module_package_count }">
+				<MvIF EXPR = "{ ISNULL l.module_package:item_count }">
+					<MvASSIGN NAME = "l.module_package:item_count"			VALUE = "{ miva_array_elements( l.module_package:items ) }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.package_count"							VALUE = "{ l.package_count + 1 }">
+				<MvASSIGN NAME = "l.packages" INDEX = "{ l.package_count }"	VALUE = "{ l.module_package }">
+
+				<MvEVAL EXPR = "{ ProductShippingRules_BuildProductIDArray( l.packages[ l.package_count ] ) }">
+			</MvFOREACH>
+
+			<MvFUNCTIONRETURN VALUE = "{ l.package_count }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Package everything in the fallback package
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.package_count"				VALUE = "{ l.package_count + 1 }">
+
+	<MvREFERENCEARRAY NAME = "l.package" VARIABLE = "l.packages">
+		<MvDIMENSION INDEX = "{ l.package_count }">
+	</MvREFERENCEARRAY>
+
+	<MvASSIGN NAME = "l.package:width"				VALUE = "{ l.packagingrules:fb_width }">
+	<MvASSIGN NAME = "l.package:length"				VALUE = "{ l.packagingrules:fb_length }">
+	<MvASSIGN NAME = "l.package:height"				VALUE = "{ l.packagingrules:fb_height }">
+	<MvASSIGN NAME = "l.package:weight"				VALUE = 0>
+
+	<MvFOREACH INDEX = "l.item_pos" ITERATOR = "l.packable_item" ARRAY = "l.packable_items" COUNT = "{ l.packable_item_count }">
+		<MvASSIGN NAME = "l.package:items" INDEX = "{ l.item_pos }"	VALUE = "{ l.packable_item }">
+		<MvASSIGN NAME = "l.package:weight"							VALUE = "{ l.package:weight + l.packable_item:weight }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.package:item_count"			VALUE = "{ l.packable_item_count }">
+
+	<MvEVAL EXPR = "{ ProductShippingRules_BuildProductIDArray( l.package ) }">
+	<MvFUNCTIONRETURN VALUE = "{ l.package_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_BuildProductIDArray" PARAMETERS = "package var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.package:product_ids"		VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.package:items" COUNT = "{ l.package:item_count }">
+		<MvIF EXPR = "{ l.item:product:id GT 0 }">
+			<MvASSIGN NAME = "l.package:product_ids" INDEX = "{ l.item:product:id }"	VALUE = "{ l.item:product:id }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.package:product_count"		VALUE = "{ miva_array_collapse( l.package:product_ids ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Pack_Basket" PARAMETERS = "basket_id, packages var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].PackagingRules_Load( l.packagingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.separate_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.packable_item_count"			VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( l.basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ NOT ProductShippingRules_Merge_BasketItem( l.packagingrules, l.basketitem,	
+																   l.null1, l.null2, l.null3,
+																   l.separate_items, l.separate_item_count,
+																   l.packable_items, l.packable_item_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductShippingRules_Finalize_Packing( l.packagingrules,
+																		l.separate_items, l.separate_item_count,
+																		l.packable_items, l.packable_item_count,
+																		l.packages ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Pack_OrderShipment" PARAMETERS = "shpmnt_id, packages var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].PackagingRules_Load( l.packagingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.separate_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.packable_item_count"			VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Module_Library_DB ].OrderItemList_Load_Shipment( l.shpmnt_id, l.orderitems ) }">
+		<MvIF EXPR = "{ NOT ProductShippingRules_Merge_OrderItem( l.packagingrules, l.orderitem,	
+																  l.null1, l.null2, l.null3,
+																  l.separate_items, l.separate_item_count,
+																  l.packable_items, l.packable_item_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductShippingRules_Finalize_Packing( l.packagingrules,
+																		l.separate_items, l.separate_item_count,
+																		l.packable_items, l.packable_item_count,
+																		l.packages ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_EncodeEntities" PARAMETERS = "val" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '&reg;',		'®' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '&trade;',	'™' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '&',			'&amp;' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '"',			'&quot;' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '<',			'&lt;' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '>',			'&gt;' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, ',',			'&#44;' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '®',			'&reg;' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '™',			'&trade;' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.val }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_DecodeTrademarkSymbols" PARAMETERS = "val" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '&reg;',		'®' ) }">
+	<MvASSIGN NAME = "l.val" VALUE = "{ glosub( l.val, '&trade;',	'™' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.val }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ZipInList" PARAMETERS = "zip_list, zip" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].ZipInList( l.zip_list, l.zip ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ZipInRange" PARAMETERS = "zip_range, zip" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].ZipInRange( l.zip_range, l.zip ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Address_Is_POBox" PARAMETERS = "addr" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.stripped_addr" VALUE = "{ Strip_Address( l.addr ) }">
+
+	<MvFOREACH ITERATOR = "l.po_box" ARRAY = "l.po_boxes" COUNT = "{ Generate_POBox_Possibilities( l.po_boxes ) }">
+		<MvIF EXPR = "{ ( l.po_box CIN l.stripped_addr ) EQ 1 }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_POBox_Possibilities" PARAMETERS = "possibilities var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Design said they use the following regex to test for PO Boxes on the front end.
+	|
+	| Original Regex: ^\s*((P(OST)?.?\s*O(FF(ICE)?)?.?\s+(B(IN|OX) )?)|B(IN|OX) )
+	| Simplified Regex: ((P(OST)?\s*O(FF(ICE)?)?)|B(IN|OX) )
+	|
+	| We were able to get to the simplified regex by not caring about any non-alpha characters,
+	| or multiple spaces in a row.  The \s* between POST and OFFICE is rather annoying as it
+	| allows all permutations to be replicated, but without a space between the two words
+	| (i.e. POST OFFICE, POSTOFFICE, P O and PO are both valid).  In addition, notice that all
+	| possibilities have a meaningful space after their value as that the next portion of the address
+	| would contain the box number.  Finally, we do not include any permutations that contain of BOX / BIN
+	| at the end as we are using the IN operator for comparison, so if the address is POST OFFICE BOX and
+	| we define POST OFFICE BOX as a possibility, we will never use that comparison as the POST OFFICE
+	| possibility already satisfies the IN check.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.possibilities" 	VALUE = "">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'BIN ', 				-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'BOX ', 				-1 ) }">
+
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POST O ', 			-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POST OFF ', 		-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POST OFFICE ', 		-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'P O ', 				-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'P OFF ', 			-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'P OFFICE ', 		-1 ) }">
+
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POSTO ', 			-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POSTOFF ', 			-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POSTOFFICE ', 		-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'PO ', 				-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POBOX ',			-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POFF ', 			-1 ) }">
+	<MvASSIGN NAME = "l.count" 			VALUE = "{ miva_array_insert( l.possibilities, 'POFFICE ', 			-1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Strip_Address" PARAMETERS = "addr" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pos" 			VALUE = 1>
+	<MvASSIGN NAME = "l.addr" 			VALUE = "{ trim( l.addr ) }">
+	<MvASSIGN NAME = "l.addr_length" 	VALUE = "{ len_var( l.addr ) }">
+	<MvASSIGN NAME = "l.new_addr" 		VALUE = "">
+
+	<MvWHILE EXPR = "{ l.pos LE l.addr_length }">
+		<MvASSIGN NAME = "l.char" VALUE = "{ substring_var( l.addr, l.pos, 1 ) }">
+
+		<MvIF EXPR = "{ isalnum( l.char ) }">
+			<MvASSIGN NAME = "l.new_addr" VALUE = "{ l.new_addr $ l.char }">
+		<MvELSEIF EXPR = "{ isspace( l.char ) }">
+			<MvASSIGN NAME = "l.new_addr" 	VALUE = "{ l.new_addr $ ' ' }">
+
+			<MvWHILE EXPR = "{ ( l.pos LE l.addr_length ) AND ( isspace( substring_var( l.addr, ++l.pos, 1 ) ) ) }">
+				<MvCOMMENT> do nothing... </MvCOMMENT>
+			</MvWHILE>
+
+			<MvWHILECONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ ltrim( l.new_addr ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_Update_References" PARAMETERS = "module var, old_ship_data, new_ship_data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_SHP_DB ].ShippingMethodRules_Update_Method( l.module:code, l.old_ship_data, l.new_ship_data )	OR
+					NOT [ g.Module_Library_DB ].Order_Update_All_Shipping( l.module:id, l.old_ship_data, l.module:id, l.new_ship_data )		OR
+					NOT [ g.Module_Feature_SUB_DB ].Subscription_Update_All_Shipping( l.module:id, l.old_ship_data, l.module:id, l.new_ship_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "features/shp/zplpreview.mv">

@@ -1,0 +1,145 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_Search_Filter_MivaScript_LIKE" PARAMETERS = "value, pattern" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pattern_pos"					VALUE = 1>
+	<MvASSIGN NAME = "l.pattern_length"					VALUE = "{ len_var( l.pattern ) }">
+	<MvASSIGN NAME = "l.value_pos"						VALUE = 1>
+	<MvASSIGN NAME = "l.value_length"					VALUE = "{ len_var( l.value ) }">
+	<MvASSIGN NAME = "l.percent_count"					VALUE = 0>
+
+	<MvWHILE EXPR = "{ 1 }">
+		<MvASSIGN NAME = "l.end_of_pattern"				VALUE = "{ l.pattern_pos GT l.pattern_length }">
+		<MvASSIGN NAME = "l.end_of_value"				VALUE = "{ l.value_pos GT l.value_length }">
+
+		<MvIF EXPR = "{ l.end_of_pattern AND l.end_of_value }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ l.end_of_pattern OR l.end_of_value }">
+			<MvCOMMENT>
+			|
+			| Only one of end_of_pattern or end_of_value may be true in this
+			| block
+			|
+			| We can manipulate pattern_pos and value_pos here because this
+			| block either returns or resets those values from the percent
+			| stack
+			|
+			| If we are at the end of the value and the remaining pattern
+			| is nothing but %, we are done
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.end_of_value }">
+				<MvWHILE EXPR = "{ l.pattern_pos LE l.pattern_length }">
+					<MvIF EXPR = "{ substring_var( l.pattern, l.pattern_pos, 1 ) NE '%' }">
+						<MvWHILESTOP>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.pattern_pos"	VALUE = "{ l.pattern_pos + 1 }">
+				</MvWHILE>
+
+				<MvIF EXPR = "{ l.pattern_pos GT l.pattern_length }">
+					<MvFUNCTIONRETURN VALUE = 1>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.percent_count EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Back up to the last found percent sign, consume more characters,
+			| and try again
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pattern_pos"			VALUE = "{ l.percent_pattern_stack[ l.percent_count ] }">
+			<MvASSIGN NAME = "l.value_pos"				VALUE = "{ l.percent_value_stack[ l.percent_count ] }">
+			<MvASSIGN NAME = "l.percent_count"			VALUE = "{ l.percent_count - 1 }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.pattern_char"				VALUE = "{ substring_var( l.pattern, l.pattern_pos, 1 ) }">
+
+		<MvIF EXPR = "{ l.pattern_char EQ '_' }">
+			<MvASSIGN NAME = "l.value_pos"				VALUE = "{ l.value_pos + 1 }">
+			<MvASSIGN NAME = "l.pattern_pos"			VALUE = "{ l.pattern_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pattern_char EQ '%' }">
+			<MvCOMMENT>
+			|
+			| Compress multiple percents strung together
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pattern_pos"			VALUE = "{ l.pattern_pos + 1 }">
+			<MvWHILE EXPR = "{ l.pattern_pos LE l.pattern_length }">
+				<MvASSIGN NAME = "l.pattern_char"		VALUE = "{ substring_var( l.pattern, l.pattern_pos, 1 ) }">
+				<MvIF EXPR = "{ l.pattern_char NE '%' }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.pattern_pos"		VALUE = "{ l.pattern_pos + 1 }">
+			</MvWHILE>
+
+			<MvIF EXPR = "{ l.pattern_pos GT l.pattern_length }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvWHILE EXPR = "{ l.value_pos LE l.value_length }">
+				<MvIF EXPR = "{ l.pattern_char EQ '_' }">											<MvWHILESTOP>
+				<MvELSEIF EXPR = "{ substring_var( l.value, l.value_pos, 1 ) EQ l.pattern_char }">	<MvWHILESTOP>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.value_pos"			VALUE = "{ l.value_pos + 1 }">
+			</MvWHILE>
+
+			<MvIF EXPR = "{ l.value_pos GT l.value_length }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Skip the next character since we have already matched it in the loop above
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.value_pos"				VALUE = "{ l.value_pos + 1 }">
+
+			<MvIF EXPR = "{ l.value_pos LE l.value_length }">
+				<MvASSIGN NAME = "l.percent_count"											VALUE = "{ l.percent_count + 1 }">
+				<MvASSIGN NAME = "l.percent_pattern_stack"	INDEX = "{ l.percent_count }"	VALUE = "{ l.pattern_pos - 1 }">
+				<MvASSIGN NAME = "l.percent_value_stack"	INDEX = "{ l.percent_count }"	VALUE = "{ l.value_pos }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pattern_pos"			VALUE = "{ l.pattern_pos + 1 }">
+		<MvELSE>
+			<MvIF EXPR = "{ substring_var( l.value, l.value_pos, 1 ) EQ l.pattern_char }">
+				<MvASSIGN NAME = "l.pattern_pos"		VALUE = "{ l.pattern_pos + 1 }">
+				<MvASSIGN NAME = "l.value_pos"			VALUE = "{ l.value_pos + 1 }">
+			<MvELSEIF EXPR = "{ l.percent_count EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSE>
+				<MvASSIGN NAME = "l.pattern_pos"		VALUE = "{ l.percent_pattern_stack[ l.percent_count ] }">
+				<MvASSIGN NAME = "l.value_pos"			VALUE = "{ l.percent_value_stack[ l.percent_count ] }">
+				<MvASSIGN NAME = "l.percent_count"		VALUE = "{ l.percent_count - 1 }">
+			</MvIF>
+		</MvIF>
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>

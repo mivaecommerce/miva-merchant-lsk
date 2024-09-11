@@ -1,0 +1,757 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-FCS-
+| Next Error Code: 10    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-flatcus">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Customers to Flat File">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0803">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.FlatCustomer_File" VALUE = "{ trim( g.FlatCustomer_File ) }">
+
+	<MvIF EXPR = "{ len( g.FlatCustomer_File ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCustomer_File', 'Please specify a file' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ '/' IN g.FlatCustomer_File }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCustomer_File', 'Please do not include a path in the file name' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatCustomer_Email" VALUE = "{ trim( g.FlatCustomer_Email ) }">
+
+	<MvIF EXPR = "{ g.FlatCustomer_SendEmail AND len( g.FlatCustomer_Email ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCustomer_Email', 'Please specify a valid email address' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.FlatCustomer_Email ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCustomer_Email', 'Please specify a valid email address' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( len( g.FlatCustomer_Delimiter ) EQ 0 ) AND ( NOT g.FlatCustomer_Delimiter_Tab ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCustomer_Delimiter', 'Please specify a delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatCustomer_Delimiter_Tab }">
+		<MvASSIGN NAME = "g.FlatCustomer_Delimiter" VALUE = "{ asciichar( 9 ) }">
+	</MvIF>
+
+		<MvIF EXPR = "{ NOT len( g.Customer_Check_Fields:ShipFirstName 					$
+								 g.Customer_Check_Fields:ShipLastName 					$
+								 g.Customer_Check_Fields:Login 							$
+								 g.Customer_Check_Fields:Password 						$
+								 g.Customer_Check_Fields:PasswordEmail 					$
+								 g.Customer_Check_Fields:BusinessAccount 				$
+								 g.Customer_Check_Fields:CreatedTimestamp 				$
+								 g.Customer_Check_Fields:LastUpdatedTimestamp 			$
+								 g.Customer_Check_Fields:LastLoginTimestamp 			$
+								 g.Customer_Check_Fields:PasswordLastChangedTimestamp	$
+								 g.Customer_Check_Fields:TaxExempt						$
+								 g.Customer_Check_Fields:ShipAddress 					$
+								 g.Customer_Check_Fields:ShipCity 						$
+								 g.Customer_Check_Fields:ShipState 						$
+								 g.Customer_Check_Fields:ShipZip 						$
+								 g.Customer_Check_Fields:ShipCountry 					$
+								 g.Customer_Check_Fields:ShipEmail 						$
+								 g.Customer_Check_Fields:ShipPhone 						$
+								 g.Customer_Check_Fields:ShipFax 						$
+								 g.Customer_Check_Fields:ShipCompany 					$
+								 g.Customer_Check_Fields:BillAddress 					$
+								 g.Customer_Check_Fields:BillCity 						$
+								 g.Customer_Check_Fields:BillState 						$
+								 g.Customer_Check_Fields:BillZip 						$
+								 g.Customer_Check_Fields:BillCountry 					$
+								 g.Customer_Check_Fields:BillEmail 						$
+								 g.Customer_Check_Fields:BillPhone 						$
+								 g.Customer_Check_Fields:BillFax 						$
+								 g.Customer_Check_Fields:BillCompany 					$
+								 g.Customer_Check_Fields:OrderCount 					$
+								 g.Customer_Check_Fields:AvgOrderTotal 					$
+								 g.Customer_Check_Fields:OrderTotal ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select at least one field' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Export" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.directory"		VALUE = "{ g.MerchantPath $ 's' $ padl( g.Store:id, 2, '0' ) $ '/export/' }">
+	<MvASSIGN NAME = "l.output"			VALUE = "{ l.directory $ g.FlatCustomer_File }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'data', l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ fexists( l.output ) }">
+		<MvIF EXPR = "{ NOT g.FlatCustomer_Append }">
+			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.output ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Progress_Bar EQ 100 }">
+		<MvIF EXPR = "{ g.Total_Customer_Count EQ 1 }">	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( '1 customer exported to \'' $ l.output $ '\'' ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( g.Total_Customer_Count $ ' customers exported to \'' $ l.output $ '\'' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-EXP-FCS-00009', 'Customers exported' ) }">
+
+		<MvIF EXPR = "{ g.FlatCustomer_SendEmail }">
+			<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.null" VALUE = "{ Send_Email_Attachment( g.Store:email, g.FlatCustomer_Email, '', 'Miva Merchant Customer Export', g.FlatCustomer_File, l.directory, 'data' ) }">
+		</MvIF>		
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+		<MvASSIGN NAME = "l.end_time" VALUE = "20">
+	<MvELSE>
+		<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatCustomer_Export_Time_Start"		VALUE = "{ s.time_t }">
+	<MvASSIGN NAME = "l.exported_customfield_count"			VALUE = "{ [ g.Module_Library_Utilities ].CustomFieldSelect_Selected_WithModules( g.FlatCustomer_CustomFields, 'fields_cust', l.exported_customfields ) }">
+
+	<MvCOMMENT>Export Header</MvCOMMENT>
+	<MvIF EXPR = "{ g.FlatCustomer_Header }">
+		<MvIF EXPR = "{ NOT FlatCustomer_Export_Header( l.output, l.exported_customfields ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatCustomer_Format EQ 'legacy' }">
+        <MvASSIGN NAME = "l.fields" VALUE = "{ Create_Fields_For_MvEXPORT( l.exported_customfields ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Total_Customer_Count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Cust_Temp"
+					QUERY	= "{ 'SELECT COUNT(*) as customer_count FROM ' $ g.Store_Table_Prefix $ 'Customers' }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCS-00003', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Total_Customer_Count" VALUE = "{ Cust_Temp.d.customer_count }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Cust_Temp">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.FlatCustomer_Export_LastCustomer }">
+		<MvASSIGN NAME = "g.FlatCustomer_Export_LastCustomer" 	VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Count"			VALUE = 0>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Customers"
+				QUERY	= "{ 'SELECT
+								cust.*,
+								ba.title AS business_title
+							  FROM ' $
+							  	g.Store_Table_Prefix $ 'Customers cust
+							  	LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'BusinessAccounts ba ON ba.id = cust.account_id
+							  WHERE
+							  	cust.id > ?
+							  ORDER BY
+							  	cust.id' }"
+				FIELDS	= "g.FlatCustomer_Export_LastCustomer">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCS-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Start( 'Customer Export Progress', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Show() }">
+
+	<MvASSIGN NAME = "l.time_good" VALUE = 1>
+	<MvWHILE EXPR = "{ NOT Customers.d.EOF AND l.time_good }">
+		<MvASSIGN NAME = "g.Customer_Count" VALUE = "{ g.Customer_Count + 1 }">
+
+		<MvIF EXPR = "{ NOT Customers.d.dt_created }">	<MvASSIGN NAME = "g.Customers_Created_Formatted"				VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "g.Customers_Created_Formatted"				VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Customers.d.dt_created, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Customers.d.dt_created, s.miva_language ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Customers.d.dt_updated }">	<MvASSIGN NAME = "g.Customers_Last_Updated_Formatted"			VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "g.Customers_Last_Updated_Formatted"			VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Customers.d.dt_updated, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Customers.d.dt_updated, s.miva_language ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Customers.d.dt_login }">	<MvASSIGN NAME = "g.Customers_Login_Formatted"					VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "g.Customers_Login_Formatted"					VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Customers.d.dt_login, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Customers.d.dt_login, s.miva_language ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Customers.d.dt_pwchg }">	<MvASSIGN NAME = "g.Customers_Password_Last_Changed_Formatted"	VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "g.Customers_Password_Last_Changed_Formatted"	VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Customers.d.dt_pwchg, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Customers.d.dt_pwchg, s.miva_language ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.Customer_Count, g.Total_Customer_Count ) }">
+
+		<MvASSIGN NAME = "l.exported_customfield_pos"		VALUE = 1>
+		<MvWHILE EXPR = "{ l.exported_customfield_pos LE l.exported_customfield_count }">
+			<MvDO FILE	= "{ g.Module_Root $ l.exported_customfields[ l.exported_customfield_pos ]:module:module }"
+				  NAME	= "{ 'l.customfield_values[' $ l.exported_customfield_pos $ ']' }"
+				  VALUE	= "{ Module_Customer_Field_Value( l.exported_customfields[ l.exported_customfield_pos ]:module, Customers.d.id, l.exported_customfields[ l.exported_customfield_pos ]:code ) }">
+
+			<MvASSIGN NAME = "l.exported_customfield_pos"	VALUE = "{ l.exported_customfield_pos + 1 }">
+		</MvWHILE>
+
+        <MvIF EXPR = "{ g.FlatCustomer_Format EQ 'customerimport' }">
+            <MvIF EXPR = "{ NOT Modern_Export_Record( l.output, l.customfield_values ) }">
+                <MvCLOSEVIEW NAME = "Merchant" VIEW = "Customers">
+                <MvFUNCTIONRETURN VALUE = 0>
+            </MvIF>
+
+        <MvELSE>
+            <MvEXPORT FILE = "{ l.output }" FIELDS = "{ l.fields }" DELIMITER = "{ g.FlatCustomer_Delimiter }">
+            <MvIF EXPR = "{ g.MvEXPORT_Error }">
+                <MvCLOSEVIEW NAME = "Merchant" VIEW = "Customers">
+                <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCS-00004', g.MvEXPORT_Error ) }">
+            </MvIF>
+        </MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatCustomer_Export_Time_Start ) GT l.end_time }">
+			<MvASSIGN NAME = "l.time_good" 				VALUE = 0>
+			<MvASSIGN NAME = "g.FlatCustomer_Export_NeedRefresh" 	VALUE = 1>
+			<MvASSIGN NAME = "l.customer_id" 			VALUE = "{ Customers.d.id }">
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Customers" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ g.FlatCustomer_Export_NeedRefresh AND ( NOT Customers.d.EOF ) }">
+		<MvASSIGN NAME = "g.FlatCustomer_Export_LastCustomer" 	VALUE = "{ l.customer_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.FlatCustomer_Export_NeedRefresh" 	VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ Customers.d.EOF }">
+		<MvASSIGN NAME = "g.FlatCustomer_Export_NeedRefresh" 	VALUE = 1>
+		<MvASSIGN NAME = "g.Progress_Bar"						VALUE = 100>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Customers">
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.FlatCustomer_Export_NeedRefresh }">
+		<MvASSIGN NAME = "g.FlatCustomer_Append" 	VALUE = 1>
+		<MvASSIGN NAME = "g.FlatCustomer_Header"	VALUE = 0>
+
+		<MvHIDE FIELDS = "g.Customer_Count, g.Customer_Check_Fields, g.FlatCustomer_Format, g.FlatCustomer_Delimiter_Tab,
+						  g.FlatCustomer_Delimiter, g.FlatCustomer_Export_LastCustomer, g.FlatCustomer_File, g.FlatCustomer_Append, 
+						  g.FlatCustomer_Export_Time_Start, g.Module_Code, g.FlatCustomer_CustomFields, g.Progress_Bar,
+						  g.Total_Customer_Count, g.FlatCustomer_Email, g.FlatCustomer_SendEmail, g.FlatCustomer_Header">
+
+		<script type="text/javascript">
+			function exp_continue()
+			{
+				document.forms[ Screen ].submit();
+			}
+			window.onload = exp_continue;
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_End() }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Load_Fields }">
+		<MvIF EXPR = "{ g.Reset NE 'No' }">
+			<MvASSIGN NAME = "g.FlatCustomer_File"									VALUE = "">
+			<MvASSIGN NAME = "g.FlatCustomer_Append"								VALUE = "">
+			<MvASSIGN NAME = "g.FlatCustomer_Format"								VALUE = "">
+			<MvASSIGN NAME = "g.FlatCustomer_Delimiter_Tab"							VALUE = "">
+			<MvASSIGN NAME = "g.FlatCustomer_Delimiter"								VALUE = "">
+			<MvASSIGN NAME = "g.FlatCustomer_Header"								VALUE = "">
+
+			<MvASSIGN NAME = "g.Customer_Check_Fields:Login"						VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:Password"						VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:PasswordEmail"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BusinessAccount"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:CreatedTimestamp"				VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:LastUpdatedTimestamp"			VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:LastLoginTimestamp"			VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:PasswordLastChangedTimestamp"	VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:TaxExempt"					VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipFirstName"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipLastName"					VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipEmail"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipPhone"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipFax"						VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipCompany"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipAddress"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipAddress2"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipCity"						VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipState"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipZip"						VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:ShipCountry"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillFirstName"				VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillLastName"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillPhone"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillFax"						VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillEmail"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillCompany"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillAddress"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillAddress2"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillCity"						VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillState"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillZip"						VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:BillCountry"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:OrderCount"					VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:AvgOrderTotal"				VALUE = "">
+			<MvASSIGN NAME = "g.Customer_Check_Fields:OrderTotal"					VALUE = "">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].InitializeCustomFieldSelect( l.empty_customfield_list, g.FlatCustomer_CustomFields ) }">
+
+			<MvASSIGN NAME = "g.Customer_Check_CustomFields"				VALUE = "">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL g.FlatCustomer_File }">			<MvASSIGN NAME = "g.FlatCustomer_File"			VALUE = "customers.csv">	</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCustomer_Append }">		<MvASSIGN NAME = "g.FlatCustomer_Append"		VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCustomer_Format }">	    <MvASSIGN NAME = "g.FlatCustomer_Format"        VALUE = "customerimport">   </MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCustomer_Delimiter_Tab }">	<MvASSIGN NAME = "g.FlatCustomer_Delimiter_Tab" VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCustomer_Delimiter }">		<MvASSIGN NAME = "g.FlatCustomer_Delimiter" 	VALUE = ",">				</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCustomer_Header }">		<MvASSIGN NAME = "g.FlatCustomer_Header"		VALUE = 1>					</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( 'Export Customers To Flat File', 'EXPT', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_JavaScript( 'Exporting Customers to Flat File', 'EXPT', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_CSS() }">
+
+	<script language="JavaScript">
+<!--
+HaveCustomReset = 1;
+
+function CustomReset()
+{
+	document.EXPT.Reset.value = 'Yes';
+}
+//-->
+	</script>
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( 'Export Customers To Flat File', 'EXPT', '' ) }">
+
+	<input type="hidden" name="Reset" value="No">
+	<MvHIDE FIELDS = "g.Module_Code">
+
+	<MvDO FILE = "{ g.Module_Admin }" NAME = "l.ok" VALUE = "{ BeginContent() }">
+	<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Destination', 110 ) }">
+				<tr><td nowrap>
+					<b>Export Customers to File:</b>
+				</td><td width="100%">
+					<input type="text" name="FlatCustomer_File" size=40 value = "{ encodeentities( g.FlatCustomer_File ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>If File Exists:</b>
+				</td><td width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatCustomer_Append', '1',	g.FlatCustomer_Append,	'Append To File' ) }"><br>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatCustomer_Append', '',	g.FlatCustomer_Append,	'Replace File' ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					Email File To:
+				</td><td width="100%" nowrap>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatCustomer_SendEmail', '0',	g.FlatCustomer_SendEmail,	'Do Not Email' ) }"><br>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatCustomer_SendEmail', '1',	g.FlatCustomer_SendEmail,	'' ) }">
+
+					<input type="text" size=40 name="FlatCustomer_Email" value="{ encodeentities( g.Store:email ) }">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td><td width = "100%">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Format', 110 ) }">
+				<tr><td valign="top" nowrap>
+					<b>File Format:</b>
+				</td><td width="100%">
+					<select name="FlatCustomer_Format">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'customerimport', g.FlatCustomer_Format, 'Customer Import' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'legacy',         g.FlatCustomer_Format, 'Legacy Import Customers From Flat File' ) }">
+					</select>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>Delimiter:</b>
+				</td><td width="100%">
+					<table border=0 cellpadding = 0 cellspacing = 0>
+					<tr><td>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatCustomer_Delimiter_Tab', '1',	g.FlatCustomer_Delimiter_Tab,	'Tab' ) }">
+					</td><td align="left" valign="middle">
+						&nbsp;
+					</td></tr>
+
+					<tr><td>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatCustomer_Delimiter_Tab', '',	g.FlatCustomer_Delimiter_Tab,	'Other:' ) }">
+					</td><td align="left" valign="middle">
+						<input type="text" name="FlatCustomer_Delimiter" value="{ encodeentities( g.FlatCustomer_Delimiter ) }" size=10>
+					</td></tr>
+					</table>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					&nbsp;
+				</td><td width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.FlatCustomer_Header, 'FlatCustomer_Header', 'Yes', 'Export Field Names as Header' ) }">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Fields', 'auto' ) }">
+				<tr><td valign="top" colspan="2" nowrap style="padding: 10px 10px 10px 0;">
+					<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawCheckUncheckAll_In( 'customerexportfields' ) }">
+				</td></tr>
+				<tr><td valign="top" nowrap>
+					<b>Standard Fields:</b>
+				</td><td valign="top" nowrap>
+					<table id="customerexportfields" border="0" cellpadding="2" cellspacing="0">
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:Login, 'Customer_Check_Fields:Login', 'Yes', 'Login' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:Password, 'Customer_Check_Fields:Password', 'Yes', 'Password' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:PasswordEmail, 'Customer_Check_Fields:PasswordEmail', 'Yes', 'Pass. Recovery Email' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BusinessAccount, 'Customer_Check_Fields:BusinessAccount', 'Yes', 'Business Account' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:CreatedTimestamp, 'Customer_Check_Fields:CreatedTimestamp', 'Yes', 'Created Timestamp' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:LastUpdatedTimestamp, 'Customer_Check_Fields:LastUpdatedTimestamp', 'Yes', 'Last Updated Timestamp' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:LastLoginTimestamp, 'Customer_Check_Fields:LastLoginTimestamp', 'Yes', 'Last Login Timestamp' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:PasswordLastChangedTimestamp, 'Customer_Check_Fields:PasswordLastChangedTimestamp', 'Yes', 'Password Last Changed' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:TaxExempt, 'Customer_Check_Fields:TaxExempt', 'Yes', 'Tax Exempt' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipFirstName, 'Customer_Check_Fields:ShipFirstName', 'Yes', 'Ship. First Name' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipLastName, 'Customer_Check_Fields:ShipLastName', 'Yes', 'Ship. Last Name' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipEmail, 'Customer_Check_Fields:ShipEmail', 'Yes', 'Ship. Email' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipPhone, 'Customer_Check_Fields:ShipPhone', 'Yes', 'Ship. Phone' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipFax, 'Customer_Check_Fields:ShipFax', 'Yes', 'Ship. Fax' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipCompany, 'Customer_Check_Fields:ShipCompany', 'Yes', 'Ship. Company' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipAddress, 'Customer_Check_Fields:ShipAddress', 'Yes', 'Ship. Address' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipAddress2, 'Customer_Check_Fields:ShipAddress2', 'Yes', 'Ship. Address2' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipCity, 'Customer_Check_Fields:ShipCity', 'Yes', 'Ship. City' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipState, 'Customer_Check_Fields:ShipState', 'Yes', 'Ship. State' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipZip, 'Customer_Check_Fields:ShipZip', 'Yes', 'Ship. Zip' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:ShipCountry, 'Customer_Check_Fields:ShipCountry', 'Yes', 'Ship. Country' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillFirstName, 'Customer_Check_Fields:BillFirstName', 'Yes', 'Bill. First Name' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillLastName, 'Customer_Check_Fields:BillLastName', 'Yes', 'Bill. Last Name' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillPhone, 'Customer_Check_Fields:BillPhone', 'Yes', 'Bill. Phone' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillFax, 'Customer_Check_Fields:BillFax', 'Yes', 'Bill. Fax' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillEmail, 'Customer_Check_Fields:BillEmail', 'Yes', 'Bill. Email' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillCompany, 'Customer_Check_Fields:BillCompany', 'Yes', 'Bill. Company' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillAddress, 'Customer_Check_Fields:BillAddress', 'Yes', 'Bill. Address' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillAddress2, 'Customer_Check_Fields:BillAddress2', 'Yes', 'Bill. Address2' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillCity, 'Customer_Check_Fields:BillCity', 'Yes', 'Bill. City' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillState, 'Customer_Check_Fields:BillState', 'Yes', 'Bill. State' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillZip, 'Customer_Check_Fields:BillZip', 'Yes', 'Bill. Zip' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:BillCountry, 'Customer_Check_Fields:BillCountry', 'Yes', 'Bill. Country' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:OrderCount, 'Customer_Check_Fields:OrderCount', 'Yes', 'Orders' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:AvgOrderTotal, 'Customer_Check_Fields:AvgOrderTotal', 'Yes', 'Avg Order Value' ) }">
+						</td><td align="left">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Customer_Check_Fields:OrderTotal, 'Customer_Check_Fields:OrderTotal', 'Yes', 'Lifetime' ) }">
+						</td></tr>
+					</table>
+				</td></tr>
+
+				<MvASSIGN NAME = "l.customfield_count"	VALUE = "{ [ g.Module_Library_Utilities ].CustomerCustomFieldList_Load( l.customfields ) }">
+				<MvIF EXPR = "{ l.customfield_count }">
+					<tr><td valign="top" nowrap>
+						Custom Fields:
+					</td><td valign="top" nowrap>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCustomFieldSelect( 'FlatCustomer_CustomFields', g.FlatCustomer_CustomFields, l.customfields, l.customfield_count ) }">
+					</td></tr>
+				</MvIF>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+	</table>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Buttons( 'Export', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatCustomer_Export_Header" PARAMETERS = "output, customfields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.FlatCustomer_Format EQ 'legacy' }">
+        <MvIF EXPR = "{ NOT Build_Legacy_Header( l.output, l.customfields ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+
+	<MvELSEIF EXPR = "{ g.FlatCustomer_Format EQ 'customerimport' }">
+        <MvIF EXPR = "{ NOT Build_Modern_Header( l.output, l.customfields ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+	</MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Build_Legacy_Header" PARAMETERS = "output, customfields" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Login }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LOGIN' ) }">								</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Password }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_PASSWORD' ) }">							</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordEmail }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LOST_PASSWORD_EMAIL' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BusinessAccount }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BUSINESS_ACCOUNT' ) }">   				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:CreatedTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_CREATED_TIMESTAMP' ) }">   				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastUpdatedTimestamp }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LAST_UPDATED_TIMESTAMP' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastLoginTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LAST_LOGIN_TIMESTAMP' ) }">  				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordLastChangedTimestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_PASSWORD_LAST_CHANGED_TIMESTAMP' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:TaxExempt }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_TAX_EXEMPT' ) }">							</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_FIRST_NAME' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_LAST_NAME' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_ADDRESS' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_ADDRESS2' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCity }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_CITY' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipState }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_STATE' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipZip }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_ZIP' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_COUNTRY' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_EMAIL' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_PHONE' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFax }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_FAX' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_COMPANY' ) }">					</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_FIRST_NAME' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_LAST_NAME' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_ADDRESS' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_ADDRESS2' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCity }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_CITY' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillState }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_STATE' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillZip }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_ZIP' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_COUNTRY' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_EMAIL' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_PHONE' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFax }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_FAX' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_COMPANY' ) }">					</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderCount }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_ORDER_COUNT' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:AvgOrderTotal }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_ORDER_AVERAGE' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderTotal }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_ORDER_TOTAL' ) }">						</MvIF>
+
+    <MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields">
+        <MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCustomer_Delimiter, l.customfield:code ) }">
+    </MvFOREACH>
+
+    <MvEXPORT FILE = "{ l.output }" FIELDS = "l.header" DELIMITER = "">
+    <MvIF EXPR = "{ g.MvEXPORT_Error }">
+        <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCS-00002', g.MvEXPORT_Error ) }">
+    </MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Build_Modern_Header" PARAMETERS = "output, customfields" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Login }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LOGIN' ) }">							</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Password }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_PASSWORD' ) }">							</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordEmail }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LOST_PASSWORD_EMAIL' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BusinessAccount }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BUSINESS_ACCOUNT' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:CreatedTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_CREATED_TIMESTAMP' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastUpdatedTimestamp }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LAST_UPDATED_TIMESTAMP' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastLoginTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_LAST_LOGIN_TIMESTAMP' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordLastChangedTimestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_PASSWORD_LAST_CHANGED_TIMESTAMP' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:TaxExempt }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_TAX_EXEMPT' ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_FIRST_NAME' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_LAST_NAME' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_ADDRESS' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_ADDRESS2' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCity }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_CITY' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipState }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_STATE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipZip }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_ZIP' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_COUNTRY' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_EMAIL' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_PHONE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFax }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_FAX' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_SHIPPING_COMPANY' ) }">					</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_FIRST_NAME' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_LAST_NAME' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_ADDRESS' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_ADDRESS2' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCity }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_CITY' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillState }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_STATE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillZip }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_ZIP' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_COUNTRY' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_EMAIL' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_PHONE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFax }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_FAX' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_BILLING_COMPANY' ) }">					</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderCount }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_ORDER_COUNT' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:AvgOrderTotal }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_ORDER_AVERAGE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderTotal }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, 'CUSTOMER_ORDER_TOTAL' ) }">						</MvIF>
+
+    <MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields">
+        <MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCustomer_Delimiter, toupper( glosub( [ g.Module_Root $ l.customfield:module:module ].Module_Customer_Field_Name( l.customfield:module, l.customfield:code ), ' ', '_' ) ) ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.header ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_Fields_For_MvEXPORT" PARAMETERS = "customfields var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Login }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.login' ) }">							</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Password }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.password' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordEmail }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.pw_email' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BusinessAccount }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.business_title' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:CreatedTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'g.Customers_Created_Formatted' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastUpdatedTimestamp }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'g.Customers_Last_Updated_Formatted' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastLoginTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'g.Customers_Login_Formatted' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordLastChangedTimestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'g.Customers_Password_Last_Changed_Formatted' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:TaxExempt }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.tax_exempt' ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_fname' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_lname' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_addr' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_addr2' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCity }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_city' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipState }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_state' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipZip }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_zip' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_cntry' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_email' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_phone' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFax }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_fax' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.ship_comp' ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_fname' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_lname' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_addr' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_addr2' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCity }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_city' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillState }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_state' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillZip }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_zip' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_cntry' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_email' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_phone' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFax }">							<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_fax' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.bill_comp' ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderCount }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.order_cnt' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:AvgOrderTotal }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.order_avg' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderTotal }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Customers.d.order_tot' ) }">						</MvIF>
+
+    <MvFOREACH ITERATOR = "l.field" INDEX = "l.pos" ARRAY = "l.customfields">
+        <MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.customfield_values[' $ l.pos $ ']' ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ l.fields }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Modern_Export_Record" PARAMETERS = "output, customfield_values var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Login }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.login ) }">							</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:Password }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.password ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordEmail }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.pw_email ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BusinessAccount }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.business_title ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:CreatedTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, g.Customers_Created_Formatted ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastUpdatedTimestamp }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, g.Customers_Last_Updated_Formatted ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:LastLoginTimestamp }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, g.Customers_Login_Formatted ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:PasswordLastChangedTimestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, g.Customers_Password_Last_Changed_Formatted ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:TaxExempt }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.tax_exempt ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_fname ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_lname ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_addr ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_addr2 ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCity }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_city ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipState }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_state ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipZip }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_zip ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_cntry ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_email ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_phone ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipFax }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_fax ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:ShipCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.ship_comp ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFirstName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_fname ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillLastName }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_lname ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_addr ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillAddress2 }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_addr2 ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCity }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_city ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillState }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_state ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillZip }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_zip ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCountry }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_cntry ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillEmail }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_email ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillPhone }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_phone ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillFax }">							<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_fax ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:BillCompany }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.bill_comp ) }">						</MvIF>
+
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderCount }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.order_cnt ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:AvgOrderTotal }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.order_avg ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Customer_Check_Fields:OrderTotal }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, Customers.d.order_tot ) }">						</MvIF>
+
+    <MvFOREACH ITERATOR = "l.value" ARRAY = "l.customfield_values">
+        <MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCustomer_Delimiter, l.value ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.record ) }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/export/export_include.mv">

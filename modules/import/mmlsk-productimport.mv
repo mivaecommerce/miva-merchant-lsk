@@ -1,0 +1,1421 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-PRO-
+| Next Error Code: 16   
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| API Functions for Feature "import"
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-productimport">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Product Import">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0900">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "import">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:screen"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:persistent"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:format"				VALUE = "delimited">
+	<MvASSIGN NAME = "l.capabilities:persistent_provision"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Build_Column_Info( l.import, l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.fields"	VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed', 'Records Processed:', 0 ) }">
+
+	<MvIF EXPR = "{ l.import:config:products EQ 'add' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'update' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'addupdate' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'replace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'addreplace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped', 'Records Skipped:', 0 ) }">
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'record_problems', 'Record Problems:', 0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.inv_default ) }">
+	<MvASSIGN NAME = "l.inv_default:quantity"			VALUE = 0>
+	<MvASSIGN NAME = "l.inv_default:adjust_quantity"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 1 }">
+		<MvCOMMENT> Validate columns when automatically mapped </MvCOMMENT>
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present, l.error_code, l.error_msg ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, l.error_msg ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.list_pos"					VALUE = 0>
+	<MvASSIGN NAME = "l.total_columns" 				VALUE = "{ Build_Column_Info( l.import, l.run_data:columns_all ) }">
+	<MvASSIGN NAME = "l.original_columns_present" 	VALUE = "{ l.run_data:columns_present }">
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ l.total_columns }">
+		<MvASSIGN NAME = "l.column_value" VALUE = "{ miva_variable_value( 'l.original_columns_present:' $ l.column:field ) }">
+
+		<MvIF EXPR = "{ l.column_value }">
+			<MvASSIGN NAME = "l.column:present"		VALUE = 1>
+			<MvASSIGN NAME = "l.list_pos"			VALUE = "{ l.list_pos + 1 }">
+
+			<MvREFERENCE NAME = "l.run_data:columns_list"		INDEX = "{ l.list_pos }"		VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+			<MvREFERENCE NAME = "l.run_data:columns_present"	MEMBER = "{ l.column:field }"	VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+			
+			<MvIF EXPR = "{ NOT ISNULL l.column:module }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_ref( l.run_data:custom_fields, l.run_data:columns_all[ l.index ], l.column_value ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.column:inventory }">
+			<MvASSIGN NAME = "l.run_data:process_inventory"	VALUE = 1>
+			<MvASSIGN NAME = "l.column:default"				VALUE = "{ miva_variable_value( 'l.inv_default:' $ l.column:inv_field ) }">
+			
+			<MvIF EXPR = "{ l.column:related_field }">
+				<MvASSIGN NAME = "l.column:related_default"	VALUE = "{ miva_variable_value( 'l.inv_default:' $ l.column:related_field ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.column:productpaymentrules }">
+			<MvASSIGN NAME = "l.run_data:process_productpaymentrules" VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.column:productshippingrules }">
+			<MvASSIGN NAME = "l.run_data:process_productshippingrules" VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.run_data:columns_present:code, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ignore" VALUE = "{ [ g.Module_Library_DB ].Product_Load_Code( l.record:code, l.existing_product ) }">
+
+	<MvIF EXPR = "{ l.import:config:products EQ 'add' }">
+		<MvIF EXPR = "{ NOT Import_Add_Only( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'update' }">
+		<MvIF EXPR = "{ NOT Import_Update_Only( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'addupdate' }">
+		<MvIF EXPR = "{ NOT Import_Add_And_Update( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'replace' }">
+		<MvIF EXPR = "{ NOT Import_Replace_Only( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.import:config:products EQ 'addreplace' }">
+		<MvIF EXPR = "{ NOT Import_Add_And_Replace( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:id }">
+		<MvASSIGN NAME = "g.Import_Product_Products"				VALUE = "{ l.import:config:products }">
+		<MvASSIGN NAME = "g.Import_Product_Categories"				VALUE = "{ l.import:config:categories }">
+		<MvASSIGN NAME = "g.Import_Product_CustomFields"			VALUE = "{ l.import:config:custom }">
+		<MvASSIGN NAME = "g.Import_Product_AttributeTemplates"		VALUE = "{ l.import:config:attribute_templates }">
+		<MvASSIGN NAME = "g.Import_Product_CanonicalURIHandling"	VALUE = "{ l.import:config:canonicalurihandling }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Import_Product_Products"				VALUE = "addupdate">
+		<MvASSIGN NAME = "g.Import_Product_Categories"				VALUE = "add">
+		<MvASSIGN NAME = "g.Import_Product_CustomFields"			VALUE = "retain">
+		<MvASSIGN NAME = "g.Import_Product_AttributeTemplates"		VALUE = "use">
+		<MvASSIGN NAME = "g.Import_Product_CanonicalURIHandling"	VALUE = "301">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "products,categories,custom,attribute_templates,canonicalurihandling">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'products' }">					<MvFUNCTIONRETURN VALUE = "{ g.Import_Product_Products_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'categories' }">				<MvFUNCTIONRETURN VALUE = "{ g.Import_Product_Categories_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">					<MvFUNCTIONRETURN VALUE = "{ g.Import_Product_CustomFields_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'attribute_templates' }">		<MvFUNCTIONRETURN VALUE = "{ g.Import_Product_AttributeTemplates_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'canonicalurihandling' }">	<MvFUNCTIONRETURN VALUE = "{ g.Import_Product_CanonicalURIHandling_Invalid }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'products' }">					<MvFUNCTIONRETURN VALUE = "<b>Products:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'categories' }">				<MvFUNCTIONRETURN VALUE = "<b>Categories:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">					<MvFUNCTIONRETURN VALUE = "<b>Custom Fields:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'attribute_templates' }">		<MvFUNCTIONRETURN VALUE = "<b>Attribute Templates:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'canonicalurihandling' }">	<MvFUNCTIONRETURN VALUE = "<b>Canonical URI Handling:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'products' }">
+		<select name="Import_Product_Products">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'add',				g.Import_Product_Products,				'Add New Products Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'update',			g.Import_Product_Products,				'Update Existing Products Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addupdate',		g.Import_Product_Products,				'Add New and Update Existing Products' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',			g.Import_Product_Products,				'Replace Existing Products Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addreplace',		g.Import_Product_Products,				'Add New and Replace Existing Products' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'categories' }">
+		<select name="Import_Product_Categories">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'add',				g.Import_Product_Categories,			'Append To Existing Categories' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace_data',	g.Import_Product_Categories,			'Replace Existing Categories Except When Field Is Empty' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace_empty',	g.Import_Product_Categories,			'Replace Existing Categories Including When Field Is Empty' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">
+		<select name="Import_Product_CustomFields">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'retain',			g.Import_Product_CustomFields,			'Retain Existing Data When Imported Data Is Empty' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'delete',			g.Import_Product_CustomFields,			'Delete Existing Data When Imported Data Is Empty' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'attribute_templates' }">
+		<select name="Import_Product_AttributeTemplates">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'use',				g.Import_Product_AttributeTemplates,	'Use Attribute Template Codes' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'copy',			g.Import_Product_AttributeTemplates,	'Copy Attribute Template Values' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'canonicalurihandling' }">
+		<select name="Import_Product_CanonicalURIHandling">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '',	g.Import_Product_CanonicalURIHandling, 'Delete Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '301',	g.Import_Product_CanonicalURIHandling, '301 Redirect Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '302',	g.Import_Product_CanonicalURIHandling, '302 Redirect Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '303',	g.Import_Product_CanonicalURIHandling, '303 Redirect Old Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '307',	g.Import_Product_CanonicalURIHandling, '307 Redirect Old Canonical' ) }">
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"												VALUE = 1>
+
+	<MvASSIGN NAME = "g.Import_Product_Products_Invalid"					VALUE = 0>
+	<MvASSIGN NAME = "g.Import_Product_CustomFields_Invalid"				VALUE = 0>
+	<MvASSIGN NAME = "g.Import_Product_AttributeTemplates_Invalid"			VALUE = 0>
+	<MvASSIGN NAME = "g.Import_Product_CanonicalURIHandling_Invalid"		VALUE = 0>
+
+	<MvASSIGN NAME = "g.Import_Product_Products"							VALUE = "{ trim( g.Import_Product_Products ) }">
+	<MvASSIGN NAME = "g.Import_Product_Categories"							VALUE = "{ trim( g.Import_Product_Categories ) }">
+	<MvASSIGN NAME = "g.Import_Product_CustomFields"						VALUE = "{ trim( g.Import_Product_CustomFields ) }">
+	<MvASSIGN NAME = "g.Import_Product_AttributeTemplates"					VALUE = "{ trim( g.Import_Product_AttributeTemplates ) }">
+	<MvASSIGN NAME = "g.Import_Product_CanonicalURIHandling"				VALUE = "{ trim( g.Import_Product_CanonicalURIHandling ) }">
+
+	<MvIF EXPR = "{ ( g.Import_Product_Products NE 'add' )			AND
+					( g.Import_Product_Products NE 'update' )		AND
+					( g.Import_Product_Products NE 'addupdate' )	AND
+					( g.Import_Product_Products NE 'replace' )		AND
+					( g.Import_Product_Products NE 'addreplace' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Product_Products_Invalid"				VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Product_Categories NE 'replace_data' )	AND
+					( g.Import_Product_Categories NE 'replace_empty' )	AND
+					( g.Import_Product_Categories NE 'add' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Product_Categories_Invalid"				VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Product_CustomFields NE 'retain' ) AND
+					( g.Import_Product_CustomFields NE 'delete' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Product_CustomFields_Invalid"			VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Product_AttributeTemplates NE 'use' ) AND
+					( g.Import_Product_AttributeTemplates NE 'copy' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Product_AttributeTemplates_Invalid"		VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Product_CanonicalURIHandling NE '' ) 	AND
+					( g.Import_Product_CanonicalURIHandling NE '301' ) 	AND
+					( g.Import_Product_CanonicalURIHandling NE '302' ) 	AND
+					( g.Import_Product_CanonicalURIHandling NE '303' ) 	AND
+					( g.Import_Product_CanonicalURIHandling NE '307' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Product_CanonicalURIHandlings_Invalid"	VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvCOMMENT> Validate columns when manually mapped </MvCOMMENT>
+		<MvEVAL EXPR = "{ Store_Config( l.import:config ) }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present, l.error_code, l.error_msg ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductImport_File', l.error_msg ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Store_Config( l.import:config ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Products',				l.import:config:products,				'add,update,addupdate,replace,addreplace',
+																																						'add,update,addupdate,replace,addreplace' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Categories',			l.import:config:categories,				'replace_data, replace_empty, add',
+																																						'replace_data, replace_empty, add' )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'CustomFields',			l.import:config:custom,					'retain,delete',
+																																						'retain,delete' )							OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'AttributeTemplates',	l.import:config:attribute_templates,	'use,copy',
+																																						'use,copy' )								OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'CanonicalURIHandling',	l.import:config:canonicalurihandling,	'delete,301,302,303,307',
+																																						',301,302,303,307' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvCOMMENT> Validate columns when manually mapped </MvCOMMENT>
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present, l.error_code, l.error_msg ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, l.error_msg ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Mode Specific Single Record Import Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Add_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.existing_product:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' already exists.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_Product( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_product:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Product( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Update" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_product:id }">
+		<MvIF EXPR = "{ NOT Import_Create_Product( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Update_Product( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_product:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Replace_Product( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Replace" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_product:id }">
+		<MvIF EXPR = "{ NOT Import_Create_Product( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Replace_Product( l.import, l.session, l.record, l.run_data, l.existing_product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Functions To Actually Import a Single Record
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Create_Product" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:agrpcount"		VALUE = 0>
+	<MvASSIGN NAME = "l.record:pgrpcount"		VALUE = 0>
+	<MvEVAL EXPR = "{ Convert_Cancat_Code( l.record, l.session ) }">
+	
+	<MvIF EXPR = "{ NOT Validate_Alternate_Page_Code( l.record, l.session ) }">
+		<MvASSIGN NAME = "l.record:page_code"	VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Insert( l.record ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' failed to create: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00011', 'ProductImport Product \'' $ l.record:code $ '\' created' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
+
+		<MvIF EXPR = "{ l.run_data:process_inventory }">
+			<MvIF EXPR = "{ NOT Create_Product_Inventory( l.import, l.session, l.record, l.run_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.run_data:process_productpaymentrules }">
+			<MvIF EXPR = "{ NOT Create_Product_PaymentRules( l.import, l.session, l.record, l.run_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.run_data:process_productshippingrules }">
+			<MvIF EXPR = "{ NOT Create_Product_ShippingRules( l.import, l.session, l.record, l.run_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Category( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Attribute_Templates( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_CanonicalURI( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Commit() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Product" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Update( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ Convert_Cancat_Code( l.record, l.session ) }">
+	
+	<MvIF EXPR = "{ NOT Validate_Alternate_Page_Code( l.record, l.session ) }">
+		<MvASSIGN NAME = "l.record:page_code"	VALUE = "{ l.existing_product:page_code }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:id"	VALUE = "{ l.existing_product:id }">
+
+	<MvCOMMENT>
+	|
+	| Blank values are ignored for these fields, even when their columns are assigned
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:code }">				<MvASSIGN NAME = "l.existing_product:code"			VALUE = "{ l.record:code }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:name }">				<MvASSIGN NAME = "l.existing_product:name"			VALUE = "{ l.record:name }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:category }">			<MvASSIGN NAME = "l.existing_product:category"		VALUE = "{ l.record:category }">	</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:price }">				<MvASSIGN NAME = "l.existing_product:price"			VALUE = "{ l.record:price }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:cost }">				<MvASSIGN NAME = "l.existing_product:cost"			VALUE = "{ l.record:cost }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:weight }">				<MvASSIGN NAME = "l.existing_product:weight"		VALUE = "{ l.record:weight }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:taxable }">				<MvASSIGN NAME = "l.existing_product:taxable"		VALUE = "{ l.record:taxable }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:active }">				<MvASSIGN NAME = "l.existing_product:active"		VALUE = "{ l.record:active }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:attribute }">			<MvASSIGN NAME = "l.existing_product:attribute"		VALUE = "{ l.record:attribute }">	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| When assigned, blank values are permitted for these fields
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:cancat_code }">	<MvASSIGN NAME = "l.existing_product:cancat_id"		VALUE = "{ l.record:cancat_id }">	</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:page_code }">	<MvASSIGN NAME = "l.existing_product:page_code"		VALUE = "{ l.record:page_code }">	</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:sku }">			<MvASSIGN NAME = "l.existing_product:sku"			VALUE = "{ l.record:sku }">			</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:descrip }">		<MvASSIGN NAME = "l.existing_product:descrip"		VALUE = "{ l.record:descrip }">		</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:thumbnail }">	<MvASSIGN NAME = "l.existing_product:thumbnail"		VALUE = "{ l.record:thumbnail }">	</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:image }">		<MvASSIGN NAME = "l.existing_product:image"			VALUE = "{ l.record:image }">		</MvIF>
+	<MvIF EXPR = "{ l.run_data:columns_present:page_title }">	<MvASSIGN NAME = "l.existing_product:page_title"	VALUE = "{ l.record:page_title }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Update( l.existing_product ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' failed to update: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00001', 'ProductImport Product \'' $ l.existing_product:code $ '\' updated' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_updated', 1 ) }">
+
+		<MvIF EXPR = "{ l.run_data:process_inventory }">
+			<MvIF EXPR = "{ NOT Update_Product_Inventory( l.import, l.session, l.record, l.run_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.run_data:process_productpaymentrules }">
+			<MvIF EXPR = "{ NOT Update_Product_PaymentRules( l.import, l.session, l.record, l.run_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.run_data:process_productshippingrules }">
+			<MvIF EXPR = "{ NOT Update_Product_ShippingRules( l.import, l.session, l.record, l.run_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Category( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Attribute_Templates( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_CanonicalURI( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Commit() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Product" PARAMETERS = "import var, session var, record var, run_data var, existing_product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:agrpcount"		VALUE = 0>
+	<MvASSIGN NAME = "l.record:pgrpcount"		VALUE = 0>
+	<MvEVAL EXPR = "{ Convert_Cancat_Code( l.record, l.session ) }">
+
+	<MvIF EXPR = "{ NOT Validate_Alternate_Page_Code( l.record, l.session ) }">
+		<MvASSIGN NAME = "l.record:page_code"	VALUE = "{ l.existing_product:page_code }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Delete( l.existing_product ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' failed to replace: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00002', 'ProductImport Product \'' $ l.existing_product:code $ '\' deleted' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Insert( l.record ) }">
+			<MvEVAL EXPR = "{ Record_Skip( l.session, 'product \'' $ l.record:code $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00003', 'ProductImport Product \'' $ l.record:code $ '\' created' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
+
+			<MvIF EXPR = "{ l.run_data:process_inventory }">
+				<MvIF EXPR = "{ NOT Create_Product_Inventory( l.import, l.session, l.record, l.run_data ) }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.run_data:process_productpaymentrules }">
+				<MvIF EXPR = "{ NOT Create_Product_PaymentRules( l.import, l.session, l.record, l.run_data ) }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.run_data:process_productshippingrules }">
+				<MvIF EXPR = "{ NOT Create_Product_ShippingRules( l.import, l.session, l.record, l.run_data ) }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Product_Transfer( l.existing_product:id, l.record:id ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Category( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Attribute_Templates( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_CanonicalURI( l.import, l.session, l.record, l.run_data ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Commit() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_Product_Inventory" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.record:inv_active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.inv_data:product_id"	VALUE = "{ l.record:id }">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ l.column:inventory }">
+			<MvREFERENCE NAME = "l.inv_data" MEMBER = "{ l.column:inv_field }" VARIABLE = "{ 'l.record:' $ l.column:field }">
+			<MvIF EXPR = "{ len( l.column:related_field ) }">
+				<MvREFERENCE NAME = "l.inv_data" MEMBER = "{ l.column:related_field }" VARIABLE = "{ 'l.record:' $ l.column:related_field }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Insert( l.inv_data ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set inventory settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00004', 'ProductImport Inventory Settings for Product \'' $ l.record:id $ '\' created' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Insert( l.record:id, l.inv_data:quantity + l.inv_data:adjust_quantity ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set inventory count for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00005', 'ProductImport InventoryCount Settings for Product \'' $ l.record:id $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Update_Product_Inventory" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.record:id, l.existing_inv_data ) }">
+		<MvIF EXPR = "{ NOT l.run_data:columns_present:inv_active OR len( l.record:inv_active ) EQ 0 OR NOT l.record:inv_active }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvCOMMENT> Apply defaults (when appropriate) to all inventory fields, present or not. </MvCOMMENT>
+		<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+			<MvIF EXPR = "{ l.column:inventory }">
+				<MvEVAL EXPR = "{ Set_Inventory_Field_Default( l.session, l.record, l.run_data, l.column ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvFUNCTIONRETURN VALUE = "{ Create_Product_Inventory( l.import, l.session, l.record, l.run_data ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:inv_active AND len( l.record:inv_active ) NE 0 AND NOT l.record:inv_active }">
+		<MvFUNCTIONRETURN VALUE = "{ Delete_Product_Inventory( l.import, l.session, l.record, l.run_data ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ l.column:inventory }">
+			<MvIF EXPR = "{ l.column:present }">
+				<MvREFERENCE NAME = "l.field" VARIABLE = "{ 'l.record:' $ l.column:field }">
+
+				<MvCOMMENT>
+				|
+				| Empty values are only permitted in the following fields.  All others are ignored.
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ ISNULL l.field }">
+					<MvIF EXPR = "{ ( l.column:inv_field NE 'in_short'	) AND
+									( l.column:inv_field NE 'in_long'	) AND
+									( l.column:inv_field NE 'low_short'	) AND
+									( l.column:inv_field NE 'low_long'	) AND
+									( l.column:inv_field NE 'out_short'	) AND
+									( l.column:inv_field NE 'out_long'	) AND
+									( l.column:inv_field NE 'ltd_long'	) }">
+						<MvFOREACHCONTINUE>
+					</MvIF>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.existing_inv_data" MEMBER = "{ l.column:inv_field }" VALUE = "{ l.field }">
+				<MvIF EXPR = "{ len( l.column:related_field ) }">
+					<MvASSIGN NAME = "l.existing_inv_data" MEMBER = "{ l.column:related_field }" VALUE = "{ miva_variable_value( 'l.record:' $ l.column:related_field ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Update( l.existing_inv_data ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot update inventory settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00006', 'ProductImport Inventory Settings for Product \'' $ l.record:id $ '\' updated' ) }">
+
+	<MvIF EXPR = "{ l.run_data:columns_present:inv_quantity }">
+		<MvIF EXPR = "{ len( l.record:inv_quantity ) NE 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Update( l.record:id, l.record:inv_quantity ) }">
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot update inventory count for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00007', 'ProductImport InventoryCount Settings for Product \'' $ l.record:id $ '\' updated' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:inv_adjust_quantity }">
+		<MvIF EXPR = "{ len( l.record:inv_adjust_quantity ) NE 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Adjust( l.record:id, l.record:inv_adjust_quantity ) }">
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot adjust inventory count for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00008', 'ProductImport InventoryCount Settings for Product \'' $ l.record:id $ '\' updated' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Delete_Product_Inventory" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_INV_DB ].InventoryProductSettings_Delete( l.record:id ) AND
+								 [ g.Module_Feature_INV_DB ].InventoryProductCount_Delete( l.record:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_Product_PaymentRules" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.ppr_data:product_id" VALUE = "{ l.record:id }">
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ l.column:productpaymentrules }">
+			<MvIF EXPR = "{ l.column:field EQ 'limitpaymentmeths' }">
+				<MvREFERENCE NAME = "l.ppr_data" MEMBER = "limitmeths" 			VARIABLE = "{ 'l.record:' $ l.column:field }">
+			<MvELSE>
+				<MvREFERENCE NAME = "l.ppr_data" MEMBER = "{ l.column:field }"	VARIABLE = "{ 'l.record:' $ l.column:field }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Equal_Default( l.ppr_data ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Insert( l.ppr_data ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set product payment rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:paymentmethods:present }">
+		<MvIF EXPR = "{ NOT Create_ProductPaymentMethods( l.session, l.ppr_data, l.record ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00014', 'ProductImport ProductPaymentRules Settings for Product \'' $ l.record:id $ '\' created' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Update_Product_PaymentRules" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Load_ProductOrDefault( l.record:id, l.ppr_data ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot load product payment rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ l.column:productpaymentrules }">
+			<MvREFERENCE NAME = "l.import_file_data" MEMBER = "{ l.column:field }" VARIABLE = "{ 'l.record:' $ l.column:field }">
+		</MvIF>
+	</MvFOREACH>
+	
+	<MvCOMMENT>
+	|
+	| Blank values are ignored for these fields, even when their columns are assigned
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.import_file_data:limitpaymentmeths }"> 		<MvASSIGN NAME = "l.ppr_data:limitmeths" 	VALUE = "{ l.import_file_data:limitpaymentmeths }">	</MvIF>
+	
+	<MvCOMMENT>
+	|
+	| When assigned, blank values are permitted for these fields
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ l.run_data:columns_present:paymentmethods:present }"> 	<MvASSIGN NAME = "l.ppr_data:paymentmethods" 	VALUE = "{ l.import_file_data:paymentmethods }">	</MvIF>
+	
+	<MvIF EXPR = "{ [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Equal_Default( l.ppr_data ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Delete_Product( l.ppr_data:product_id ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot delete product payment rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Insert( l.ppr_data ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">			
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set product payment rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Update( l.ppr_data ) }">	
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set product payment rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>	
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:paymentmethods:present }">
+		<MvIF EXPR = "{ NOT Create_ProductPaymentMethods( l.session, l.ppr_data, l.record ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00015', 'ProductImport ProductPaymentRules Settings for Product \'' $ l.record:id $ '\' created' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_ProductPaymentMethods" PARAMETERS = "session var, ppr_data var, record var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentMethod_Delete_All_Product( l.ppr_data:product_id ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot delete permitted product payment methods for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "product_id"				VALUE = "{ l.ppr_data:product_id }">
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.ppr_data:paymentmethods, ',', l.methods ) }">
+		<MvIF EXPR = "{ ISNULL l.method }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.module_code" 	VALUE = "{ substring( l.method, 1, ( ':' IN l.method ) - 1 ) }">
+		<MvASSIGN NAME = "l.module_data" 	VALUE = "{ substring( l.method, ( ':' IN l.method ) + 1, len( l.method ) ) }">
+
+		<MvIF EXPR = "{ l.module_code EQ 'paymentcardtype' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_Type_Cached( l.module_data, l.paymentcardtype ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">	<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot insert product payment method for Product Code \'' $ l.record:code $ '\'. Unable to load payment card type \'' $ l.module_data $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvELSE>														<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot insert product payment method for Product Code \'' $ l.record:code $ '\'. Payment card type \'' $ l.module_data $ '\'. does not exist' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "mod_code"		VALUE = "">
+			<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "meth_code"		VALUE = "">
+			<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "pctype_id"		VALUE = "{ l.paymentcardtype:id }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.module_code, l.module ) OR
+							NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule ) }">
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot insert product payment method for Product Code \'' $ l.record:code $ '\'. Unable to load payment module \'' $ l.module_code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			<MvELSEIF EXPR = "{ NOT l.module:active }">
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot insert product payment method for Product Code \'' $ l.record:code $ '\'. Payment module \'' $ l.module_code $ '\' has been deactivated.' ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "mod_code"		VALUE = "{ l.module:code }">
+			<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "meth_code"		VALUE = "{ l.module_data }">
+			<MvASSIGN NAME = "l.productpaymentmethod" MEMBER = "pctype_id"		VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentMethod_Insert( l.productpaymentmethod ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot insert product payment method for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_Product_ShippingRules" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.psr_data:product_id" VALUE = "{ l.record:id }">
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ l.column:productshippingrules }">
+			<MvREFERENCE NAME = "l.psr_data" MEMBER = "{ l.column:field }" VARIABLE = "{ 'l.record:' $ l.column:field }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Equal_Default( l.psr_data ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Insert( l.psr_data ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set product shipping rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:shippingmethods:present }">
+		<MvIF EXPR = "{ NOT Create_ProductShippingMethods( l.psr_data, l.record ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00012', 'ProductImport ProductShippingRules Settings for Product \'' $ l.record:id $ '\' created' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Update_Product_ShippingRules" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Load_ProductOrDefault( l.record:id, l.psr_data ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot load product shipping rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ l.column:productshippingrules }">
+			<MvREFERENCE NAME = "l.import_file_data" MEMBER = "{ l.column:field }" VARIABLE = "{ 'l.record:' $ l.column:field }">
+		</MvIF>
+	</MvFOREACH>
+	
+	<MvCOMMENT>
+	|
+	| Blank values are ignored for these fields, even when their columns are assigned
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.import_file_data:ownpackage }"> 			<MvASSIGN NAME = "l.psr_data:ownpackage" 		VALUE = "{ l.import_file_data:ownpackage }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.import_file_data:width }"> 				<MvASSIGN NAME = "l.psr_data:width" 			VALUE = "{ l.import_file_data:width }">				</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.import_file_data:length }"> 				<MvASSIGN NAME = "l.psr_data:length" 			VALUE = "{ l.import_file_data:length }">			</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.import_file_data:height }"> 				<MvASSIGN NAME = "l.psr_data:height" 			VALUE = "{ l.import_file_data:height }">			</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.import_file_data:limitmeths }"> 			<MvASSIGN NAME = "l.psr_data:limitmeths" 		VALUE = "{ l.import_file_data:limitmeths }">		</MvIF>
+	
+	<MvCOMMENT>
+	|
+	| When assigned, blank values are permitted for these fields
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ l.run_data:columns_present:shippingmethods:present }"> 	<MvASSIGN NAME = "l.psr_data:shippingmethods" 	VALUE = "{ l.import_file_data:shippingmethods }">	</MvIF>
+	
+	<MvIF EXPR = "{ [ g.Module_Feature_SHP_DB ].ProductShippingRules_Equal_Default( l.psr_data ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Delete_Product( l.psr_data:product_id ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot delete product shipping rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Insert( l.psr_data ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">			
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set product shipping rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingRules_Update( l.psr_data ) }">	
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot set product shipping rules settings for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>	
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:shippingmethods:present }">
+		<MvIF EXPR = "{ NOT Create_ProductShippingMethods( l.psr_data, l.record ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-PRO-00013', 'ProductImport ProductShippingRules Settings for Product \'' $ l.record:id $ '\' created' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_ProductShippingMethods" PARAMETERS = "psr_data var, record var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingMethod_Delete_All_Product( l.psr_data:product_id ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot delete permitted product shipping methods for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_pos" VALUE = 1>
+	<MvASSIGN NAME = "l.method"		VALUE = "{ gettoken( l.psr_data:shippingmethods, ',', l.method_pos ) }">
+
+	<MvWHILE EXPR = "{ l.method }">
+		<MvASSIGN NAME = "l.productshippingmethod" MEMBER = "product_id"	VALUE = "{ l.psr_data:product_id }">
+		<MvASSIGN NAME = "l.productshippingmethod" MEMBER = "mod_code"		VALUE = "{ gettoken( l.method, ':', 1 ) }">
+		<MvASSIGN NAME = "l.productshippingmethod" MEMBER = "meth_code"		VALUE = "{ gettoken( l.method, ':', 2 ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ProductShippingMethod_Insert( l.productshippingmethod ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Cannot insert product shipping method for Product Code \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.method_pos" VALUE = "{ l.method_pos + 1 }">
+		<MvASSIGN NAME = "l.method"		VALUE = "{ gettoken( l.psr_data:shippingmethods, ',', l.method_pos ) }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Custom_Fields" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.customfields_updated" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.run_data:custom_fields">
+		<MvIF EXPR = "{ l.import:config:custom EQ 'delete' }">
+			<MvDO	FILE = "{ g.Module_Root $ l.field:module:module }"
+					NAME = "l.set_var"
+					VALUE = "{ Module_Product_Set_Field( l.field:module, l.record:id, l.field:code, miva_variable_value( 'l.record:' $ l.field:field ) ) }">
+
+			<MvASSIGN NAME = "l.customfields_updated" VALUE = 1>
+		<MvELSE>
+			<MvIF EXPR = "{ len( miva_variable_value( 'l.record:' $ l.field:field ) ) GT 0 }">
+				<MvDO	FILE = "{ g.Module_Root $ l.field:module:module }"
+						NAME = "l.set_var"
+						VALUE = "{ Module_Product_Set_Field( l.field:module, l.record:id, l.field:code, miva_variable_value( 'l.record:' $ l.field:field ) ) }">
+
+				<MvASSIGN NAME = "l.customfields_updated" VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.customfields_updated }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Update_LastUpdated_Product( l.record ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Category" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.run_data:columns_present:category }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT ISNULL l.record:category ) OR ( l.import:config:categories EQ 'replace_empty' ) }">
+		<MvIF EXPR = "{ ( l.import:config:categories EQ 'replace_data' ) OR
+						( l.import:config:categories EQ 'replace_empty' ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].CategoryXProduct_Delete_All_Product( l.record:id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.category_code" ARRAY = "l.category_codes" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.record:category, ',', l.category_codes ) }">
+			<MvIF EXPR = "{ ISNULL l.category_code }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( l.category_code, l.ctgy ) }">
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'No such category \'' $ l.category_code $ '\'. Error Message: ' $ g.Error_Message ) }">
+			<MvELSE>
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].CategoryXProduct_Load( l.ctgy:id, l.record:id, l.catxprod ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].CategoryXProduct_Insert( l.ctgy:id, l.record:id ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Attribute_Templates" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.attribute_template_code" ARRAY = "l.attribute_template_codes" COUNT = "{ miva_splitstring( l.record:attribute, '|', l.attribute_template_codes, 'trim,escaped' ) }">
+		<MvIF EXPR = "{ ISNULL l.attribute_template_code }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplate_Load_Code( l.attribute_template_code, l.attr_template ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Error processing Product Code \'' $ l.record:code $ '\'. Error Message: Attribute template \'' $ l.attribute_template_code $ '\' not found.' ) }">
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.import:config:attribute_templates EQ 'copy' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplate_Copy( l.attr_template:id, l.record:id, 0 ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Attribute_Load_Code( l.record:id, l.attribute_template_code, l.attr ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.attr"				VALUE = "">
+				<MvASSIGN NAME = "l.attr:product_id"	VALUE = "{ l.record:id }">
+				<MvASSIGN NAME = "l.attr:default_id"	VALUE = 0>
+				<MvASSIGN NAME = "l.attr:code"			VALUE = "{ l.attr_template:code }">
+				<MvASSIGN NAME = "l.attr:type"			VALUE = "template">
+				<MvASSIGN NAME = "l.attr:attemp_id"		VALUE = "{ l.attr_template:id }">
+				<MvASSIGN NAME = "l.attr:prompt"		VALUE = "{ l.attr_template:prompt }">
+				<MvASSIGN NAME = "l.attr:price"			VALUE = 0>
+				<MvASSIGN NAME = "l.attr:cost"			VALUE = 0>
+				<MvASSIGN NAME = "l.attr:weight"		VALUE = 0>
+				<MvASSIGN NAME = "l.attr:required"		VALUE = 0>
+				<MvASSIGN NAME = "l.attr:image"			VALUE = "">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Attribute_Insert( l.attr ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Create_CanonicalURI" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.run_data:columns_present:canonicaluri OR ISNULL l.record:canonicaluri }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Generate_Product_New( l.record ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for product \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_URI( l.record:canonicaluri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for product \'' $ l.record:code $ '\'. Error Message: ' $ g.Validation_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.uri:uri"			VALUE = "{ substring_var( l.record:canonicaluri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"			VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"		VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"		VALUE = "{ l.record:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Regenerate_Replace( l.import:config:canonicalurihandling, l.uri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for product \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_CanonicalURI" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.run_data:columns_present:canonicaluri OR ISNULL l.record:canonicaluri }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Generate_Product_Update( l.record ) }">
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for product \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_URI( l.record:canonicaluri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for product \'' $ l.record:code $ '\'. Error Message: ' $ g.Validation_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.uri:uri"			VALUE = "{ substring_var( l.record:canonicaluri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"			VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"		VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"		VALUE = "{ l.record:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Regenerate_Replace( l.import:config:canonicalurihandling, l.uri ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Failed to generate URI for product \'' $ l.record:code $ '\'. Error Message: ' $ g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Validation Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var, error_code var, error_msg var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.columns_present:code }">
+		<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-PRO-00009">
+		<MvASSIGN NAME = "l.error_msg" VALUE = "The Product Code field must be assigned to an import file column">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:products NE 'update' }">
+		<MvIF EXPR = "{ NOT l.columns_present:name }">
+			<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-PRO-00010">
+			<MvASSIGN NAME = "l.error_msg" VALUE = "The Product Name field must be assigned to an import file column">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Create" PARAMETERS = "session var, product var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT> Validate the contents of the fields that are present. </MvCOMMENT>
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.product, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT> Apply defaults (when appropriate) to all fields, present or not. </MvCOMMENT>
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvIF EXPR = "{ NOT l.column:inventory }">
+			<MvEVAL EXPR = "{ Set_Field_Default( l.session, l.product, l.run_data, l.column ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ Set_Inventory_Field_Default( l.session, l.product, l.run_data, l.column ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Update" PARAMETERS = "session var, product var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.product, l.run_data, l.column, 0 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Set_Inventory_Field_Default" PARAMETERS = "session var, product var, run_data var, column var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.field" VARIABLE = "{ 'l.product:' $ l.column:field }">
+
+	<MvIF EXPR = "{ len( l.field ) EQ 0 }">
+		<MvASSIGN NAME = "l.field" VALUE = "{ l.column:default }">
+		<MvIF EXPR = "{ l.column:related_field }">
+			<MvASSIGN NAME = "l.product" MEMBER = "{ l.column:related_field }" VALUE = "{ l.column:related_default }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Miscellaneous Utility Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Build_Column_Info" PARAMETERS = "import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.columns"	VALUE = "">
+
+	<MvCOMMENT>											field			name							header						required	default		validation		</MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'code',			'Product Code',					'PRODUCT_CODE',				1,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'sku',			'Product SKU',					'PRODUCT_SKU',				0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'cancat_code',	'Canonical Category Code',		'CANONICAL_CATEGORY_CODE',	0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'page_code',	'Alternate Display Page',		'ALTERNATE_DISPLAY_PAGE', 	0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'name',			'Product Name',					'PRODUCT_NAME',				1,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'category',		'Category Codes',				'CATEGORY_CODES',			0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'price',		'Price',						'PRICE',					0,			0,			'currency' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'cost',			'Cost',							'COST',						0,			0,			'currency' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'weight',		'Weight',						'WEIGHT',					0,			0,			'float' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'descrip',		'Description',					'DESCRIPTION',				0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'taxable',		'Taxable',						'TAXABLE',					0,			1,			'bool' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'active',		'Active',						'ACTIVE',					0,			1,			'bool' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'thumbnail',	'Thumbnail URL',				'THUMBNAIL_URL',			0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'image',		'Image URL',					'IMAGE_URL',				0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'attribute',	'Attribute Template Code(s)',	'ATTRIBUTE_TEMPLATE_CODE',	0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'page_title',	'Page Title',					'PAGE_TITLE',				0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'canonicaluri',	'Canonical URI',				'CANONICAL_URI',			0,			'',			'string' ) }">
+
+	<MvEVAL EXPR = "{ Add_ProductPaymentRules_Column( l.columns,	'limitpaymentmeths','Limit Payment Methods',		'LIMIT_PAYMENT_METHODS',	0,		'bool' ) }">
+	<MvEVAL EXPR = "{ Add_ProductPaymentRules_Column( l.columns,	'paymentmethods',	'Permitted Payment Methods',	'PAYMENT_METHODS',			'',		'string' ) }">
+
+	<MvEVAL EXPR = "{ Add_ProductShippingRules_Column( l.columns,	'width',			'Shipping Width',				'SHIPPING_WIDTH',			0,		'float' ) }">
+	<MvEVAL EXPR = "{ Add_ProductShippingRules_Column( l.columns,	'length',			'Shipping Length',				'SHIPPING_LENGTH',			0,		'float' ) }">
+	<MvEVAL EXPR = "{ Add_ProductShippingRules_Column( l.columns,	'height',			'Shipping Height',				'SHIPPING_HEIGHT',			0,		'float' ) }">
+	<MvEVAL EXPR = "{ Add_ProductShippingRules_Column( l.columns,	'ownpackage',		'Ships In Own Package',			'SEPARATE_PACKAGE',			0,		'bool' ) }">
+	<MvEVAL EXPR = "{ Add_ProductShippingRules_Column( l.columns,	'limitmeths',		'Limit Shipping Methods',		'LIMIT_SHIPPING_METHODS',	0,		'bool' ) }">
+	<MvEVAL EXPR = "{ Add_ProductShippingRules_Column( l.columns,	'shippingmethods',	'Permitted Shipping Methods',	'SHIPPING_METHODS',			'',		'string' ) }">
+
+	<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ [ g.Module_Library_Utilities ].ProductCustomFieldList_Load( l.customfields ) }">
+		<MvEVAL EXPR = "{ Add_Custom_Field_Column( l.columns, l.customfield, l.customfield:module ) }">
+	</MvFOREACH>
+
+	<MvCOMMENT>											field				name								header							validation		related_field	</MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'active',			'Track Product Inventory',			'TRACK_PRODUCT_INVENTORY',		'bool',			'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'quantity',			'Current Stock Level',				'CURRENT_STOCK_LEVEL',			'integer',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'adjust_quantity',	'Adjust Stock By',					'ADJUST_STOCK_BY',				'integer',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'in_short',			'In Stock Message (Short)',			'IN_STOCK_MESSAGE_SHORT',		'string',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'in_long',			'In Stock Message (Long)',			'IN_STOCK_MESSAGE_LONG',		'string',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'low_track',		'Track Low Stock Level',			'TRACK_LOW_STOCK_LEVEL',		'dbool',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'low_level',		'Low Stock Level',					'LOW_STOCK_LEVEL',				'int_or_d',		'low_lvl_d' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'low_short',		'Low Stock Message (Short)',		'LOW_STOCK_MESSAGE_SHORT',		'string',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'low_long',			'Low Stock Message (Long)',			'LOW_STOCK_MESSAGE_LONG',		'string',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'out_track',		'Track Out of Stock Level',			'TRACK_OUT_OF_STOCK_LEVEL',		'dbool',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'out_level',		'Out of Stock Level',				'OUT_OF_STOCK_LEVEL',			'int_or_d',		'out_lvl_d' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'out_hide',			'Hide Out of Stock Products',		'HIDE_OUT_OF_STOCK_PRODUCTS',	'dbool',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'out_short',		'Out of Stock Message (Short)',		'OUT_OF_STOCK_MESSAGE_SHORT',	'string',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'out_long',			'Out of Stock Message (Long)',		'OUT_OF_STOCK_MESSAGE_LONG',	'string',		'' ) }">
+	<MvEVAL EXPR = "{ Add_Inventory_Column( l.columns,	'ltd_long',			'Limited Stock Message',			'LIMITED_STOCK_MESSAGE',		'string',		'' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Add_Inventory_Column" PARAMETERS = "columns var, field, name, header, validation, related_field" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN		NAME = "l.column:field"			VALUE = "{ 'inv_' $ l.field }">
+	<MvASSIGN		NAME = "l.column:name"			VALUE = "{ l.name }">
+	<MvASSIGN		NAME = "l.column:header"		VALUE = "{ l.header }">
+	<MvASSIGN		NAME = "l.column:required"		VALUE = 0>
+	<MvASSIGN		NAME = "l.column:inv_field"		VALUE = "{ l.field }">
+	<MvASSIGN		NAME = "l.column:validation"	VALUE = "{ l.validation }">
+	<MvASSIGN		NAME = "l.column:related_field"	VALUE = "{ l.related_field }">
+	<MvASSIGN		NAME = "l.column:inventory"		VALUE = 1>
+
+	<MvASSIGN		NAME = "l.column_pos"			VALUE = "{ miva_array_max( l.columns ) + 1 }">
+	<MvREFERENCE	NAME = "l.columns"				INDEX = "{ l.column_pos }" VARIABLE = "l.column">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Add_ProductPaymentRules_Column" PARAMETERS = "columns var, field, name, header, default, validation" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN		NAME = "l.column:field"					VALUE = "{ l.field }">
+	<MvASSIGN		NAME = "l.column:name"					VALUE = "{ l.name }">
+	<MvASSIGN		NAME = "l.column:header"				VALUE = "{ l.header }">
+	<MvASSIGN		NAME = "l.column:default"				VALUE = "{ l.default }">
+	<MvASSIGN		NAME = "l.column:required"				VALUE = 0>
+	<MvASSIGN		NAME = "l.column:validation"			VALUE = "{ l.validation }">
+	<MvASSIGN		NAME = "l.column:productpaymentrules"	VALUE = 1>
+
+	<MvASSIGN		NAME = "l.column_pos"					VALUE = "{ miva_array_max( l.columns ) + 1 }">
+	<MvREFERENCE	NAME = "l.columns" INDEX = "{ l.column_pos }" VARIABLE = "l.column">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Add_ProductShippingRules_Column" PARAMETERS = "columns var, field, name, header, default, validation" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN		NAME = "l.column:field"					VALUE = "{ l.field }">
+	<MvASSIGN		NAME = "l.column:name"					VALUE = "{ l.name }">
+	<MvASSIGN		NAME = "l.column:header"				VALUE = "{ l.header }">
+	<MvASSIGN		NAME = "l.column:default"				VALUE = "{ l.default }">
+	<MvASSIGN		NAME = "l.column:required"				VALUE = 0>
+	<MvASSIGN		NAME = "l.column:validation"			VALUE = "{ l.validation }">
+	<MvASSIGN		NAME = "l.column:productshippingrules"	VALUE = 1>
+
+	<MvASSIGN		NAME = "l.column_pos"					VALUE = "{ miva_array_max( l.columns ) + 1 }">
+	<MvREFERENCE	NAME = "l.columns" INDEX = "{ l.column_pos }" VARIABLE = "l.column">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Config" PARAMETERS = "config var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.config:products"				VALUE = "{ g.Import_Product_Products }">
+	<MvASSIGN NAME = "l.config:categories"				VALUE = "{ g.Import_Product_Categories }">
+	<MvASSIGN NAME = "l.config:custom"					VALUE = "{ g.Import_Product_CustomFields }">
+	<MvASSIGN NAME = "l.config:attribute_templates"		VALUE = "{ g.Import_Product_AttributeTemplates }">
+	<MvASSIGN NAME = "l.config:canonicalurihandling"	VALUE = "{ g.Import_Product_CanonicalURIHandling }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Problem" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Record Problem - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'record_problems', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Convert_Cancat_Code" PARAMETERS = "record var, session var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| convert cancat_code to cancat_id
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:cancat_code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( l.record:cancat_code, l.canonical_category ) }">
+			<MvASSIGN NAME = "l.record:cancat_id" VALUE = 0>
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'Value: \'' $ l.record:cancat_code $ '\' set for CanonicalCategoryCode was invalid. Import continued, but a Canonical Category was NOT assigned' ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.record:cancat_id" VALUE = "{ l.canonical_category:id }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.record:cancat_id" VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Alternate_Page_Code" PARAMETERS = "record var, session var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Optional_Code( l.record:page_code ) }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Value: \'' $ l.record:page_code $ '\' set for AlternateDisplayPage was invalid. Import continued, but an Alternate Display Page was NOT assigned' ) }">
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

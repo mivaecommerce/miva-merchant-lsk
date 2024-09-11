@@ -1,0 +1,123 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-IMG-
+| Next Error Code: 10   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Image_Read" PARAMETERS = "image var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.image:id"			VALUE = "{ Images.d.id }">
+	<MvASSIGN NAME = "l.image:image"		VALUE = "{ Images.d.image }">
+	<MvASSIGN NAME = "l.image:image_md5"	VALUE = "{ Images.d.image_md5 }">
+	<MvASSIGN NAME = "l.image:width"		VALUE = "{ Images.d.width }">
+	<MvASSIGN NAME = "l.image:height"		VALUE = "{ Images.d.height }">
+	<MvASSIGN NAME = "l.image:refcount"		VALUE = "{ Images.d.refcount }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Insert_LowLevel" PARAMETERS = "image var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.image:id"			VALUE = "{ StoreKey_Generate( 'Images' ) }">
+	<MvASSIGN NAME = "l.image:image_md5"	VALUE = "{ crypto_md5( l.image:image ) }">
+	<MvASSIGN NAME = "l.image:refcount"		VALUE = 0>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'Images 
+					      ( id, image, image_md5, width, height, refcount )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.image:id, l.image:image, l.image:image_md5,
+					   l.image:width, l.image:height, l.image:refcount">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-IMG-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Delete_LowLevel" PARAMETERS = "image_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'Images WHERE id = ?' }"
+			 FIELDS	= "l.image_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-IMG-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Load_ID" PARAMETERS = "image_id, image var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Images"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Images WHERE id = ?' }"
+				FIELDS	= "l.image_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-IMG-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Images.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Images">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-IMG-00004' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Image_Read( l.image ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Images">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Load_File" PARAMETERS = "image_filepath, image var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">	
+	<MvASSIGN NAME = "l.image_md5" VALUE = "{ crypto_md5( l.image_filepath ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Images"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Images WHERE image_md5 = ?' }"
+				FIELDS	= "l.image_md5">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-IMG-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Images.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Images">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-IMG-00006' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Image_Read( l.image ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Images">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Increment_RefCount" PARAMETERS = "image_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Images SET refcount = refcount + 1 WHERE id = ?' }"
+			 FIELDS	= "l.image_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-IMG-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Decrement_RefCount" PARAMETERS = "image_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Images SET refcount = refcount - 1 WHERE id = ?' }"
+			 FIELDS	= "l.image_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-IMG-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

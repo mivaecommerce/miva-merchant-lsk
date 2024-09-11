@@ -1,0 +1,449 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-RPD-DTB-
+| Next Error Code: 19   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "RPD_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'RelatedProducts
+								(
+									product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+									relprod_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+									disp_order	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+								) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'RelatedProducts_1 ON ' $ g.Store_Table_Prefix $ 'RelatedProducts ( product_id, relprod_id ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'RelatedProducts_2 ON ' $ g.Store_Table_Prefix $ 'RelatedProducts ( relprod_id ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'RelatedProducts_3 ON ' $ g.Store_Table_Prefix $ 'RelatedProducts ( product_id, disp_order ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'RelatedProductDisplayOrder', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RPD_Store_Delete" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'RelatedProducts' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Read" PARAMETERS = "relatedproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.relatedproduct:product_id"	VALUE = "{ RelatedProducts.d.product_id }">
+	<MvASSIGN NAME = "l.relatedproduct:relprod_id"	VALUE = "{ RelatedProducts.d.relprod_id }">
+	<MvASSIGN NAME = "l.relatedproduct:disp_order"	VALUE = "{ RelatedProducts.d.disp_order }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Insert" PARAMETERS = "relatedproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT RelatedProduct_Insert_LowLevel( l.relatedproduct ) OR
+					NOT [ g.Module_Library_DB ].Product_Update_LastUpdated( l.relatedproduct:product_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_relprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_RelatedProduct_Insert( l.module, l.relatedproduct:product_id, l.relatedproduct:relprod_id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Insert_LowLevel" PARAMETERS = "relatedproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.relatedproduct:disp_order"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'RelatedProductDisplayOrder' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'RelatedProducts
+					      ( product_id, relprod_id, disp_order )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.relatedproduct:product_id, l.relatedproduct:relprod_id, l.relatedproduct:disp_order">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Update_DisplayOrder" PARAMETERS = "relatedproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'RelatedProducts
+					      SET
+							disp_order	= ?
+					      WHERE
+							product_id	= ? AND
+							relprod_id	= ?' }"
+			 FIELDS	= "l.relatedproduct:disp_order,
+					   l.relatedproduct:product_id, l.relatedproduct:relprod_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Delete_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'RelatedProducts WHERE product_id = ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Delete_ProductOrRelatedProduct" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Update_LastUpdated_RelatedProduct( l.product_id ) OR
+					NOT RelatedProduct_Delete_ProductOrRelatedProduct_LowLevel( l.product_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Delete_ProductOrRelatedProduct_LowLevel" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'RelatedProducts WHERE product_id = ? OR relprod_id = ?' }"
+			 FIELDS	= "l.product_id, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Delete" PARAMETERS = "product_id, relatedproduct" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT RelatedProduct_Delete_LowLevel( l.product_id, l.relatedproduct ) OR
+					NOT [ g.Module_Library_DB ].Product_Update_LastUpdated( l.product_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_relprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_RelatedProduct_Delete( l.module, l.product_id, l.relatedproduct ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Delete_LowLevel" PARAMETERS = "product_id, relatedproduct" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'RelatedProducts WHERE product_id = ? AND relprod_id = ?' }"
+			 FIELDS	= "l.product_id, l.relatedproduct">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Load_Product" PARAMETERS = "product_id, relprod_id, relatedproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "RelatedProducts"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'RelatedProducts WHERE product_id = ? AND relprod_id = ?' }"
+				FIELDS	= "l.product_id, l.relprod_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ RelatedProducts.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "RelatedProducts">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-RPD-DTB-00014' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ RelatedProduct_Read( l.relatedproduct ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "RelatedProducts">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProductList_Customer_Load_Product" PARAMETERS = "cust_id, prod_id, product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT
+								prod.*,
+								rlp.disp_order	AS sort_order,
+								ipc.inventory	AS ipc_inventory,
+								ips.active		AS ips_active,
+								ips.in_long		AS ips_in_long,
+								ips.in_short	AS ips_in_short,
+								ips.low_level	AS ips_low_level,
+								ips.low_long	AS ips_low_long,
+								ips.low_lvl_d	AS ips_low_lvl_d,
+								ips.low_short	AS ips_low_short,
+								ips.low_track	AS ips_low_track,
+								ips.out_level	AS ips_out_level,
+								ips.out_long	AS ips_out_long,
+								ips.out_lvl_d	AS ips_out_lvl_d,
+								ips.out_short	AS ips_out_short,
+								ips.out_track	AS ips_out_track,
+								iset.active		AS iset_active,
+								iset.in_long	AS iset_in_long,
+								iset.in_short	AS iset_in_short,
+								iset.low_level	AS iset_low_level,
+								iset.low_long	AS iset_low_long,
+								iset.low_short	AS iset_low_short,
+								iset.low_track	AS iset_low_track,
+								iset.out_level	AS iset_out_level,
+								iset.out_long	AS iset_out_long,
+								iset.out_short	AS iset_out_short,
+								iset.out_track	AS iset_out_track
+							  FROM ' $
+								g.Store_Table_Prefix $ 'RelatedProducts rlp, ' $
+								g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+								g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								rlp.product_id	= ?					AND
+								prod.id			= rlp.relprod_id	AND
+								prod.active		= 1					AND
+								(
+									( prod.agrpcount = 0 ) OR
+									( prod.id IN ( SELECT
+													agxp.product_id
+												   FROM ' $ 
+													g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Customers cust ON cust.id = ?
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCustomer agxcust ON cust.id = agxcust.cust_id AND agxcust.agrp_id = agxp.agrp_id
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXBusinessAccount agxba ON cust.account_id = agxba.account_id AND agxba.agrp_id = agxp.agrp_id
+												   WHERE
+													agxp.product_id = prod.id	AND
+													(
+														agxcust.cust_id IS NOT NULL	OR
+														agxba.account_id IS NOT NULL
+													) ) )
+							    )
+								AND
+								(
+									( ( iset.active = 0 ) OR ( ips.active IS NULL ) OR ( ips.active = 0 ) ) OR
+									(
+										( ( ips.out_hide = \'d\' ) AND ( iset.out_hide = 0 ) ) OR
+										( ips.out_hide = \'n\' ) OR     
+										(                   
+											( ( ips.out_lvl_d = 1 ) AND ( ipc.inventory > iset.out_level ) ) OR
+											( ( ips.out_lvl_d = 0 ) AND ( ipc.inventory > ips.out_level ) )
+										)
+									)
+								)
+							  ORDER BY
+								sort_order' }"
+				FIELDS = "l.prod_id, l.cust_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.prod_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvASSIGN NAME = "l.prod_count" VALUE = "{ l.prod_count + 1 }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Product_Read( l.product[ l.prod_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products">
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPD-DTB-00015', l.prod_count ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sorting:  Items to be sorted are processed in three groups.  The input array to the sort function just contains the
+|		    items to be sorted, their desired offsets, and their current offsets.  We initially sort this data into
+|			two groups: items moving up and items moving down.  During processing, items moving down are segregated
+|			into two groups: items moving past the highest current offset, and items moving within the current
+|			data set.
+|
+|			Ties are broken using the items original offset.
+|
+|			The end result is that we process items in the following order:
+|
+|				+-----------------------+  offset  original_offset
+|				|                       |    |            ^
+|				|    Items moving up    |    |            |
+|				|                       |    v            |
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    |            |
+|				| Items moving past end |    |            |
+|				|                       |    v            v
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    ^            |
+|				|   Items moving down   |    |            |
+|				|                       |    |            v
+|				+-----------------------+
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "RelatedProduct_Update_Offsets_PastEnd" PARAMETERS = "product_id, pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.RelatedProducts_Order_RelatedID" 	VALUE = "{ l.pastend[ l.pastend_pos ]:relprod_id }">
+		<MvASSIGN NAME = "l.disp_order"							VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'RelatedProductDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+													$ g.Store_Table_Prefix $ 'RelatedProducts 
+												SET 
+													disp_order = ? 
+												WHERE 
+													relprod_id = ? AND product_id = ?' }" 
+												FIELDS = "l.disp_order, g.RelatedProducts_Order_RelatedID, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00013', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RelatedProduct_Update_Offsets" PARAMETERS = "product_id, relprods var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"						VALUE = 0>
+
+	<MvASSIGN NAME = "l.relprod_pos"						VALUE = 1>
+	<MvASSIGN NAME = "l.relprod_count"						VALUE = "{ miva_array_elements( l.relprods ) }">
+	<MvASSIGN NAME = "g.RelatedProducts_Order_ProductID" 	VALUE = "{ l.product_id }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].SortOffsetArray( l.relprods, l.relprod_count ) }">
+
+	<MvWHILE EXPR = "{ l.relprod_pos LE l.relprod_count }">
+		<MvASSIGN NAME = "g.RelatedProducts_Order_RelatedID" 	VALUE = "{ l.relprods[ l.relprod_pos ]:relprod_id }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current relprod at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				 'RelatedProducts',
+																				 'SELECT relprod_id, disp_order FROM ' $ g.Store_Table_Prefix $ 'RelatedProducts WHERE relprod_id <> ? AND product_id = ? ORDER BY disp_order',
+																				 'g.RelatedProducts_Order_RelatedID, g.RelatedProducts_Order_ProductID',
+																				 l.relprods[ l.relprod_pos ]:offset - 1,
+																				 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00010', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ RelatedProducts.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "RelatedProducts">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.relprods[ l.relprod_pos ] }">
+
+			<MvASSIGN NAME = "l.relprod_pos"	VALUE = "{ l.relprod_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "RelatedProducts">
+
+			<MvIF EXPR = "{ NOT RelatedProduct_Update_Offsets_PastEnd( l.product_id, l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ RelatedProducts.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "RelatedProducts">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting relprods after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'RelatedProducts 
+													SET 
+														disp_order = disp_order + 1 
+													WHERE 
+														disp_order >= ? AND product_id = ?' }" 
+													FIELDS = "l.disp_order, l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00011', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'RelatedProductDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the relprod in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'RelatedProducts 
+													SET 
+														disp_order = ? 
+													WHERE 
+														relprod_id = ? AND product_id = ?' }" 
+													FIELDS = "l.disp_order, g.RelatedProducts_Order_RelatedID, l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPD-DTB-00012', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.relprod_pos"	VALUE = "{ l.relprod_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT RelatedProduct_Update_Offsets_PastEnd( l.product_id, l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Product_Update_LastUpdated( l.product_id ) }">
+</MvFUNCTION>

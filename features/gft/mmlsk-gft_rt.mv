@@ -1,0 +1,113 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-GFT-RNT-
+| Next Error Code: 1    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Action_RedeemGiftCertificate" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.GiftCertificate_Code" VALUE = "{ trim( g.GiftCertificate_Code ) }">
+
+	<MvIF EXPR = "{ g.Basket:cust_id EQ 0 OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'giftcertificate_customer_login' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Load_Code( g.GiftCertificate_Code, l.giftcert ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Unable to apply gift certificate' ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'giftcertificate_invalid' ) }">
+	</MvIF>
+	
+	<MvLOCKFILE FILE = "{ [ g.Module_Feature_GFT_UT ].GiftCertificate_Redeem_LockFile( l.giftcert ) }">
+		<MvASSIGN NAME = "l.result"	VALUE = "{ Action_RedeemGiftCertificate_LowLevel( l.giftcert ) }">
+	</MvLOCKFILE>
+
+	<MvIF EXPR = "{ l.result }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FEL_DB ].FeatureEngagement_Increment_Counter( 'giftcertificate_redeemed', 1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_RedeemGiftCertificate_LowLevel" PARAMETERS = "giftcert var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Load_ID( l.giftcert:id, l.giftcert ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Unable to apply gift certificate' ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'giftcertificate_invalid' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.giftcert:active }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Unable to apply gift certificate' ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'giftcertificate_invalid' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.giftcert_copy"				VALUE = "{ l.giftcert }">
+	<MvASSIGN NAME = "l.giftcert_copy:active"		VALUE = 0>
+	<MvASSIGN NAME = "l.giftcert_copy:cust_id"		VALUE = "{ g.Basket:cust_id }">
+	<MvASSIGN NAME = "l.giftcert_copy:credit_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.giftcert_copy:redeem_dt"	VALUE = "{ s.dyn_time_t }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Update( l.giftcert_copy ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Unable to apply gift certificate' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'giftcertificate_invalid' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.credit"						VALUE = "">
+	<MvASSIGN NAME = "l.credit:cust_id"				VALUE = "{ g.Basket:cust_id }">
+	<MvASSIGN NAME = "l.credit:txref"				VALUE = "{ l.giftcert_copy:code }">
+	<MvASSIGN NAME = "l.credit:descrip"				VALUE = "{ 'Gift Certificate Code: ' $ l.giftcert_copy:code }">
+	<MvASSIGN NAME = "l.credit:amount"				VALUE = "{ l.giftcert_copy:amount }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].CustomerCreditHistory_Insert( l.credit ) }">
+		<MvCOMMENT> Reset Gift Certificate record to original </MvCOMMENT>
+		<MvASSIGN NAME = "l.null"					VALUE = "{ [ g.Module_Feature_GFT_DB ].GiftCertificate_Update( l.giftcert ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Unable to apply gift certificate' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'giftcertificate_invalid' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.giftcert_copy:credit_id"	VALUE = "{ l.credit:id }">
+	<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Feature_GFT_DB ].GiftCertificate_Update( l.giftcert_copy ) }">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Order_Load_ID( l.giftcert_copy:order_id, l.order ) AND
+					[ g.Module_Library_DB ].OrderItem_Load_Line( l.giftcert_copy:order_id, l.giftcert_copy:line_id, l.orderitem ) AND
+					( l.orderitem:status EQ 210 ) }">
+		<MvASSIGN NAME = "l.orderitem:status"		VALUE = 211>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Status_LowLevel( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Update_Status( l.order ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.giftcert"					VALUE = "{ l.giftcert_copy }">
+	<MvASSIGN NAME = "g.Customer:credit"			VALUE = "{ g.Customer:credit + l.giftcert:amount }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_giftcert', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_GiftCertificate_Redeemed( l.module, g.Customer, l.giftcert ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Gift certificate has been applied to your account credit.' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

@@ -1,0 +1,444 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-BPK-PBC-
+| Next Error Code: 6
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-packbycube">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Pack by Cubic Volume">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0100">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.72">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "boxpacking, data_store, vis_pkgrules, provision_store">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PackByCube
+						  (
+							default_w 	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 ) $ ',
+							default_l 	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 ) $ ',
+							default_h 	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 ) $ ',
+							max_volume	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 ) $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBC-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.packbycube:default_w" 	VALUE = 0.00>
+	<MvASSIGN NAME = "l.packbycube:default_l" 	VALUE = 0.00>
+	<MvASSIGN NAME = "l.packbycube:default_h" 	VALUE = 0.00>
+	<MvASSIGN NAME = "l.packbycube:max_volume" 	VALUE = 0.00>
+
+	<MvFUNCTIONRETURN VALUE = "{ PackByCube_Insert( l.packbycube ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PackByCube' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Packaging Rules Screen Feature (vis_pkgrules)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.module:code $ ':' $ l.module:name }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab NE l.module:code }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_UI_JavaScript() }">
+
+	<script language="JavaScript">
+		MMScreen_LoadFinished( function()
+		{
+			var max_volume, max_dimension;
+
+			max_volume 			= document.getElementById( 'packbycube_max_volume' );
+			max_dimension		= document.getElementById( 'packbycube_max_dimension' );
+			max_dimension.value = Math.pow( max_volume.value, 1 / 3 ).toFixed( 2 );
+
+			max_volume.onkeyup = function( e )
+			{
+				max_dimension.value = stod_def( Math.pow( max_volume.value, 1 / 3 ), 0 ).toFixed( 2 );
+			};
+
+			max_dimension.onkeyup = function( e )
+			{
+				max_volume.value = stod_def( Math.pow( max_dimension.value, 3 ), 0 ).toFixed( 2 );
+			};
+		} );
+	</script>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT PackByCube_Load( g.PackByCube ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab NE l.module:code }">
+		<MvHIDE FIELDS = "g.PackByCube">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.units" VALUE = "{ encodeentities( toupper( g.Store:dmunitcode ) ) }">
+
+	<table width="100%">
+		<tr>
+			<td nowrap><b>Default Product Dimensions:</b>
+			<td width="100%">
+				<input type="text" size="5" name="PackByCube:default_w" value="{ g.PackByCube:default_w ROUND 2 }" />x<input type="text" size="5" name="PackByCube:default_l" value="{ g.PackByCube:default_l ROUND 2 }" />x<input type="text" size="5" name="PackByCube:default_h" value="{ g.PackByCube:default_h ROUND 2 }" /> (<MvEVAL EXPR = "{ l.units }">, WxLxH)
+			</td>
+		</tr>
+		<tr>
+			<td colspan="2">&nbsp;</td>
+		</tr>
+		<tr>
+			<td nowrap><b>Maximum Package Volume:</b>
+			<td width="100%">
+				<input type="text" size="5" name="PackByCube:max_volume" value="{ g.PackByCube:max_volume ROUND 2 }" id="packbycube_max_volume" autocomplete="off" /> <MvEVAL EXPR = "{ l.units }"><sup>3</sup>
+			</td>
+		</tr>
+		<tr>
+			<td nowrap><b>Maximum Package Dimension:</b>
+			<td width="100%">
+				<input type="text" size="5" value="0.00" id="packbycube_max_dimension" autocomplete="off" /> <MvEVAL EXPR = "{ l.units }">
+			</td>
+		</tr>
+	</table>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.PackByCube:default_w" 	VALUE = "{ g.PackByCube:default_w ROUND 2 }">
+	<MvASSIGN NAME = "g.PackByCube:default_l" 	VALUE = "{ g.PackByCube:default_l ROUND 2 }">
+	<MvASSIGN NAME = "g.PackByCube:default_h" 	VALUE = "{ g.PackByCube:default_h ROUND 2 }">
+	<MvASSIGN NAME = "g.PackByCube:max_volume" 	VALUE = "{ g.PackByCube:max_volume ROUND 2 }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( g.PackByCube:default_w ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( l.module:code, 'PackByCube:default_w', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( g.PackByCube:default_l ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( l.module:code, 'PackByCube:default_l', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( g.PackByCube:default_h ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( l.module:code, 'PackByCube:default_h', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( g.PackByCube:max_volume ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( l.module:code, 'PackByCube:max_volume', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.packbycube:default_w" 	VALUE = "{ g.PackByCube:default_w }">
+	<MvASSIGN NAME = "l.packbycube:default_l" 	VALUE = "{ g.PackByCube:default_l }">
+	<MvASSIGN NAME = "l.packbycube:default_h" 	VALUE = "{ g.PackByCube:default_h }">
+	<MvASSIGN NAME = "l.packbycube:max_volume" 	VALUE = "{ g.PackByCube:max_volume }">
+
+	<MvFUNCTIONRETURN VALUE = "{ PackByCube_Update( l.packbycube ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature boxpacking
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Fields" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Provision" PARAMETERS = "module var, box var, provider_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Validate" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Update" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Insert" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Delete" PARAMETERS = "module var, box_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Pack_Items" PARAMETERS = "module var, items var, item_count, packages var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PackByCube_Load( l.packbycube ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.packages" 					VALUE = "">
+	<MvASSIGN NAME = "l.package_count" 				VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvIF EXPR = "{ l.item:width EQ 0 AND l.item:length EQ 0 AND l.item:height EQ 0 }">
+			<MvASSIGN NAME = "l.item:width" 		VALUE = "{ l.packbycube:default_w }">
+			<MvASSIGN NAME = "l.item:length" 		VALUE = "{ l.packbycube:default_l }">
+			<MvASSIGN NAME = "l.item:height" 		VALUE = "{ l.packbycube:default_h }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.item:cubic_volume" 		VALUE = "{ l.item:width * l.item:length * l.item:height }">
+
+		<MvIF EXPR = "{ l.item:cubic_volume GE l.packbycube:max_volume }">
+			<MvASSIGN NAME = "l.item:packaged" 		VALUE = 1>
+			<MvASSIGN NAME = "l.separate_item[ 1 ]" VALUE = "{ l.item }">
+			<MvASSIGN NAME = "l.package" 			VALUE = "{ PackByCube_Create_Package( l.item:width, l.item:length, l.item:height, l.separate_item, 1 ) }">
+			<MvASSIGN NAME = "l.package_count"		VALUE = "{ miva_array_insert( l.packages, l.package, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.volume" 					VALUE = 0>
+	<MvASSIGN NAME = "l.saved_item_count" 			VALUE = 0>
+	<MvASSIGN NAME = "l.saved_items" 				VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ miva_array_sort( l.items, 'PackByCube_Sort_Volume', l.null ) }">
+		<MvIF EXPR = "{ l.item:packaged }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( l.item:cubic_volume + l.volume ) GT l.packbycube:max_volume }">
+			<MvASSIGN NAME = "l.dimension" 			VALUE = "{ power( l.volume, 1 / 3 ) ROUND 2 }">
+			<MvASSIGN NAME = "l.package" 			VALUE = "{ PackByCube_Create_Package( l.dimension, l.dimension, l.dimension, l.saved_items, l.saved_item_count ) }">
+			<MvASSIGN NAME = "l.package_count" 		VALUE = "{ miva_array_insert( l.packages, l.package, -1 ) }">
+			<MvASSIGN NAME = "l.volume" 			VALUE = 0>
+			<MvASSIGN NAME = "l.saved_item_count" 	VALUE = 0>
+			<MvASSIGN NAME = "l.saved_items" 		VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.volume" 				VALUE = "{ l.volume + l.item:cubic_volume }">
+		<MvASSIGN NAME = "l.saved_item_count"		VALUE = "{ miva_array_insert( l.saved_items, l.item, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.volume GT 0 }">
+		<MvASSIGN NAME = "l.dimension" 				VALUE = "{ power( l.volume, 1 / 3 ) ROUND 2 }">
+		<MvASSIGN NAME = "l.package" 				VALUE = "{ PackByCube_Create_Package( l.dimension, l.dimension, l.dimension, l.saved_items, l.saved_item_count ) }">
+		<MvASSIGN NAME = "l.package_count" 			VALUE = "{ miva_array_insert( l.packages, l.package, -1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.package_count }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ModuleProvisionStore_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PackByCube_Load( l.packbycube ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml, 'DefaultWidth', 	l.packbycube:default_w, 10, 2 )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml, 'DefaultLength', 	l.packbycube:default_l, 10, 2 )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml, 'DefaultHeight', 	l.packbycube:default_h, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( l.packbycube:default_w ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for DefaultWidth: ' $ g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( l.packbycube:default_l ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for DefaultLength: ' $ g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( l.packbycube:default_h ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for DefaultHeight: ' $ g.Validation_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.volume_exists" 		VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'MaximumVolume' ) }">
+	<MvASSIGN NAME = "l.dimension_exists" 	VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'MaximumDimension' ) }">
+
+	<MvIF EXPR = "{ l.volume_exists AND l.dimension_exists }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Only one of MaximumVolume, MaximumDimension can exist' ) }">
+	<MvELSEIF EXPR = "{ l.volume_exists }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml, 'MaximumVolume', l.packbycube:max_volume, 10, 2 ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( l.packbycube:max_volume ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for MaximumVolume: ' $ g.Validation_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.dimension_exists }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml, 'MaximumDimension', l.packbycube:max_volume, 10, 2 ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_NonNegative_Required( l.packbycube:max_volume ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for MaximumDimension: ' $ g.Validation_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.packbycube:max_volume" VALUE = "{ power( l.packbycube:max_volume, 3 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PackByCube_Update( l.packbycube ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.tag" VALUE = "{ tolower( l.child:name ) }">
+
+		<MvIF EXPR = "{ l.tag EQ 'settings' }">	<MvEVAL EXPR = "{ ModuleProvisionStore_Settings( l.module, l.child ) }">
+		<MvELSE>								<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child, 'Unknown tag \'' $ l.child:name $ '\'' ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PackByCube_Create_Package" PARAMETERS = "width, length, height, items var, item_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.package" 			VALUE = "">
+	<MvASSIGN NAME = "l.package:width" 		VALUE = "{ l.width }">
+	<MvASSIGN NAME = "l.package:length" 	VALUE = "{ l.length }">
+	<MvASSIGN NAME = "l.package:height" 	VALUE = "{ l.height }">
+	<MvASSIGN NAME = "l.package:weight" 	VALUE = "{ PackByCube_Items_Weight( l.items, l.item_count ) }">
+	<MvASSIGN NAME = "l.package:item_count" VALUE = "{ l.item_count }">
+	<MvASSIGN NAME = "l.package:items" 		VALUE = "{ l.items }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.package }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByCube_Items_Weight" PARAMETERS = "items var, item_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.weight" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvASSIGN NAME = "l.weight" VALUE = "{ l.weight + l.item:weight }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.weight }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByCube_Sort_Volume" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.right:cubic_volume GT l.left:cubic_volume }">		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.right:cubic_volume LT l.left:cubic_volume }">	<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions for table PackByCube
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PackByCube_Insert" PARAMETERS = "packbycube var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PackByCube
+						  ( default_w, default_l, default_h, max_volume )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.packbycube:default_w, l.packbycube:default_l, l.packbycube:default_h, l.packbycube:max_volume">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBC-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByCube_Update" PARAMETERS = "packbycube var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $
+			 				g.Store_Table_Prefix $ 'PackByCube
+						  SET
+						  	default_w 	= ?,
+						  	default_l 	= ?,
+						  	default_h	= ?,
+						  	max_volume	= ?' }"
+			 FIELDS = "l.packbycube:default_w, l.packbycube:default_l, l.packbycube:default_h, l.packbycube:max_volume">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBC-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByCube_Load" PARAMETERS = "packbycube var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "PackByCube"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PackByCube' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBC-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PackByCube.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PackByCube">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-BPK-PBC-00005' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.packbycube:default_w" 	VALUE = "{ PackByCube.d.default_w }">
+	<MvASSIGN NAME = "l.packbycube:default_l" 	VALUE = "{ PackByCube.d.default_l }">
+	<MvASSIGN NAME = "l.packbycube:default_h" 	VALUE = "{ PackByCube.d.default_h }">
+	<MvASSIGN NAME = "l.packbycube:max_volume" 	VALUE = "{ PackByCube.d.max_volume }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PackByCube">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

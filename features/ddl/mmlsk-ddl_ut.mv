@@ -1,0 +1,629 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DDL-UT-
+| Next Error Code: 15
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownload_Redirect" PARAMETERS = "dl var, dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadSettings_Load_Cached( l.dl_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.dl_productsettings:cdn_id EQ 0 }">
+		<MvIF EXPR = "{ NOT DigitalDownload_Redirect_Local( l.dl, l.dl_productsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Load_ID( l.dl_productsettings:cdn_id, l.dl_cdn ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00001', 'Failed to load CDN' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.dl_cdn:cdn EQ 'A' }">
+			<MvIF EXPR = "{ NOT DigitalDownload_Redirect_Amazon( l.dl_cdn:data, l.dl_productsettings:data ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00002', 'Unsupported CDN' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Increment_TotalDownloads( l.dl:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Redirect_Local" PARAMETERS = "dl var, dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.symlink_location"	VALUE = "{ DigitalDownload_Directory_Symlinks() }">
+	<MvASSIGN NAME = "l.script_file"		VALUE = "{ l.symlink_location $ l.dl:symlink }">
+
+	<MvIF EXPR = "{ NOT sexists( l.symlink_location ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'script', l.symlink_location ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DigitalDownload_Create_Symlink( l.dl, l.dl_productsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00003', 'Failed to create the Digital Download link' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Secure }">	<MvASSIGN NAME = "l.uri_prefix" VALUE = "{ '/' $ gettoken( g.Domain:mm_surl, '/', 4 ) }">
+	<MvELSE>						<MvASSIGN NAME = "l.uri_prefix" VALUE = "{ '/' $ gettoken( g.Domain:mm_url, '/', 4 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( '~' IN l.uri_prefix ) NE 2 }">
+		<MvASSIGN NAME = "l.uri_prefix" VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.file_size" VALUE = "{ ssize( l.script_file ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Increment_TotalBandwidth( l.file_size, l.dl:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.dl_productsettings:miva_name }">	<MvASSIGN NAME = "l.attachment_name" VALUE = "{ l.dl_productsettings:miva_name }">
+	<MvELSE>														<MvASSIGN NAME = "l.attachment_name" VALUE = "{ l.dl_productsettings:miva_path }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Cache-Control', 		'no-cache, no-store, must-revalidate' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Pragma', 				'no-cache' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Expires', 			'0' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Content-Type', 		'application/octet-stream' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Content-Disposition',	'attachment; filename="' $ [ g.Module_Library_Utilities ].BaseName( l.attachment_name ) $ '"' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Content-Length', 		l.file_size ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Location', 			l.uri_prefix $ l.symlink_location $ encodeattribute( l.dl:symlink ) ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Redirect_Amazon" PARAMETERS = "cdn_data var, productsettings_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.amazon:access_key" 	VALUE = "{ l.cdn_data:access_key }">
+	<MvASSIGN NAME = "l.amazon:secret_key"	VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.cdn_data:secret_key ) }">
+	<MvASSIGN NAME = "l.amazon:region" 		VALUE = "{ l.productsettings_data:region }">
+	<MvASSIGN NAME = "l.amazon:endpoint" 	VALUE = "{ DigitalDownload_Amazon_Endpoint( l.amazon:region ) }">
+	<MvASSIGN NAME = "l.amazon:bucket" 		VALUE = "{ l.productsettings_data:bucket }">
+	<MvASSIGN NAME = "l.amazon:file" 		VALUE = "{ l.productsettings_data:file }">
+	<MvASSIGN NAME = "l.amazon:expire" 		VALUE = "{ 60 }">
+
+	<MvIF EXPR = "{ NOT DigitalDownload_Amazon_CreateStringToSign( l.amazon, l.string_to_sign ) }">									<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT DigitalDownload_Amazon_GetSigningKey( l.amazon, l.signing_key ) }">										<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT DigitalDownload_Amazon_GenerateSignature( l.amazon, l.string_to_sign, l.signing_key, l.signature ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Location', DigitalDownload_Amazon_GenerateURL( l.amazon, l.signature ) ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Expiration_DateTime" PARAMETERS = "dl var, expiration var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.dl:expiration GE 0 }">
+		<MvIF EXPR = "{ l.dl:expiration EQ 0 }">	<MvASSIGN NAME = "l.expiration" VALUE = 0>
+		<MvELSE>									<MvASSIGN NAME = "l.expiration" VALUE = "{ l.dl:create_dt + ( 60 * 60 * 24 * l.dl:expiration ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Cascading...
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_DDL_DB ].DigitalDownloadProductSetting_Load_Product_Cached( l.dl:product_id, l.dl_productsettings ) }">
+		<MvIF EXPR = "{ l.dl_productsettings:expiration NE -1 }">
+			<MvIF EXPR = "{ l.dl_productsettings:expiration EQ 0 }">	<MvASSIGN NAME = "l.expiration" VALUE = 0>
+			<MvELSE>													<MvASSIGN NAME = "l.expiration" VALUE = "{ l.dl:create_dt + ( 60 * 60 * 24 * l.dl_productsettings:expiration ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Cascading...
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadSettings_Load_Cached( l.dl_settings ) }">
+		<MvASSIGN NAME = "l.expiration" VALUE = 0>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.dl_settings:expiration EQ 0 }">	<MvASSIGN NAME = "l.expiration" VALUE = 0>
+	<MvELSE>											<MvASSIGN NAME = "l.expiration" VALUE = "{ l.dl:create_dt + ( 60 * 60 * 24 * l.dl_settings:expiration ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_MaxDownloads" PARAMETERS = "dl var, max var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.dl:max_dl GE 0 }">
+		<MvASSIGN NAME = "l.max" VALUE = "{ l.dl:max_dl }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Cascading...
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_DDL_DB ].DigitalDownloadProductSetting_Load_Product_Cached( l.dl:product_id, l.dl_productsettings ) }">
+		<MvIF EXPR = "{ l.dl_productsettings:max_dl NE -1 }">
+			<MvASSIGN NAME = "l.max" VALUE = "{ l.dl_productsettings:max_dl }">
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Cascading...
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadSettings_Load_Cached( l.dl_settings ) }">
+		<MvASSIGN NAME = "l.max" VALUE = 0>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.max" VALUE = "{ l.dl_settings:max_dl }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Generate_DownloadURL" PARAMETERS = "code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Domain:mm_surl }">	<MvASSIGN NAME = "l.url" VALUE = "{ glosub( g.Domain:mm_surl, 'merchant.mvc?', 'download.mvc?' ) }">
+	<MvELSE>								<MvASSIGN NAME = "l.url" VALUE = "{ glosub( g.Domain:mm_url, 'merchant.mvc?', 'download.mvc?' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.url $ 'Store_Code=' $ encodeattribute( g.Store:code ) $ '&DigitalDownload=' $ encodeattribute( l.code ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Directory_DigitalDownloads" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ g.Module_Root $ 'digitaldownloads/' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Directory_Store" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownload_Directory_DigitalDownloads() $ padl( g.Store:id, 8, '0' ) $ '/' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Directory_Symlinks" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownload_Directory_Store() $ 'symlinks/' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Directory_Uploads" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownload_Directory_Store() $ 'uploads/' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Symlink_Delete" PARAMETERS = "symlink" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( DigitalDownload_Directory_Symlinks() $ l.symlink ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Generate_DownloadCode" PARAMETERS = "code var" STANDARDOUTPUTLEVEL = "">
+	<MvFOR INDEX = "l.pos" COUNT = "{ 100 }">
+		<MvASSIGN NAME = "l.code" VALUE = "{ MakeSessionID() }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Load_Code( l.code, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOR>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00006', 'Failed to generate a unique digital download code after 100 attempts' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Generate_SymlinkCode" PARAMETERS = "code var" STANDARDOUTPUTLEVEL = "">
+	<MvFOR INDEX = "l.pos" COUNT = "{ 100 }">
+		<MvASSIGN NAME = "l.code" VALUE = "{ MakeSessionID() }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Load_Symlink( l.code, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOR>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00007', 'Failed to generate a unique digital download symlink code after 100 attempts' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_LocalFile_IsValid" PARAMETERS = "path" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ sexists( l.path ) AND ( NOT sisdir( l.path ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Process_Order" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderitems"			VALUE = "">
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownload_Process_OrderItems( l.orderitems, l.orderitem_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Process_OrderItem" PARAMETERS = "orderitem var, created_digitaldownloads var, created_digitaldownload_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant( l.orderitem, l.product, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownload_Process_OrderItem_Variant( l.orderitem, l.product, l.variant_id, l.created_digitaldownloads, l.created_digitaldownload_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Process_OrderItems" PARAMETERS = "orderitems var, orderitem_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.created_digitaldownloads"		VALUE = "">
+	<MvASSIGN NAME = "l.created_digitaldownload_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvIF EXPR = "{ NOT l.orderitem:product_id }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT DigitalDownload_Process_OrderItem( l.orderitem, l.created_digitaldownloads, l.created_digitaldownload_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ Notify_DigitalDownloads_Created( l.created_digitaldownloads, l.created_digitaldownload_count ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Process_OrderItem_Variant" PARAMETERS = "orderitem var, product var, variant_id, created_digitaldownloads var, created_digitaldownload_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.product_ids"							VALUE = "">
+	<MvASSIGN NAME = "l.product_id_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.exploded_orderitems"					VALUE = "">
+	<MvASSIGN NAME = "l.exploded_orderitem_count"				VALUE = 0>
+
+	<MvASSIGN NAME = "l.loaded_products"						VALUE = "">
+	<MvASSIGN NAME = "l.contains_digitaldownload"				VALUE = 0>
+	<MvASSIGN NAME = "l.product_id_count"						VALUE = "{ miva_array_insert_var( l.product_ids, l.product:id, -1 ) }">
+
+	<MvFOREACH ITERATOR = "l.loaded_product" ARRAY = "l.loaded_products" COUNT = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.loaded_products ) }">
+		<MvASSIGN NAME = "l.product_id_count"					VALUE = "{ miva_array_insert_var( l.product_ids, l.loaded_product:id, -1 ) }">
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.product_id" ARRAY = "l.product_ids" COUNT = "{ l.product_id_count }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_DDL_DB ].DigitalDownloadProductSetting_Load_Product_Cached( l.product_id, l.dl_productsettings ) AND l.dl_productsettings:enabled }">
+			<MvASSIGN NAME = "l.contains_digitaldownload"		VALUE = 1>
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.contains_digitaldownload }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Explode( l.orderitem, l.exploded_orderitems, l.exploded_orderitem_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.product_id" ARRAY = "l.product_ids" COUNT = "{ l.product_id_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadProductSetting_Load_Product_Cached( l.product_id, l.dl_productsettings ) OR NOT l.dl_productsettings:enabled }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.exploded_orderitem" ARRAY = "l.exploded_orderitems" COUNT = "{ l.exploded_orderitem_count }">
+			<MvASSIGN NAME = "l.dl"								VALUE = "">
+			<MvASSIGN NAME = "l.dl:product_id"					VALUE = "{ l.product_id }">
+			<MvASSIGN NAME = "l.dl:order_id" 					VALUE = "{ l.exploded_orderitem:order_id }">
+			<MvASSIGN NAME = "l.dl:line_id" 					VALUE = "{ l.exploded_orderitem:line_id }">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Insert( l.dl ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.created_digitaldownload_count"	VALUE = "{ miva_array_insert_var( l.created_digitaldownloads, l.dl, -1 ) }">
+
+			<MvASSIGN NAME = "l.option"							VALUE = "">
+			<MvASSIGN NAME = "l.option:order_id"				VALUE = "{ l.exploded_orderitem:order_id }">
+			<MvASSIGN NAME = "l.option:line_id"					VALUE = "{ l.exploded_orderitem:line_id }">
+			<MvASSIGN NAME = "l.option:attr_id"					VALUE = 0>
+			<MvASSIGN NAME = "l.option:attr_code"				VALUE = "digitaldownload">
+			<MvASSIGN NAME = "l.option:attmpat_id"				VALUE = 0>
+			<MvASSIGN NAME = "l.option:option_id"				VALUE = 0>
+			<MvASSIGN NAME = "l.option:opt_code"				VALUE = "">
+			<MvASSIGN NAME = "l.option:retail"					VALUE = 0>
+			<MvASSIGN NAME = "l.option:base_price"				VALUE = 0>
+			<MvASSIGN NAME = "l.option:price"					VALUE = 0>
+			<MvASSIGN NAME = "l.option:weight"					VALUE = 0>
+			<MvASSIGN NAME = "l.option:data"					VALUE = "">
+			<MvASSIGN NAME = "l.option:data_long"				VALUE = "">
+			<MvASSIGN NAME = "l.option:attr_prompt"				VALUE = "Digital Download">
+			<MvASSIGN NAME = "l.option:opt_prompt"				VALUE = "">
+			<MvASSIGN NAME = "l.option:data" 					VALUE = "{ l.dl:code }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderOption_Insert( l.option ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.exploded_orderitem:group_id"	VALUE = "{ l.exploded_orderitem:line_id }">
+			<MvASSIGN NAME = "l.exploded_orderitem:status"		VALUE = 220>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update( l.exploded_orderitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Create_Symlink" PARAMETERS = "dl var, dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.symlink_location"	VALUE = "{ DigitalDownload_Directory_Symlinks() }">
+	<MvASSIGN NAME = "l.script_file"		VALUE = "{ l.symlink_location $ l.dl:symlink }">
+
+	<MvIF EXPR = "{ sexists( l.script_file ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| So the sexists check above could fail either because the file does not exist OR because
+	| the engine settings are configured in a way to not follow symlinks.  We check the security
+	| flags to see if the engine is setup to follow symlinks and if it is NOT, we manually
+	| search the symlinks folder for the specified file.  If file is found, we return, otherwise
+	| the file truly doesn't exist and we need to create it.
+	|
+	| 0x1: MvCONFIG_SEC_S_ALLOW_SYMLINKS
+	| 0x2: MvCONFIG_SEC_S_IGNORE_SYM_OWNERSHIP
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.allows_symlinks" VALUE = "{ s.miva_config:flags_security BITAND 0x3 }">
+
+	<MvIF EXPR = "{ NOT l.allows_symlinks }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ dir( l.symlink_location, 'script', l.files ) }">
+
+		<MvIF EXPR = "{ miva_array_search( l.files, 1, l.element, 'l.element EQ l.dl:symlink' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ssymlink( l.dl_productsettings:miva_path, l.script_file ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Amazon CDN Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_GenerateURL" PARAMETERS = "amazon var, signature" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query_parameters" VALUE = "{ DigitalDownload_Amazon_QueryParameters( l.amazon ) }">
+
+	<MvCAPTURE VARIABLE = "l.query">
+		<MvFOREACH ITERATOR = "l.member" ARRAY = "l.members" INDEX = "l.pos" COUNT = "{ miva_struct_members( l.query_parameters, l.members ) }">
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				<MvEVAL EXPR = "&">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ l.member $ '=' $ encodeattribute( miva_variable_value( 'l.query_parameters:' $ l.member ) ) }">
+		</MvFOREACH>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ 'https://' $ l.amazon:endpoint $ '/' $ l.amazon:bucket $ '/' $ l.amazon:file $ '?' $ l.query $ '&X-Amz-Signature=' $ encodeattribute( l.signature ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_GenerateSignature" PARAMETERS = "amazon var, string_to_sign, signing_key, signature var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT crypto_hmac_sha256( l.string_to_sign, l.signing_key, 'hex', l.signature ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00008', 'Failed to create signature' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_CreateScope" PARAMETERS = "amazon var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownload_Amazon_Date_ISO8601_Short( s.time_t ) $ '/' $ l.amazon:region $ '/s3/aws4_request' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_CreateCanonicalRequest" PARAMETERS = "amazon var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query_parameters" VALUE = "{ DigitalDownload_Amazon_QueryParameters( l.amazon ) }">
+
+	<MvCAPTURE VARIABLE = "l.request">
+		<MvEVAL EXPR = "{ 'GET' $ asciichar( 10 ) }">																				<MvCOMMENT> HTTP Verb </MvCOMMENT>
+		<MvEVAL EXPR = "{ DigitalDownload_Amazon_URIEncode( '/' $ l.amazon:bucket $ '/' $ l.amazon:file, 0 ) $ asciichar( 10 ) }">	<MvCOMMENT> Canonical URI </MvCOMMENT>
+		<MvEVAL EXPR = "{ DigitalDownload_Amazon_GetCanonicalizedQuery( l.query_parameters ) $ asciichar( 10 ) }">					<MvCOMMENT> Canonicalized Query String </MvCOMMENT>
+		<MvEVAL EXPR = "{ 'host:' $ trim( l.amazon:endpoint ) $ asciichar( 10 ) $ asciichar( 10 ) }">								<MvCOMMENT> Canonical Headers </MvCOMMENT>
+		<MvEVAL EXPR = "{ 'host' $ asciichar( 10 ) }">																				<MvCOMMENT> Signed Headers </MvCOMMENT>
+		<MvEVAL EXPR = "UNSIGNED-PAYLOAD">																							<MvCOMMENT> Amazon Defined Constant </MvCOMMENT>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.request }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_CreateStringToSign" PARAMETERS = "amazon var, string_to_sign var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.scope" 		VALUE = "{ DigitalDownload_Amazon_CreateScope( l.amazon ) }">
+	<MvASSIGN NAME = "l.request"	VALUE = "{ DigitalDownload_Amazon_CreateCanonicalRequest( l.amazon ) }">
+
+	<MvIF EXPR = "{ NOT crypto_sha256( l.request, 'hex', l.hash ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00009', 'Failed to create hash' ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.string_to_sign">
+		<MvEVAL EXPR = "{ 'AWS4-HMAC-SHA256' $ asciichar( 10 ) }">
+		<MvEVAL EXPR = "{ DigitalDownload_Amazon_Date_ISO8601_Long( s.time_t ) $ asciichar( 10 ) }">
+		<MvEVAL EXPR = "{ l.scope $ asciichar( 10 ) }">
+		<MvEVAL EXPR = "{ l.hash }">
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_GetSigningKey" PARAMETERS = "amazon var, signing_key var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.date" 		VALUE = "{ DigitalDownload_Amazon_Date_ISO8601_Short( s.time_t ) }">
+	<MvASSIGN NAME = "l.service" 	VALUE = "s3">
+	<MvASSIGN NAME = "l.type" 		VALUE = "aws4_request">
+
+	<MvIF EXPR = "{ NOT crypto_hmac_sha256( l.date, 				'AWS4' $ l.amazon:secret_key, 	'binary', l.date_key ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00010', 'Failed creating date key' ) }">
+	<MvELSEIF EXPR = "{ NOT crypto_hmac_sha256( l.amazon:region, 	l.date_key, 					'binary', l.region_key ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00011', 'Failed creating region key' ) }">
+	<MvELSEIF EXPR = "{ NOT crypto_hmac_sha256( l.service, 			l.region_key, 					'binary', l.service_key ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00012', 'Failed creating service key' ) }">
+	<MvELSEIF EXPR = "{ NOT crypto_hmac_sha256( l.type, 			l.service_key, 					'binary', l.signing_key ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-UT-00013', 'Failed creating signing key' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_GetCanonicalizedQuery" PARAMETERS = "query_parameters var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_struct_members( l.query_parameters, l.members ) }">
+
+	<MvCAPTURE VARIABLE = "l.canonical_query">
+		<MvFOREACH ITERATOR = "l.member" ARRAY = "l.members" INDEX = "l.pos" COUNT = "{ miva_array_sort( l.members, 'DigitalDownload_Amazon_SortQueryParameters', l.null ) }">
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				<MvEVAL EXPR = "&">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ DigitalDownload_Amazon_URIEncode( l.member, 1 ) $ '=' $ DigitalDownload_Amazon_URIEncode( miva_variable_value( 'l.query_parameters:' $ l.member ), 1 ) }">
+		</MvFOREACH>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.canonical_query }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_Date_ISO8601_Long" PARAMETERS = "time_t" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ padl( time_t_year( l.time_t, 0 ), 4, '0' )			$
+								 padl( time_t_month( l.time_t, 0 ), 2, '0' ) 		$
+								 padl( time_t_dayofmonth( l.time_t, 0 ), 2, '0' )	$
+								 'T' 												$
+								 padl( time_t_hour( l.time_t, 0 ), 2, '0' )			$
+								 padl( time_t_min( l.time_t, 0 ), 2, '0' )			$
+								 padl( time_t_sec( l.time_t, 0 ), 2, '0' )			$
+								 'Z' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_Date_ISO8601_Short" PARAMETERS = "time_t" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ substring( DigitalDownload_Amazon_Date_ISO8601_Long( l.time_t ), 1, 8 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_URIEncode" PARAMETERS = "input, encode_slash" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.output" VALUE = "">
+
+	<MvFOR INDEX = "l.pos" COUNT = "{ len_var( l.input ) }">
+		<MvASSIGN NAME = "l.char" VALUE = "{ substring_var( l.input, l.pos, 1 ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.char AND ( isalnum( l.char ) OR l.char EQ '_' OR l.char EQ '-' OR l.char EQ '~' OR l.char EQ '.' OR ( l.char EQ '/' AND NOT l.encode_slash ) ) }">
+			<MvASSIGN NAME = "l.output" VALUE = "{ l.output $ l.char }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.output" VALUE = "{ l.output $ '%' $ toupper( miva_hex_encode( l.char ) ) }">
+		</MvIF>
+	</MvFOR>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.output }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_Endpoint" PARAMETERS = "region" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.region" VALUE = "{ tolower( l.region ) }">
+
+	<MvIF EXPR = "{ l.region EQ 'us-east-1' }">				<MvFUNCTIONRETURN VALUE = "s3.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'us-west-2' }">			<MvFUNCTIONRETURN VALUE = "s3-us-west-2.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'us-west-1' }">			<MvFUNCTIONRETURN VALUE = "s3-us-west-1.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'eu-west-1' }">			<MvFUNCTIONRETURN VALUE = "s3-eu-west-1.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'eu-central-1' }">		<MvFUNCTIONRETURN VALUE = "s3-eu-central-1.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'ap-southeast-1' }">	<MvFUNCTIONRETURN VALUE = "s3-ap-southeast-1.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'ap-southeast-2' }">	<MvFUNCTIONRETURN VALUE = "s3-ap-southeast-2.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'ap-northeast-1' }">	<MvFUNCTIONRETURN VALUE = "s3-ap-northeast-1.amazonaws.com">
+	<MvELSEIF EXPR = "{ l.region EQ 'sa-east-1' }">			<MvFUNCTIONRETURN VALUE = "s3-sa-east-1.amazonaws.com">
+	<MvELSE>												<MvFUNCTIONRETURN VALUE = "s3.amazonaws.com">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_QueryParameters" PARAMETERS = "amazon var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query_parameters:response-content-disposition" 	VALUE = "attachment">
+	<MvASSIGN NAME = "l.query_parameters:X-Amz-Algorithm" 				VALUE = "{ 'AWS4-HMAC-SHA256' }">
+	<MvASSIGN NAME = "l.query_parameters:X-Amz-Credential" 				VALUE = "{ l.amazon:access_key $ '/' $ DigitalDownload_Amazon_Date_ISO8601_Short( s.time_t ) $ '/' $ l.amazon:region $ '/s3/aws4_request' }">
+	<MvASSIGN NAME = "l.query_parameters:X-Amz-Date" 					VALUE = "{ DigitalDownload_Amazon_Date_ISO8601_Long( s.time_t ) }">
+	<MvASSIGN NAME = "l.query_parameters:X-Amz-Expires" 				VALUE = "{ l.amazon:expire }">
+	<MvASSIGN NAME = "l.query_parameters:X-Amz-SignedHeaders" 			VALUE = "{ 'host' }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.query_parameters }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_SortQueryParameters" PARAMETERS = "left var, right var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left LT l.right }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left GT l.right }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Amazon_Regions" PARAMETERS = "regions var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" 	MEMBER = "name" 	VALUE = "US Standard">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }"	MEMBER = "region"	VALUE = "us-east-1">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Oregon">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "us-west-2">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Northern California">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "us-west-1">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Ireland">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "eu-west-1">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Frankfurt">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "eu-central-1">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Singapore">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "ap-southeast-1">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Sydney">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "ap-southeast-2">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Tokyo">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "ap-northeast-1">
+
+	<MvASSIGN NAME = "l.count" 												VALUE = "{ l.count + 1 }">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "name" 		VALUE = "Sao Paulo">
+	<MvASSIGN NAME = "l.regions" INDEX = "{ l.count }" MEMBER = "region"	VALUE = "sa-east-1">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.count }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Notify_DigitalDownloads_Created" PARAMETERS = "created_digitaldownloads var, created_digitaldownload_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.created_digitaldownload_count }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_digital', l.modules ) }">
+			<MvIF EXPR = "{ l.module:api_ver GE 10.08 }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_DigitalDownloads_Created( l.module, l.created_digitaldownloads, l.created_digitaldownload_count ) }">
+			<MvELSE>
+				<MvFOREACH ITERATOR = "l.created_digitaldownload" ARRAY = "l.created_digitaldownloads" COUNT = "{ l.created_digitaldownload_count }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_DigitalDownload_Created( l.module, l.created_digitaldownload ) }">
+				</MvFOREACH>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>

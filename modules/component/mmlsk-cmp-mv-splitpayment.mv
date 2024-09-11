@@ -1,0 +1,104 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CMP-SPY-
+| Next Error Code: 1    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-mv-splitpayment">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Split Payment Fields">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "component">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Tabs" PARAMETERS = "module var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Validate" PARAMETERS = "module var, item, field_prefix, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Update" PARAMETERS = "module var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Content" PARAMETERS = "module var, item, tab, load_fields, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Defaults" PARAMETERS = "module var, settings var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Assign" PARAMETERS = "module var, page var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Unassign" PARAMETERS = "module var, page var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Initialize_Item( l.all_settings, 'payment' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:remaining"				VALUE = "{ [ g.Module_Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL g.SplitPaymentData }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Decrypt_SplitPaymentData( g.SplitPaymentData, l.settings:splits ) }">
+			<MvASSIGN NAME = "l.settings:splits"		VALUE = "">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.split" ARRAY = "l.settings:splits">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.split:module_id, l.split:module ) }">
+				<MvASSIGN NAME = "l.split:desc"						VALUE = "Unknown">
+			<MvELSE>
+				<MvASSIGN NAME = "l.split:desc"						VALUE = "{ [ g.Module_Root $ l.split:module:module ].PaymentModule_Payment_Description( l.split:module, l.split:module_data ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.split:amount_negative"				VALUE = "{ 0 - l.split:amount }">
+			<MvASSIGN NAME = "l.split:formatted_amount"				VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.split:amount ) }">
+			<MvASSIGN NAME = "l.split:formatted_amount_negative"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.split:amount_negative ) }">
+			<MvASSIGN NAME = "l.settings:remaining"					VALUE = "{ [ g.Module_Library_Utilities ].IEEE754_Normalize( 2, l.settings:remaining - l.split:amount ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:formatted_remaining"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.settings:remaining ) }">
+
+	<MvIF EXPR = "{ ( NOT l.all_settings:payment:capabilities:balance ) OR ( l.all_settings:payment:balance GE l.settings:remaining ) }">
+		<MvIF EXPR = "{ NOT g.UI_Exception OR ( g.Session:cache:last_ui_exception EQ 'additional_payment' ) }">
+			<MvASSIGN NAME = "g.AmountType" VALUE = "total">
+			<MvASSIGN NAME = "g.Amount"		VALUE = "{ l.settings:remaining ROUND 2 }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT g.UI_Exception OR ( g.Session:cache:last_ui_exception EQ 'additional_payment' ) }">
+			<MvASSIGN NAME = "g.AmountType" VALUE = "balance">
+			<MvASSIGN NAME = "g.Amount"		VALUE = "{ l.all_settings:payment:balance ROUND 2 }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_Start" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_End" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>

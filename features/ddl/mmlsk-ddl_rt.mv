@@ -1,0 +1,83 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DDL-RT-
+| Next Error Code: 5
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownload_DownloadFile" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.DigitalDownload" VALUE = "{ trim( g.DigitalDownload ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Load_Code( g.DigitalDownload, l.dl ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-RT-00001', 'The Digital Download does not exist' ) }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadProductSetting_Load_Product_Cached( l.dl:product_id, l.dl_productsettings ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Symlink_Delete( l.dl:symlink ) }">
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-RT-00002', 'The Digital Download is no longer configured' ) }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_UT ].DigitalDownload_Expiration_DateTime( l.dl, l.expiration ) }"> <MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Feature_Filename_DDL_UT ].DigitalDownload_MaxDownloads( l.dl, l.max_downloads ) }"> <MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.max_downloads AND ( l.dl:total_dl GE l.max_downloads ) }">
+		<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Symlink_Delete( l.dl:symlink ) }">
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-RT-00003', 'The Digital Download has reached its maximum number of allowed downloads' ) }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.expiration AND ( s.dyn_time_t GE l.expiration ) }">
+		<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Symlink_Delete( l.dl:symlink ) }">
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-RT-00004', 'The Digital Download has expired' ) }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Order_Load_ID( l.dl:order_id, l.order ) AND
+					[ g.Module_Library_DB ].OrderItem_Load_Line( l.dl:order_id, l.dl:line_id, l.orderitem ) AND
+					( l.orderitem:status EQ 220 ) }">
+		<MvASSIGN NAME = "l.orderitem:status" VALUE = 221>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Status_LowLevel( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Update_Status( l.order ) OR
+						NOT [ g.Module_Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_UT ].DigitalDownload_Redirect( l.dl, l.dl_productsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

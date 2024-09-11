@@ -1,0 +1,2553 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-
+| Next Error Code: 13   
+|
+</MvCOMMENT>
+
+<MvDO FILE = "lib/config.mvc">
+<MvIF EXPR = "{ NOT Merchant() }">
+	<MvIF EXPR = "{ len( g.Error_Message ) EQ 0 }">
+		<MvDO FILE = "{ g.Library_Utilities }" NAME = "l.null" VALUE = "{ Error( 'MER-00001', '<b>Unknown Error</b><br><br>&nbsp;&nbsp;Action = ' $ encodeentities( g.Action ) $ '<br>&nbsp;&nbsp;Screen = ' $ encodeentities( g.Screen ) ) }">
+	</MvIF>
+
+	<MvDO FILE = "{ g.Library_Utilities }" NAME = "l.null" VALUE = "{ Screen_Error() }">
+</MvIF>
+
+<MvEVAL EXPR = "{ [ g.Feature_SCH_UT ].ScheduledTasks_Spawn_AsynchronousTask() }">
+<MvEVAL EXPR = "{ [ g.Feature_FEL_UT ].FeatureEngagement_Spawn_AsynchronousTask() }">
+<MvEXIT>
+
+<MvFUNCTION NAME = "Merchant" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Data_Opened }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].OpenDataFiles_Source( g.Merchant_Version, 'runtime', g.Domain ) }">
+			<MvIF EXPR = "{ NOT g.Version_Mismatch }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Data_Opened" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_RuntimeOrigin() }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Screen_RejectOrigin() }">
+		<MvEXIT>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"							VALUE = "{ [ g.Library_Utilities ].SetRuntimePaths() }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].ValidatePaths() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result"							VALUE = "{ [ g.Feature_URI_UT ].URI_Dispatch_Request() }">
+
+	<MvIF EXPR = "{ l.result EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.result EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Store:charset }">
+		<MvASSIGN NAME = "s.miva_charset"				VALUE = "{ g.Store:charset }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ miva_output_header( 'Content-Type', 'text/html; charset=' $ g.Store:charset ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Store:trackhits }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Feature_STA_DB ].Stats_Inc_Hits() }">
+
+		<MvIF EXPR = "{ ISNULL g.Session_ID }">
+			<MvASSIGN NAME = "l.null"					VALUE = "{ [ g.Feature_STA_DB ].Stats_Inc_Visits() }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_AFF_DB ].AffiliateOptions_Load( g.AffiliateOptions ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Store_Module_Currency"			VALUE = "{ g.Store:currncy_mod }">
+	<MvASSIGN NAME = "g.Store_Module_Tax"				VALUE = "{ g.Store:tax_mod }">
+	<MvASSIGN NAME = "g.Store_Module_UI"				VALUE = "{ g.Store:ui_mod }">
+
+	<MvASSIGN NAME = "g.Module_Store_Module_Currency" 	VALUE = "{ g.Module_Root $ g.Store_Module_Currency:module }">
+	<MvASSIGN NAME = "g.Module_Store_Module_Tax" 		VALUE = "{ g.Module_Root $ g.Store_Module_Tax:module }">
+	<MvASSIGN NAME = "g.Module_Store_Module_UI"			VALUE = "{ g.Module_Root $ g.Store_Module_UI:module }">
+
+	<MvASSIGN NAME = "g.SystemModule_Count"				VALUE = "{ [ g.Library_DB ].StoreModuleList_Load_Feature( 'system',	g.SystemModules ) }">
+	<MvASSIGN NAME = "g.LogModule_Count"				VALUE = "{ [ g.Library_DB ].StoreModuleList_Load_Feature( 'log',	g.LogModules ) }">
+
+	<MvASSIGN NAME = "g.Maintenance_Warning_Message"	VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Library_Utilities ].OpenBasket( g.Basket ) }">
+		<MvIF EXPR = "{ MaintenanceMode_StoreClosed() }">			<MvFUNCTIONRETURN VALUE = "{ Error_Store_Closed() }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ MaintenanceMode_DisallowNewBaskets() }">	<MvFUNCTIONRETURN VALUE = "{ Error_Store_Closed() }">
+		<MvELSEIF EXPR = "{ MaintenanceMode_StoreClosed() }">		<MvFUNCTIONRETURN VALUE = "{ Error_Store_Closed() }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Store:deferbask }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].Basket_Create_Provisional( g.Basket ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Basket_Create( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.AffiliateOptions:active }">
+		<MvIF EXPR = "{ NOT [ g.Feature_AFF_DB ].Affiliate_Update_SessionID( g.Session_ID ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Basket:cust_id EQ 0 }">
+		<MvASSIGN NAME = "g.Customer"					VALUE = "">
+		<MvASSIGN NAME = "g.BusinessAccount"			VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAndBusinessAccount_Load_CustomerID( g.Basket:cust_id, g.Customer, g.BusinessAccount ) }">
+			<MvASSIGN NAME = "g.Basket:cust_id"			VALUE = 0>
+			<MvASSIGN NAME = "g.Customer"				VALUE = "">
+			<MvASSIGN NAME = "g.BusinessAccount"		VALUE = "">
+
+			<MvDO FILE = "{ g.Library_DB }" NAME = "l.null"	VALUE = "{ Basket_Update_Customer_ID( g.Basket ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.action_count"		VALUE = "{ miva_splitstring( g.Action, ',', l.actions, 'trim,upper,noempty' ) }">
+
+	<MvIF EXPR = "{ NOT Merchant_Actions_IncludeCheckout( l.actions ) }">
+		<MvASSIGN NAME = "l.result"			VALUE = "{ Merchant_LowLevel( l.actions, l.action_count ) }">
+	<MvELSE>
+		<MvLOCKFILE FILE = "{ Merchant_Actions_CheckoutLockFile() }">
+			<MvIF EXPR = "{ [ g.Library_DB ].Basket_Load_Session( g.Basket:session_id, g.Basket ) }">
+				<MvASSIGN NAME = "l.result"	VALUE = "{ Merchant_LowLevel( l.actions, l.action_count ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvASSIGN NAME = "l.result"	VALUE = 0>
+			<MvELSEIF EXPR = "{ ( l.action_count EQ 1 ) AND ( l.actions[ 1 ] EQ 'AUTH' ) }"> 
+				<MvASSIGN NAME = "l.result"	VALUE = "{ UIException( 'order_alreadyprocessed' ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.result" VALUE = "{ UIException( 'checkout_invalid_session' ) }">
+			</MvIF>
+		</MvLOCKFILE>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_LowLevel" PARAMETERS = "actions var, action_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Merchant_Actions_LowLevel( l.actions, l.action_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.UI_Exception }">
+		<MvIF EXPR = "{ NOT Merchant_Screens() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_Actions" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.action_count"		VALUE = "{ miva_splitstring( g.Action, ',', l.actions, 'trim,upper,noempty' ) }">
+
+	<MvIF EXPR = "{ NOT Merchant_Actions_IncludeCheckout( l.actions ) }">
+		<MvASSIGN NAME = "l.result"			VALUE = "{ Merchant_Actions_LowLevel( l.actions, l.action_count ) }">
+	<MvELSE>
+		<MvLOCKFILE FILE = "{ Merchant_Actions_CheckoutLockFile() }">
+			<MvIF EXPR = "{ [ g.Library_DB ].Basket_Load_Session( g.Basket:session_id, g.Basket ) }">
+				<MvASSIGN NAME = "l.result"	VALUE = "{ Merchant_Actions_LowLevel( l.actions, l.action_count ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvASSIGN NAME = "l.result"	VALUE = 0>
+			<MvELSEIF EXPR = "{ ( l.action_count EQ 1 ) AND ( l.actions[ 1 ] EQ 'AUTH' ) }"> 
+				<MvASSIGN NAME = "l.result"	VALUE = "{ UIException( 'order_alreadyprocessed' ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.result" VALUE = "{ UIException( 'checkout_invalid_session' ) }">
+			</MvIF>
+		</MvLOCKFILE>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_Actions_IncludeCheckout" PARAMETERS = "actions var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_search( l.actions, 1, l.checkout_action,
+												    '( l.checkout_action EQ \'AUPR\' ) OR
+													 ( l.checkout_action EQ \'AUPM\' ) OR
+													 ( l.checkout_action EQ \'CTAX\' ) OR
+													 ( l.checkout_action EQ \'SHIP\' ) OR
+													 ( l.checkout_action EQ \'PSHP\' ) OR
+													 ( l.checkout_action EQ \'AUTH\' )' ) GT 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_Actions_CheckoutLockFile" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Merchant_Basket_CheckoutLockFile( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_Basket_CheckoutLockFile" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ g.MerchantPath $ crypto_md5( l.basket:session_id $ ' checkout action lock file' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_Actions_LowLevel" PARAMETERS = "actions var, action_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CSRF_Token" VALUE = "{ trim( g.CSRF_Token ) }">
+	<MvASSIGN NAME = "l.action_pos"	VALUE = 1>
+
+	<MvWHILE EXPR = "{ l.action_pos LE l.action_count }">
+		<MvREFERENCEARRAY NAME = "l.current" VARIABLE = "l.actions">
+			<MvDIMENSION INDEX = "{ l.action_pos }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ l.current EQ 'CPWD' OR
+						l.current EQ 'CEML' OR
+						l.current EQ 'UCST' OR
+						l.current EQ 'ICST' OR
+						l.current EQ 'ICSQ' OR
+						l.current EQ 'ICSA' OR
+						l.current EQ 'UCSA' OR
+						l.current EQ 'DCSA' OR
+						l.current EQ 'CCSA' OR
+						l.current EQ 'ICPC' OR
+						l.current EQ 'UCPC' OR
+						l.current EQ 'DCPC' OR
+						l.current EQ 'UCSB' OR
+						l.current EQ 'DCSB' }">
+			<MvIF EXPR = "{ [ g.Library_DB ].Basket_Is_Provisional( g.Basket ) }">
+				<MvIF EXPR = "{ l.current EQ 'ICST' OR l.current EQ 'ICSQ' }">
+					<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Insert( g.Basket ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				<MvELSE>
+					<MvFUNCTIONRETURN VALUE = "{ UIException( 'customer_invalid_session' ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT [ g.Feature_CUS_UT ].Customer_Verify_CSRF_Token( g.CSRF_Token ) }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'customer_invalid_csrf_token' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Basket_Register( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.systemmodule_override"			VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.systemmodule" ARRAY = "g.SystemModules" COUNT = "{ g.SystemModule_Count }">
+			<MvIF EXPR = "{ l.systemmodule:api_ver LT 5.60 }">
+				<MvIF EXPR = "{ ( l.current EQ 'UCST' ) OR ( l.current EQ 'ICST' ) }">	<MvEVAL EXPR = "{ [ g.Feature_CUS_RT ].v56_CustomerAddress_Compatibility() }">
+				<MvELSEIF EXPR = "{ l.current EQ 'ORDR' }">								<MvEVAL EXPR = "{ v56_Address_Compatibility() }">
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.original_action"			VALUE = "{ g.Action }">
+			<MvASSIGN NAME = "l.result"						VALUE = "{ [ g.Module_Root $ l.systemmodule:module ].SystemModule_Action( l.systemmodule, l.current ) }">
+			<MvIF EXPR = "{ l.result EQ -1 }">
+				<MvASSIGN NAME = "l.systemmodule_override"	VALUE = 1>
+				<MvFOREACHSTOP>
+			<MvELSEIF EXPR = "{ l.result EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Some legacy modules (paypalpro) make modifications to g.Action in SystemModule_Action.  Handle those changes by replacing our actions and
+			| action_count using the updated value set by the module.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ g.Action NE l.original_action }">
+				<MvASSIGN NAME = "l.action_count"			VALUE = "{ miva_splitstring( g.Action, ',', l.actions, 'trim,upper,noempty' ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT l.systemmodule_override }">
+			<MvIF EXPR = "{ l.current EQ 'LOGN' }">		<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_Login() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'LOGO' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_Logout() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'EMPW' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_EmailPassword() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'CPWD' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_ChangePassword() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'CEML' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_ChangeEmailAddress() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UCST' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_Update() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ICST' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_Insert() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ICSQ' }">	<MvDO FILE = "{ g.Feature_CUS_RT }"	NAME = "l.ok" VALUE = "{ Action_Customer_Quick_Insert() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'CSTR' }">	<MvDO FILE = "{ g.Feature_CUS_RT }" NAME = "l.ok" VALUE = "{ Action_Customer_ResetPassword() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ICSA' }">	<MvDO FILE = "{ g.Feature_CUS_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerAddress_Insert() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UCSA' }">	<MvDO FILE = "{ g.Feature_CUS_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerAddress_Update() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'DCSA' }">	<MvDO FILE = "{ g.Feature_CUS_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerAddress_Delete() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'CCSA' }">	<MvDO FILE = "{ g.Feature_CUS_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerAddress_ChangeDefault() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ICPC' }">	<MvDO FILE = "{ g.Feature_PAY_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerPaymentCard_Insert() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UCPC' }">	<MvDO FILE = "{ g.Feature_PAY_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerPaymentCard_Update() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'DCPC' }">	<MvDO FILE = "{ g.Feature_PAY_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerPaymentCard_Delete() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UCSB' }">	<MvDO FILE = "{ g.Feature_SUB_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerSubscription_Update() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'DCSB' }">	<MvDO FILE = "{ g.Feature_SUB_RT }" NAME = "l.ok" VALUE = "{ Action_CustomerSubscription_Delete() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'RDGC' }">	<MvDO FILE = "{ g.Feature_GFT_RT }" NAME = "l.ok" VALUE = "{ Action_RedeemGiftCertificate() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UAFL' }">	<MvDO FILE = "{ g.Feature_AFF }"	NAME = "l.ok" VALUE = "{ Action_Affiliate_Update_Run() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'IAFL' }">	<MvDO FILE = "{ g.Feature_AFF }"	NAME = "l.ok" VALUE = "{ Action_Affiliate_Insert_Run() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ALGI' }">	<MvDO FILE = "{ g.Feature_AFF }"	NAME = "l.ok" VALUE = "{ Action_Affiliate_Login_Run() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ALOG' }">	<MvDO FILE = "{ g.Feature_AFF }"	NAME = "l.ok" VALUE = "{ Action_Affiliate_Logout_Run() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AFPW' }">	<MvDO FILE = "{ g.Feature_AFF }"	NAME = "l.ok" VALUE = "{ Action_Affiliate_EmailPassword_Run() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AFFR' }"> <MvDO FILE = "{ g.Feature_AFF }"	NAME = "l.ok" VALUE = "{ Action_Affiliate_ResetPassword() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ADPR' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_AddProductToBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ADPM' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_AddMultipleProductsToBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AUPR' }">	<MvDO FILE = "{ g.Feature_USL_RT }"	NAME = "l.ok" VALUE = "{ Action_AddUpsoldProductToBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AUPM' }">	<MvDO FILE = "{ g.Feature_USL_RT }"	NAME = "l.ok" VALUE = "{ Action_AddMultipleUpsoldProductsToBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'QNTY' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_UpdateQuantity() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'QTYG' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_UpdateGroupQuantity() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'RPRD' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_RemoveProductFromBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'RGRP' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_RemoveGroupFromBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'CBSK' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_ClearBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ACPN' }">	<MvDO FILE = "{ g.Feature_PGR_RT }" NAME = "l.ok" VALUE = "{ Action_ApplyCouponToBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'RCPN' }"> <MvDO FILE = "{ g.Feature_PGR_RT }" NAME = "l.ok" VALUE = "{ Action_RemoveCouponFromBasket() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ORDR' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_Save_OrderInformation() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'SHIP' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_CalculateShipping() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'PSHP' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_PaymentManipulateShipping() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'CTAX' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_CalculateTax() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AUTH' }">	<MvASSIGN							NAME = "l.ok" VALUE = "{ Action_AuthorizePayment() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'ATWL' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_AddProductToWishList() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AFWL' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_AddProductFromWishList() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'AFWA' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_AddAllProductsFromWishList() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'RMWL' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_RemoveProductFromWishList() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UPWL' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_UpdateWishListProduct() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'MPWL' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_MoveProductToWishList() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'MAWL' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_MoveAllProductsToWishList() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'IWSH' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_WishList_Insert() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'UWSH' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_WishList_Update() }">
+			<MvELSEIF EXPR = "{ l.current EQ 'DWSH' }">	<MvDO FILE = "{ g.Feature_WSH_RT }" NAME = "l.ok" VALUE = "{ Action_WishList_Delete() }">
+			<MvELSE>									
+				<MvASSIGN NAME = "l.ok"	VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.ok }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.UI_Exception }">
+			<MvWHILESTOP>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.logmodule" ARRAY = "g.LogModules" COUNT = "{ g.LogModule_Count }">
+			<MvIF EXPR = "{ l.logmodule:api_ver LT 5.60 }">
+				<MvIF EXPR = "{ ( l.current EQ 'UCST' ) OR ( l.current EQ 'ICST' ) }">	<MvEVAL EXPR = "{ [ g.Feature_CUS_RT ].v56_CustomerAddress_Compatibility() }">
+				<MvELSEIF EXPR = "{ l.current EQ 'ORDR' }">								<MvEVAL EXPR = "{ v56_Address_Compatibility() }">
+				</MvIF>
+			</MvIF>
+	
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.logmodule:module ].LogModule_Action( l.logmodule, l.current ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.action_pos"	VALUE = "{ l.action_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Merchant_Screens" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "g.SystemModules" COUNT = "{ g.SystemModule_Count }">
+		<MvASSIGN NAME = "l.result"		VALUE = "{ [ g.Module_Root $ l.module:module ].SystemModule_Screen( l.module, g.Screen ) }">
+		<MvIF EXPR = "{ l.result EQ -1 }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ l.result EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ g.Screen EQ 'INVC' }">
+		<MvIF EXPR = "{ NOT g.Checkout_Session_Verified }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invoice_invalid_session' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_UT ].ShopAsCustomer_ClearCookies() }">
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].UpdateSessionID() }">
+
+		<MvIF EXPR = "{ NOT g.Basket:order_id }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_alreadyprocessed' ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( g.Basket:order_id, g.Order ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT UIException( 'order_invoice' ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Reset_Basket( g.Basket ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basket"					VALUE = "">
+			<MvASSIGN NAME = "l.basket:session_id"		VALUE = "{ g.Basket:session_id }">
+			<MvASSIGN NAME = "l.basket:order_id"		VALUE = "{ g.Order:id }">
+			<MvASSIGN NAME = "l.basket:order_proc"		VALUE = 1>
+			<MvASSIGN NAME = "l.basket:cust_id"			VALUE = 0>
+			<MvASSIGN NAME = "l.basket:ship_id"			VALUE = 0>
+			<MvASSIGN NAME = "l.basket:lastupdate"		VALUE = "{ s.time_t }">
+			<MvASSIGN NAME = "l.basket:tax_exempt"		VALUE = "{ g.Basket:tax_exempt }">
+
+			<MvIF EXPR = "{ NOT g.Basket:cust_id }">
+				<MvASSIGN NAME = "l.basket:chksess_id"	VALUE = "{ g.Basket:chksess_id }">
+				<MvASSIGN NAME = "l.basket:csrf_token"	VALUE = "{ g.Basket:csrf_token }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.basket:cussess_id"	VALUE = "{ g.Basket:cussess_id }">
+				<MvASSIGN NAME = "l.basket:cust_id"		VALUE = "{ g.Basket:cust_id }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Insert( l.basket ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Screen EQ 'STSL' }">
+		<MvIF EXPR = "{ g.Domain:stsl_id EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-00004', 'There is no user interface configured for store selection.<BR>Please use the administration interface to select a user interface module.' ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID( g.Domain:stsl_id, l.module ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvDO FILE = "{ l.module:module }" NAME = "l.store_select" VALUE = "{ UIModule_StoreSelection_Render() }">
+
+			<MvASSIGN NAME = "l.logmodule_pos"		VALUE = 1>
+			<MvWHILE EXPR = "{ l.logmodule_pos LE g.LogModule_Count }">
+				<MvDO FILE = "{ g.Module_Root $ g.LogModules[ l.logmodule_pos ]:module }" NAME = "l.module_ok" VALUE = "{ LogModule_Screen( g.LogModules[ l.logmodule_pos ], g.Screen ) }">
+				<MvIF EXPR = "{ NOT l.module_ok }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.logmodule_pos"	VALUE = "{ l.logmodule_pos + 1 }">
+			</MvWHILE>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.result"	VALUE = "{ [ g.Module_Store_Module_UI ].StoreUIModule_Dispatch( g.Store_Module_UI, g.Screen ) }">
+		<MvIF EXPR = "{ l.result LT 0 }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ l.result EQ 0 }">
+			<MvIF EXPR = "{ ISNULL g.Screen }">
+				<MvASSIGN NAME = "g.Screen"	VALUE = "SFNT">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Feature_TUI_MGR ].TemplateManager_Render_Page_Cache( g.Screen ) }">
+				<MvIF EXPR = "{ g.TemplateManager_Exception }">
+					<MvFUNCTIONRETURN VALUE = "{ UIException( g.TemplateManager_Exception_Code ) }">
+				<MvELSE>
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MaintenanceMode_StoreClosed" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Store:mnt_time LE 0 }">				<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Store:mnt_ips }">
+		<MvIF EXPR = "{ [ g.Library_Utilities ].IP_In_CIDR_IP_List( s.remote_addr, g.Store:mnt_ips ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+	
+	<MvIF EXPR = "{ s.time_t GE g.Store:mnt_time }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.minutes"			VALUE = "{ ( ( g.Store:mnt_time - s.time_t ) / 60 ) ROUND 0 }">
+
+	<MvASSIGN NAME = "l.maint_time"			VALUE = "{ [ g.Library_Utilities ].Format_Time( g.Store:mnt_time, s.miva_language ) }">
+	<MvASSIGN NAME = "l.maint_date"			VALUE = "{ [ g.Library_Utilities ].Format_Date( g.Store:mnt_time, s.miva_language ) }">
+	<MvASSIGN NAME = "l.maint_countdown"	VALUE = "{ l.minutes }">
+
+	<MvASSIGN NAME = "l.hours"				VALUE = 0>
+	<MvASSIGN NAME = "l.days"				VALUE = 0>
+
+	<MvIF EXPR = "{ l.minutes GE 20160 }">
+		<MvASSIGN NAME = "l.maint_countdown_formatted"			VALUE = "{ 'on ' $ l.maint_date }">
+	<MvELSE>
+		<MvIF EXPR = "{ l.minutes GE 2880 }">
+			<MvASSIGN NAME = "l.days"							VALUE = 2>
+			<MvASSIGN NAME = "l.minutes"						VALUE = "{ l.minutes - 2880 }">
+
+			<MvWHILE EXPR = "{ l.minutes GE '1440' }">
+				<MvASSIGN NAME = "l.days"						VALUE = "{ l.days + 1 }">
+				<MvASSIGN NAME = "l.minutes"					VALUE = "{ l.minutes - 1440 }">
+			</MvWHILE>
+
+			<MvASSIGN NAME = "l.maint_countdown_formatted"		VALUE = "{ 'in ' $ l.days $ ' Days' }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.minutes GE 120 }">
+			<MvASSIGN NAME = "l.hours"							VALUE = 2>
+			<MvASSIGN NAME = "l.minutes"						VALUE = "{ l.minutes - 120 }">
+
+			<MvWHILE EXPR = "{ l.minutes GE 60 }">
+				<MvASSIGN NAME = "l.hours"						VALUE = "{ l.hours + 1 }">
+				<MvASSIGN NAME = "l.minutes"					VALUE = "{ l.minutes - 60 }">
+			</MvWHILE>
+
+			<MvIF EXPR = "{ l.days LE 2 }">
+				<MvASSIGN NAME = "l.maint_countdown_formatted"	VALUE = "{ 'in ' $ l.hours $ ' Hours' }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.days EQ 0 }">
+			<MvASSIGN NAME = "l.maint_countdown_formatted"		VALUE = "{ l.maint_countdown_formatted $ ' ' $ l.minutes $ ' Minutes' }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.tokens" INDEX = 1 MEMBER = "token" VALUE = "store_name">				<MvASSIGN NAME = "l.tokens" INDEX = 1 MEMBER = "value" VALUE = "{ g.Store:name }">
+	<MvASSIGN NAME = "l.tokens" INDEX = 2 MEMBER = "token" VALUE = "maint_time">				<MvASSIGN NAME = "l.tokens" INDEX = 2 MEMBER = "value" VALUE = "{ l.maint_time }">
+	<MvASSIGN NAME = "l.tokens" INDEX = 3 MEMBER = "token" VALUE = "maint_date">				<MvASSIGN NAME = "l.tokens" INDEX = 3 MEMBER = "value" VALUE = "{ l.maint_date }">
+	<MvASSIGN NAME = "l.tokens" INDEX = 4 MEMBER = "token" VALUE = "maint_countdown">			<MvASSIGN NAME = "l.tokens" INDEX = 4 MEMBER = "value" VALUE = "{ l.maint_countdown }">
+	<MvASSIGN NAME = "l.tokens" INDEX = 5 MEMBER = "token" VALUE = "maint_countdown_formatted">	<MvASSIGN NAME = "l.tokens" INDEX = 5 MEMBER = "value" VALUE = "{ l.maint_countdown_formatted }">
+
+	<MvASSIGN NAME = "g.Maintenance_Warning_Message"			VALUE = "{ tokenize( g.Store:mnt_warn, l.tokens ) }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MaintenanceMode_DisallowNewBaskets" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Store:mnt_time LE 0 }">												<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ ( s.time_t + ( g.Store:mnt_no_new * 60 ) ) LT g.Store:mnt_time }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Store:mnt_ips }">
+		<MvIF EXPR = "{ [ g.Library_Utilities ].IP_In_CIDR_IP_List( s.remote_addr, g.Store:mnt_ips ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Error_Store_Closed" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.time" VALUE = "{ padl( time_t_hour( g.Store:mnt_time, g.Merchant_Local_Timezone ), 2, '0' ) $ ':' $ padl( time_t_min( g.Store:mnt_time, g.Merchant_Local_Timezone ), 2, '0' ) }">
+	<MvASSIGN NAME = "l.minutes" VALUE = "{ ( ( g.Store:mnt_time - s.time_t ) / 60 ) ROUND 0 }">
+	<MvDO FILE = "{ g.Library_Utilities }" NAME = "l.date" VALUE = "{ Format_Date( g.Store:mnt_time, s.miva_language ) }">
+
+	<MvASSIGN NAME = "l.message" VALUE = "{ glosub( g.Store:mnt_close, '%store_name%', g.Store:name ) }">
+	<MvASSIGN NAME = "l.message" VALUE = "{ glosub( l.message, '%maint_time%', l.time ) }">
+	<MvASSIGN NAME = "l.message" VALUE = "{ glosub( l.message, '%maint_date%', l.date ) }">
+	<MvASSIGN NAME = "l.message" VALUE = "{ glosub( l.message, '%maint_countdown%', l.minutes ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( l.message ) }">
+	<MvFUNCTIONRETURN VALUE = "{ UIException( 'store_offline' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddProductToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Quantity"						VALUE = "{ trim( g.Quantity ) }">
+	<MvASSIGN NAME = "g.Product_Subscription_Term_ID"	VALUE = "{ int( g.Product_Subscription_Term_ID ) }">
+
+	<MvIF EXPR = "{ ( NOT isdigit( g.Quantity ) ) OR
+					( g.Quantity LE 0 ) OR
+					( len( g.Quantity ) GT 10 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_Code( g.Product_Code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Product_Subscription_Term_ID }">
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( g.Product_Subscription_Term_ID, l.productsubscriptionterm ) }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_subscription' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id"		VALUE = "{ l.productsubscriptionterm:id }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'subscription_required' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id"		VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.items"				VALUE = "">
+	<MvASSIGN NAME = "l.items_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ miva_array_collapse( g.Product_Attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_Attributes_DetermineVariant( l.product, g.Attributes NE 0, g.Product_Attributes, l.attribute_count, l.basketoptions, l.basketoption_count, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'product_attributes' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_variant' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Check to see if there is already an entry that has the same options as this add request, and if so,
+	| update the quantity of the existing record rather than inserting a new one.
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Product( g.Basket:basket_id, l.product:id, l.basketitems ) }">
+		<MvIF EXPR = "{ l.basketitem:wish_id						OR
+						l.basketitem:upsold							OR
+						( l.basketitem:variant_id NE l.variant_id )	OR
+						( l.basketitem:subterm_id NE l.subterm_id ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:option_count" VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+
+		<MvIF EXPR = "{ l.basketitem:option_count NE l.basketoption_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketoptions_match" VALUE = 1>
+
+		<MvFOREACH ITERATOR = "l.existing_basketoption" ARRAY = "l.basketitem:options" COUNT = "{ l.basketitem:option_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.basketoptions, 1, l.basketoption, '( l.basketoption:attr_id EQ l.existing_basketoption:attr_id )		AND
+																						( l.basketoption:attmpat_id EQ l.existing_basketoption:attmpat_id )	AND
+																						( l.basketoption:option_id EQ l.existing_basketoption:option_id )	AND
+																						( l.basketoption:data EQ l.existing_basketoption:data )				AND
+																						( l.basketoption:data_long EQ l.existing_basketoption:data_long )' ) }">
+				<MvASSIGN NAME = "l.basketoptions_match" VALUE = 0>
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT l.basketoptions_match }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Found a matching item
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.basketitem:quantity + g.Quantity }">
+		<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ g.Quantity }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.basketitem:variant_id, l.check_quantity ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.UI_Exception }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.basketitem:quantity"	VALUE = "{ l.original_basketitem:quantity + g.Quantity }">
+		<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+
+		<MvFOREACHSTOP>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.item_count }">
+		<MvCOMMENT>
+		|
+		| Nothing matched, so add a new item to the basket
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.attr_price_override" VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.variant_id, g.Quantity ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.UI_Exception }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem"							VALUE = "">
+		<MvASSIGN NAME = "l.basketitem:basket_id"				VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketitem:line_id"					VALUE = "">							<MvCOMMENT> Allow database code to generate line_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:group_id"				VALUE = "">							<MvCOMMENT> Allow database code to assign to line_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:product_id" 				VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.basketitem:variant_id"				VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.basketitem:wish_id"					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:subterm_id"				VALUE = "{ l.subterm_id }">
+		<MvASSIGN NAME = "l.basketitem:code" 					VALUE = "{ l.product:code }">
+		<MvASSIGN NAME = "l.basketitem:name" 					VALUE = "{ l.product:name }">
+
+		<MvASSIGN NAME = "l.part_count"							VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.parts ) }">
+
+		<MvIF EXPR = "{ l.variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.product:sku }">
+		<MvELSEIF EXPR = "{ l.part_count EQ 1 }">					<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+		<MvELSE>													<MvASSIGN NAME = "l.basketitem:sku" VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:retail"					VALUE = "{ l.product:price }">
+		<MvASSIGN NAME = "l.basketitem:base_price"				VALUE = "{ [ g.Library_Utilities ].Adjusted_Price( l.product, l.product:price, l.product:cost ) }">
+		<MvASSIGN NAME = "l.basketitem:price"					VALUE = "{ l.basketitem:base_price }">
+		<MvASSIGN NAME = "l.basketitem:weight" 					VALUE = "{ l.product:weight }">
+		<MvASSIGN NAME = "l.basketitem:taxable" 				VALUE = "{ l.product:taxable }">
+		<MvASSIGN NAME = "l.basketitem:upsold" 					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:quantity" 				VALUE = "{ g.Quantity }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ l.basketoption_count }">
+			<MvASSIGN NAME = "l.basketoption:basket_id"			VALUE = "{ l.basketitem:basket_id }">
+			<MvASSIGN NAME = "l.basketoption:line_id"			VALUE = "{ l.basketitem:line_id }">
+
+			<MvIF EXPR = "{ l.attr_price_override }">
+				<MvASSIGN NAME = "l.basketoption:retail"		VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:base_price"	VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:price"			VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:weight"		VALUE = 0.00>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketitem:option_count"		VALUE = "{ miva_array_insert_var( l.basketitem:options, l.basketoption, -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Insert( l.product, l.basketitem, l.items ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddMultipleProductsToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.product_lookup"	VALUE = "">
+	<MvASSIGN NAME = "l.products"		VALUE = "">
+	<MvASSIGN NAME = "l.product_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.items"			VALUE = "">
+	<MvASSIGN NAME = "l.item_count"		VALUE = 0>
+
+	<MvCOMMENT>
+	|
+	| Merge duplicate product entries into a new list
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.product" ARRAY = "g.Products">
+		<MvASSIGN NAME = "l.product:quantity"	VALUE = "{ trim( l.product:quantity ) }">
+		<MvASSIGN NAME = "l.product:subterm_id"	VALUE = "{ int( l.product:subterm_id ) }">
+
+		<MvIF EXPR = "{ ( NOT isdigit( l.product:quantity ) ) OR
+						( l.product:quantity LE 0 ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.reference_product" VARIABLE = "l.product_lookup">
+			<MvMEMBER NAME = "{ l.product:code $ ':' $ l.product:subterm_id $ ':' $ crypto_md5( miva_array_serialize( l.product:attributes ) ) }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL l.reference_product }">
+			<MvASSIGN NAME = "l.reference_product:quantity"	VALUE = "{ l.reference_product:quantity + l.product:quantity }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.reference_product"			VALUE = "{ l.product }">
+			<MvASSIGN NAME = "l.product_count"				VALUE = "{ miva_array_insert_ref( l.products, l.reference_product, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Process merged products and build list of basket item changes
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.product" ARRAY = "l.products" COUNT = "{ l.product_count }">
+		<MvIF EXPR = "{ NOT Action_AddMultipleProductsToBasket_ProcessProduct( l.product, l.items, l.item_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.UI_Exception }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Process basket item changes
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddMultipleProductsToBasket_ProcessProduct" PARAMETERS = "product var, items var, item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ len_var( l.product:quantity ) GT 10 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_Code( l.product:code, l.loaded_product ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Unable to load product \'' $ l.product:code $ '\'' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:subterm_id }">
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( l.product:subterm_id, l.productsubscriptionterm ) }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Invalid subscription' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id"			VALUE = "{ l.productsubscriptionterm:id }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.loaded_product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Subscription is required for this product' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id"			VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketoptions"			VALUE = "">
+	<MvASSIGN NAME = "l.basketoption_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.attribute_count"		VALUE = "{ miva_array_collapse( l.product:attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_Attributes_DetermineVariant( l.loaded_product, 0, l.product:attributes, l.attribute_count, l.basketoptions, l.basketoption_count, l.variant_id ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Product \'' $ l.loaded_product:name $ '\' is missing a required attribute' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Is_Available_Variant( l.loaded_product, l.variant_id, l.product:quantity ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Check to see if there is already an entry that has the same options as this add request, and if so,
+	| update the quantity of the existing record rather than inserting a new one.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.basketitem_found" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Product( g.Basket:basket_id, l.loaded_product:id, l.basketitems ) }">
+		<MvIF EXPR = "{ l.basketitem:wish_id						OR
+						l.basketitem:upsold							OR
+						( l.basketitem:variant_id NE l.variant_id )	OR
+						( l.basketitem:subterm_id NE l.subterm_id ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:option_count" VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+
+		<MvIF EXPR = "{ l.basketitem:option_count NE l.basketoption_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketoptions_match" VALUE = 1>
+
+		<MvFOREACH ITERATOR = "l.existing_basketoption" ARRAY = "l.basketitem:options" COUNT = "{ l.basketitem:option_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.basketoptions, 1, l.basketoption, '( l.basketoption:attr_id EQ l.existing_basketoption:attr_id )		AND
+																						( l.basketoption:attmpat_id EQ l.existing_basketoption:attmpat_id )	AND
+																						( l.basketoption:option_id EQ l.existing_basketoption:option_id )	AND
+																						( l.basketoption:data EQ l.existing_basketoption:data )				AND
+																						( l.basketoption:data_long EQ l.existing_basketoption:data_long )' ) }">
+				<MvASSIGN NAME = "l.basketoptions_match" VALUE = 0>
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT l.basketoptions_match }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem_found"		VALUE = 1>
+		<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.basketitem:quantity"	VALUE = "{ l.original_basketitem:quantity + l.product:quantity }">
+		<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.loaded_product, l.original_basketitem, l.basketitem, l.items ) }">
+
+		<MvFOREACHSTOP>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.basketitem_found }">
+		<MvCOMMENT>
+		|
+		| Nothing matched, so add a new item to the basket
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.loaded_product, l.variant_id, l.attr_price_override ) }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem"							VALUE = "">
+		<MvASSIGN NAME = "l.basketitem:basket_id"				VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketitem:line_id"					VALUE = "">							<MvCOMMENT> Allow database code to generate line_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:group_id"				VALUE = "">							<MvCOMMENT> Allow database code to assign to line_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:product_id" 				VALUE = "{ l.loaded_product:id }">
+		<MvASSIGN NAME = "l.basketitem:variant_id"				VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.basketitem:wish_id"					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:subterm_id"				VALUE = "{ l.subterm_id }">
+		<MvASSIGN NAME = "l.basketitem:code" 					VALUE = "{ l.loaded_product:code }">
+		<MvASSIGN NAME = "l.basketitem:name" 					VALUE = "{ l.loaded_product:name }">
+
+		<MvASSIGN NAME = "l.part_count"							VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.loaded_product:id, l.variant_id, l.parts ) }">
+
+		<MvIF EXPR = "{ l.variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.loaded_product:sku }">
+		<MvELSEIF EXPR = "{ l.part_count EQ 1 }">					<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+		<MvELSE>													<MvASSIGN NAME = "l.basketitem:sku" VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:retail"					VALUE = "{ l.loaded_product:price }">
+		<MvASSIGN NAME = "l.basketitem:base_price"				VALUE = "{ [ g.Library_Utilities ].Adjusted_Price( l.loaded_product, l.loaded_product:price, l.loaded_product:cost ) }">
+		<MvASSIGN NAME = "l.basketitem:price"					VALUE = "{ l.basketitem:base_price }">
+		<MvASSIGN NAME = "l.basketitem:weight" 					VALUE = "{ l.loaded_product:weight }">
+		<MvASSIGN NAME = "l.basketitem:taxable" 				VALUE = "{ l.loaded_product:taxable }">
+		<MvASSIGN NAME = "l.basketitem:upsold" 					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:quantity" 				VALUE = "{ l.product:quantity }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ l.basketoption_count }">
+			<MvASSIGN NAME = "l.basketoption:basket_id"			VALUE = "{ l.basketitem:basket_id }">
+			<MvASSIGN NAME = "l.basketoption:line_id"			VALUE = "{ l.basketitem:line_id }">
+
+			<MvIF EXPR = "{ l.attr_price_override }">
+				<MvASSIGN NAME = "l.basketoption:retail"		VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:base_price"	VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:price"			VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:weight"		VALUE = 0.00>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketitem:option_count"		VALUE = "{ miva_array_insert_var( l.basketitem:options, l.basketoption, -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Insert( l.loaded_product, l.basketitem, l.items ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_UpdateQuantity" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Quantity"	VALUE = "{ trim( g.Quantity ) }">
+
+	<MvIF EXPR = "{ ( NOT isdigit( g.Quantity ) ) OR
+					( g.Quantity LT 0 ) OR
+					( len( g.Quantity ) GT 10 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Quantity EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Action_RemoveProductFromBasket() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketItem_Load_Line( g.Basket:basket_id, g.Basket_Line, l.basketitem ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-00006', 'Unable to load requested Basket Item. Some or all of the Basket Contents may no longer be available.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.basketitem:quantity EQ g.Quantity }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Dirty( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product"	VALUE = "">
+		<MvASSIGN NAME = "l.product:id"	VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem:option_count"	VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+	<MvASSIGN NAME = "l.original_basketitem"		VALUE = "{ l.basketitem }">
+	<MvASSIGN NAME = "l.basketitem:quantity"		VALUE = "{ g.Quantity }">
+
+	<MvASSIGN NAME = "l.items"						VALUE = "">
+	<MvASSIGN NAME = "l.item_count"					VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+
+	<MvASSIGN NAME = "l.quantity_adjustment"		VALUE = "{ l.basketitem:quantity - l.original_basketitem:quantity }">
+
+	<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+		<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ g.Quantity }">
+		<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.basketitem:variant_id, l.check_quantity ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.UI_Exception }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_UpdateGroupQuantity" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Quantity"		VALUE = "{ trim( g.Quantity ) }">
+
+	<MvIF EXPR = "{ ( NOT isdigit( g.Quantity ) ) OR
+					( g.Quantity LT 0 ) OR
+					( len( g.Quantity ) GT 10 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Quantity EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Action_RemoveGroupFromBasket() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.items"					VALUE = "">
+	<MvASSIGN NAME = "l.item_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.total_quantity"			VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem_count"		VALUE = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Group( g.Basket:basket_id, g.Basket_Group, l.basketitems ) }">
+
+	<MvIF EXPR = "{ l.basketitem_count EQ 0 }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Unable to load requested Basket Item. Some or all of the Basket Contents may no longer be available.' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitems[ 1 ], l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product"	VALUE = "">
+		<MvASSIGN NAME = "l.product:id"	VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvASSIGN NAME = "l.total_quantity"							VALUE = "{ l.total_quantity + l.basketitem:quantity }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.quantity_adjustment"						VALUE = "{ g.Quantity - l.total_quantity }">
+
+	<MvIF EXPR = "{ ( l.quantity_adjustment GT 0 ) OR ( l.basketitem_count EQ 1 ) }">
+		<MvREFERENCEARRAY NAME = "l.basketitem" VARIABLE = "l.basketitems">
+			<MvDIMENSION INDEX = 1>
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.basketitem:option_count"				VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+		<MvASSIGN NAME = "l.original_basketitem"					VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.basketitem:quantity"					VALUE = "{ l.basketitem:quantity + ( g.Quantity - l.total_quantity ) }">
+
+		<MvASSIGN NAME = "l.item_count"								VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+	<MvELSEIF EXPR = "{ g.Quantity LT l.basketitem_count }">
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ g.Quantity }">
+			<MvASSIGN NAME = "l.basketitem:option_count"			VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+			<MvASSIGN NAME = "l.original_basketitem"				VALUE = "{ l.basketitem }">
+			<MvASSIGN NAME = "l.basketitem:quantity"				VALUE = 1>
+
+			<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" FIRST = "{ g.Quantity + 1 }" LAST = "{ l.basketitem_count }">
+			<MvASSIGN NAME = "l.basketitem:option_count"			VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+			<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Delete( l.product, l.basketitem, l.items ) }">
+		</MvFOREACH>
+	<MvELSE>
+		<MvASSIGN NAME = "l.avg_quantity"							VALUE = "{ floor( g.Quantity / l.basketitem_count ) }">
+		<MvASSIGN NAME = "l.first_quantity"							VALUE = "{ g.Quantity - ( l.avg_quantity * ( l.basketitem_count - 1 ) ) }">
+
+		<MvREFERENCEARRAY NAME = "l.basketitem" VARIABLE = "l.basketitems">
+			<MvDIMENSION INDEX = 1>
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.basketitem:option_count"				VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+		<MvASSIGN NAME = "l.original_basketitem"					VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.basketitem:quantity"					VALUE = "{ l.first_quantity }">
+
+		<MvASSIGN NAME = "l.item_count"								VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" FIRST = 2 LAST = "{ l.basketitem_count }">
+			<MvASSIGN NAME = "l.basketitem:option_count"			VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+			<MvASSIGN NAME = "l.original_basketitem"				VALUE = "{ l.basketitem }">
+			<MvASSIGN NAME = "l.basketitem:quantity"				VALUE = "{ l.avg_quantity }">
+
+			<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+		<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ g.Quantity }">
+		<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.items[ 1 ]:original_basketitem:variant_id, l.check_quantity ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.UI_Exception }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.upsold_present" VALUE = "{ [ g.Library_DB ].Basket_Quantity_Upsold( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.upsold_present }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_ShouldDeleteUpsold( l.items, l.item_count ) }">
+			<MvASSIGN NAME = "g.Merchant_Remove_Upsell_Message"	VALUE = "{ '<font color="red">Due to changes in your basket, all Special Offers have been removed.</font><br><br>' }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_RemoveProductFromBasket" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketItem_Load_Line( g.Basket:basket_id, g.Basket_Line, l.basketitem ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product"						VALUE = "">
+		<MvASSIGN NAME = "l.product:id"						VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem:option_count"			VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+
+	<MvASSIGN NAME = "l.items"								VALUE = "">
+	<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Delete( l.product, l.basketitem, l.items ) }">
+
+	<MvASSIGN NAME = "l.upsold_present"						VALUE = "{ [ g.Library_DB ].Basket_Quantity_Upsold( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.upsold_present }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_ShouldDeleteUpsold( l.items, l.item_count ) }">
+			<MvASSIGN NAME = "g.Merchant_Remove_Upsell_Message"	VALUE = "{ '<font color="red">Due to changes in your basket, all Special Offers have been removed.</font><br><br>' }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_RemoveGroupFromBasket" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketitem_count"		VALUE = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Group( g.Basket:basket_id, g.Basket_Group, l.basketitems ) }">
+	<MvIF EXPR = "{ l.basketitem_count EQ 0 }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Dirty( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitems[ 1 ], l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product"						VALUE = "">
+		<MvASSIGN NAME = "l.product:id"						VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.items"								VALUE = "">
+	<MvASSIGN NAME = "l.item_count"							VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvASSIGN NAME = "l.basketitem:option_count"		VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+		<MvASSIGN NAME = "l.item_count"						VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Delete( l.product, l.basketitem, l.items ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.upsold_present"						VALUE = "{ [ g.Library_DB ].Basket_Quantity_Upsold( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.upsold_present }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_ShouldDeleteUpsold( l.items, l.item_count ) }">
+			<MvASSIGN NAME = "g.Merchant_Remove_Upsell_Message"	VALUE = "{ '<font color="red">Due to changes in your basket, all Special Offers have been removed.</font><br><br>' }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_ClearBasket" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_DB ].Runtime_Basket_Empty( g.Basket:basket_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Validate" PARAMETERS = "tax_module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid" VALUE = 1>
+
+	<MvDO FILE = "{ g.Library_DB }" NAME = "l.standardfields_load" VALUE = "{ StandardFields_Load_Cached( l.std_fields ) }">
+	<MvIF EXPR = "{ NOT l.standardfields_load }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.ShipID" 			VALUE = "{ int( g.ShipID ) }">
+	<MvASSIGN NAME = "g.ShipFirstName" 		VALUE = "{ trim( g.ShipFirstName ) }">
+	<MvASSIGN NAME = "g.ShipLastName" 		VALUE = "{ trim( g.ShipLastName ) }">
+	<MvASSIGN NAME = "g.ShipEmail" 			VALUE = "{ trim( g.ShipEmail ) }">
+	<MvASSIGN NAME = "g.ShipCompany" 		VALUE = "{ trim( g.ShipCompany ) }">
+	<MvASSIGN NAME = "g.ShipPhone" 			VALUE = "{ trim( g.ShipPhone ) }">
+	<MvASSIGN NAME = "g.ShipFax" 			VALUE = "{ trim( g.ShipFax ) }">
+	<MvASSIGN NAME = "g.ShipAddress1" 		VALUE = "{ trim( g.ShipAddress1 ) }">
+	<MvASSIGN NAME = "g.ShipAddress2" 		VALUE = "{ trim( g.ShipAddress2 ) }">
+	<MvASSIGN NAME = "g.ShipCity" 			VALUE = "{ trim( g.ShipCity ) }">
+	<MvASSIGN NAME = "g.ShipState" 			VALUE = "{ trim( g.ShipState ) }">
+	<MvASSIGN NAME = "g.ShipStateSelect" 	VALUE = "{ trim( g.ShipStateSelect ) }">
+	<MvASSIGN NAME = "g.ShipZip" 			VALUE = "{ trim( g.ShipZip ) }">
+	<MvASSIGN NAME = "g.ShipCountry" 		VALUE = "{ trim( g.ShipCountry ) }">
+	<MvASSIGN NAME = "g.ShipResidential" 	VALUE = "{ [ g.Filename_Admin ].Trim_Boolean( g.ShipResidential ) }">
+
+	<MvIF EXPR = "{ len( g.ShipStateSelect ) }">
+		<MvASSIGN NAME = "g.ShipState"		VALUE = "{ g.ShipStateSelect }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.BillID" 			VALUE = "{ int( g.BillID ) }">
+	<MvASSIGN NAME = "g.BillFirstName" 		VALUE = "{ trim( g.BillFirstName ) }">
+	<MvASSIGN NAME = "g.BillLastName" 		VALUE = "{ trim( g.BillLastName ) }">
+	<MvASSIGN NAME = "g.BillEmail" 			VALUE = "{ trim( g.BillEmail ) }">
+	<MvASSIGN NAME = "g.BillCompany" 		VALUE = "{ trim( g.BillCompany ) }">
+	<MvASSIGN NAME = "g.BillPhone" 			VALUE = "{ trim( g.BillPhone ) }">
+	<MvASSIGN NAME = "g.BillFax" 			VALUE = "{ trim( g.BillFax ) }">
+	<MvASSIGN NAME = "g.BillAddress1" 		VALUE = "{ trim( g.BillAddress1 ) }">
+	<MvASSIGN NAME = "g.BillAddress2" 		VALUE = "{ trim( g.BillAddress2 ) }">
+	<MvASSIGN NAME = "g.BillCity" 			VALUE = "{ trim( g.BillCity ) }">
+	<MvASSIGN NAME = "g.BillState" 			VALUE = "{ trim( g.BillState ) }">
+	<MvASSIGN NAME = "g.BillStateSelect" 	VALUE = "{ trim( g.BillStateSelect ) }">
+	<MvASSIGN NAME = "g.BillZip" 			VALUE = "{ trim( g.BillZip ) }">
+	<MvASSIGN NAME = "g.BillCountry" 		VALUE = "{ trim( g.BillCountry ) }">
+
+	<MvIF EXPR = "{ len( g.BillStateSelect ) }">
+		<MvASSIGN NAME = "g.BillState"		VALUE = "{ g.BillStateSelect }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ship_address:fname"		VALUE = "{ g.ShipFirstName }">
+	<MvASSIGN NAME = "l.ship_address:lname"		VALUE = "{ g.ShipLastName }">
+	<MvASSIGN NAME = "l.ship_address:email"		VALUE = "{ g.ShipEmail }">
+	<MvASSIGN NAME = "l.ship_address:comp"		VALUE = "{ g.ShipCompany }">
+	<MvASSIGN NAME = "l.ship_address:phone"		VALUE = "{ g.ShipPhone }">
+	<MvASSIGN NAME = "l.ship_address:fax"		VALUE = "{ g.ShipFax }">
+	
+	<MvIF EXPR = "{ len( g.ShipAddress ) AND ( NOT len( g.ShipAddress1 ) ) AND ( NOT len( g.ShipAddress2 ) ) }">
+		<MvASSIGN NAME = "g.ShipAddress1"		VALUE = "{ g.ShipAddress }">
+		<MvASSIGN NAME = "g.ShipAddress2"		VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ship_address:addr1"	VALUE = "{ g.ShipAddress1 }">
+	<MvASSIGN NAME = "l.ship_address:addr2"	VALUE = "{ g.ShipAddress2 }">
+
+	<MvASSIGN NAME = "l.ship_address:city"		VALUE = "{ g.ShipCity }">
+	<MvASSIGN NAME = "l.ship_address:state"		VALUE = "{ g.ShipState }">
+	<MvASSIGN NAME = "l.ship_address:zip"		VALUE = "{ g.ShipZip }">
+	<MvASSIGN NAME = "l.ship_address:cntry"		VALUE = "{ g.ShipCountry }">
+
+	<MvASSIGN NAME = "l.bill_address:fname"		VALUE = "{ g.BillFirstName }">
+	<MvASSIGN NAME = "l.bill_address:lname"		VALUE = "{ g.BillLastName }">
+	<MvASSIGN NAME = "l.bill_address:email"		VALUE = "{ g.BillEmail }">
+	<MvASSIGN NAME = "l.bill_address:comp"		VALUE = "{ g.BillCompany }">
+	<MvASSIGN NAME = "l.bill_address:phone"		VALUE = "{ g.BillPhone }">
+	<MvASSIGN NAME = "l.bill_address:fax"		VALUE = "{ g.BillFax }">
+	
+	<MvIF EXPR = "{ len( g.BillAddress ) AND ( NOT len( g.BillAddress1 ) ) AND ( NOT len( g.BillAddress2 ) ) }">
+		<MvASSIGN NAME = "g.BillAddress1"		VALUE = "{ g.BillAddress }">
+		<MvASSIGN NAME = "g.BillAddress2"		VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.bill_address:addr1"		VALUE = "{ g.BillAddress1 }">
+	<MvASSIGN NAME = "l.bill_address:addr2"		VALUE = "{ g.BillAddress2 }">
+
+	<MvASSIGN NAME = "l.bill_address:city"		VALUE = "{ g.BillCity }">
+	<MvASSIGN NAME = "l.bill_address:state"		VALUE = "{ g.BillState }">
+	<MvASSIGN NAME = "l.bill_address:zip"		VALUE = "{ g.BillZip }">
+	<MvASSIGN NAME = "l.bill_address:cntry"		VALUE = "{ g.BillCountry }">
+
+	<MvIF EXPR = "{ l.std_fields:primaddr EQ 'shipping' }">		<MvASSIGN NAME = "l.valid" VALUE = "{ [ g.Library_Utilities ].StandardFields_Validate( l.std_fields, l.std_fields:shipping,	l.std_fields:billing,	l.ship_address, 'g.Ship', l.bill_address, 'g.Bill' ) }">
+	<MvELSEIF EXPR = "{ l.std_fields:primaddr EQ 'billing' }">	<MvASSIGN NAME = "l.valid" VALUE = "{ [ g.Library_Utilities ].StandardFields_Validate( l.std_fields, l.std_fields:billing,	l.std_fields:shipping,	l.bill_address, 'g.Bill', l.ship_address, 'g.Ship' ) }">
+	<MvELSE>													<MvASSIGN NAME = "l.valid" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvASSIGN NAME = "g.ShipAddress_Invalid"	VALUE = "{ g.ShipAddress1_Invalid OR g.ShipAddress2_Invalid }">
+		<MvASSIGN NAME = "g.BillAddress_Invalid"	VALUE = "{ g.BillAddress1_Invalid OR g.BillAddress2_Invalid }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.ShipFirstName"		VALUE = "{ l.ship_address:fname }">
+		<MvASSIGN NAME = "g.ShipLastName"		VALUE = "{ l.ship_address:lname }">
+		<MvASSIGN NAME = "g.ShipEmail"			VALUE = "{ l.ship_address:email }">
+		<MvASSIGN NAME = "g.ShipCompany"		VALUE = "{ l.ship_address:comp }">
+		<MvASSIGN NAME = "g.ShipPhone"			VALUE = "{ l.ship_address:phone }">
+		<MvASSIGN NAME = "g.ShipFax"			VALUE = "{ l.ship_address:fax }">
+
+		<MvIF EXPR = "{ len( l.ship_address:addr2 ) EQ 0 }">
+			<MvASSIGN NAME = "g.ShipAddress"	VALUE = "{ l.ship_address:addr1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.ShipAddress"	VALUE = "{ l.ship_address:addr1 $ ' ' $ l.ship_address:addr2 }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.ShipAddress1"		VALUE = "{ l.ship_address:addr1 }">
+		<MvASSIGN NAME = "g.ShipAddress2"		VALUE = "{ l.ship_address:addr2 }">
+		<MvASSIGN NAME = "g.ShipCity"			VALUE = "{ l.ship_address:city }">
+		<MvASSIGN NAME = "g.ShipState"			VALUE = "{ l.ship_address:state }">
+		<MvASSIGN NAME = "g.ShipZip"			VALUE = "{ l.ship_address:zip }">
+		<MvASSIGN NAME = "g.ShipCountry"		VALUE = "{ l.ship_address:cntry }">
+
+		<MvASSIGN NAME = "g.BillFirstName"	VALUE = "{ l.bill_address:fname }">
+		<MvASSIGN NAME = "g.BillLastName"	VALUE = "{ l.bill_address:lname }">
+		<MvASSIGN NAME = "g.BillEmail"		VALUE = "{ l.bill_address:email }">
+		<MvASSIGN NAME = "g.BillCompany"	VALUE = "{ l.bill_address:comp }">
+		<MvASSIGN NAME = "g.BillPhone"		VALUE = "{ l.bill_address:phone }">
+		<MvASSIGN NAME = "g.BillFax"		VALUE = "{ l.bill_address:fax }">
+
+		<MvIF EXPR = "{ len( l.bill_address:addr2 ) EQ 0 }">
+			<MvASSIGN NAME = "g.BillAddress"	VALUE = "{ l.bill_address:addr1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.BillAddress"	VALUE = "{ l.bill_address:addr1 $ ' ' $ l.bill_address:addr2 }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.BillAddress1"	VALUE = "{ l.bill_address:addr1 }">
+		<MvASSIGN NAME = "g.BillAddress2"	VALUE = "{ l.bill_address:addr2 }">
+		<MvASSIGN NAME = "g.BillCity"		VALUE = "{ l.bill_address:city }">
+		<MvASSIGN NAME = "g.BillState"		VALUE = "{ l.bill_address:state }">
+		<MvASSIGN NAME = "g.BillZip"		VALUE = "{ l.bill_address:zip }">
+		<MvASSIGN NAME = "g.BillCountry"	VALUE = "{ l.bill_address:cntry }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.tax_module:module ].TaxModule_Order_Validate( l.tax_module ) }">
+		<MvASSIGN NAME = "l.valid" VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Save_OrderInformation" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Basket:sub_count AND ( NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified ) }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_customer_required' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Order_Validate( g.Store_Module_Tax ) }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_invalid_info' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_SHP_DB ].ShippingRules_Load_Cached( l.shippingrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Store:addrval_id AND l.shippingrules:aval_ordr }">
+		<MvIF EXPR = "{ g.ShipValidated AND g.BillValidated }">
+			<MvASSIGN NAME = "g.Basket:addr_val_s"	VALUE = 1>
+			<MvASSIGN NAME = "g.Basket:addr_val_b"	VALUE = 1>
+		<MvELSEIF EXPR = "{ strcasecmp( g.Basket:ship_comp, g.ShipCompany ) NE 0	OR 
+							strcasecmp( g.Basket:ship_addr1, g.ShipAddress1 ) NE 0	OR 
+							strcasecmp( g.Basket:ship_addr2, g.ShipAddress2 ) NE 0	OR 
+							strcasecmp( g.Basket:ship_city, g.ShipCity ) NE 0		OR 
+							strcasecmp( g.Basket:ship_state, g.ShipState ) NE 0		OR 
+							strcasecmp( g.Basket:ship_zip, g.ShipZip ) NE 0			OR 
+							strcasecmp( g.Basket:ship_cntry, g.ShipCountry ) NE 0	OR 
+							strcasecmp( g.Basket:bill_comp, g.BillCompany ) NE 0	OR 
+							strcasecmp( g.Basket:bill_addr1, g.BillAddress1 ) NE 0	OR 
+							strcasecmp( g.Basket:bill_addr2, g.BillAddress2 ) NE 0	OR 
+							strcasecmp( g.Basket:bill_city, g.BillCity ) NE 0		OR 
+							strcasecmp( g.Basket:bill_state, g.BillState ) NE 0		OR 
+							strcasecmp( g.Basket:bill_zip, g.BillZip ) NE 0			OR
+							strcasecmp( g.Basket:bill_cntry, g.BillCountry ) NE 0 }">
+			<MvASSIGN NAME = "g.Basket:addr_val_s"	VALUE = 0>
+			<MvASSIGN NAME = "g.Basket:addr_val_b"	VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Checkout_Session_Verified"	VALUE = 1>
+	<MvASSIGN NAME = "g.Checkout_Session_ID"		VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "g.Basket:chksess_id"			VALUE = "{ g.Checkout_Session_ID }">
+	<MvASSIGN NAME = "g.Basket:auth_token"			VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "g.Basket:auth_fails"			VALUE = 0>
+	<MvASSIGN NAME = "g.Basket:ship_fname"			VALUE = "{ g.ShipFirstName }">
+	<MvASSIGN NAME = "g.Basket:ship_lname"			VALUE = "{ g.ShipLastName }">
+	<MvASSIGN NAME = "g.Basket:ship_email"			VALUE = "{ g.ShipEmail }">
+	<MvASSIGN NAME = "g.Basket:ship_comp"			VALUE = "{ g.ShipCompany }">
+	<MvASSIGN NAME = "g.Basket:ship_phone"			VALUE = "{ g.ShipPhone }">
+	<MvASSIGN NAME = "g.Basket:ship_fax"			VALUE = "{ g.ShipFax }">
+	<MvASSIGN NAME = "g.Basket:ship_addr"			VALUE = "">
+	<MvASSIGN NAME = "g.Basket:ship_addr1"			VALUE = "{ g.ShipAddress1 }">
+	<MvASSIGN NAME = "g.Basket:ship_addr2"			VALUE = "{ g.ShipAddress2 }">
+	<MvASSIGN NAME = "g.Basket:ship_city"			VALUE = "{ g.ShipCity }">
+	<MvASSIGN NAME = "g.Basket:ship_state"			VALUE = "{ g.ShipState }">
+	<MvASSIGN NAME = "g.Basket:ship_zip"			VALUE = "{ g.ShipZip }">
+	<MvASSIGN NAME = "g.Basket:ship_cntry"			VALUE = "{ g.ShipCountry }">
+	<MvASSIGN NAME = "g.Basket:bill_fname"			VALUE = "{ g.BillFirstName }">
+	<MvASSIGN NAME = "g.Basket:bill_lname"			VALUE = "{ g.BillLastName }">
+	<MvASSIGN NAME = "g.Basket:bill_email"			VALUE = "{ g.BillEmail }">
+	<MvASSIGN NAME = "g.Basket:bill_comp"			VALUE = "{ g.BillCompany }">
+	<MvASSIGN NAME = "g.Basket:bill_phone"			VALUE = "{ g.BillPhone }">
+	<MvASSIGN NAME = "g.Basket:bill_fax"			VALUE = "{ g.BillFax }">
+	<MvASSIGN NAME = "g.Basket:bill_addr"			VALUE = "">
+	<MvASSIGN NAME = "g.Basket:bill_addr1"			VALUE = "{ g.BillAddress1 }">
+	<MvASSIGN NAME = "g.Basket:bill_addr2"			VALUE = "{ g.BillAddress2 }">
+	<MvASSIGN NAME = "g.Basket:bill_city"			VALUE = "{ g.BillCity }">
+	<MvASSIGN NAME = "g.Basket:bill_state"			VALUE = "{ g.BillState }">
+	<MvASSIGN NAME = "g.Basket:bill_zip"			VALUE = "{ g.BillZip }">
+	<MvASSIGN NAME = "g.Basket:bill_cntry"			VALUE = "{ g.BillCountry }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].StandardFields_Load_Cached( l.std_fields ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_fields:ship_res EQ 'A' }">	<MvASSIGN NAME = "g.Basket:ship_res" VALUE = "{ ISNULL g.Basket:ship_comp }">
+	<MvELSE>											<MvASSIGN NAME = "g.Basket:ship_res" VALUE = "{ g.ShipResidential }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Basket:order_id EQ 0 ) OR g.Basket:order_proc }">
+		<MvASSIGN NAME = "g.Basket:order_id"	VALUE = "{ [ g.Library_DB ].StoreKey_Generate( 'Orders' ) }">
+		<MvASSIGN NAME = "g.Basket:order_proc"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Update_Order( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketInfo_Delete_ClearOnMod_Basket( g.Basket:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_Utilities ].UpdateSessionID() }">
+
+	<MvIF EXPR = "{ ( NOT g.Basket:addr_val_s OR NOT g.Basket:addr_val_b ) AND ( NOT g.ShipValidated OR NOT g.BillValidated ) }">
+		<MvIF EXPR = "{ g.Store:addrval_id AND l.shippingrules:aval_ordr }">
+			<MvASSIGN NAME = "l.ship_address:addr1"		VALUE = "{ g.Basket:ship_addr1 }">
+			<MvASSIGN NAME = "l.ship_address:addr2"		VALUE = "{ g.Basket:ship_addr2 }">
+			<MvASSIGN NAME = "l.ship_address:city"		VALUE = "{ g.Basket:ship_city }">
+			<MvASSIGN NAME = "l.ship_address:state"		VALUE = "{ g.Basket:ship_state }">
+			<MvASSIGN NAME = "l.ship_address:zip"		VALUE = "{ g.Basket:ship_zip }">
+			<MvASSIGN NAME = "l.ship_address:cntry"		VALUE = "{ g.Basket:ship_cntry }">
+			<MvASSIGN NAME = "l.ship_address:comp"		VALUE = "{ g.Basket:ship_comp }">
+			<MvASSIGN NAME = "l.ship_address:resdntl"	VALUE = "{ g.Basket:ship_res }">
+
+			<MvASSIGN NAME = "l.bill_address:addr1"		VALUE = "{ g.Basket:bill_addr1 }">
+			<MvASSIGN NAME = "l.bill_address:addr2"		VALUE = "{ g.Basket:bill_addr2 }">
+			<MvASSIGN NAME = "l.bill_address:city"		VALUE = "{ g.Basket:bill_city }">
+			<MvASSIGN NAME = "l.bill_address:state"		VALUE = "{ g.Basket:bill_state }">
+			<MvASSIGN NAME = "l.bill_address:zip"		VALUE = "{ g.Basket:bill_zip }">
+			<MvASSIGN NAME = "l.bill_address:cntry"		VALUE = "{ g.Basket:bill_cntry }">
+			<MvASSIGN NAME = "l.bill_address:comp"		VALUE = "{ g.Basket:bill_comp }">
+			<MvASSIGN NAME = "l.bill_address:resdntl"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Feature_CUS_RT ].Runtime_Validate_ShippingBilling( l.ship_address, l.bill_address, 'order_validate_info', g.ValidatedShipAddresses, g.ValidatedBillAddresses ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT g.UI_Exception }">
+				<MvASSIGN NAME = "g.Basket:addr_val_s"	VALUE = 1>
+				<MvASSIGN NAME = "g.Basket:addr_val_b"	VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Update_Customer_Information( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Update_Customer AND g.Basket:cust_id AND g.Customer_Session_Verified }">
+		<MvIF EXPR = "{ g.ShipID EQ 0 }">	<MvASSIGN NAME = "l.ship_id" VALUE = "{ g.Customer:ship_id }">
+		<MvELSE>							<MvASSIGN NAME = "l.ship_id" VALUE = "{ g.ShipID }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.BillID EQ 0 }">	<MvASSIGN NAME = "l.bill_id" VALUE = "{ g.Customer:bill_id }">
+		<MvELSE>							<MvASSIGN NAME = "l.bill_id" VALUE = "{ g.BillID }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.update_customer" VALUE = 0>
+
+		<MvIF EXPR = "{ l.std_fields:primaddr EQ 'shipping' }">
+			<MvIF EXPR = "{ NOT Action_Save_OrderInformation_Update_CustomerAddress_Shipping( l.ship_id, l.bill_id, l.std_fields, l.address_ship ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ NOT Action_Save_OrderInformation_Update_CustomerAddress_Billing( l.ship_id, l.bill_id, l.std_fields, l.address_bill ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( g.Customer:ship_id EQ l.address_ship:id ) OR ( g.Customer:ship_id EQ 0 ) }">
+				<MvEVAL EXPR = "{ Action_Save_OrderInformation_Update_Customer_Shipping_FromCustomerAddress( g.Customer, l.address_ship, l.std_fields ) }">
+				<MvASSIGN NAME = "l.update_customer" VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( g.Customer:bill_id EQ l.address_bill:id ) OR ( g.Customer:bill_id EQ 0 ) }">
+				<MvEVAL EXPR = "{ Action_Save_OrderInformation_Update_Customer_Billing_FromCustomerAddress( g.Customer, l.address_bill, l.std_fields ) }">
+				<MvASSIGN NAME = "l.update_customer" VALUE = 1>
+			<MvELSEIF EXPR = "{ g.Customer:bill_id EQ l.address_ship:id }">
+				<MvEVAL EXPR = "{ Action_Save_OrderInformation_Update_Customer_Billing_FromCustomerAddress( g.Customer, l.address_ship, l.std_fields ) }">
+				<MvASSIGN NAME = "l.update_customer" VALUE = 1>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT Action_Save_OrderInformation_Update_CustomerAddress_Billing( l.ship_id, l.bill_id, l.std_fields, l.address_bill ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ NOT Action_Save_OrderInformation_Update_CustomerAddress_Shipping( l.ship_id, l.bill_id, l.std_fields, l.address_ship ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( g.Customer:bill_id EQ l.address_bill:id ) OR ( g.Customer:bill_id EQ 0 ) }">
+				<MvEVAL EXPR = "{ Action_Save_OrderInformation_Update_Customer_Billing_FromCustomerAddress( g.Customer, l.address_bill, l.std_fields ) }">
+				<MvASSIGN NAME = "l.update_customer" VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( g.Customer:ship_id EQ l.address_ship:id ) OR ( g.Customer:ship_id EQ 0 ) }">
+				<MvEVAL EXPR = "{ Action_Save_OrderInformation_Update_Customer_Shipping_FromCustomerAddress( g.Customer, l.address_ship, l.std_fields ) }">
+				<MvASSIGN NAME = "l.update_customer" VALUE = 1>
+			<MvELSEIF EXPR = "{ g.Customer:ship_id EQ l.address_bill:id }">
+				<MvEVAL EXPR = "{ Action_Save_OrderInformation_Update_Customer_Shipping_FromCustomerAddress( g.Customer, l.address_bill, l.std_fields ) }">
+				<MvASSIGN NAME = "l.update_customer" VALUE = 1>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.update_customer }">
+			<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].Customer_Update( g.Customer ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Check_Available_AtCheckout( g.Basket, l.available ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT l.available }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'inventory_unavailable_atcheckout' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Save_OrderInformation_Update_CustomerAddress_Shipping" PARAMETERS = "ship_id, bill_id, std_fields var, address_ship var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.ship_id GT 0 }">
+		<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Load( g.Basket:cust_id, l.ship_id, l.address_ship ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL g.ShipDescription }">
+		<MvASSIGN NAME = "l.address_ship:descrip"					VALUE = "{ g.ShipDescription }">
+	<MvELSEIF EXPR = "{ NOT l.address_ship:id }">
+		<MvASSIGN NAME = "l.ship_address:fname"						VALUE = "{ g.Basket:ship_fname }">
+		<MvASSIGN NAME = "l.ship_address:lname"						VALUE = "{ g.Basket:ship_lname }">
+		<MvASSIGN NAME = "l.ship_address:email"						VALUE = "{ g.Basket:ship_email }">
+		<MvASSIGN NAME = "l.ship_address:comp"						VALUE = "{ g.Basket:ship_comp }">
+		<MvASSIGN NAME = "l.ship_address:phone"						VALUE = "{ g.Basket:ship_phone }">
+		<MvASSIGN NAME = "l.ship_address:fax"						VALUE = "{ g.Basket:ship_fax }">
+		<MvASSIGN NAME = "l.ship_address:addr1"						VALUE = "{ g.Basket:ship_addr1 }">
+		<MvASSIGN NAME = "l.ship_address:addr2"						VALUE = "{ g.Basket:ship_addr2 }">
+		<MvASSIGN NAME = "l.ship_address:city"						VALUE = "{ g.Basket:ship_city }">
+		<MvASSIGN NAME = "l.ship_address:state"						VALUE = "{ g.Basket:ship_state }">
+		<MvASSIGN NAME = "l.ship_address:zip"						VALUE = "{ g.Basket:ship_zip }">
+		<MvASSIGN NAME = "l.ship_address:cntry"						VALUE = "{ g.Basket:ship_cntry }">
+
+		<MvIF EXPR = "{ [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Basket:cust_id, l.ship_address, l.customershipaddress ) }">
+			<MvASSIGN NAME = "l.address_ship:descrip"				VALUE = "{ l.customershipaddress:descrip }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.address_ship:descrip"				VALUE = "{ g.Basket:ship_addr1 }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.address_ship:id }">
+		<MvASSIGN NAME = "l.address_ship:cust_id"					VALUE = "{ g.Basket:cust_id }">
+		<MvASSIGN NAME = "l.address_ship:fname"						VALUE = "{ g.Basket:ship_fname }">
+		<MvASSIGN NAME = "l.address_ship:lname"						VALUE = "{ g.Basket:ship_lname }">
+		<MvASSIGN NAME = "l.address_ship:email"						VALUE = "{ g.Basket:ship_email }">
+		<MvASSIGN NAME = "l.address_ship:comp"						VALUE = "{ g.Basket:ship_comp }">
+		<MvASSIGN NAME = "l.address_ship:phone"						VALUE = "{ g.Basket:ship_phone }">
+		<MvASSIGN NAME = "l.address_ship:fax"						VALUE = "{ g.Basket:ship_fax }">
+		<MvASSIGN NAME = "l.address_ship:addr1"						VALUE = "{ g.Basket:ship_addr1 }">
+		<MvASSIGN NAME = "l.address_ship:addr2"						VALUE = "{ g.Basket:ship_addr2 }">
+		<MvASSIGN NAME = "l.address_ship:city"						VALUE = "{ g.Basket:ship_city }">
+		<MvASSIGN NAME = "l.address_ship:state"						VALUE = "{ g.Basket:ship_state }">
+		<MvASSIGN NAME = "l.address_ship:zip"						VALUE = "{ g.Basket:ship_zip }">
+		<MvASSIGN NAME = "l.address_ship:cntry"						VALUE = "{ g.Basket:ship_cntry }">
+		<MvASSIGN NAME = "l.address_ship:resdntl"					VALUE = "{ g.Basket:ship_res }">
+
+		<MvIF EXPR = "{ [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Basket:cust_id, l.address_ship, l.customeraddress_ship ) }">
+			<MvASSIGN NAME = "l.address_ship:id" 					VALUE = "{ l.customeraddress_ship:id }">
+
+			<MvIF EXPR = "{ l.customeraddress_ship:resdntl NE l.address_ship:resdntl }">
+				<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Update( l.address_ship ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ [ g.Filename_Admin ].Validate_StandardFields( l.std_fields, l.address_ship ) }">
+				<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Insert( l.address_ship ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.address_ship:fname"						VALUE = "{ g.Basket:ship_fname }">
+		<MvASSIGN NAME = "l.address_ship:lname"						VALUE = "{ g.Basket:ship_lname }">
+		<MvASSIGN NAME = "l.address_ship:email"						VALUE = "{ g.Basket:ship_email }">
+		<MvASSIGN NAME = "l.address_ship:comp"						VALUE = "{ g.Basket:ship_comp }">
+		<MvASSIGN NAME = "l.address_ship:phone"						VALUE = "{ g.Basket:ship_phone }">
+		<MvASSIGN NAME = "l.address_ship:fax"						VALUE = "{ g.Basket:ship_fax }">
+		<MvASSIGN NAME = "l.address_ship:addr1"						VALUE = "{ g.Basket:ship_addr1 }">
+		<MvASSIGN NAME = "l.address_ship:addr2"						VALUE = "{ g.Basket:ship_addr2 }">
+		<MvASSIGN NAME = "l.address_ship:city"						VALUE = "{ g.Basket:ship_city }">
+		<MvASSIGN NAME = "l.address_ship:state"						VALUE = "{ g.Basket:ship_state }">
+		<MvASSIGN NAME = "l.address_ship:zip"						VALUE = "{ g.Basket:ship_zip }">
+		<MvASSIGN NAME = "l.address_ship:cntry"						VALUE = "{ g.Basket:ship_cntry }">
+		<MvASSIGN NAME = "l.address_ship:resdntl"					VALUE = "{ g.Basket:ship_res }">
+
+		<MvIF EXPR = "{ [ g.Filename_Admin ].Validate_StandardFields( l.std_fields, l.address_ship ) }">
+			<MvIF EXPR = "{ l.ship_id NE l.bill_id }">
+				<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Update( l.address_ship ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ l.std_fields:primaddr EQ 'shipping' }">
+					<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Update( l.address_ship ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				<MvELSEIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Basket:cust_id, l.address_ship, l.customeraddress_ship ) }">
+					<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Insert( l.address_ship ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Save_OrderInformation_Update_CustomerAddress_Billing" PARAMETERS = "ship_id, bill_id, std_fields var, address_bill var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.bill_id GT 0 }">
+		<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Load( g.Basket:cust_id, l.bill_id, l.address_bill ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL g.BillDescription }">
+		<MvASSIGN NAME = "l.address_bill:descrip"					VALUE = "{ g.BillDescription }">
+	<MvELSEIF EXPR = "{ NOT l.address_bill:id }">
+		<MvASSIGN NAME = "l.bill_address:fname"						VALUE = "{ g.Basket:bill_fname }">
+		<MvASSIGN NAME = "l.bill_address:lname"						VALUE = "{ g.Basket:bill_lname }">
+		<MvASSIGN NAME = "l.bill_address:email"						VALUE = "{ g.Basket:bill_email }">
+		<MvASSIGN NAME = "l.bill_address:comp"						VALUE = "{ g.Basket:bill_comp }">
+		<MvASSIGN NAME = "l.bill_address:phone"						VALUE = "{ g.Basket:bill_phone }">
+		<MvASSIGN NAME = "l.bill_address:fax"						VALUE = "{ g.Basket:bill_fax }">
+		<MvASSIGN NAME = "l.bill_address:addr1"						VALUE = "{ g.Basket:bill_addr1 }">
+		<MvASSIGN NAME = "l.bill_address:addr2"						VALUE = "{ g.Basket:bill_addr2 }">
+		<MvASSIGN NAME = "l.bill_address:city"						VALUE = "{ g.Basket:bill_city }">
+		<MvASSIGN NAME = "l.bill_address:state"						VALUE = "{ g.Basket:bill_state }">
+		<MvASSIGN NAME = "l.bill_address:zip"						VALUE = "{ g.Basket:bill_zip }">
+		<MvASSIGN NAME = "l.bill_address:cntry"						VALUE = "{ g.Basket:bill_cntry }">
+
+		<MvIF EXPR = "{ [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Basket:cust_id, l.bill_address, l.customerbilladdress ) }">
+			<MvASSIGN NAME = "l.address_bill:descrip"				VALUE = "{ l.customerbilladdress:descrip }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.address_bill:descrip"				VALUE = "{ g.Basket:bill_addr1 }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.address_bill:id }">
+		<MvASSIGN NAME = "l.address_bill:cust_id"					VALUE = "{ g.Basket:cust_id }">
+		<MvASSIGN NAME = "l.address_bill:fname"						VALUE = "{ g.Basket:bill_fname }">
+		<MvASSIGN NAME = "l.address_bill:lname"						VALUE = "{ g.Basket:bill_lname }">
+		<MvASSIGN NAME = "l.address_bill:email"						VALUE = "{ g.Basket:bill_email }">
+		<MvASSIGN NAME = "l.address_bill:comp"						VALUE = "{ g.Basket:bill_comp }">
+		<MvASSIGN NAME = "l.address_bill:phone"						VALUE = "{ g.Basket:bill_phone }">
+		<MvASSIGN NAME = "l.address_bill:fax"						VALUE = "{ g.Basket:bill_fax }">
+		<MvASSIGN NAME = "l.address_bill:addr1"						VALUE = "{ g.Basket:bill_addr1 }">
+		<MvASSIGN NAME = "l.address_bill:addr2"						VALUE = "{ g.Basket:bill_addr2 }">
+		<MvASSIGN NAME = "l.address_bill:city"						VALUE = "{ g.Basket:bill_city }">
+		<MvASSIGN NAME = "l.address_bill:state"						VALUE = "{ g.Basket:bill_state }">
+		<MvASSIGN NAME = "l.address_bill:zip"						VALUE = "{ g.Basket:bill_zip }">
+		<MvASSIGN NAME = "l.address_bill:cntry"						VALUE = "{ g.Basket:bill_cntry }">
+		<MvASSIGN NAME = "l.address_bill:resdntl"					VALUE = 0>
+
+		<MvIF EXPR = "{ [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Basket:cust_id, l.address_bill, l.customeraddress_bill ) }">
+			<MvASSIGN NAME = "l.address_bill:id" 					VALUE = "{ l.customeraddress_bill:id }">
+			<MvASSIGN NAME = "l.address_bill:resdntl" 				VALUE = "{ l.customeraddress_bill:resdntl }">
+		<MvELSE>
+			<MvIF EXPR = "{ [ g.Filename_Admin ].Validate_StandardFields( l.std_fields, l.address_bill ) }">
+				<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Insert( l.address_bill ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.address_bill:fname"						VALUE = "{ g.Basket:bill_fname }">
+		<MvASSIGN NAME = "l.address_bill:lname"						VALUE = "{ g.Basket:bill_lname }">
+		<MvASSIGN NAME = "l.address_bill:email"						VALUE = "{ g.Basket:bill_email }">
+		<MvASSIGN NAME = "l.address_bill:comp"						VALUE = "{ g.Basket:bill_comp }">
+		<MvASSIGN NAME = "l.address_bill:phone"						VALUE = "{ g.Basket:bill_phone }">
+		<MvASSIGN NAME = "l.address_bill:fax"						VALUE = "{ g.Basket:bill_fax }">
+		<MvASSIGN NAME = "l.address_bill:addr1"						VALUE = "{ g.Basket:bill_addr1 }">
+		<MvASSIGN NAME = "l.address_bill:addr2"						VALUE = "{ g.Basket:bill_addr2 }">
+		<MvASSIGN NAME = "l.address_bill:city"						VALUE = "{ g.Basket:bill_city }">
+		<MvASSIGN NAME = "l.address_bill:state"						VALUE = "{ g.Basket:bill_state }">
+		<MvASSIGN NAME = "l.address_bill:zip"						VALUE = "{ g.Basket:bill_zip }">
+		<MvASSIGN NAME = "l.address_bill:cntry"						VALUE = "{ g.Basket:bill_cntry }">
+
+		<MvIF EXPR = "{ [ g.Filename_Admin ].Validate_StandardFields( l.std_fields, l.address_bill ) }">
+			<MvIF EXPR = "{ l.ship_id NE l.bill_id }">
+				<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Update( l.address_bill ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ l.std_fields:primaddr EQ 'billing' }">
+					<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Update( l.address_bill ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				<MvELSEIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Basket:cust_id, l.address_bill, l.customeraddress_bill ) }">
+					<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Insert( l.address_bill ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Save_OrderInformation_Update_Customer_Shipping_FromCustomerAddress" PARAMETERS = "customer var, address var, std_fields var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.std_fields:mode_fname NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_fname" 	VALUE = "{ l.address:fname }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_lname NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_lname" 	VALUE = "{ l.address:lname }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_email NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_email" 	VALUE = "{ l.address:email }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_comp NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_comp" 	VALUE = "{ l.address:comp }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_phone NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_phone" 	VALUE = "{ l.address:phone }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_fax NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_fax" 		VALUE = "{ l.address:fax }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_addr NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_addr1" 	VALUE = "{ l.address:addr1 }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_addr2 NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_addr2" 	VALUE = "{ l.address:addr2 }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_city NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_city" 	VALUE = "{ l.address:city }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_state NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_state" 	VALUE = "{ l.address:state }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_zip NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_zip" 		VALUE = "{ l.address:zip }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_cntry NE 'H' }"> 	<MvASSIGN NAME = "l.customer:ship_cntry" 	VALUE = "{ l.address:cntry }"> 	</MvIF>
+
+	<MvASSIGN NAME = "l.customer:ship_descrip"	VALUE = "{ l.address:descrip }">
+	<MvASSIGN NAME = "l.customer:ship_res"		VALUE = "{ l.address:resdntl }">
+	<MvASSIGN NAME = "l.customer:ship_addr"		VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Save_OrderInformation_Update_Customer_Billing_FromCustomerAddress" PARAMETERS = "customer var, address var, std_fields var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.std_fields:mode_fname NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_fname" 	VALUE = "{ l.address:fname }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_lname NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_lname" 	VALUE = "{ l.address:lname }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_email NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_email" 	VALUE = "{ l.address:email }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_comp NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_comp" 	VALUE = "{ l.address:comp }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_phone NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_phone" 	VALUE = "{ l.address:phone }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_fax NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_fax" 		VALUE = "{ l.address:fax }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_addr NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_addr1" 	VALUE = "{ l.address:addr1 }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_addr2 NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_addr2" 	VALUE = "{ l.address:addr2 }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_city NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_city" 	VALUE = "{ l.address:city }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_state NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_state" 	VALUE = "{ l.address:state }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_zip NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_zip" 		VALUE = "{ l.address:zip }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_fields:mode_cntry NE 'H' }"> 	<MvASSIGN NAME = "l.customer:bill_cntry" 	VALUE = "{ l.address:cntry }"> 	</MvIF>
+
+	<MvASSIGN NAME = "l.customer:bill_descrip"	VALUE = "{ l.address:descrip }">
+	<MvASSIGN NAME = "l.customer:bill_addr"		VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CalculateTax" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Checkout_Session_Verified }">	<MvFUNCTIONRETURN VALUE = "{ UIException( 'checkout_invalid_session' ) }">
+	<MvELSEIF EXPR = "{ g.Basket:order_id EQ 0 }">		<MvFUNCTIONRETURN VALUE = "{ UIException( 'basket_changed' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Reset_Tax( g.Basket:basket_id ) OR
+					NOT [ g.Library_DB ].BasketCharge_Delete_All_Type( g.Basket:basket_id, 'TAX' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ g.Store:tax_mod:module ].TaxModule_Calculate_Basket( g.Store:tax_mod ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CalculateShipping" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Checkout_Session_Verified }">	<MvFUNCTIONRETURN VALUE = "{ UIException( 'checkout_invalid_session' ) }">
+	<MvELSEIF EXPR = "{ g.Basket:order_id EQ 0 }">		<MvFUNCTIONRETURN VALUE = "{ UIException( 'basket_changed' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketCharge_Delete_All_Type( g.Basket:basket_id, 'SHIPPING' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL g.ShippingMethod }">
+		<MvASSIGN NAME = "l.module_code"						VALUE = "{ substring( g.ShippingMethod, 1, ( ':' IN g.ShippingMethod ) - 1 ) }">
+		<MvASSIGN NAME = "l.module_data"						VALUE = "{ substring( g.ShippingMethod, ( ':' IN g.ShippingMethod ) + 1, len( g.ShippingMethod ) ) }">
+
+		<MvIF EXPR = "{ ISNULL l.module_code }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_shipping_method' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_Code( l.module_code, l.module ) OR
+							NOT [ g.Library_DB ].StoreModule_Load( l.module:id, 'shipping', l.storemodule ) OR
+							NOT l.module:active }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_shipping_method' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_SHP_UT ].ShippingMethod_ApplyToBasket_LowLevel( l.module, l.module_data ) }">
+			<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_ShippingMethod_Invalid() }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_shipping_method' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvCOMMENT>
+		|
+		| If a method was not specified, first make sure shipping is not required, then apply the fallback
+		| method.  If shipping is not required for free orders, do not insert any shipping or handling
+		| charges, as the UI will be skipping the OSEL and OPAY screens, and if the order total is not
+		| 0 during the AUTH action an error will be generated.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.total" VALUE = "{ [ g.Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+
+		<MvIF EXPR = "{ ( l.total GT 0 ) AND g.Store:req_ship }">				<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_shipping_method' ) }">
+		<MvELSEIF EXPR = "{ ( l.total EQ 0 ) AND ( NOT g.Store:req_frship ) }">	<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_SHP_UT ].FallbackShippingMethod_Valid_ForBasket() }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'no_shipping_methods' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Feature_SHP_UT ].FallbackShippingMethod_ApplyToBasket() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_SHP_UT ].HandlingCharge_CalculateAndApplyToBasket() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PGR_UT ].Discount_Shipping( g.Basket, l.module, l.module_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_DB ].Basket_Update_Shipping( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_PaymentManipulateShipping" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Checkout_Session_Verified }">	<MvFUNCTIONRETURN VALUE = "{ UIException( 'checkout_invalid_session' ) }">
+	<MvELSEIF EXPR = "{ g.Basket:order_id EQ 0 }">		<MvFUNCTIONRETURN VALUE = "{ UIException( 'basket_changed' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Basket:cust_id AND g.Customer_Session_Verified }">	<MvASSIGN NAME = "l.customer_id" VALUE = "{ g.Basket:cust_id }">
+	<MvELSE>																<MvASSIGN NAME = "l.customer_id" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketCharge_Delete_All_Type( g.Basket:basket_id, 'PAYMENT' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentMethod_Parse_Runtime_WithModule( g.PaymentMethod, l.customer_id, l.module, l.module_data, l.paymentcard, l.paymentcardtype ) }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+	<MvELSEIF EXPR = "{ ISNULL l.module }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.module_ok" VALUE = "{ PaymentModule_Manipulate_Shipping( l.module, l.module_data ) }">
+	<MvIF EXPR = "{ NOT l.module_ok }">
+		<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_PaymentMethod_Invalid() }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AuthorizePayment" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Basket:chksess_id }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_alreadyprocessed' ) }">
+	<MvELSEIF EXPR = "{ NOT g.Checkout_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'checkout_invalid_session' ) }">
+	<MvELSEIF EXPR = "{ g.Basket:order_proc }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_alreadyprocessed' ) }">
+	<MvELSEIF EXPR = "{ ( g.Basket:order_id EQ 0 ) OR 
+						[ g.Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'basket_changed' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_PAY_DB ].PaymentRules_Load_Cached( l.paymentrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].AuthorizationBlacklist_Delete_All_Expired() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ [ g.Library_DB ].AuthorizationBlacklist_Load_IP( s.remote_addr, l.null ) }">
+		<MvEVAL EXPR = "{ [ g.Feature_PAY_UT ].Payment_AuthDelay( l.paymentrules ) }">
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Unable to authorize payment.' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_authorizationfailure' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total"			VALUE = "{ [ g.Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ g.Basket:cust_id AND g.Customer_Session_Verified }">	<MvASSIGN NAME = "l.customer_id" VALUE = "{ g.Basket:cust_id }">
+	<MvELSE>																<MvASSIGN NAME = "l.customer_id" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentMethod_Parse_Runtime_WithMivaPayResponse( g.PaymentMethod, l.customer_id, l.module_code, l.module_data, l.paymentcard, l.paymentcardtype, g.ResponseXML, g.ResponseSignature, l.mivapay_response ) }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentcard:id OR l.paymentcardtype:id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].MivaPay_Validate_Response( l.mivapay_response, 'checkout', g.Basket:chksess_id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.paymentcardtype:id }">
+			<MvASSIGN NAME = "l.paymentcard:id"					VALUE = 0>
+			<MvASSIGN NAME = "l.paymentcard:cust_id"			VALUE = "{ g.Basket:cust_id }">
+			<MvASSIGN NAME = "l.paymentcard:type_id"			VALUE = "{ l.paymentcardtype:id }">
+			<MvASSIGN NAME = "l.paymentcard:type"				VALUE = "{ l.paymentcardtype:type }">
+			<MvASSIGN NAME = "l.paymentcard:mod_code"			VALUE = "{ l.paymentcardtype:mod_code }">
+			<MvASSIGN NAME = "l.paymentcard:meth_code"			VALUE = "{ l.paymentcardtype:meth_code }">
+			<MvASSIGN NAME = "l.paymentcard:token"				VALUE = "{ l.mivapay_response:Token }">
+			<MvASSIGN NAME = "l.paymentcard:addr1"				VALUE = "{ g.Basket:bill_addr1 }">
+			<MvASSIGN NAME = "l.paymentcard:addr2"				VALUE = "{ g.Basket:bill_addr2 }">
+			<MvASSIGN NAME = "l.paymentcard:city"				VALUE = "{ g.Basket:bill_city }">
+			<MvASSIGN NAME = "l.paymentcard:state"				VALUE = "{ g.Basket:bill_state }">
+			<MvASSIGN NAME = "l.paymentcard:zip"				VALUE = "{ g.Basket:bill_zip }">
+			<MvASSIGN NAME = "l.paymentcard:cntry"				VALUE = "{ g.Basket:bill_cntry }">
+			<MvASSIGN NAME = "l.paymentcard:lastused"			VALUE = 0>
+			<MvASSIGN NAME = "l.paymentcard:refcount"			VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'FirstName' ) }">		<MvASSIGN NAME = "l.paymentcard:fname"		VALUE = "{ l.mivapay_response:FirstName }">					</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'LastName' ) }">		<MvASSIGN NAME = "l.paymentcard:lname"		VALUE = "{ l.mivapay_response:LastName }">					</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'ExpirationMonth' ) }">	<MvASSIGN NAME = "l.paymentcard:exp_month"	VALUE = "{ int( l.mivapay_response:ExpirationMonth ) }">	</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'ExpirationYear' ) }">	<MvASSIGN NAME = "l.paymentcard:exp_year"	VALUE = "{ int( l.mivapay_response:ExpirationYear ) }">		</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'CardLastFour' ) }">	<MvASSIGN NAME = "l.paymentcard:lastfour"	VALUE = "{ l.mivapay_response:CardLastFour }">				</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'Address1' ) }">		<MvASSIGN NAME = "l.paymentcard:addr1"		VALUE = "{ l.mivapay_response:Address1 }">					</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'Address2' ) }">		<MvASSIGN NAME = "l.paymentcard:addr2"		VALUE = "{ l.mivapay_response:Address2 }">					</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'City' ) }">			<MvASSIGN NAME = "l.paymentcard:city"		VALUE = "{ l.mivapay_response:City }">						</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'State' ) }">			<MvASSIGN NAME = "l.paymentcard:state"		VALUE = "{ l.mivapay_response:State }">						</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'Zip' ) }">				<MvASSIGN NAME = "l.paymentcard:zip"		VALUE = "{ l.mivapay_response:Zip }">						</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'Country' ) }">			<MvASSIGN NAME = "l.paymentcard:cntry"		VALUE = "{ l.mivapay_response:Country }">					</MvIF>
+
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'TokenCVV' ) }">
+			<MvASSIGN NAME = "l.paymentcard:tokencvvsession"	VALUE = "{ l.mivapay_response:TokenCVV:Session }">
+			<MvASSIGN NAME = "l.paymentcard:tokencvvnonce"		VALUE = "{ l.mivapay_response:TokenCVV:Nonce }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.module_code }">
+		<MvIF EXPR = "{ ( NOT [ g.Library_DB ].Module_Load_Code_Cached( l.module_code, l.module ) OR
+						  NOT [ g.Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule ) OR
+						  NOT l.module:active ) AND ( l.total GT 0 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Feature_PAY_UT ].Payment_reCAPTCHA_Is_Active( l.paymentrules, l.module, l.module_data, l.paymentcard:type_id ) }">
+			<MvASSIGN NAME = "l.recaptcha_response" VALUE = "{ trim( g.g\-recaptcha\-response ) }">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Pay_UT ].Payment_reCAPTCHA_Validate( l.paymentrules, l.recaptcha_response ) }">
+				<MvEVAL EXPR = "{ [ g.Feature_PAY_UT ].Payment_AuthDelay( l.paymentrules ) }">
+
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_invalid_payment' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentcard:token }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.paymentcard:meth_code, l.method_capabilities ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.method_capabilities:mivapay }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+		</MvIF>
+	</MvIF>
+	
+	<MvIF EXPR = "{ ( ( l.total GT 0 ) AND g.Store:req_ship ) OR
+					( ( l.total EQ 0 ) AND g.Store:req_frship ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketCharge_Count_Type( g.Basket:basket_id, 'SHIPPING' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Unable to authorize payment: Missing Required Shipping Information' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_authorizationfailure' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Store:req_tax }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketCharge_Count_Type( g.Basket:basket_id, 'TAX' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Unable to authorize payment: Missing Required Tax Information' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_authorizationfailure' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.total EQ 0 }">
+		<MvASSIGN NAME = "l.pay_id"					VALUE = 0>
+		<MvASSIGN NAME = "l.pay_data"				VALUE = "">
+		<MvASSIGN NAME = "l.paymentcard:id"			VALUE = 0>
+
+		<MvASSIGN NAME = "l.payment_secure:id"		VALUE = 0>
+		<MvASSIGN NAME = "l.payment_secure:key"		VALUE = "">
+		<MvASSIGN NAME = "l.payment_secure:data"	VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Runtime_Inventory_Adjust_AtCheckout( g.Basket, l.inventory_available ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT l.inventory_available }">																	<MvFUNCTIONRETURN VALUE = "{ UIException( 'inventory_unavailable_atcheckout' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ ISNULL l.module_code }">
+		<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+	<MvELSE>
+		<MvCOMMENT>
+		|
+		| If enabled, validate the authorization token
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.paymentrules:use_token }">
+			<MvASSIGN NAME = "l.auth_token"			VALUE = "{ g.Basket:auth_token }">
+			<MvASSIGN NAME = "g.Basket:auth_token"	VALUE = "{ MakeSessionID() }">
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Update_AuthorizationToken( g.Basket ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ g.PaymentAuthorizationToken NE l.auth_token }">
+				<MvEVAL EXPR = "{ [ g.Feature_PAY_UT ].Payment_AuthDelay( l.paymentrules ) }">
+
+				<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'Unable to authorize payment: Invalid authorization token.' ) }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_authorizationfailure' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Validate input with the selected payment module/method
+		|
+		</MvCOMMENT>
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Error_Clear() }">
+
+		<MvIF EXPR = "{ l.paymentcard:type_id }">		<MvASSIGN NAME = "l.pctype_id" VALUE = "{ l.paymentcard:type_id }">
+		<MvELSE>										<MvASSIGN NAME = "l.pctype_id" VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentMethod_Valid_ForBasket( l.module, l.module_data, l.pctype_id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.paymentcard:token }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Validate( l.module, l.module_data ) }">
+				<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_PaymentMethod_Invalid() }">
+					<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_invalid_payment' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Decrypt existing split payment data, if present
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.split_data"		VALUE = "">
+		<MvASSIGN NAME = "l.remaining"		VALUE = "{ l.total }">
+
+		<MvIF EXPR = "{ NOT ISNULL g.SplitPaymentData }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Decrypt_SplitPaymentData( g.SplitPaymentData, l.split_data ) }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.split" ARRAY = "l.split_data">
+				<MvIF EXPR = "{ l.split:amount LE 0 }">
+					<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">					
+				</MvIF>
+
+				<MvASSIGN NAME = "l.remaining"	VALUE = "{ [ g.Library_Utilities ].IEEE754_Normalize( 2, l.remaining - l.split:amount ) }">
+			</MvFOREACH>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.remaining LE 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| If the amount field is present, and is less than the remaining total, perform
+		| a partial payment.
+		|
+		| Otherwise, finalize the existing split payments (if any), then perform a normal authorization for the remaining
+		| amount.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ISNULL g.Amount }">
+			<MvASSIGN NAME = "g.Amount"					VALUE = "{ trim( g.Amount ) }">
+
+			<MvIF EXPR = "{ ( NOT [ g.Filename_Admin ].Validate_Currency_NonNegative_Required( g.Amount ) ) OR
+							( g.Amount LE 0 ) OR ( g.Amount GT l.remaining ) }">
+				<MvASSIGN NAME = "g.Amount_Invalid"		VALUE = 1>
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'order_invalid_payment' ) }">
+			<MvELSEIF EXPR = "{ l.module:api_ver LT 9.03 }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "g.Amount"					VALUE = "{ g.Amount ROUND 2 }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.capabilities ) }">
+
+			<MvIF EXPR = "{ NOT l.capabilities:split }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.new_split:module_id"	VALUE = "{ l.module:id }">
+			<MvASSIGN NAME = "l.new_split:amount"		VALUE = "{ g.Amount }">
+			<MvASSIGN NAME = "l.new_split:module_data"	VALUE = "{ l.module_data }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_Runtime_SplitPayment_Prepare( l.module, l.new_split:module_data, l.new_split:amount, l.new_split:payment_data ) }">
+				<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_PaymentMethod_Invalid() }">
+					<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PAY_UT ].Payment_Process_RuntimeAuthorizationFailure( g.Basket, l.module, l.new_split:module_data, l.new_split:amount, 'order_authorizationfailure' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_insert( l.split_data, l.new_split, -1 ) }">
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Encrypt_SplitPaymentData( l.split_data, g.SplitPaymentData ) }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_payment_method' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ UIException( 'additional_payment' ) }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Perform Runtime Inventory Adjustment at Checkout
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Runtime_Inventory_Adjust_AtCheckout( g.Basket, l.inventory_available ) OR
+						NOT l.inventory_available }">
+			<MvASSIGN NAME = "l.error_code"			VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.error_message"		VALUE = "{ g.Error_Message }">
+
+			<MvIF EXPR = "{ NOT ISNULL l.paymentcard:token AND NOT l.paymentcard:id AND NOT l.mivapay_response:StoreToken }">
+				<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Feature_PAY_UT ].MivaPay_PaymentCard_Delete_Token( l.paymentcard:token ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.inventory_available }">
+				<MvFUNCTIONRETURN VALUE = "{ UIException( 'inventory_unavailable_atcheckout' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( l.error_code, l.error_message ) }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Perform authorizations, unwind and void in the event of a failure
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "g.UI_Exception"			VALUE = 0>
+		<MvASSIGN NAME = "l.result"					VALUE = 1>
+
+		<MvCOMMENT>
+		|
+		| Process split payments
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH ITERATOR = "l.split" ARRAY = "l.split_data" INDEX = "l.last_processed_split">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID( l.split:module_id, l.split:module ) }">
+				<MvASSIGN NAME = "l.result"			VALUE = "{ UIException( 'invalid_payment_method' ) }">
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.split:module:module ].PaymentModule_Runtime_SplitPayment_Authorize( l.split:module, l.split:module_data, l.split:amount, l.split:payment_data ) }">
+				<MvASSIGN NAME = "l.result"			VALUE = "{ [ g.Feature_PAY_UT ].Payment_Process_RuntimeAuthorizationFailure( g.Basket, l.split:module, l.split:module_data, l.split:amount, 'order_split_authorizationfailure' ) }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvWHILE EXPR = "{ ( NOT g.UI_Exception ) AND l.result }">
+			<MvCOMMENT>
+			|
+			| Perform final authorization
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.module:api_ver GE 5.60 }">
+				<MvIF EXPR = "{ ( l.module:api_ver GE 9.06 ) AND ( NOT ISNULL l.paymentcard:token ) }">
+					<MvASSIGN NAME = "l.result"		VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Runtime_Authorize_PaymentCard( l.module, l.module_data, l.paymentcard, l.remaining ) }">
+				<MvELSE>
+					<MvASSIGN NAME = "l.result"		VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Runtime_Authorize( l.module, l.module_data, l.remaining ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT l.result }">
+					<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_PaymentMethod_Invalid() }">
+						<MvASSIGN NAME = "l.result"	VALUE = "{ UIException( 'invalid_payment_method' ) }">
+						<MvWHILESTOP>
+					</MvIF>
+					
+					<MvIF EXPR = "{ l.paymentcard:id }">	<MvASSIGN NAME = "l.result"		VALUE = "{ [ g.Feature_PAY_UT ].Payment_Process_RuntimeAuthorizationFailure( g.Basket, l.module, l.module_data, l.remaining, 'order_authorizationfailure_storedcard' ) }">
+					<MvELSE>								<MvASSIGN NAME = "l.result"		VALUE = "{ [ g.Feature_PAY_UT ].Payment_Process_RuntimeAuthorizationFailure( g.Basket, l.module, l.module_data, l.remaining, 'order_authorizationfailure' ) }">
+					</MvIF>
+
+					<MvWHILESTOP>
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_Authorize( l.module, l.module_data, l.remaining, l.pay_data, l.secure_data ) }">
+					<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_PaymentMethod_Invalid() }">
+						<MvASSIGN NAME = "l.result"	VALUE = "{ UIException( 'invalid_payment_method' ) }">
+						<MvWHILESTOP>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.result"		VALUE = "{ [ g.Feature_PAY_UT ].Payment_Process_RuntimeAuthorizationFailure( g.Basket, l.module, l.module_data, l.remaining, 'order_authorizationfailure' ) }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Create( g.Basket:order_id,
+																		  0,
+																		  1, 
+																		  g.Basket:order_id,
+																		  l.remaining, l.remaining,
+																		  l.module:id,
+																		  l.pay_data,
+																		  l.secure_data ) }">
+					<MvASSIGN NAME = "l.result"		VALUE = 0>
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.secure_data"	VALUE = "">
+			</MvIF>
+
+			<MvWHILESTOP>
+		</MvWHILE>
+
+		<MvIF EXPR = "{ g.UI_Exception OR ( NOT l.result ) }">
+			<MvCOMMENT>
+			|
+			| Roll back any processed split payments for this order
+			|
+			</MvCOMMENT>
+
+			<MvFOREACH ITERATOR = "l.split" ARRAY = "l.split_data" FIRST = 1 LAST = "{ l.last_processed_split - 1 }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.split:module:module ].PaymentModule_Runtime_SplitPayment_Rollback( l.split:module, l.split:module_data, l.split:amount, l.split:payment_data ) }">
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT ISNULL l.paymentcard:token AND NOT l.paymentcard:id AND NOT l.mivapay_response:StoreToken }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Feature_PAY_UT ].MivaPay_PaymentCard_Delete_Token( l.paymentcard:token ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Feature_INV_RT ].Runtime_Inventory_Restore_AtCheckout( g.Basket ) }">
+
+			<MvFUNCTIONRETURN VALUE = "{ l.result }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].ShopAsCustomer_Runtime_Session_Active( l.shopascustomersession ) }">
+		<MvASSIGN NAME = "g.Order:source"		VALUE = "shopper">
+		<MvASSIGN NAME = "g.Order:source_id"	VALUE = "{ g.Basket:cust_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Order:source"		VALUE = "shopascustomer">
+		<MvASSIGN NAME = "g.Order:source_id"	VALUE = "{ l.shopascustomersession:user_id }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].v56_Order_Create( g.Basket, l.total, g.Order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_PaymentOperation( 'MER-00011', 'Authorize', g.Basket:order_id, l.module:code, l.total ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_UT ].WishList_Process_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Insert/Update Customer Payment Card or Order Payment Card
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.paymentcard:token }">
+		<MvIF EXPR = "{ l.paymentcard:id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Update( l.paymentcard ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Update_LastUsed( l.paymentcard ) }">
+		<MvELSEIF EXPR = "{ l.mivapay_response:StoreToken AND g.Customer_Session_Verified AND g.Basket:cust_id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Insert( l.paymentcard ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Update_LastUsed( l.paymentcard ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load( l.mivapaysettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ l.mivapaysettings:ordr_cards }">
+			<MvASSIGN NAME = "l.orderpaymentcard" 			VALUE = "">
+			<MvASSIGN NAME = "l.orderpaymentcard:fname" 	VALUE = "{ l.paymentcard:fname }">
+			<MvASSIGN NAME = "l.orderpaymentcard:lname" 	VALUE = "{ l.paymentcard:lname }">
+			<MvASSIGN NAME = "l.orderpaymentcard:exp_month" VALUE = "{ l.paymentcard:exp_month }">
+			<MvASSIGN NAME = "l.orderpaymentcard:exp_year" 	VALUE = "{ l.paymentcard:exp_year }">
+			<MvASSIGN NAME = "l.orderpaymentcard:lastfour" 	VALUE = "{ l.paymentcard:lastfour }">
+			<MvASSIGN NAME = "l.orderpaymentcard:addr1" 	VALUE = "{ l.paymentcard:addr1 }">
+			<MvASSIGN NAME = "l.orderpaymentcard:addr2" 	VALUE = "{ l.paymentcard:addr2 }">
+			<MvASSIGN NAME = "l.orderpaymentcard:city" 		VALUE = "{ l.paymentcard:city }">
+			<MvASSIGN NAME = "l.orderpaymentcard:state" 	VALUE = "{ l.paymentcard:state }">
+			<MvASSIGN NAME = "l.orderpaymentcard:zip" 		VALUE = "{ l.paymentcard:zip }">
+			<MvASSIGN NAME = "l.orderpaymentcard:cntry" 	VALUE = "{ l.paymentcard:cntry }">
+			<MvASSIGN NAME = "l.orderpaymentcard:token" 	VALUE = "{ l.paymentcard:token }">
+			<MvASSIGN NAME = "l.orderpaymentcard:type_id" 	VALUE = "{ l.paymentcard:type_id }">
+			<MvASSIGN NAME = "l.orderpaymentcard:expires" 	VALUE = "{ s.time_t + ( l.mivapaysettings:ordr_days * 60 * 60 * 24 ) }">
+			<MvASSIGN NAME = "l.orderpaymentcard:refcount" 	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCard_Insert( l.orderpaymentcard ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCardXOrder_Insert( l.orderpaymentcard, g.Order ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_PAY_UT ].MivaPay_PaymentCard_Delete_Token( l.paymentcard:token ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Insert Subscriptions
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.subscription_basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_WithSubscriptionTerm( g.Basket:basket_id, l.subscription_basketitems ) }">
+		<MvIF EXPR = "{ l.paymentcard:id }">
+			<MvASSIGN NAME = "l.subscription:custpc_id"	VALUE = "{ l.paymentcard:id }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.subscription:custpc_id"	VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subscription:id"			VALUE = 0>
+		<MvASSIGN NAME = "l.subscription:order_id"		VALUE = "{ g.Order:id }">
+		<MvASSIGN NAME = "l.subscription:line_id"		VALUE = "{ l.basketitem:line_id }">
+		<MvASSIGN NAME = "l.subscription:cust_id"		VALUE = "{ g.Order:cust_id }">
+		<MvASSIGN NAME = "l.subscription:product_id"	VALUE = "{ l.basketitem:productsubscriptionterm:product_id }">
+		<MvASSIGN NAME = "l.subscription:quantity"		VALUE = "{ l.basketitem:quantity }">
+		<MvASSIGN NAME = "l.subscription:subterm_id"	VALUE = "{ l.basketitem:productsubscriptionterm:id }">
+		<MvASSIGN NAME = "l.subscription:firstdate"		VALUE = "{ g.Order:orderdate }">
+		<MvASSIGN NAME = "l.subscription:lastdate"		VALUE = "{ g.Order:orderdate }">
+		<MvASSIGN NAME = "l.subscription:nextdate"		VALUE = "{ [ g.Feature_SUB_UT ].Subscription_CalculateNextDate( l.subscription, l.basketitem:productsubscriptionterm ) }">
+
+		<MvIF EXPR = "{ l.basketitem:productsubscriptionterm:term EQ 0 }">	<MvASSIGN NAME = "l.subscription:termrem" VALUE = 0>
+		<MvELSE>															<MvASSIGN NAME = "l.subscription:termrem" VALUE = "{ l.basketitem:productsubscriptionterm:term - 1 }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subscription:termproc"		VALUE = 1>
+		<MvASSIGN NAME = "l.subscription:status"		VALUE = "A">
+		<MvASSIGN NAME = "l.subscription:message"		VALUE = "">
+		<MvASSIGN NAME = "l.subscription:cncldate"		VALUE = 0>
+
+		<MvASSIGN NAME = "l.ship_address:cust_id"		VALUE = "{ g.Order:cust_id }">
+		<MvASSIGN NAME = "l.ship_address:fname"			VALUE = "{ g.Order:ship_fname }">
+		<MvASSIGN NAME = "l.ship_address:lname"			VALUE = "{ g.Order:ship_lname }">
+		<MvASSIGN NAME = "l.ship_address:email"			VALUE = "{ g.Order:ship_email }">
+		<MvASSIGN NAME = "l.ship_address:comp"			VALUE = "{ g.Order:ship_comp }">
+		<MvASSIGN NAME = "l.ship_address:phone"			VALUE = "{ g.Order:ship_phone }">
+		<MvASSIGN NAME = "l.ship_address:fax"			VALUE = "{ g.Order:ship_fax }">
+		<MvASSIGN NAME = "l.ship_address:addr1"			VALUE = "{ g.Order:ship_addr1 }">
+		<MvASSIGN NAME = "l.ship_address:addr2"			VALUE = "{ g.Order:ship_addr2 }">
+		<MvASSIGN NAME = "l.ship_address:city"			VALUE = "{ g.Order:ship_city }">
+		<MvASSIGN NAME = "l.ship_address:state"			VALUE = "{ g.Order:ship_state }">
+		<MvASSIGN NAME = "l.ship_address:zip"			VALUE = "{ g.Order:ship_zip }">
+		<MvASSIGN NAME = "l.ship_address:cntry"			VALUE = "{ g.Order:ship_cntry }">
+		<MvASSIGN NAME = "l.ship_address:resdntl"		VALUE = "{ g.Order:ship_res }">
+
+		<MvIF EXPR = "{ [ g.Feature_CUS_DB ].CustomerAddress_Load_AddressFields( g.Order:cust_id, l.ship_address, l.existing_address ) }">
+			<MvASSIGN NAME = "l.subscription:addr_id"	VALUE = "{ l.existing_address:id }">
+		<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].CustomerAddress_Insert( l.ship_address ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.subscription:addr_id"	VALUE = "{ l.ship_address:id }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subscription:ship_id"		VALUE = "{ g.Order:ship_id }">
+		<MvASSIGN NAME = "l.subscription:ship_data"		VALUE = "{ g.Order:ship_data }">
+
+		<MvASSIGN NAME = "l.subscription:tax"			VALUE = 0>
+		<MvASSIGN NAME = "l.subscription:shipping"		VALUE = 0>
+		<MvASSIGN NAME = "l.subscription:subtotal"		VALUE = 0>
+		<MvASSIGN NAME = "l.subscription:total"			VALUE = 0>
+		<MvASSIGN NAME = "l.subscription:option_count"	VALUE = "{ [ g.Feature_SUB_DB ].SubscriptionOptionList_Load_Basket_Line( l.basketitem:basket_id, l.basketitem:line_id, l.subscription:options ) }">
+
+		<MvASSIGN NAME = "l.subscription_count"			VALUE = "{ miva_array_insert( l.subscriptions, l.subscription, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.subscription_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].SubscriptionList_Insert( l.subscriptions, l.subscription_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.subscription" ARRAY = "l.subscriptions" COUNT = "{ l.subscription_count }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Load_Line( g.Order:id, l.subscription:line_id, l.orderitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.orderitem:subscrp_id"	VALUE = "{ l.subscription:id }">
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Update( l.orderitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Feature_SUB_UT ].Subscription_Recalculate_Totals( l.subscription ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Reset_Contents( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_GFT_UT ].GiftCertificateSales_Process_Order( g.Order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_DDL_UT ].DigitalDownload_Process_Order( g.Order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Order( g.Order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_Status( g.Order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvDO FILE = "{ g.Module_Store_Module_Tax }" NAME = "l.tax_process" VALUE = "{ TaxModule_ProcessOrder( g.Store_Module_Tax ) }">
+	<MvIF EXPR = "{ NOT l.tax_process }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvDO FILE = "{ g.Library_DB }" NAME = "l.storemod_count" VALUE = "{ StoreModuleList_Load_Feature( 'fulfill', l.storemodule ) }">
+	<MvASSIGN NAME = "l.smod_pos" VALUE = 1>
+	<MvWHILE EXPR = "{ l.smod_pos LE l.storemod_count }">
+		<MvDO FILE = "{ g.Module_Root $ l.storemodule[ l.smod_pos ]:module }" NAME = "l.fulfillment_process" VALUE = "{ FulfillmentModule_ProcessOrder( l.storemodule[ l.smod_pos ], g.Order ) }">
+		<MvIF EXPR = "{ NOT l.fulfillment_process }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.smod_pos" VALUE = "{ l.smod_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UIException" PARAMETERS = "code" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.UI_Exception"						VALUE = 1>
+	<MvASSIGN NAME = "g.Session:cache:last_ui_exception"	VALUE = "{ l.code }">
+
+	<MvFOREACH ITERATOR = "l.logmodule" ARRAY = "g.LogModules" COUNT = "{ g.LogModule_Count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.logmodule:module ].LogModule_UIException( l.logmodule, l.code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.systemmodule" ARRAY = "g.SystemModules" COUNT = "{ g.SystemModule_Count }">
+		<MvASSIGN NAME = "l.result"							VALUE = "{ [ g.Module_Root $ l.systemmodule:module ].SystemModule_UIException( l.systemmodule, l.code ) }">
+		<MvIF EXPR = "{ l.result EQ -1 }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ l.result EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Store_Module_UI ].StoreUIModule_Exception( g.Store_Module_UI, l.code ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v56_Address_Compatibility" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ len( g.ShipAddress ) EQ 0 }">
+		<MvIF EXPR = "{ len( g.ShipAddress2 ) EQ 0 }">
+			<MvASSIGN NAME = "g.ShipAddress"	VALUE = "{ g.ShipAddress1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.ShipAddress"	VALUE = "{ g.ShipAddress1 $ ' ' $ g.ShipAddress2 }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ len( g.BillAddress ) EQ 0 }">
+		<MvIF EXPR = "{ len( g.BillAddress2 ) EQ 0 }">
+			<MvASSIGN NAME = "g.BillAddress"	VALUE = "{ g.BillAddress1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.BillAddress"	VALUE = "{ g.BillAddress1 $ ' ' $ g.BillAddress2 }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>

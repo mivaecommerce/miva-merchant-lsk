@@ -1,0 +1,855 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-URI-DTB-
+| Next Error Code: 160
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URI_CreateDataFiles" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE URISettings
+						  (
+							source		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )	$ ',
+							module_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							urlprefix	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							surlprefix	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							def_store	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							def_screen	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							pg_templ	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							pg_gen		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							pg_regen	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 20 )	$ ',
+							pg_delete	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							ct_templ	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							ct_gen		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							ct_regen	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 20 )	$ ',
+							ct_delete	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							pr_templ	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							pr_gen		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							pr_regen	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 20 )	$ ',
+							pr_delete	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.urisettings:source"			VALUE = "long">
+	<MvASSIGN NAME = "l.urisettings:module_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.urisettings:urlprefix"		VALUE = "">
+	<MvASSIGN NAME = "l.urisettings:surlprefix"		VALUE = "">
+	<MvASSIGN NAME = "l.urisettings:def_store"		VALUE = "">
+	<MvASSIGN NAME = "l.urisettings:def_screen"		VALUE = "NTFD">
+	<MvASSIGN NAME = "l.urisettings:pg_templ"		VALUE = "{ '/<mvt:if expr="NOT ISNULL l.settings:page:slugified_title"><mvt:eval expr="tolower( l.settings:page:slugified_title )" /><mvt:else><mvt:eval expr="tolower( l.settings:page:slugified_name )" /></mvt:if>.html' }">
+	<MvASSIGN NAME = "l.urisettings:pg_gen"			VALUE = 1>
+	<MvASSIGN NAME = "l.urisettings:pg_regen"		VALUE = "">
+	<MvASSIGN NAME = "l.urisettings:pg_delete"		VALUE = 1>
+	<MvASSIGN NAME = "l.urisettings:ct_templ"		VALUE = "{ '/<mvt:if expr="NOT ISNULL l.settings:category:slugified_page_title"><mvt:eval expr="tolower( l.settings:category:slugified_page_title )" /><mvt:else><mvt:eval expr="tolower( l.settings:category:slugified_name )" /></mvt:if>.html' }">
+	<MvASSIGN NAME = "l.urisettings:ct_gen"			VALUE = 1>
+	<MvASSIGN NAME = "l.urisettings:ct_regen"		VALUE = "">
+	<MvASSIGN NAME = "l.urisettings:ct_delete"		VALUE = 1>
+	<MvASSIGN NAME = "l.urisettings:pr_templ"		VALUE = "{ '/<mvt:if expr="NOT ISNULL l.settings:product:slugified_page_title"><mvt:eval expr="tolower( l.settings:product:slugified_page_title )" /><mvt:else><mvt:eval expr="tolower( l.settings:product:slugified_name )" /></mvt:if>.html' }">
+	<MvASSIGN NAME = "l.urisettings:pr_gen"			VALUE = 1>
+	<MvASSIGN NAME = "l.urisettings:pr_regen"		VALUE = "">
+	<MvASSIGN NAME = "l.urisettings:pr_delete"		VALUE = 1>
+
+	<MvIF EXPR = "{ NOT URISettings_Insert( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create initial generation templates
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"						VALUE = "{ smkdir( g.Module_Root $ 'templates/uri' ) }">
+
+	<MvIF EXPR = "{ NOT miva_template_compile_itemlist( l.null, l.urisettings:pg_templ, l.null, g.Module_Root $ 'templates/uri/page.mvc', l.compile_error ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00019', l.compile_error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_template_compile_itemlist( l.null, l.urisettings:ct_templ, l.null, g.Module_Root $ 'templates/uri/category.mvc', l.compile_error ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00020', l.compile_error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_template_compile_itemlist( l.null, l.urisettings:pr_templ, l.null, g.Module_Root $ 'templates/uri/product.mvc', l.compile_error ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00021', l.compile_error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE URIs
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							uri			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							store_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							screen		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							page_code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							cat_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							feed_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							canonical	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							status		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME = "Merchant"
+			 QUERY = "CREATE UNIQUE INDEX URIs_1 ON URIs ( id )">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME = "Merchant"
+			 QUERY = "CREATE UNIQUE INDEX URIs_2 ON URIs ( uri )">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME = "Merchant"
+			 QUERY = "CREATE INDEX URIs_3 ON URIs ( store_id, screen, page_code, cat_id, product_id, feed_id, canonical )">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].DomainKey_Insert( 'URIs' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_DeleteDataFiles" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "DROP TABLE URIs">
+	<MvQUERY NAME = "Merchant" QUERY = "DROP TABLE URISettings">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| URISettings
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URISettings_Read" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.urisettings:source"		VALUE = "{ URISettings.d.source }">
+	<MvASSIGN NAME = "l.urisettings:module_id"	VALUE = "{ URISettings.d.module_id }">
+	<MvASSIGN NAME = "l.urisettings:urlprefix"	VALUE = "{ URISettings.d.urlprefix }">
+	<MvASSIGN NAME = "l.urisettings:surlprefix"	VALUE = "{ URISettings.d.surlprefix }">
+	<MvASSIGN NAME = "l.urisettings:def_store"	VALUE = "{ URISettings.d.def_store }">
+	<MvASSIGN NAME = "l.urisettings:def_screen"	VALUE = "{ URISettings.d.def_screen }">
+	<MvASSIGN NAME = "l.urisettings:pg_templ"	VALUE = "{ URISettings.d.pg_templ }">
+	<MvASSIGN NAME = "l.urisettings:pg_gen"		VALUE = "{ URISettings.d.pg_gen }">
+	<MvASSIGN NAME = "l.urisettings:pg_regen"	VALUE = "{ URISettings.d.pg_regen }">
+	<MvASSIGN NAME = "l.urisettings:pg_delete"	VALUE = "{ URISettings.d.pg_delete }">
+	<MvASSIGN NAME = "l.urisettings:ct_templ"	VALUE = "{ URISettings.d.ct_templ }">
+	<MvASSIGN NAME = "l.urisettings:ct_gen"		VALUE = "{ URISettings.d.ct_gen }">
+	<MvASSIGN NAME = "l.urisettings:ct_regen"	VALUE = "{ URISettings.d.ct_regen }">
+	<MvASSIGN NAME = "l.urisettings:ct_delete"	VALUE = "{ URISettings.d.ct_delete }">
+	<MvASSIGN NAME = "l.urisettings:pr_templ"	VALUE = "{ URISettings.d.pr_templ }">
+	<MvASSIGN NAME = "l.urisettings:pr_gen"		VALUE = "{ URISettings.d.pr_gen }">
+	<MvASSIGN NAME = "l.urisettings:pr_regen"	VALUE = "{ URISettings.d.pr_regen }">
+	<MvASSIGN NAME = "l.urisettings:pr_delete"	VALUE = "{ URISettings.d.pr_delete }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URISettings_Insert" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "INSERT INTO URISettings
+					   ( source, module_id, urlprefix, surlprefix, def_store, def_screen, pg_templ, pg_gen, pg_regen, pg_delete, ct_templ, ct_gen, ct_regen, ct_delete, pr_templ, pr_gen, pr_regen, pr_delete )
+					   VALUES
+					   ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )"
+			 FIELDS	= "l.urisettings:source, l.urisettings:module_id, l.urisettings:urlprefix, l.urisettings:surlprefix, l.urisettings:def_store, l.urisettings:def_screen,
+			 		   l.urisettings:pg_templ, l.urisettings:pg_gen, l.urisettings:pg_regen, l.urisettings:pg_delete,
+			 		   l.urisettings:ct_templ, l.urisettings:ct_gen, l.urisettings:ct_regen, l.urisettings:ct_delete,
+			 		   l.urisettings:pr_templ, l.urisettings:pr_gen, l.urisettings:pr_regen, l.urisettings:pr_delete">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URISettings_Update" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT URISettings_Update_LowLevel( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:urisettings_load_cached" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URISettings_Update_LowLevel" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "UPDATE URISettings
+					   SET
+						source		= ?,
+						module_id	= ?,
+						urlprefix	= ?,
+						surlprefix	= ?,
+						def_store	= ?,
+						def_screen	= ?,
+						pg_templ	= ?,
+						pg_gen		= ?,
+						pg_regen	= ?,
+						pg_delete	= ?,
+						ct_templ	= ?,
+						ct_gen		= ?,
+						ct_regen	= ?,
+						ct_delete	= ?,
+						pr_templ	= ?,
+						pr_gen		= ?,
+						pr_regen	= ?,
+						pr_delete	= ?"
+			 FIELDS	= "l.urisettings:source, l.urisettings:module_id, l.urisettings:urlprefix, l.urisettings:surlprefix, l.urisettings:def_store, l.urisettings:def_screen,
+			 		   l.urisettings:pg_templ, l.urisettings:pg_gen, l.urisettings:pg_regen, l.urisettings:pg_delete,
+			 		   l.urisettings:ct_templ, l.urisettings:ct_gen, l.urisettings:ct_regen, l.urisettings:ct_delete,
+			 		   l.urisettings:pr_templ, l.urisettings:pr_gen, l.urisettings:pr_regen, l.urisettings:pr_delete">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URISettings_Load" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URISettings"
+				QUERY	= "SELECT
+							u.*,
+							m.code		AS module_code,
+							m.name		AS module_name,
+							m.provider	AS module_provider,
+							m.api_ver	AS module_api_ver,
+							m.version	AS module_version,
+							m.module	AS module_module,
+							m.refcount	AS module_refcount,
+							m.active	AS module_active,
+							m.priority	AS module_priority,
+							mxf.feature	AS module_feature
+						   FROM
+						   	URISettings u
+						   	LEFT OUTER JOIN Modules m ON m.id = u.module_id AND m.active = 1
+						   	LEFT OUTER JOIN ModuleXFeature mxf ON mxf.module_id = m.id AND mxf.feature = 'uri'">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URISettings_Read( l.urisettings ) }">
+
+	<MvIF EXPR = "{ ISNULL URISettings.d.module_feature }">
+		<MvASSIGN NAME = "l.urisettings:module"				VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.urisettings:module"				VALUE = "">
+		<MvASSIGN NAME = "l.urisettings:module:id"			VALUE = "{ URISettings.d.module_id }">
+		<MvASSIGN NAME = "l.urisettings:module:code"		VALUE = "{ URISettings.d.module_code }">
+		<MvASSIGN NAME = "l.urisettings:module:name"		VALUE = "{ URISettings.d.module_name }">
+		<MvASSIGN NAME = "l.urisettings:module:provider"	VALUE = "{ URISettings.d.module_provider }">
+		<MvASSIGN NAME = "l.urisettings:module:api_ver"		VALUE = "{ URISettings.d.module_api_ver }">
+		<MvASSIGN NAME = "l.urisettings:module:version"		VALUE = "{ URISettings.d.module_version }">
+		<MvASSIGN NAME = "l.urisettings:module:module"		VALUE = "{ URISettings.d.module_module }">
+		<MvASSIGN NAME = "l.urisettings:module:refcount"	VALUE = "{ URISettings.d.module_refcount }">
+		<MvASSIGN NAME = "l.urisettings:module:active"		VALUE = "{ URISettings.d.module_active }">
+		<MvASSIGN NAME = "l.urisettings:module:priority"	VALUE = "{ URISettings.d.module_priority }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URISettings">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URISettings_Load_Cached" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:urisettings_load_cached">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ URISettings_Load( l.cache:urisettings ) }">
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.urisettings"					VALUE = "{ l.cache:urisettings }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| URIs
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URI_Read" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri:id"			VALUE = "{ URIs.d.id }">
+	<MvASSIGN NAME = "l.uri:uri"		VALUE = "{ URIs.d.uri }">
+	<MvASSIGN NAME = "l.uri:screen"		VALUE = "{ URIs.d.screen }">
+	<MvASSIGN NAME = "l.uri:store_id"	VALUE = "{ URIs.d.store_id }">
+	<MvASSIGN NAME = "l.uri:page_code"	VALUE = "{ URIs.d.page_code }">
+	<MvASSIGN NAME = "l.uri:cat_id"		VALUE = "{ URIs.d.cat_id }">
+	<MvASSIGN NAME = "l.uri:product_id"	VALUE = "{ URIs.d.product_id }">
+	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = "{ URIs.d.feed_id }">
+	<MvASSIGN NAME = "l.uri:canonical"	VALUE = "{ URIs.d.canonical }">
+	<MvASSIGN NAME = "l.uri:status"		VALUE = "{ URIs.d.status }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_ID" PARAMETERS = "id, existing_uri var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "SELECT * FROM URIs WHERE id = ?"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ URIs.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-URI-DTB-00010' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Read( l.existing_uri ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_URI" PARAMETERS = "uri, existing_uri var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "SELECT * FROM URIs WHERE uri = ?"
+				FIELDS	= "l.uri">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ URIs.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-URI-DTB-00012' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Read( l.existing_uri ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_Item_Canonical" PARAMETERS = "uri var, canonical_uri var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.uri:store_id }">	<MvASSIGN NAME = "l.uri:store_id"	VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:cat_id }">		<MvASSIGN NAME = "l.uri:cat_id"		VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:product_id }">	<MvASSIGN NAME = "l.uri:product_id"	VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:feed_id }">	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0> </MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "{ 'SELECT
+								*
+							  FROM
+								URIs
+							  WHERE
+								screen		= ?	AND
+								store_id	= ?	AND
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( '?' ) $ ' AND
+								cat_id		= ?	AND
+								product_id	= ?	AND
+								feed_id		= ?	AND
+								canonical	= 1' }"
+				FIELDS	= "l.uri:screen, l.uri:store_id, l.uri:page_code, l.uri:cat_id, l.uri:product_id, l.uri:feed_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ URIs.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-URI-DTB-00014' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Read( l.canonical_uri ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_Screen_Canonical" PARAMETERS = "screen, canonical_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri:screen"		VALUE = "{ l.screen }">
+	<MvASSIGN NAME = "l.uri:store_id"	VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"	VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Load_Item_Canonical( l.uri, l.canonical_uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_Page_Canonical" PARAMETERS = "page_code, canonical_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri:screen"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"	VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"	VALUE = "{ l.page_code }">
+	<MvASSIGN NAME = "l.uri:cat_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Load_Item_Canonical( l.uri, l.canonical_uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_Category_Canonical" PARAMETERS = "cat_id, canonical_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri:screen"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"	VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"	VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"		VALUE = "{ l.cat_id }">
+	<MvASSIGN NAME = "l.uri:product_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Load_Item_Canonical( l.uri, l.canonical_uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_Product_Canonical" PARAMETERS = "product_id, canonical_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri:screen"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"	VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"	VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"	VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Load_Item_Canonical( l.uri, l.canonical_uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Load_Feed_Canonical" PARAMETERS = "feed_id, canonical_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri:screen"		VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"	VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"	VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = "{ l.feed_id }">
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Load_Item_Canonical( l.uri, l.canonical_uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URIList_Load_Page" PARAMETERS = "page_id, uris var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.branch_id" VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "{ 'SELECT
+								u.*
+							  FROM ' $
+								g.Store_Table_Prefix $ 'PageBranchVersions pbv,
+								URIs u
+							  WHERE
+								pbv.branch_id	= ?		AND
+								pbv.head		= 1		AND
+								pbv.page_id		= ?		AND
+								u.screen		= \'\'	AND
+								u.store_id 		= ?		AND
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'u.page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'pbv.code' ) $ ' AND
+								u.cat_id		= 0 	AND
+								u.product_id 	= 0		AND
+								u.feed_id		= 0
+							  ORDER BY
+								u.id' }"
+				FIELDS	= "l.branch_id, l.page_id, g.Store:id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00035', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT URIs.d.EOF }">
+		<MvEVAL EXPR = "{ URI_Read( l.uris[ ++l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "URIs" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-URI-DTB-00036', l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URIList_Load_Page_Code" PARAMETERS = "page_code, uris var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "{ 'SELECT
+								*
+							  FROM
+								URIs
+							  WHERE
+								screen		= \'\'	AND
+								store_id 	= ?		AND
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( '?' ) $ ' AND
+								cat_id		= 0 	AND
+								product_id 	= 0		AND
+								feed_id		= 0
+							  ORDER BY
+								id' }"
+				FIELDS	= "g.Store:id, l.page_code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00038', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT URIs.d.EOF }">
+		<MvEVAL EXPR = "{ URI_Read( l.uris[ ++l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "URIs" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-URI-DTB-00039', l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URIList_Load_Product" PARAMETERS = "product_id, uris var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "SELECT
+						   		*
+						   FROM
+						   		URIs
+						   WHERE
+						   		screen		= ''	AND
+						   		store_id 	= ?		AND
+						   		page_code	= '' 	AND
+						   		cat_id		= 0 	AND
+						   		product_id 	= ?		AND
+						   		feed_id		= 0
+						   ORDER BY
+						   		id"
+				FIELDS	= "g.Store:id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT URIs.d.EOF }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ l.count + 1 }">
+		<MvEVAL EXPR = "{ URI_Read( l.uris[ l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "URIs" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-URI-DTB-00023', l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URIList_Load_Category" PARAMETERS = "cat_id, uris var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "SELECT
+						   		*
+						   FROM
+						   		URIs
+						   WHERE
+						   		screen		= ''	AND
+						   		store_id 	= ?		AND
+						   		page_code	= '' 	AND
+						   		cat_id		= ? 	AND
+						   		product_id 	= 0		AND
+						   		feed_id		= 0
+						   ORDER BY
+						   		id"
+				FIELDS	= "g.Store:id, l.cat_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00030', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT URIs.d.EOF }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ l.count + 1 }">
+		<MvEVAL EXPR = "{ URI_Read( l.uris[ l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "URIs" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-URI-DTB-00031', l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URIList_Load_Item" PARAMETERS = "uri var, uris var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "URIs"
+				QUERY	= "{ 'SELECT
+							   	*
+							  FROM
+							   	URIs
+							  WHERE
+								screen		= ?																																	AND
+								store_id	= ?																																	AND
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( '?' ) $ '	AND
+								cat_id		= ?																																	AND
+								product_id	= ?																																	AND
+								feed_id		= ?
+							  ORDER BY
+							   	id' }"
+				FIELDS	= "l.uri:screen, l.uri:store_id, l.uri:page_code, l.uri:cat_id, l.uri:product_id, l.uri:feed_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00028', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT URIs.d.EOF }">
+		<MvASSIGN NAME = "l.count" VALUE = "{ l.count + 1 }">
+		<MvEVAL EXPR = "{ URI_Read( l.uris[ l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "URIs" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "URIs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-URI-DTB-00029', l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Product_Transfer" PARAMETERS = "old_product_id, new_product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "UPDATE URIs
+					   SET
+						product_id = ?
+					   WHERE
+						product_id = ?"
+			 FIELDS	= "l.new_product_id, l.old_product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00032', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Category_Transfer" PARAMETERS = "old_category_id, new_category_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "UPDATE URIs
+					   SET
+						cat_id = ?
+					   WHERE
+						cat_id = ?"
+			 FIELDS	= "l.new_category_id, l.old_category_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00033', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Insert" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT URI_Insert_LowLevel( l.uri ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.uri:store_id AND l.uri:store_id EQ g.Store:id }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_uri', l.modules ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_URI_Insert( l.module, l.uri ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Insert_LowLevel" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.uri:id }">			<MvASSIGN NAME = "l.uri:id"			VALUE = "{ [ g.Module_Library_DB ].DomainKey_Generate( 'URIs' ) }"> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:cat_id }">		<MvASSIGN NAME = "l.uri:cat_id" 	VALUE = 0>															</MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:product_id }">	<MvASSIGN NAME = "l.uri:product_id" VALUE = 0>															</MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:feed_id }">	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0>															</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "INSERT INTO URIs
+					   ( id, uri, screen, store_id, page_code, cat_id, product_id, feed_id, canonical, status )
+					   VALUES
+					   ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )"
+			 FIELDS	= "l.uri:id, l.uri:uri, l.uri:screen, l.uri:store_id, l.uri:page_code,
+					   l.uri:cat_id, l.uri:product_id, l.uri:feed_id, l.uri:canonical, l.uri:status">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Update" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT URI_Update_LowLevel( l.uri ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.uri:store_id AND l.uri:store_id EQ g.Store:id }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_uri', l.modules ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_URI_Update( l.module, l.uri ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Update_LowLevel" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.uri:cat_id }">		<MvASSIGN NAME = "l.uri:cat_id" 	VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:product_id }">	<MvASSIGN NAME = "l.uri:product_id" VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.uri:feed_id }">	<MvASSIGN NAME = "l.uri:feed_id"	VALUE = 0> </MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "UPDATE URIs
+					   SET
+						uri			= ?,
+						screen		= ?,
+						store_id	= ?,
+						page_code	= ?,
+						cat_id		= ?,
+						product_id	= ?,
+						feed_id		= ?,
+						canonical	= ?,
+						status		= ?
+					   WHERE
+						id			= ?"
+			 FIELDS	= "l.uri:uri, l.uri:screen, l.uri:store_id, l.uri:page_code,
+					   l.uri:cat_id, l.uri:product_id, l.uri:feed_id, l.uri:canonical, l.uri:status,
+					   l.uri:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Update_Page_Code_All" PARAMETERS = "old_page_code, new_page_code" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE URIs
+						  SET
+							page_code = ?
+						  WHERE
+							' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS	= "l.new_page_code, l.old_page_code">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00037', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT URI_Delete_LowLevel( l.uri ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.uri:store_id AND l.uri:store_id EQ g.Store:id }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_uri', l.modules ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_URI_Delete( l.module, l.uri ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_LowLevel" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "DELETE FROM URIs WHERE id = ?"
+			 FIELDS	= "l.uri:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Store" PARAMETERS = "store_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "DELETE FROM URIs WHERE store_id = ?"
+			 FIELDS	= "l.store_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 			store_id	= ? AND
+			 			screen		= '' AND
+			 			page_code	= '' AND
+			 			cat_id		= 0 AND
+			 			product_id 	= ?"
+			 FIELDS = "g.Store:id, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Category" PARAMETERS = "cat_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 			store_id	= ? AND
+			 			screen		= '' AND
+			 			page_code	= '' AND
+			 			cat_id		= ?"
+			 FIELDS = "g.Store:id, l.cat_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00025', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Page" PARAMETERS = "page_code" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM URIs
+			 			  WHERE
+			 				store_id	= ?		AND
+			 				screen		= \'\'	AND
+							' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( '?' ) }"
+			 FIELDS = "g.Store:id, l.page_code">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00026', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Screen" PARAMETERS = "screen" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 			store_id	= ? AND
+			 			screen		= ?"
+			 FIELDS = "g.Store:id, l.screen">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00027', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Feed" PARAMETERS = "feed_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 		   	store_id	= ?		AND
+			 		   	screen		= ''	AND
+			 		   	page_code	= ''	AND
+			 		   	cat_id		= 0		AND
+			 		   	product_id	= 0		AND
+			 		   	feed_id		= ?"
+			 FIELDS = "g.Store:id, l.feed_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-DTB-00034', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

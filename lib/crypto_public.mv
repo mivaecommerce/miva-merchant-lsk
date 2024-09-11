@@ -1,0 +1,1631 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CRY-PUB-
+| Next Error Code: 156   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Encryption_Available" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ s.miva_sslavailable }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Encryption_Default_Preferred_Ciphers" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "aes-256-cbc,aes-128-cbc">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Encryption_Choose_Cipher" PARAMETERS = "preferred_ciphers, mode, min_key_length, max_key_length, cipher var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.cipher" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.preferred_cipher" ARRAY = "l.ciphers" COUNT = "{ miva_splitstring( l.preferred_ciphers, ',', l.ciphers, 'trim,noempty' ) }">
+		<MvASSIGN NAME = "l.cipher_mode"		VALUE = "{ crypto_cipher_mode( l.preferred_cipher ) }">
+		<MvASSIGN NAME = "l.cipher_key_length"	VALUE = "{ crypto_cipher_key_length( l.preferred_cipher ) }">
+
+		<MvIF EXPR = "{ l.cipher_key_length LT l.min_key_length }">											<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.max_key_length GT 0 ) AND ( l.cipher_key_length GT l.max_key_length ) }">	<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ l.cipher_mode NE l.mode }">														<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.cipher"				VALUE = "{ l.preferred_cipher }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ ( l.min_key_length LE 32 ) AND ( ( l.max_key_length EQ 0 ) OR ( l.max_key_length GE 32 ) ) }">
+		<MvIF EXPR = "{ l.mode EQ 'cbc' }">		<MvASSIGN NAME = "l.cipher"	VALUE = "aes-256-cbc">
+		<MvELSEIF EXPR = "{ l.mode EQ 'ecb' }">	<MvASSIGN NAME = "l.cipher"	VALUE = "aes-256-ecb">
+		</MvIF>
+	<MvELSEIF EXPR = "{ ( l.min_key_length LE 16 ) AND ( ( l.max_key_length EQ 0 ) OR ( l.max_key_length GE 16 ) ) }">
+		<MvIF EXPR = "{ l.mode EQ 'cbc' }">		<MvASSIGN NAME = "l.cipher"	VALUE = "aes-128-cbc">
+		<MvELSEIF EXPR = "{ l.mode EQ 'ecb' }">	<MvASSIGN NAME = "l.cipher"	VALUE = "aes-128-ecb">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.cipher }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00080', 'Unable to determine an appropriate cipher' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Encrypt_Payment" PARAMETERS = "crypt_id, secure_data var, payment_secure var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( ISNULL l.secure_data ) OR ( l.crypt_id EQ 0 ) }">
+		<MvASSIGN NAME = "l.payment_secure:id"		VALUE = 0>
+		<MvASSIGN NAME = "l.payment_secure:key"		VALUE = "">
+		<MvASSIGN NAME = "l.payment_secure:data"	VALUE = "{ l.secure_data }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_DB ].Encryption_Load_ID( l.crypt_id, l.encryption ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT rsa_load_publickey_mem( l.encryption:pub_key, l.rsa ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00002', 'Encryption failed: Unable to load public key: ' $ crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.payment_secure:id"			VALUE = "{ l.crypt_id }">
+	<MvASSIGN NAME = "l.result"						VALUE = "{ Encrypt_Payment_LowLevel( l.rsa, l.secure_data, l.payment_secure ) }">
+	<MvASSIGN NAME = "l.null"						VALUE = "{ rsa_free( l.rsa ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Encrypt_Payment_LowLevel" PARAMETERS = "rsa var, secure_data var, payment_secure var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Encryption_Choose_Cipher( g.Domain:ciphers, 'cbc', 16, 0, l.cipher ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.key"				VALUE = "{ crypto_rand_bytes( crypto_cipher_key_length( l.cipher ) ) }">
+	<MvASSIGN NAME = "l.iv"					VALUE = "{ crypto_rand_bytes( crypto_cipher_iv_length( l.cipher ) ) }">
+
+	<MvIF EXPR = "{ NOT crypto_evp_encrypt( l.cipher, l.key, l.iv, l.secure_data, l.ciphertext ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00066', 'Encryption failed: Unable to encrypt payment data: ' $ crypto_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT rsa_public_encrypt( l.rsa, l.key $ l.iv, l.key_ciphertext ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00004', 'Encryption failed: Unable to encrypt transaction key: ' $ crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.payment_secure:data"	VALUE = "{ crypto_base64_encode( l.ciphertext ) }">
+	<MvASSIGN NAME = "l.payment_secure:key"		VALUE = "{ l.cipher $ ':' $ crypto_base64_encode( l.key_ciphertext ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Decrypt_Payment" PARAMETERS = "crypt_id, key, secure_data var, data var, passphrase" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.crypt_id }">
+		<MvASSIGN NAME = "l.data" VALUE = "">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00011', 'Decrypt_Payment is no longer supported for reasons of PA-DSS compliance.  Use Decrypt_Order or Decrypt_OrderPayment instead.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data" VALUE = "{ miva_array_deserialize( l.secure_data ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Decrypt_Order" PARAMETERS = "purpose, order var, passphrase, data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"			VALUE = "">
+
+	<MvIF EXPR = "{ ISNULL l.order:pay_secdat }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.order:pay_secid EQ 0 }">
+		<MvASSIGN NAME = "l.data"		VALUE = "{ miva_array_deserialize( l.order:pay_secdat ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.passphrase }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00012', 'Decryption failed: Passphrase missing' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Encryption_Key_LoadPrivateKey( l.purpose, l.order:id, l.order:orderpayment_id, l.order:pay_id, l.order:pay_secid, l.passphrase, l.rsa ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result"			VALUE = "{ Decrypt_OrderPayment_LowLevel( l.rsa, l.order, l.plaintext ) }">
+
+	<MvIF EXPR = "{ l.result }">
+		<MvASSIGN NAME = "l.data"		VALUE = "{ miva_array_deserialize( l.plaintext ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_PaymentDataDisplay( 'MER-CRY-PUB-00017', l.purpose, l.order:id, l.order:orderpayment_id, l.order:pay_id, l.order:pay_secid ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ rsa_free( l.rsa ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Decrypt_OrderPayment" PARAMETERS = "purpose, orderpayment var, passphrase, data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"			VALUE = "">
+
+	<MvIF EXPR = "{ ISNULL l.orderpayment:pay_secdat }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderpayment:pay_secid EQ 0 }">
+		<MvASSIGN NAME = "l.data"		VALUE = "{ miva_array_deserialize( l.orderpayment:pay_secdat ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.passphrase }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00018', 'Decryption failed: Passphrase missing' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Encryption_Key_LoadPrivateKey( l.purpose, l.orderpayment:order_id, l.orderpayment:id, l.orderpayment:pay_id, l.orderpayment:pay_secid, l.passphrase, l.rsa ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result"			VALUE = "{ Decrypt_OrderPayment_LowLevel( l.rsa, l.orderpayment, l.plaintext ) }">
+
+	<MvIF EXPR = "{ l.result }">
+		<MvASSIGN NAME = "l.data"		VALUE = "{ miva_array_deserialize( l.plaintext ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_PaymentDataDisplay( 'MER-CRY-PUB-00023', l.purpose, l.orderpayment:order_id, l.orderpayment:id, l.orderpayment:pay_id, l.orderpayment:pay_secid ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ rsa_free( l.rsa ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Decrypt_OrderPayment_LowLevel" PARAMETERS = "rsa var, order_or_orderpayment var, plaintext var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( ':' IN l.order_or_orderpayment:pay_seckey ) EQ 0 }">
+		<MvASSIGN NAME = "l.cipher"				VALUE = "bf-ecb">
+		<MvASSIGN NAME = "l.key_ciphertext"		VALUE = "{ crypto_base64_decode( l.order_or_orderpayment:pay_seckey ) }">
+		<MvASSIGN NAME = "l.key_len"			VALUE = 16>
+		<MvASSIGN NAME = "l.iv_len"				VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.cipher"				VALUE = "{ gettoken( l.order_or_orderpayment:pay_seckey, ':', 1 ) }">
+		<MvASSIGN NAME = "l.key_ciphertext"		VALUE = "{ crypto_base64_decode( gettoken( l.order_or_orderpayment:pay_seckey, ':', 2 ) ) }">
+
+		<MvASSIGN NAME = "l.key_len"			VALUE = "{ crypto_cipher_key_length( l.cipher ) }">
+		<MvIF EXPR = "{ l.key_length LT 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00068', 'Decryption failed: ' $ crypto_last_error() ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.cipher_mode"		VALUE = "{ crypto_cipher_mode( l.cipher ) }">
+
+		<MvIF EXPR = "{ l.cipher_mode EQ 'stream' }">	<MvASSIGN NAME = "l.iv_len"	VALUE = 0>
+		<MvELSEIF EXPR = "{ l.cipher_mode EQ 'ecb' }">	<MvASSIGN NAME = "l.iv_len" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.iv_len"			VALUE = "{ crypto_cipher_iv_length( l.cipher ) }">
+			<MvIF EXPR = "{ l.iv_len LT 0 }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00069', 'Decryption failed: ' $ crypto_last_error() ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT rsa_private_decrypt( l.rsa, l.key_ciphertext, l.key_plaintext ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00070', 'Decryption failed: Unable to decrypt order key: ' $ crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.key"					VALUE = "{ substring_var( l.key_plaintext, 1, l.key_len ) }">
+	<MvASSIGN NAME = "l.iv"						VALUE = "{ substring_var( l.key_plaintext, l.key_len + 1, l.iv_len ) }">
+	<MvASSIGN NAME = "l.ciphertext"				VALUE = "{ crypto_base64_decode( l.order_or_orderpayment:pay_secdat ) }">
+
+	<MvIF EXPR = "{ NOT crypto_evp_decrypt( l.cipher, l.key, l.iv, l.ciphertext, l.plaintext ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00074', 'Decryption failed: Unable to decrypt order data: ' $ crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "bf_cbc_encrypt" PARAMETERS = "key, iv, plaintext, ciphertext var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ len_var( l.key ) NE 16 }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00054', 'Incorrect key length' ) }">
+	<MvELSEIF EXPR = "{ len_var( l.iv ) NE 8 }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00055', 'Incorrect IV length' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| PKS pad plaintext to a multiple of 8 bytes.  Padding is always added (even if already a multiple)
+	| to match the OpenSSL behavior.
+	|
+	</MvCOMMENT>
+	
+	<MvASSIGN NAME = "l.plaintext_len"		VALUE = "{ len_var( l.plaintext ) }">
+	<MvASSIGN NAME = "l.pad_len"			VALUE = "{ 8 - ( l.plaintext_len MOD 8 ) }">
+
+	<MvFOR COUNT = "{ l.pad_len }">
+		<MvASSIGN NAME = "l.plaintext"		VALUE = "{ l.plaintext $ asciichar( l.pad_len ) }">
+	</MvFOR>
+
+	<MvASSIGN NAME = "l.plaintext_len"		VALUE = "{ l.plaintext_len + l.pad_len }">
+	<MvASSIGN NAME = "l.block"				VALUE = "{ l.iv }">
+
+	<MvCAPTURE VARIABLE = "l.ciphertext">
+		<MvFOR INDEX = "l.block_start" FIRST = "{ 1 }" NEXT = "{ l.block_start + 8 }" LAST = "{ l.plaintext_len - 7 }">
+			<MvCAPTURE VARIABLE = "l.next_block">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start,		1 ) ) BITXOR asciivalue( substring_var( l.block, 1, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 1,	1 ) ) BITXOR asciivalue( substring_var( l.block, 2, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 2,	1 ) ) BITXOR asciivalue( substring_var( l.block, 3, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 3,	1 ) ) BITXOR asciivalue( substring_var( l.block, 4, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 4,	1 ) ) BITXOR asciivalue( substring_var( l.block, 5, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 5,	1 ) ) BITXOR asciivalue( substring_var( l.block, 6, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 6,	1 ) ) BITXOR asciivalue( substring_var( l.block, 7, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.plaintext, l.block_start + 7,	1 ) ) BITXOR asciivalue( substring_var( l.block, 8, 1 ) ) ) }">
+			</MvCAPTURE>
+	
+			<MvIF EXPR = "{ NOT bf_encrypt( l.key, l.next_block, l.block ) }">
+				<MvASSIGN NAME = "l.error"	VALUE = 1>
+				<MvFORSTOP>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ substring_var( l.block, 1, 8 ) }">	
+		</MvFOR>
+	</MvCAPTURE>
+
+	<MvIF EXPR = "{ l.error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00056', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "bf_cbc_decrypt" PARAMETERS = "key, iv, ciphertext, plaintext var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.ciphertext_len"					VALUE = "{ len_var( l.ciphertext ) }">
+
+	<MvIF EXPR = "{ len_var( l.key ) NE 16 }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00057', 'Incorrect key length' ) }">
+	<MvELSEIF EXPR = "{ len_var( l.iv ) NE 8 }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00058', 'Incorrect IV length' ) }">
+	<MvELSEIF EXPR = "{ l.ciphertext_len MOD 8 }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00059', 'Ciphertext length is not a multiple of block size' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| bf_decrypt will get mad at us unless there is a PKCS padded trailing block
+	| for each call, so we create an appropriate empty one using bf_encrypt
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT bf_encrypt( l.key, 'AAAAAAAA', l.dummy_block ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00060', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dummy_block"					VALUE = "{ substring_var( l.dummy_block, 9, 16 ) }">
+	<MvASSIGN NAME = "l.last_ciphertext_block"			VALUE = "{ l.iv }">
+
+	<MvCAPTURE VARIABLE = "l.plaintext">
+		<MvFOR INDEX = "l.block_start" FIRST = "{ 1 }" NEXT = "{ l.block_start + 8 }" LAST = "{ l.ciphertext_len - 7 }">
+			<MvEVAL EXPR = "{ l.plaintext_block }">
+
+			<MvASSIGN NAME = "l.ciphertext_block"		VALUE = "{ substring_var( l.ciphertext, l.block_start, 8 ) $ l.dummy_block }">
+
+			<MvIF EXPR = "{ NOT bf_decrypt( l.key, l.ciphertext_block, l.block ) }">
+				<MvASSIGN NAME = "l.error"				VALUE = 1>
+				<MvFORSTOP>
+			</MvIF>
+
+			<MvCAPTURE VARIABLE = "l.plaintext_block">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 1, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 1, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 2, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 2, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 3, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 3, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 4, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 4, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 5, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 5, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 6, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 6, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 7, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 7, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.block, 8, 1 ) ) BITXOR asciivalue( substring_var( l.last_ciphertext_block, 8, 1 ) ) ) }">
+			</MvCAPTURE>
+
+			<MvASSIGN NAME = "l.last_ciphertext_block"	VALUE = "{ l.ciphertext_block }">	
+		</MvFOR>
+
+		<MvCOMMENT>
+		|
+		| Strip PKCS padding from the final block
+		|
+		</MvCOMMENT>
+
+		<MvEVAL EXPR = "{ substring_var( l.plaintext_block, 1, 8 - asciivalue( substring_var( l.plaintext_block, 8, 1 ) ) ) }">
+	</MvCAPTURE>
+
+	<MvIF EXPR = "{ l.error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00061', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBKDF1" PARAMETERS = "hash, p, s, c, dklen, dk var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT crypto_pbkdf1( l.hash, l.p, l.s, l.c, l.dklen, l.dk ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00075', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBKDF2" PARAMETERS = "prf, p, s, c, dklen, dk var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT crypto_pbkdf2( l.prf, l.p, l.s, l.c, l.dklen, l.dk ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00076', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBKDF2_SHA1_Legacy" PARAMETERS = "p, s, c, dklen, dk var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.c LT 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00078', 'Invalid number of iterations' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.hlen"			VALUE = 20>
+	<MvIF EXPR = "{ l.dklen GT ( 4294967295.0 * l.hlen ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00037', 'Derived key too long' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.l"				VALUE = "{ ceil( l.dklen / l.hlen ) }">
+	<MvASSIGN NAME = "l.r"				VALUE = "{ l.dklen - ( l.l - 1 ) * l.hlen }">
+
+	<MvASSIGN NAME = "l.dk"				VALUE = "">
+
+	<MvFOR INDEX = "l.i" COUNT = "{ l.l }">
+		<MvASSIGN NAME = "l.u"			VALUE = "{ l.s $ asciichar( ( l.i BITSR 24 ) BITAND 255 ) $
+														 asciichar( ( l.i BITSR 16 ) BITAND 255 ) $
+														 asciichar( ( l.i BITSR 8 ) BITAND 255 ) $
+														 asciichar( l.i BITAND 255 ) }">
+		<MvIF EXPR = "{ NOT crypto_hmac_sha1( l.u, l.p, 'binary', l.u ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00038', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.t"			VALUE = "{ l.u }">
+		<MvFOR COUNT = "{ l.c - 1 }">
+			<MvIF EXPR = "{ NOT crypto_hmac_sha1( l.u, l.p, 'binary', l.u ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00039', crypto_last_error() ) }">
+			</MvIF>
+
+			<MvCAPTURE VARIABLE = "l.t">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  1, 1 ) ) BITXOR asciivalue( substring_var( l.u,  1, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  2, 1 ) ) BITXOR asciivalue( substring_var( l.u,  2, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  3, 1 ) ) BITXOR asciivalue( substring_var( l.u,  3, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  4, 1 ) ) BITXOR asciivalue( substring_var( l.u,  4, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  5, 1 ) ) BITXOR asciivalue( substring_var( l.u,  5, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  6, 1 ) ) BITXOR asciivalue( substring_var( l.u,  6, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  7, 1 ) ) BITXOR asciivalue( substring_var( l.u,  7, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  8, 1 ) ) BITXOR asciivalue( substring_var( l.u,  8, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  9, 1 ) ) BITXOR asciivalue( substring_var( l.u,  9, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 10, 1 ) ) BITXOR asciivalue( substring_var( l.u, 10, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 11, 1 ) ) BITXOR asciivalue( substring_var( l.u, 11, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 12, 1 ) ) BITXOR asciivalue( substring_var( l.u, 12, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 13, 1 ) ) BITXOR asciivalue( substring_var( l.u, 13, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 14, 1 ) ) BITXOR asciivalue( substring_var( l.u, 14, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 15, 1 ) ) BITXOR asciivalue( substring_var( l.u, 15, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 16, 1 ) ) BITXOR asciivalue( substring_var( l.u, 16, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 17, 1 ) ) BITXOR asciivalue( substring_var( l.u, 17, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 18, 1 ) ) BITXOR asciivalue( substring_var( l.u, 18, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 19, 1 ) ) BITXOR asciivalue( substring_var( l.u, 19, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 20, 1 ) ) BITXOR asciivalue( substring_var( l.u, 20, 1 ) ) ) }">
+			</MvCAPTURE>
+		</MvFOR>
+
+		<MvASSIGN NAME = "l.dk"			VALUE = "{ l.dk $ l.t }">
+	</MvFOR>
+
+	<MvASSIGN NAME = "l.dk"				VALUE = "{ substring_var( l.dk, 1, l.dklen ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBKDF2_SHA256_Legacy" PARAMETERS = "p, s, c, dklen, dk var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.c LT 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00079', 'Invalid number of iterations' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.hlen"			VALUE = 32>
+	<MvIF EXPR = "{ l.dklen GT ( 4294967295.0 * l.hlen ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00040', 'Derived key too long' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.l"				VALUE = "{ ceil( l.dklen / l.hlen ) }">
+	<MvASSIGN NAME = "l.r"				VALUE = "{ l.dklen - ( l.l - 1 ) * l.hlen }">
+
+	<MvASSIGN NAME = "l.dk"				VALUE = "">
+
+	<MvFOR INDEX = "l.i" COUNT = "{ l.l }">
+		<MvASSIGN NAME = "l.u"			VALUE = "{ l.s $ asciichar( ( l.i BITSR 24 ) BITAND 255 ) $
+														 asciichar( ( l.i BITSR 16 ) BITAND 255 ) $
+														 asciichar( ( l.i BITSR 8 ) BITAND 255 ) $
+														 asciichar( l.i BITAND 255 ) }">
+		<MvIF EXPR = "{ NOT crypto_hmac_sha256( l.u, l.p, 'binary', l.u ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00041', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.t"			VALUE = "{ l.u }">
+		<MvFOR COUNT = "{ l.c - 1 }">
+			<MvIF EXPR = "{ NOT crypto_hmac_sha256( l.u, l.p, 'binary', l.u ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00042', crypto_last_error() ) }">
+			</MvIF>
+
+			<MvCAPTURE VARIABLE = "l.t">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  1, 1 ) ) BITXOR asciivalue( substring_var( l.u,  1, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  2, 1 ) ) BITXOR asciivalue( substring_var( l.u,  2, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  3, 1 ) ) BITXOR asciivalue( substring_var( l.u,  3, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  4, 1 ) ) BITXOR asciivalue( substring_var( l.u,  4, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  5, 1 ) ) BITXOR asciivalue( substring_var( l.u,  5, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  6, 1 ) ) BITXOR asciivalue( substring_var( l.u,  6, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  7, 1 ) ) BITXOR asciivalue( substring_var( l.u,  7, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  8, 1 ) ) BITXOR asciivalue( substring_var( l.u,  8, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t,  9, 1 ) ) BITXOR asciivalue( substring_var( l.u,  9, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 10, 1 ) ) BITXOR asciivalue( substring_var( l.u, 10, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 11, 1 ) ) BITXOR asciivalue( substring_var( l.u, 11, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 12, 1 ) ) BITXOR asciivalue( substring_var( l.u, 12, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 13, 1 ) ) BITXOR asciivalue( substring_var( l.u, 13, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 14, 1 ) ) BITXOR asciivalue( substring_var( l.u, 14, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 15, 1 ) ) BITXOR asciivalue( substring_var( l.u, 15, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 16, 1 ) ) BITXOR asciivalue( substring_var( l.u, 16, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 17, 1 ) ) BITXOR asciivalue( substring_var( l.u, 17, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 18, 1 ) ) BITXOR asciivalue( substring_var( l.u, 18, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 19, 1 ) ) BITXOR asciivalue( substring_var( l.u, 19, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 20, 1 ) ) BITXOR asciivalue( substring_var( l.u, 20, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 21, 1 ) ) BITXOR asciivalue( substring_var( l.u, 21, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 22, 1 ) ) BITXOR asciivalue( substring_var( l.u, 22, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 23, 1 ) ) BITXOR asciivalue( substring_var( l.u, 23, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 24, 1 ) ) BITXOR asciivalue( substring_var( l.u, 24, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 25, 1 ) ) BITXOR asciivalue( substring_var( l.u, 25, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 26, 1 ) ) BITXOR asciivalue( substring_var( l.u, 26, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 27, 1 ) ) BITXOR asciivalue( substring_var( l.u, 27, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 28, 1 ) ) BITXOR asciivalue( substring_var( l.u, 28, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 29, 1 ) ) BITXOR asciivalue( substring_var( l.u, 29, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 30, 1 ) ) BITXOR asciivalue( substring_var( l.u, 30, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 31, 1 ) ) BITXOR asciivalue( substring_var( l.u, 31, 1 ) ) ) }">
+				<MvEVAL EXPR = "{ asciichar( asciivalue( substring_var( l.t, 32, 1 ) ) BITXOR asciivalue( substring_var( l.u, 32, 1 ) ) ) }">
+			</MvCAPTURE>
+		</MvFOR>
+
+		<MvASSIGN NAME = "l.dk"			VALUE = "{ l.dk $ l.t }">
+	</MvFOR>
+
+	<MvASSIGN NAME = "l.dk"				VALUE = "{ substring_var( l.dk, 1, l.dklen ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBES2_Cipher_Lengths" PARAMETERS = "cipher, key_len var, iv_len var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.key_len"			VALUE = "{ crypto_cipher_key_length( l.cipher ) }">
+	<MvIF EXPR = "{ l.key_len LT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00044', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cipher_mode"		VALUE = "{ crypto_cipher_mode( l.cipher ) }">
+
+	<MvIF EXPR = "{ l.cipher_mode EQ 'stream' }">	<MvASSIGN NAME = "l.iv_len"	VALUE = 0>
+	<MvELSEIF EXPR = "{ l.cipher_mode EQ 'ecb' }">	<MvASSIGN NAME = "l.iv_len" VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.iv_len"			VALUE = "{ crypto_cipher_iv_length( l.cipher ) }">
+		<MvIF EXPR = "{ l.iv_len LT 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00045', crypto_last_error() ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBES2_Encrypt" PARAMETERS = "kdf, prf, cipher, p, s, c, plaintext, ciphertext var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PBES2_Cipher_Lengths( l.cipher, l.key_len, l.iv_len ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.kdf EQ 'PBKDF1+IV' }">
+		<MvIF EXPR = "{ len_var( l.s ) NE ( 8 + l.iv_len ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00064', 'Incorrect salt length' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT PBKDF1( l.prf, l.p, substring_var( l.s, 1, 8 ), l.c, l.key_len, l.k ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.iv"			VALUE = "{ substring_var( l.s, 9, l.iv_len ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ l.kdf EQ 'PBKDF1' }">
+			<MvIF EXPR = "{ NOT PBKDF1( l.prf, l.p, l.s, l.c, l.key_len + l.iv_len, l.dk ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.kdf EQ 'PBKDF2' }">
+			<MvIF EXPR = "{ NOT PBKDF2( l.prf, l.p, l.s, l.c, l.key_len + l.iv_len, l.dk ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00046', 'Unsupported key derivation function' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.k"			VALUE = "{ substring_var( l.dk, 1, l.key_len ) }">
+		<MvASSIGN NAME = "l.iv"			VALUE = "{ substring_var( l.dk, l.key_len + 1, l.iv_len ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT crypto_evp_encrypt( l.cipher, l.k, l.iv, l.plaintext, l.ciphertext ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00047', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PBES2_Decrypt" PARAMETERS = "kdf, prf, cipher, p, s, c, ciphertext, plaintext var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PBES2_Cipher_Lengths( l.cipher, l.key_len, l.iv_len ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.kdf EQ 'PBKDF1+IV' }">
+		<MvIF EXPR = "{ len_var( l.s ) NE ( 8 + l.iv_len ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00065', 'Incorrect salt length' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT PBKDF1( l.prf, l.p, substring_var( l.s, 1, 8 ), l.c, l.key_len, l.k ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.iv"			VALUE = "{ substring_var( l.s, 9, l.iv_len ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ l.kdf EQ 'PBKDF1' }">
+			<MvIF EXPR = "{ NOT PBKDF1( l.prf, l.p, l.s, l.c, l.key_len + l.iv_len, l.dk ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.kdf EQ 'PBKDF2' }">
+			<MvIF EXPR = "{ NOT PBKDF2( l.prf, l.p, l.s, l.c, l.key_len + l.iv_len, l.dk ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00050', 'Unsupported key derivation function' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.k"			VALUE = "{ substring_var( l.dk, 1, l.key_len ) }">
+		<MvASSIGN NAME = "l.iv"			VALUE = "{ substring_var( l.dk, l.key_len + 1, l.iv_len ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT crypto_evp_decrypt( l.cipher, l.k, l.iv, l.ciphertext, l.plaintext ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00051', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| One Time Password functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "TOTP" PARAMETERS = "k, x, t0, offset, digits" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.t"			VALUE = "{ int( ( s.time_t - l.t0 ) / l.x ) + l.offset }">
+	<MvASSIGN NAME = "l.t_binary"	VALUE = "{ asciichar( 0 ) $
+											   asciichar( 0 ) $
+											   asciichar( 0 ) $
+											   asciichar( 0 ) $
+											   asciichar( ( l.t BITSR 24 ) BITAND 255 ) $
+											   asciichar( ( l.t BITSR 16 ) BITAND 255 ) $
+											   asciichar( ( l.t BITSR 8 ) BITAND 255 ) $
+											   asciichar( l.t BITAND 255 ) }">
+
+	<MvIF EXPR = "{ NOT crypto_hmac_sha1( l.t_binary, l.k, 'raw', l.hmac ) }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ padl( HOTP_Truncate( l.hmac ) MOD power( 10, l.digits ), l.digits, '0' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "HOTP_Truncate" PARAMETERS = "hmac" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.offset"	VALUE = "{ asciivalue( substring_var( l.hmac, 20, 1 ) ) BITAND 15 }">
+
+	<MvFUNCTIONRETURN VALUE = "{ ( ( asciivalue( substring_var( l.hmac, l.offset + 1, 1 ) ) BITAND 127 ) BITSL 24 ) BITOR
+								 ( asciivalue( substring_var( l.hmac, l.offset + 2, 1 ) ) BITSL 16 ) BITOR
+								 ( asciivalue( substring_var( l.hmac, l.offset + 3, 1 ) ) BITSL 8 ) BITOR
+								 asciivalue( substring_var( l.hmac, l.offset + 4, 1 ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TOTP_Verify" PARAMETERS = "k, window, step, start, digits, x" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.password_match"	VALUE = 0>
+
+	<MvFOR INDEX = "l.offset" FIRST = "{ 0 - l.window }" LAST = "{ l.twofactorsettings:window }">
+		<MvIF EXPR = "{ ( 'X' $ TOTP( l.k, l.step, l.start, l.offset, l.digits ) ) EQ ( 'X' $ l.x ) }">
+			<MvASSIGN NAME = "l.password_match"	VALUE = 1>
+			<MvFORSTOP>
+		</MvIF>
+	</MvFOR>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.password_match }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Two-Factor: YubiCloud
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "YubiCloud_Verify" PARAMETERS = "id, key, url, timeout, sl, otp" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT crypto_sha1( crypto_rand_bytes( 32 ), 'hex', l.nonce ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00084', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.request:otp"		VALUE = "{ l.otp }">
+	<MvASSIGN NAME = "l.request:id"			VALUE = "{ l.id }">
+	<MvASSIGN NAME = "l.request:nonce"		VALUE = "{ l.nonce }">
+	<MvASSIGN NAME = "l.request:timeout"	VALUE = "{ l.timeout }">
+	<MvASSIGN NAME = "l.request:sl"			VALUE = "{ l.sl }">
+	<MvASSIGN NAME = "l.h"					VALUE = "{ YubiCloud_Hash( l.request, l.key ) }">
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCAPTURE VARIABLE = "l.raw_response" STANDARDOUTPUTLEVEL = "">
+		<MvCALL METHOD	= "GET"
+				ACTION	= "{ l.url }"
+				FIELDS	= "l.otp, l.id, l.timeout, l.sl, l.nonce, l.h">
+			<MvEVAL EXPR = "{ s.callvalue }">
+		</MvCALL>
+	</MvCAPTURE>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00085', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.param" ARRAY = "l.params" COUNT = "{ miva_splitstring( l.raw_response, asciichar( 10 ), l.params, 'trim' ) }">
+		<MvASSIGN NAME = "l.len"	VALUE = "{ len_var( l.param ) }">
+		<MvASSIGN NAME = "l.split"	VALUE = "{ '=' IN l.param }">
+
+		<MvIF EXPR = "{ l.split EQ 0 }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.name"	VALUE = "{ substring_var( l.param, 1, l.split - 1 ) }">
+		<MvASSIGN NAME = "l.value"	VALUE = "{ substring_var( l.param, l.split + 1, l.len - l.split ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'h' }">
+			<MvASSIGN NAME = "l.response_hash"	VALUE = "{ l.value }">
+		<MvELSE>
+			<MvASSIGNARRAY NAME = "l.response" VALUE = "{ l.value }">
+				<MvMEMBER NAME = "{ l.name }">
+			</MvASSIGNARRAY>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.response_hash NE YubiCloud_Hash( l.response, l.key ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00087', 'Hash mismatch: Verify the entered value is in the correct Yubico OTP format and try again.' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'BAD_OTP' }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00122', 'Invalid OTP format: Your Yubikey may not be registered with Yubico, please register and try again.' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'REPLAYED_OTP' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00123', 'This OTP has already been seen by the service' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'BAD_SIGNATURE' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00124', 'HMAC signature verification failed' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'MISSING_PARAMETER' }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00125', 'The request is missing a parameter' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'NO_SUCH_CLIENT' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00126', 'The request ID does not exist' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'OPERATION_NOT_ALLOWED' }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00127', 'The request ID is not allowed to verify OTPs' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'BACKEND_ERROR' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00128', 'Unexpected server error' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'NOT_ENOUGH_ANSWERS' }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00129', 'The server could not get the requested number of syncs before timeout' ) }">
+	<MvELSEIF EXPR = "{ l.response:status EQ 'REPLAYED_REQUEST' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00130', 'This OTP/Nonce combination has already been seen by the service' ) }">
+	<MvELSEIF EXPR = "{ l.response:nonce NE l.nonce }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00086', 'Nonce mismatch' ) }">
+	<MvELSEIF EXPR = "{ l.response:status NE 'OK' }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00088', l.response:status ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "YubiCloud_Hash" PARAMETERS = "params var, key" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.member" ARRAY = "l.members" COUNT = "{ miva_struct_members( l.params, l.members ) }">
+		<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.params">
+			<MvMEMBER NAME = "{ l.member }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL l.message }">
+			<MvASSIGN NAME = "l.message"	VALUE = "{ l.message $ '&' }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.message"		VALUE = "{ l.message $ tolower( l.member ) $ '=' $ l.value }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.null"				VALUE = "{ crypto_hmac_sha1( l.message, l.key, 'raw', l.raw_hmac ) }">
+	<MvFUNCTIONRETURN VALUE = "{ crypto_base64_encode( l.raw_hmac ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| WebAuthn
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "WebAuthn_Challenge_Generate" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ crypto_base64_encode( crypto_rand_bytes( 32 ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WebAuthn_Verify_Registration" PARAMETERS = "id, pubkey_der var, signcount var, expected_challenge, require_uv, attestation_data, json_clientdata" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ s.mivaversion LT 5.32 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00120', 'Unsupported MivaScript version' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack clientDataJSON
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT miva_json_decode( l.json_clientdata, l.clientdata ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00089', miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.1.3: Verify that the value of C.type is the string webauthn.create.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.clientdata:type NE 'webauthn.create' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00090', 'Unexpected C.type' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.1.4: Verify that the value of C.challenge matches the challenge that was sent to the authenticator in the PublicKeyCredentialRequestOptions passed to the get() call.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.clientdata:challenge"	VALUE = "{ glosub( l.clientdata:challenge, '-', '+' ) }">
+	<MvASSIGN NAME = "l.clientdata:challenge"	VALUE = "{ glosub( l.clientdata:challenge, '_', '/' ) }">
+
+	<MvASSIGN NAME = "l.challenge"				VALUE = "{ crypto_base64_decode( l.clientdata:challenge ) }">
+
+	<MvIF EXPR = "{ l.challenge NE l.expected_challenge }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00091', 'Challenge mismatch' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.1.5: Verify that the value of C.origin matches the Relying Party's origin.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.clientdata:origin IN s.documenturl ) NE 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00092', 'Invalid origin' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack attestationObject
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].CBOR_Decode( l.attestation_data, l.attestation ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00093', 'Unable to decode attestation data' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack authData
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.auth_data:rpIdHash"			VALUE = "{ substring_var( l.attestation:authData, 1, 32 ) }">
+	<MvASSIGN NAME = "l.raw_flags"					VALUE = "{ asciivalue( substring_var( l.attestation:authData, 33, 1 ) ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:UP"			VALUE = "{ min( l.raw_flags BITAND 1, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:UV"			VALUE = "{ min( l.raw_flags BITAND 4, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:AT"			VALUE = "{ min( l.raw_flags BITAND 64, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:ED"			VALUE = "{ min( l.raw_flags BITAND 128, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:signCount"		VALUE = "{ ( asciivalue( substring_var( l.attestation:authData, 34, 1 ) ) BITSL 24 ) BITOR
+															   ( asciivalue( substring_var( l.attestation:authData, 35, 1 ) ) BITSL 16 ) BITOR
+															   ( asciivalue( substring_var( l.attestation:authData, 36, 1 ) ) BITSL 8 ) BITOR
+																 asciivalue( substring_var( l.attestation:authData, 37, 1 ) ) }">
+
+	<MvCOMMENT>
+	|
+	| 7.1.9: Verify that the RP ID hash in authData is indeed the SHA-256 hash of the RP ID expected by the RP.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT crypto_sha256( gettoken( s.http_host, ':', 1 ), 'raw', l.origin_hash ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00094', crypto_last_error() ) }">
+	<MvELSEIF EXPR = "{ l.auth_data:rpIdHash NE l.origin_hash }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00095', 'rpIdHash mismatch' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.1.10: If user verification is required for this assertion, verify that the User Verified bit of the flags in authData is set.
+	| 7.1.11: If user verification is not required for this assertion, verify that the User Present bit of the flags in authData is set.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.require_uv }">
+		<MvIF EXPR = "{ NOT l.auth_data:flags:UV }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00096', 'User not verified' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT l.auth_data:flags:UP }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00097', 'User not present' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack the attested credential data
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.credential:aaguid"				VALUE = "{ substring_var( l.attestation:authData, 38, 16 ) }">
+	<MvASSIGN NAME = "l.credential:credentialIdLength"	VALUE = "{ ( asciivalue( substring_var( l.attestation:authData, 54, 1 ) ) BITSL 8 ) BITOR
+																   asciivalue( substring_var( l.attestation:authData, 55, 1 ) ) }">
+	<MvASSIGN NAME = "l.credential:credentialId"		VALUE = "{ substring_var( l.attestation:authData, 56, l.credential:credentialIdLength ) }">
+
+	<MvASSIGN NAME = "l.credential_pos"					VALUE = "{ 56 + l.credential:credentialIdLength }">
+	<MvASSIGN NAME = "l.credential_length"				VALUE = "{ len_var( l.attestation:authData ) - l.credential_pos + 1 }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].CBOR_Decode_Value( l.attestation:authData, l.credential_pos, l.credential_length, l.credential:credentialPublicKey ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00098', 'Unable to decode authentication data' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack the public key
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.signcount"						VALUE = "{ int( l.auth_data:signCount ) }">
+
+	<MvIF EXPR = "{ l.credential:credentialPublicKey:3 EQ -7 }">
+		<MvASSIGN NAME = "l.publickey:alg"	VALUE = "ES256">
+	<MvELSEIF EXPR = "{ l.credential:credentialPublicKey:3 EQ -35 }">
+		<MvASSIGN NAME = "l.publickey:alg"	VALUE = "ES384">
+	<MvELSEIF EXPR = "{ l.credential:credentialPublicKey:3 EQ -36 }">
+		<MvASSIGN NAME = "l.publickey:alg"	VALUE = "ES512">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00099', 'Unknown credentialPublicKey alg' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.credential:credentialPublicKey:1 EQ 2 }">
+		<MvASSIGN NAME = "l.publickey:type" VALUE = "EC2">
+
+		<MvASSIGN NAME = "l.crv"			VALUE = "{ miva_variable_value( 'l.credential:credentialPublicKey:-1' ) }">
+
+		<MvIF EXPR = "{ l.crv EQ 1 }">		<MvASSIGN NAME = "l.publickey:crv" VALUE = "secp256r1">
+		<MvELSEIF EXPR = "{ l.crv EQ 2 }">	<MvASSIGN NAME = "l.publickey:crv" VALUE = "secp384r1">
+		<MvELSEIF EXPR = "{ l.crv EQ 3 }">	<MvASSIGN NAME = "l.publickey:crv" VALUE = "secp521r1">
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00100', 'Unsupported EC2 curve' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.x"				VALUE = "{ miva_variable_value( 'l.credential:credentialPublicKey:-2' ) }">
+		<MvASSIGN NAME = "l.y"				VALUE = "{ miva_variable_value( 'l.credential:credentialPublicKey:-3' ) }">
+
+		<MvCOMMENT>
+		|
+		| Encode the public key as ASN.1 DER data
+		|
+		</MvCOMMENT>
+
+		<MvCAPTURE VARIABLE = "l.identifier_der">
+			<MvCOMMENT> OBJECT IDENTIFIER id-ecPublicKey </MvCOMMENT>
+			<MvEVAL EXPR = "{ decodeattribute( '%06%07%2a%86%48%ce%3d%02%01' ) }">
+
+			<MvCOMMENT> OBJECT IDENTIFIER for the curve </MvCOMMENT>
+			<MvIF EXPR = "{ l.publickey:crv EQ 'secp256r1' }">						<MvCOMMENT> 1.2.840.10045.3.1.7 </MvCOMMENT>
+				<MvEVAL EXPR = "{ decodeattribute( '%06%08%2a%86%48%ce%3d%03%01%07' ) }">
+			<MvELSEIF EXPR = "{ l.publickey:crv EQ 'secp384r1' }">					<MvCOMMENT> 1.3.132.0.34 </MvCOMMENT>
+				<MvEVAL EXPR = "{ decodeattribute( '%06%05%2b%03%84%00%22' ) }">
+			<MvELSEIF EXPR = "{ l.publickey:crv EQ 'secp521r1' }">					<MvCOMMENT> 1.3.132.0.35 </MvCOMMENT>
+				<MvEVAL EXPR = "{ decodeattribute( '%06%05%2b%03%84%00%23' ) }">
+			</MvIF>
+		</MvCAPTURE>
+
+		<MvCAPTURE VARIABLE = "l.key_der">
+			<MvCOMMENT> Key data </MvCOMMENT>
+			<MvEVAL EXPR = "{ asciichar( 0x03 ) }">									<MvCOMMENT> BIT STRING </MvCOMMENT>
+			<MvEVAL EXPR = "{ asciichar( 2 + len_var( l.x ) + len_var( l.y ) ) }">	<MvCOMMENT> length </MvCOMMENT>
+			<MvEVAL EXPR = "{ asciichar( 0x00 ) }">									<MvCOMMENT> padding count </MvCOMMENT>
+			<MvEVAL EXPR = "{ asciichar( 0x04 ) }">									<MvCOMMENT> uncompressed form </MvCOMMENT>
+			<MvEVAL EXPR = "{ l.x }">
+			<MvEVAL EXPR = "{ l.y }">
+		</MvCAPTURE>
+
+		<MvCAPTURE VARIABLE = "l.pubkey_der">
+			<MvEVAL EXPR = "{ asciichar( 0x30 ) }">									<MvCOMMENT> SEQUENCE </MvCOMMENT>
+			<MvEVAL EXPR = "{ asciichar( len_var( l.identifier_der ) +
+										 len_var( l.key_der ) + 2 ) }">				<MvCOMMENT> length </MvCOMMENT>
+
+			<MvEVAL EXPR = "{ asciichar( 0x30 ) }">									<MvCOMMENT> SEQUENCE </MvCOMMENT>
+			<MvEVAL EXPR = "{ asciichar( len_var( l.identifier_der ) ) }">			<MvCOMMENT> length </MvCOMMENT>
+			<MvEVAL EXPR = "{ l.identifier_der }">
+
+			<MvEVAL EXPR = "{ l.key_der }">
+		</MvCAPTURE>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00101', 'Unknown credentialPublicKey type' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| NOTE: This attestation validation is pretty lame.
+	|	1. FireFox's default is to strip the attestation as part of its privacy protections (attestation format "none")
+	|	2. The root certificates in packed and fido-utf attestation aren't publically listed anywhere, so we can't verify the certificate itself (although we do verify the signature generated using the certificate)
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.attestation:fmt EQ 'none' }">
+		<MvCOMMENT>
+		|
+		| Do nothing
+		|
+		</MvCOMMENT>
+	<MvELSEIF EXPR = "{ l.attestation:fmt EQ 'fido-u2f' }">
+		<MvIF EXPR = "{ NOT x509_load_mem_format( l.attestation:attStmt:x5c[ 1 ], 'der', l.attestation_x509 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00102', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT evp_pkey_load_pubkey_x509( l.attestation_x509, l.attestation_pkey ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00103', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.publickey:type NE 'EC2' }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00104', 'Invalid public key type for fido-u2f attestation' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT crypto_evp_digest( 'sha256', l.json_clientdata, l.clientdata_sha256 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00105', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvCAPTURE VARIABLE = "l.u2f_signed_data">
+			<MvEVAL EXPR = "{ asciichar( 0x00 ) }">
+			<MvEVAL EXPR = "{ l.auth_data:rpIdHash }">
+			<MvEVAL EXPR = "{ l.clientdata_sha256 }">
+			<MvEVAL EXPR = "{ l.credential:credentialId }">
+			<MvEVAL EXPR = "{ asciichar( 0x04 ) }">
+			<MvEVAL EXPR = "{ miva_variable_value( 'l.credential:credentialPublicKey:-2' ) }">
+			<MvEVAL EXPR = "{ miva_variable_value( 'l.credential:credentialPublicKey:-3' ) }">
+		</MvCAPTURE>
+
+		<MvIF EXPR = "{ NOT crypto_evp_verify( 'sha256', l.attestation_pkey, l.u2f_signed_data, l.attestation:attStmt:sig ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00106', crypto_last_error() ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.attestation:fmt EQ 'packed' }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.attestation:attStmt, 'x5c' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00131', 'Only basic attestation with attestation trust path x5c is supported for packed attestation' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT x509_load_mem_format( l.attestation:attStmt:x5c[ 1 ], 'der', l.attestation_x509 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00132', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT evp_pkey_load_pubkey_x509( l.attestation_x509, l.attestation_pkey ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00133', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.publickey:type NE 'EC2' }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00134', 'Invalid public key type for packed attestation' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT crypto_evp_digest( 'sha256', l.json_clientdata, l.clientdata_sha256 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00135', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvCAPTURE VARIABLE = "l.packed_signed_data">
+			<MvEVAL EXPR = "{ l.attestation:authData }">
+			<MvEVAL EXPR = "{ l.clientdata_sha256 }">
+		</MvCAPTURE>
+
+		<MvIF EXPR = "{ NOT crypto_evp_verify( 'sha256', l.attestation_pkey, l.packed_signed_data, l.attestation:attStmt:sig ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00136', crypto_last_error() ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ x509_get_extensions( l.attestation_x509, l.extensions ) AND
+						miva_array_search( l.extensions, 1, l.extension, 'l.extension:oid EQ \'1.3.6.1.4.1.45724.1.1.4\'' ) }">
+			<MvCAPTURE VARIABLE = "l.aaguid_asn1">
+				<MvEVAL EXPR = "{ asciichar( 0x04 ) }">			<MvCOMMENT> OCTET STRING </MvCOMMENT>
+				<MvEVAL EXPR = "{ asciichar( len_var( l.credential:aaguid ) ) }">
+				<MvEVAL EXPR = "{ l.credential:aaguid }">
+			</MvCAPTURE>
+
+			<MvIF EXPR = "{ l.extension:data NE l.aaguid_asn1 }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00137', 'Attestation certificate aaguid does not match authenticatorData' ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00107', 'Unsupported attestation format \'' $ l.attestation:fmt $ '\'' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WebAuthn_Verify_Assertion" PARAMETERS = "id, pubkey_der, signcount var, expected_challenge, require_uv, authenticator_data, json_clientdata, signature" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ s.mivaversion LT 5.32 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00121', 'Unsupported MivaScript version' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack json_clientdata
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT miva_json_decode( l.json_clientdata, l.clientdata ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00108', miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Unpack authenticator_data
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.auth_data:rpIdHash"		VALUE = "{ substring_var( l.authenticator_data, 1, 32 ) }">
+	<MvASSIGN NAME = "l.raw_flags"				VALUE = "{ asciivalue( substring_var( l.authenticator_data, 33, 1 ) ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:UP"		VALUE = "{ min( l.raw_flags BITAND 1, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:UV"		VALUE = "{ min( l.raw_flags BITAND 4, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:AT"		VALUE = "{ min( l.raw_flags BITAND 64, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:flags:ED"		VALUE = "{ min( l.raw_flags BITAND 128, 1 ) }">
+	<MvASSIGN NAME = "l.auth_data:signCount"	VALUE = "{ ( asciivalue( substring_var( l.authenticator_data, 34, 1 ) ) BITSL 24 ) BITOR
+														   ( asciivalue( substring_var( l.authenticator_data, 35, 1 ) ) BITSL 16 ) BITOR
+														   ( asciivalue( substring_var( l.authenticator_data, 36, 1 ) ) BITSL 8 ) BITOR
+														   asciivalue( substring_var( l.authenticator_data, 37, 1 ) ) }">
+
+	<MvCOMMENT>
+	|
+	| 7.2.7: Verify that the value of C.type is the string webauthn.get.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.clientdata:type NE 'webauthn.get' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00109', 'Unexpected C.type' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.8: Verify that the value of C.challenge matches the challenge that was sent to the authenticator in the PublicKeyCredentialRequestOptions passed to the get() call.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.clientdata:challenge"	VALUE = "{ glosub( l.clientdata:challenge, '-', '+' ) }">
+	<MvASSIGN NAME = "l.clientdata:challenge"	VALUE = "{ glosub( l.clientdata:challenge, '_', '/' ) }">
+
+	<MvASSIGN NAME = "l.challenge"				VALUE = "{ crypto_base64_decode( l.clientdata:challenge ) }">
+
+	<MvIF EXPR = "{ l.challenge NE l.expected_challenge }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00110', 'Challenge mismatch' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.9: Verify that the value of C.origin matches the Relying Party's origin.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.clientdata:origin IN s.documenturl ) NE 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00111', 'Invalid origin' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.11: Verify that the rpIdHash in aData is the SHA-256 hash of the RP ID expected by the Relying Party.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT crypto_sha256( gettoken( s.http_host, ':', 1 ), 'raw', l.origin_hash ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00112', crypto_last_error() ) }">
+	<MvELSEIF EXPR = "{ l.auth_data:rpIdHash NE l.origin_hash }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00113', 'rpIdHash mismatch' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.12: If user verification is required for this assertion, verify that the User Verified bit of the flags in aData is set.
+	| 7.2.13: If user verification is not required for this assertion, verify that the User Present bit of the flags in aData is set.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.require_uv }">
+		<MvIF EXPR = "{ NOT l.auth_data:flags:UV }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00114', 'User not verified' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT l.auth_data:flags:UP }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00115', 'User not present' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.15: Let hash be the result of computing a hash over the cData using SHA-256.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT crypto_sha256( l.json_clientdata, 'raw', l.clientdata_sha256 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00116', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.16: Using the credential public key looked up in step 3, verify that sig is a valid signature over the binary concatenation of aData and hash.
+	|
+	</MvCOMMENT>
+		
+	<MvASSIGN NAME = "l.signed_data"			VALUE = "{ l.authenticator_data $ l.clientdata_sha256 }">
+
+	<MvIF EXPR = "{ NOT evp_pkey_load_pubkey_mem( l.pubkey_der, 'der', l.pubkey ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00117', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT crypto_evp_verify( 'sha256', l.pubkey, l.signed_data, l.signature ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00118', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| 7.2.17: If the signature counter value adata.signCount is nonzero or the value stored in conjunction with credential’s id attribute is nonzero, then run the following sub-step:
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.auth_data:signCount NE 0 ) OR ( l.signcount NE 0 ) }">
+		<MvIF EXPR = "{ l.auth_data:signCount GT l.signcount }">
+			<MvCOMMENT>
+			|
+			| greater than the signature counter value stored in conjunction with credential’s id attribute.
+			|   Update the stored signature counter value, associated with credential’s id attribute, to be the value of adata.signCount. 
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.signcount"		VALUE = "{ l.auth_data:signCount }">
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| less than or equal to the signature counter value stored in conjunction with credential’s id attribute. 
+			|
+			</MvCOMMENT>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00119', 'Authenticator may have been cloned' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Runtime Password Hashing
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_Password_Encrypted" PARAMETERS = "password" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( ( 'PBKDF1:' IN l.password ) EQ 1 ) AND ( len_var( l.password ) GT 15 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ ( ( 'PBKDF2:' IN l.password ) EQ 1 ) AND ( len_var( l.password ) GT 15 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ ( ( 'SHA1:' IN l.password ) EQ 1 ) AND ( len_var( l.password ) EQ 77 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF> 
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_Password_Verify" PARAMETERS = "plaintext, encrypted" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.plaintext OR ISNULL l.encrypted }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Runtime_Password_Encrypted( l.encrypted ) }">
+		<MvFUNCTIONRETURN VALUE = "{ crypto_md5( l.plaintext ) EQ crypto_md5( l.encrypted ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( 'PBKDF1:' IN l.encrypted ) EQ 1 }">		<MvFUNCTIONRETURN VALUE = "{ Runtime_Password_Verify_PBKDF1( l.plaintext, l.encrypted ) }">
+	<MvELSEIF EXPR = "{ ( 'PBKDF2:' IN l.encrypted ) EQ 1 }">	<MvFUNCTIONRETURN VALUE = "{ Runtime_Password_Verify_PBKDF2( l.plaintext, l.encrypted ) }">
+	<MvELSEIF EXPR = "{ ( 'SHA1:' IN l.encrypted ) EQ 1 }">		<MvFUNCTIONRETURN VALUE = "{ Runtime_Password_Verify_SHA1( l.plaintext, l.encrypted ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| PBKDF2 Prefix (PKCS No. 5/RFC2898):
+|	The hash, and iteration count and key identifier are embedded in the encrypted
+|	password and may vary.  The derived key length must be determined based on the
+|	apparent length of the ciphertext.
+|
+|	Format:
+|		PBKDF2:hash:iterations:salt-base64:ciphertext-base64
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_Password_Verify_PBKDF2" PARAMETERS = "plaintext var, encrypted var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.hash"					VALUE = "{ gettoken( l.encrypted, ':', 2 ) }">
+	<MvASSIGN NAME = "l.iterations"				VALUE = "{ int( gettoken( l.encrypted, ':', 3 ) ) }">
+	<MvASSIGN NAME = "l.salt"					VALUE = "{ crypto_base64_decode( gettoken( l.encrypted, ':', 4 ) ) }">
+	<MvASSIGN NAME = "l.encrypted_ciphertext"	VALUE = "{ crypto_base64_decode( gettoken( l.encrypted, ':', 5 ) ) }">
+	<MvASSIGN NAME = "l.dklen"					VALUE = "{ len_var( l.encrypted_ciphertext ) }">
+
+	<MvIF EXPR = "{ NOT PBKDF2( l.hash, l.plaintext, l.salt, l.iterations, l.dklen, l.ciphertext ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.ciphertext EQ l.encrypted_ciphertext }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| PBKDF1 Prefix (PKCS No. 5/RFC2898):
+|	The hash, and iteration count and key identifier are embedded in the encrypted
+|	password and may vary.  The derived key length must be determined based on the
+|	apparent length of the ciphertext.
+|
+|	Format:
+|		PBKDF1:hash:iterations:salt-base64:ciphertext-base64
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_Password_Verify_PBKDF1" PARAMETERS = "plaintext var, encrypted var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.hash"					VALUE = "{ gettoken( l.encrypted, ':', 2 ) }">
+	<MvASSIGN NAME = "l.iterations"				VALUE = "{ int( gettoken( l.encrypted, ':', 3 ) ) }">
+	<MvASSIGN NAME = "l.salt"					VALUE = "{ crypto_base64_decode( gettoken( l.encrypted, ':', 4 ) ) }">
+	<MvASSIGN NAME = "l.encrypted_ciphertext"	VALUE = "{ crypto_base64_decode( gettoken( l.encrypted, ':', 5 ) ) }">
+	<MvASSIGN NAME = "l.dklen"					VALUE = "{ len_var( l.encrypted_ciphertext ) }">
+
+	<MvIF EXPR = "{ NOT PBKDF1( l.hash, l.plaintext, l.salt, l.iterations, l.dklen, l.ciphertext ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.ciphertext EQ l.encrypted_ciphertext }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| SHA1 Prefix (custcrypt module)
+|	Single iteration of SHA1 with a 16-byte random salt.  The output is
+|	hexidecimal encoded.
+|
+|	Format:
+|		SSSSSSSSSSSSSSSSSSSSSSSSSSSSSS CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC
+|
+|	S = Hexidecimal encoded salt
+|	C = Hexidecimal encoded ciphertext
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_Password_Verify_SHA1" PARAMETERS = "plaintext var, encrypted var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.salt"				VALUE = "{ [ g.Module_Library_Utilities ].Hex_Decode( substring( l.encrypted, 6, 32 ), 32 ) }">
+	<MvASSIGN NAME = "l.encrypted_sha1"		VALUE = "{ substring( l.encrypted, 38, 40 ) }">
+	<MvASSIGN NAME = "l.salted_plaintext"	VALUE = "{ l.salt $ l.plaintext }">
+
+	<MvIF EXPR = "{ crypto_sha1( l.salted_plaintext, 'hex', l.salted_sha1 ) AND ( l.salted_sha1 EQ l.encrypted_sha1 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_Password_Encrypt" PARAMETERS = "plaintext, encrypted var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.kdf" 		VALUE = "PBKDF1">
+	<MvASSIGN NAME = "l.hash"		VALUE = "sha1">
+	<MvASSIGN NAME = "l.dklen"		VALUE = 20>
+	<MvASSIGN NAME = "l.iterations"	VALUE = 1000>
+	<MvASSIGN NAME = "l.salt"		VALUE = "{ crypto_rand_bytes( 8 ) }">
+
+	<MvIF EXPR = "{ NOT PBKDF1( l.hash, l.plaintext, l.salt, l.iterations, l.dklen, l.ciphertext ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.encrypted"	VALUE = "{ l.kdf $ ':' $ l.hash $ ':' $ l.iterations $ ':' $ crypto_base64_encode( l.salt ) $ ':' $ crypto_base64_encode( l.ciphertext ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| SSH Public Key Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SSH_PublicKey_Parse" PARAMETERS = "key, key_type var, key_id var, key_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.key_type"			VALUE = "{ gettoken( l.key, ' ', 1 ) }">
+	<MvASSIGN NAME = "l.base64_key"			VALUE = "{ gettoken( l.key, ' ', 2 ) }">
+	<MvASSIGN NAME = "l.key_id"				VALUE = "{ gettoken( l.key, ' ', 3 ) }">
+
+	<MvIF EXPR = "{ l.key_type NE 'ssh-rsa' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00138', 'Unsupported SSH key type' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.binary_key"			VALUE = "{ crypto_base64_decode( l.base64_key ) }">
+
+	<MvASSIGN NAME = "l.pos"				VALUE = 1>
+	<MvASSIGN NAME = "l.type_name_len"		VALUE = "{ SSH_Read_DWORD( l.binary_key, l.pos ) }">
+	<MvASSIGN NAME = "l.type"				VALUE = "{ SSH_Read_Bytes( l.binary_key, l.pos, l.type_name_len ) }">
+
+	<MvIF EXPR = "{ l.type NE l.key_type }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00139', 'Key type mismatch' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.key_data"			VALUE = "">
+
+	<MvASSIGN NAME = "l.exponent_len"		VALUE = "{ SSH_Read_DWORD( l.binary_key, l.pos ) }">
+	<MvASSIGN NAME = "l.key_data:exponent"	VALUE = "{ SSH_Read_Bytes( l.binary_key, l.pos, l.exponent_len ) }">
+
+	<MvASSIGN NAME = "l.modulus_len"		VALUE = "{ SSH_Read_DWORD( l.binary_key, l.pos ) }">
+	<MvASSIGN NAME = "l.key_data:modulus"	VALUE = "{ SSH_Read_Bytes( l.binary_key, l.pos, l.modulus_len ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SSH_PublicKey_Load" PARAMETERS = "key, pubkey_idx var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT SSH_PublicKey_Parse( l.key, l.key_type, l.key_id, l.key_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.key_type EQ 'ssh-rsa' }">
+		<MvASSIGN NAME = "l.der_key"		VALUE = "{ DER_PublicKey_RSA( l.key_data:modulus, l.key_data:exponent ) }">
+
+		<MvIF EXPR = "{ NOT evp_pkey_load_pubkey_mem( l.der_key, 'der', l.pubkey_idx ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00140', 'Error loading RSA public key: ' $ crypto_last_error() ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00141', 'Unsupported SSH key type' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SSH_Read_DWORD" PARAMETERS = "buffer var, pos var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ( asciivalue( substring_var( l.buffer, l.pos++, 1 ) ) BITSL 24 ) BITOR
+								 ( asciivalue( substring_var( l.buffer, l.pos++, 1 ) ) BITSL 16 ) BITOR
+								 ( asciivalue( substring_var( l.buffer, l.pos++, 1 ) ) BITSL 8 ) BITOR
+								 ( asciivalue( substring_var( l.buffer, l.pos++, 1 ) ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SSH_Read_Bytes" PARAMETERS = "buffer var, pos var, length" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.value"	VALUE = "{ substring_var( l.buffer, l.pos, l.length ) }">
+	<MvASSIGN NAME = "l.pos"	VALUE = "{ l.pos + l.length }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| ASN.1 DER Encoding Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DER_Length" PARAMETERS = "length" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Lengths between 0-127 are encoded in short form
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.length LT 0x7F }">
+		<MvFUNCTIONRETURN VALUE = "{ asciichar( l.length ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Longer lengths must be encoded in long form:
+	|	The first octet is 0x80 + the number of octets, and we must use the smallest number of possible octets.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.length GT 0xFFFFFF }">		<MvCOMMENT> Four output bytes </MvCOMMENT>
+		<MvFUNCTIONRETURN VALUE = "{ asciichar( 0x80 + 4 ) $ 
+									 asciichar( ( l.length BITAND 0xFF000000 ) BITSR 24 ) $
+									 asciichar( ( l.length BITAND 0x00FF0000 ) BITSR 16 ) $
+									 asciichar( ( l.length BITAND 0x0000FF00 ) BITSR 8 ) $
+									 asciichar( l.length BITAND 0x000000FF ) }">
+	<MvELSEIF EXPR = "{ l.length GT 0xFFFF }">		<MvCOMMENT> Three output bytes </MvCOMMENT>
+		<MvFUNCTIONRETURN VALUE = "{ asciichar( 0x80 + 3 ) $ 
+									 asciichar( ( l.length BITAND 0x00FF0000 ) BITSR 16 ) $
+									 asciichar( ( l.length BITAND 0x0000FF00 ) BITSR 8 ) $
+									 asciichar( l.length BITAND 0x000000FF ) }">
+	<MvELSE>										<MvCOMMENT> Two output bytes </MvCOMMENT>
+		<MvFUNCTIONRETURN VALUE = "{ asciichar( 0x80 + 2 ) $ 
+									 asciichar( ( l.length BITAND 0x0000FF00 ) BITSR 8 ) $
+									 asciichar( l.length BITAND 0x000000FF ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DER_RSAPublicKey" PARAMETERS = "modulus, exponent" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.modulus_der">
+		<MvEVAL EXPR = "{ asciichar( 0x02 ) }">									<MvCOMMENT> INTEGER </MvCOMMENT>
+		<MvEVAL EXPR = "{ DER_Length( len_var( l.modulus ) ) }">
+		<MvEVAL EXPR = "{ l.modulus }">
+	</MvCAPTURE>
+
+	<MvCAPTURE VARIABLE = "l.exponent_der">
+		<MvEVAL EXPR = "{ asciichar( 0x02 ) }">									<MvCOMMENT> INTEGER </MvCOMMENT>
+		<MvEVAL EXPR = "{ DER_Length( len_var( l.exponent ) ) }">
+		<MvEVAL EXPR = "{ l.exponent }">
+	</MvCAPTURE>
+
+	<MvCAPTURE VARIABLE = "l.key_sequence_der">
+		<MvEVAL EXPR = "{ asciichar( 0x30 ) }">									<MvCOMMENT> SEQUENCE </MvCOMMENT>
+		<MvEVAL EXPR = "{ DER_Length( len_var( l.modulus_der ) +
+									  len_var( l.exponent_der ) ) }">
+		<MvEVAL EXPR = "{ l.modulus_der }">
+		<MvEVAL EXPR = "{ l.exponent_der }">
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.key_sequence_der }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DER_PublicKey_RSA" PARAMETERS = "modulus var, exponent var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.identifier_der"		VALUE = "{ miva_hex_decode( '06092A864886F70D010101' ) }">
+	<MvASSIGN NAME = "l.key_sequence_der"	VALUE = "{ DER_RSAPublicKey( l.modulus, l.exponent ) }">
+
+	<MvCAPTURE VARIABLE = "l.key_bitstring_der">
+		<MvEVAL EXPR = "{ asciichar( 0x03 ) }">									<MvCOMMENT> BIT STRING </MvCOMMENT>
+		<MvEVAL EXPR = "{ DER_Length( 1 + len_var( l.key_sequence_der ) ) }">
+		<MvEVAL EXPR = "{ asciichar( 0x00 ) }">
+		<MvEVAL EXPR = "{ l.key_sequence_der }">
+	</MvCAPTURE>
+
+	<MvCAPTURE VARIABLE = "l.pubkey_der">
+		<MvEVAL EXPR = "{ asciichar( 0x30 ) }">									<MvCOMMENT> SEQUENCE </MvCOMMENT>
+
+		<MvEVAL EXPR = "{ DER_Length( len_var( l.identifier_der ) +
+									  len_var( l.key_bitstring_der ) + 2 ) }">	<MvCOMMENT> length </MvCOMMENT>
+
+		<MvEVAL EXPR = "{ asciichar( 0x30 ) }">									<MvCOMMENT> SEQUENCE </MvCOMMENT>
+		<MvEVAL EXPR = "{ asciichar( len_var( l.identifier_der ) ) }">			<MvCOMMENT> length </MvCOMMENT>
+		<MvEVAL EXPR = "{ l.identifier_der }">
+
+		<MvEVAL EXPR = "{ l.key_bitstring_der }">
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.pubkey_der }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Miscellaneous functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Random_Int31" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ( ( asciivalue( crypto_rand_bytes( 1 ) ) BITAND 127 ) BITSL 24 ) BITOR
+								 ( asciivalue( crypto_rand_bytes( 1 ) ) BITSL 16 ) BITOR
+								 ( asciivalue( crypto_rand_bytes( 1 ) ) BITSL 8 ) BITOR
+								 asciivalue( crypto_rand_bytes( 1 ) ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Duo OIDC
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Duo_State_Generate" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Base64URLEncode( crypto_rand_bytes( 36 ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Duo_AuthorizationRequest" PARAMETERS = "duo_credentials var, username, state, redirect_uri, duo_authorization_url var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.header" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">{
+		"typ": "JWT",
+		"alg": "HS512"
+	}
+	</MvCAPTURE>
+
+	<MvCAPTURE VARIABLE = "l.payload" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">{
+		"response_type":			"code",
+		"scope":					"openid",
+		"exp":						<MvEVAL EXPR = "{ int( s.dyn_time_t + 300 ) }">,
+		"client_id":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.duo_credentials:client_id ) }">",
+		"redirect_uri":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.redirect_uri ) }">",
+		"state":					"<MvEVAL EXPR = "{ encodejavascriptstring( l.state ) }">",
+		"duo_uname":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.username ) }">",
+		"use_duo_code_attribute":	true
+	}
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.unsigned" VALUE = "{ [ g.Library_Filename_Utilities ].Base64URLEncode( l.header ) $ '.' $ [ g.Library_Filename_Utilities ].Base64URLEncode( l.payload ) }">
+
+	<MvIF EXPR = "{ NOT crypto_evp_hmac( 'sha512', l.duo_credentials:secret, l.unsigned, l.signature ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00142', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.duo_authorization_url" VALUE = "{ 'https://' $ l.duo_credentials:api_hostname $ '/oauth/v1/authorize?response_type=code&client_id=' $ encodeattribute( l.duo_credentials:client_id ) $ '&request=' $ encodeattribute( l.unsigned $ '.' $ [ g.Library_Filename_Utilities ].Base64URLEncode( l.signature ) ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Duo_AccessToken" PARAMETERS = "duo_credentials var, code, username, redirect_uri" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Build JWT
+	|
+	</MvCOMMENT>
+
+	<MvCAPTURE VARIABLE = "l.header" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">{
+		"typ": "JWT",
+		"alg": "HS512"
+	}
+	</MvCAPTURE>
+
+	<MvCAPTURE VARIABLE = "l.payload" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">{
+		"iss":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.duo_credentials:client_id ) }">",
+		"sub":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.duo_credentials:client_id ) }">",
+		"aud":	"<MvEVAL EXPR = "{ encodejavascriptstring( 'https://' $ l.duo_credentials:api_hostname $ '/oauth/v1/token' ) }">",
+		"exp":	<MvEVAL EXPR = "{ int( s.dyn_time_t + 300 ) }">,
+		"jti":	"<MvEVAL EXPR = "{ encodejavascriptstring( [ g.Library_Filename_Utilities ].Base64URLEncode( crypto_rand_bytes( 36 ) ) ) }">",
+		"iat":	<MvEVAL EXPR = "{ int( s.dyn_time_t ) }">
+	}
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.unsigned"				VALUE = "{ [ g.Library_Filename_Utilities ].Base64URLEncode( l.header ) $ '.' $ [ g.Library_Filename_Utilities ].Base64URLEncode( l.payload ) }">
+
+	<MvIF EXPR = "{ NOT crypto_evp_hmac( 'sha512', l.duo_credentials:secret, l.unsigned, l.signature ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00143', crypto_last_error() ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Assemble parameters
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.grant_type"				VALUE = "authorization_code">
+	<MvASSIGN NAME = "l.client_assertion_type"	VALUE = "urn:ietf:params:oauth:client-assertion-type:jwt-bearer">
+	<MvASSIGN NAME = "l.client_assertion"		VALUE = "{ l.unsigned $ '.' $ [ g.Library_Filename_Utilities ].Base64URLEncode( l.signature ) }">
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCALL METHOD	= "POST"
+			ACTION	= "{ 'https://' $ l.duo_credentials:api_hostname $ '/oauth/v1/token' }"
+			FLAGS	= "noparse"
+			FIELDS	= "l.grant_type, l.code, l.redirect_uri, l.client_assertion_type, l.client_assertion">
+		<MvASSIGN NAME = "l.json_response" VALUE = "{ s.callvalue }">
+	</MvCALL>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00144', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_json_decode( l.json_response, l.response ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00145', miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.response:error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00146', 'Authentication failed: ' $ l.response:error $ ': ' $ l.response:error_description ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.id_token_header"		VALUE = "{ gettoken( l.response:id_token, '.', 1 ) }">
+	<MvASSIGN NAME = "l.id_token_payload"		VALUE = "{ gettoken( l.response:id_token, '.', 2 ) }">
+	<MvASSIGN NAME = "l.id_token_signature"		VALUE = "{ gettoken( l.response:id_token, '.', 3 ) }">
+
+	<MvCOMMENT>
+	|
+	| Validate JWT Signature
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.signed_data"			VALUE = "{ l.id_token_header $ '.' $ l.id_token_payload }">
+
+	<MvIF EXPR = "{ NOT miva_json_decode( crypto_base64_decode( l.id_token_header ), l.header ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00147', miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.header:typ NE 'JWT' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00148', 'Unsupported header type' ) }">
+	<MvELSEIF EXPR = "{ l.header:alg EQ 'HS512' }">
+		<MvIF EXPR = "{ NOT crypto_evp_hmac( 'sha512', l.duo_credentials:secret, l.signed_data, l.signature ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00149', crypto_last_error() ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.header:alg EQ 'HS256' }">
+		<MvIF EXPR = "{ NOT crypto_evp_hmac( 'sha256', l.duo_credentials:secret, l.signed_data, l.signature ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00150', crypto_last_error() ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00151', 'Unsupported JWT signature algorithm' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.id_token_signature, [ g.Library_Filename_Utilities ].Base64URLEncode( l.signature ) ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00152', 'Payload signature mismatch' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate Response
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT miva_json_decode( crypto_base64_decode( l.id_token_payload ), l.payload ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00153', miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.payload:auth_result:result, 'allow' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00154', 'Authentication failed: ' $ l.payload:auth_result:status_msg ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.payload:sub, l.username ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-CRY-PUB-00155', 'Username mismatch' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

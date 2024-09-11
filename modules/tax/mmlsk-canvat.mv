@@ -1,0 +1,1594 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-TAX-CAN-
+| Next Error Code: 55   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-canvat">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Canadian VAT">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0102">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.01">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "tax, vis_product, vis_store, provision_store, data_store, not_prod, json, clientside, clientside_sri, copy_prod">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Hide_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Required" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00040', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'CanVatGst
+						  (
+							gst			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 3 )	$ ',
+							tax_ship	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.canvatgst:gst" 		VALUE = "7.000">
+	<MvASSIGN NAME = "l.canvatgst:tax_ship" VALUE = 0>
+
+	<MvIF EXPR = "{ NOT CanVatGst_Insert( l.canvatgst ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'CanVat
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							name		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+							type		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )		$ ',
+							pst			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 3 )	$ ',
+							hst			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 3 )	$ ',
+							tax_ship	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ ',
+							tax_gst		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'CanVat_1 ON ' $ g.Store_Table_Prefix $ 'CanVat ( name )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'CanVat_2 ON ' $ g.Store_Table_Prefix $ 'CanVat ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00041', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'CanVat', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'CanVatProducts
+						  (
+							product_id ' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
+							gst_exempt ' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							pst_exempt ' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'CanVatProducts_1 ON ' $ g.Store_Table_Prefix $ 'CanVatProducts ( product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CanVatGst' }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CanVat' }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CanVatProducts' }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'CanVat' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Basket" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Basket:ship_cntry NE 'CA' OR g.Basket:tax_exempt }">
+		<MvIF EXPR = "{ NOT g.Store:req_tax }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge"			 	VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt"	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"		 	VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVatGst_Load( l.canvatgst ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Load_Province( g.Basket:ship_state, l.canvat ) }">
+		<MvASSIGN NAME = "l.tax_type" 		VALUE = "pst">
+		<MvASSIGN NAME = "l.pst_rate" 		VALUE = "0.00">
+		<MvASSIGN NAME = "l.hst_rate" 		VALUE = "0.00">
+		<MvASSIGN NAME = "l.tax_ship" 		VALUE = 0>
+		<MvASSIGN NAME = "l.tax_gst" 		VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.tax_type" 		VALUE = "{ l.canvat:type }">
+		<MvASSIGN NAME = "l.pst_rate" 		VALUE = "{ l.canvat:pst }">
+		<MvASSIGN NAME = "l.hst_rate" 		VALUE = "{ l.canvat:hst }">
+		<MvASSIGN NAME = "l.tax_ship" 		VALUE = "{ l.canvat:tax_ship }">
+		<MvASSIGN NAME = "l.tax_gst" 		VALUE = "{ l.canvat:tax_gst }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pst_rebatable"		VALUE = 0.00>
+	<MvASSIGN NAME = "l.hst_tax"			VALUE = 0.00>
+	<MvASSIGN NAME = "l.pst_tax"			VALUE = 0.00>
+	<MvASSIGN NAME = "l.gst_tax"			VALUE = 0.00>
+
+	<MvASSIGN NAME = "l.basketcharge_count"	VALUE = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ NOT l.basketitem:taxable }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.price"						VALUE = "{ l.basketitem:price * l.basketitem:quantity }">
+
+		<MvFOREACH ITERATOR = "l.option" ARRAY = "l.basketitem:options" COUNT = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+			<MvASSIGN NAME = "l.price"					VALUE = "{ l.price + ( l.option:price * l.basketitem:quantity ) }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ CanVatProduct_Load_Product( l.basketitem:product_id, l.canvat ) }">
+			<MvASSIGN NAME = "l.gst_exempt" 			VALUE = "{ l.canvat:gst_exempt }">
+			<MvASSIGN NAME = "l.pst_exempt" 			VALUE = "{ l.canvat:pst_exempt }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.gst_exempt" 			VALUE = 0>
+			<MvASSIGN NAME = "l.pst_exempt" 			VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.tax_type EQ 'hst' OR l.tax_type EQ 'hst_rebate' }">
+			<MvIF EXPR = "{ l.hst_rate GT 0 }">
+				<MvASSIGN NAME = "l.basketitem:tax"			VALUE = "{ l.price * ( l.hst_rate / 100 ) }">
+				<MvASSIGN NAME = "l.hst_tax"				VALUE = "{ l.hst_tax + l.basketitem:tax }">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Update_Tax( l.basketitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.tax_type EQ 'hst_rebate' AND l.pst_exempt AND l.pst_rate GT 0 }">
+				<MvASSIGN NAME = "l.pst_rebatable"			VALUE = "{ l.pst_rebatable + l.price }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ ( ( l.canvatgst:gst GT 0 ) AND ( NOT l.gst_exempt ) ) OR
+							( ( l.pst_rate GT 0 ) AND ( NOT l.pst_exempt ) ) }">
+				<MvASSIGN NAME = "l.basketitem_gst_tax"		VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketitem_pst_tax"		VALUE = 0.00>
+
+				<MvIF EXPR = "{ ( l.canvatgst:gst GT 0 ) AND ( NOT l.gst_exempt ) }">	<MvASSIGN NAME = "l.basketitem_gst_tax" VALUE = "{ l.price * ( l.canvatgst:gst / 100 ) }">	</MvIF>
+				<MvIF EXPR = "{ ( l.pst_rate GT 0 ) AND ( NOT l.pst_exempt ) }">		<MvASSIGN NAME = "l.basketitem_pst_tax" VALUE = "{ l.price * ( l.pst_rate / 100 ) }">		</MvIF>
+
+				<MvASSIGN NAME = "l.basketitem:tax"			VALUE = "{ l.basketitem_pst_tax + l.basketitem_gst_tax }">
+
+				<MvASSIGN NAME = "l.pst_tax"				VALUE = "{ l.pst_tax + l.basketitem_pst_tax }">
+				<MvASSIGN NAME = "l.gst_tax"				VALUE = "{ l.gst_tax + l.basketitem_gst_tax }">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Update_Tax( l.basketitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.canvatgst:tax_ship OR l.tax_ship }">
+		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+			<MvIF EXPR = "{ l.basketcharge:type EQ 'SHIPPING' }">
+				<MvIF EXPR = "{ l.tax_type EQ 'hst' OR l.tax_type EQ 'hst_rebate' }">
+					<MvIF EXPR = "{ l.hst_rate GT 0 AND l.tax_ship }">
+						<MvASSIGN NAME = "l.basketcharge:tax"		VALUE = "{ l.basketcharge:amount * ( l.hst_rate / 100 ) }">
+						<MvASSIGN NAME = "l.hst_tax"				VALUE = "{ l.hst_tax + l.basketcharge:tax }">
+
+						<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+					</MvIF>
+				<MvELSEIF EXPR = "{ ( l.canvatgst:gst GT 0 AND l.canvatgst:tax_ship ) OR ( l.pst_rate GT 0 AND l.tax_ship ) }">
+					<MvASSIGN NAME = "l.basketcharge_gst_tax"		VALUE = 0.00>
+					<MvASSIGN NAME = "l.basketcharge_pst_tax"		VALUE = 0.00>
+
+					<MvIF EXPR = "{ l.canvatgst:gst GT 0 AND l.canvatgst:tax_ship }">
+						<MvASSIGN NAME = "l.basketcharge_gst_tax"	VALUE = "{ l.basketcharge:amount * ( l.canvatgst:gst / 100 ) }">
+					</MvIF>
+
+					<MvIF EXPR = "{ l.pst_rate GT 0 AND l.tax_ship }">
+						<MvASSIGN NAME = "l.basketcharge_pst_tax"	VALUE = "{ l.basketcharge:amount * ( l.pst_rate / 100 ) }">
+					</MvIF>
+
+					<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = "{ l.basketcharge_pst_tax + l.basketcharge_gst_tax }">
+
+					<MvASSIGN NAME = "l.pst_tax"					VALUE = "{ l.pst_tax + l.basketcharge_pst_tax }">
+					<MvASSIGN NAME = "l.gst_tax"					VALUE = "{ l.gst_tax + l.basketcharge_gst_tax }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tax_type EQ 'hst' OR l.tax_type EQ 'hst_rebate' }">
+		<MvIF EXPR = "{ ( l.hst_rate GT 0 ) }">
+			<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+				<MvIF EXPR = "{ ( l.basketcharge:type NE 'SHIPPING' ) 	AND
+								( l.basketcharge:type NE 'TAX' ) 		AND
+								( NOT l.basketcharge:tax_exempt ) }">
+
+					<MvASSIGN NAME = "l.basketcharge:tax"	VALUE = "{ l.basketcharge:amount * ( l.hst_rate / 100 ) }">
+					<MvASSIGN NAME = "l.hst_tax"			VALUE = "{ l.hst_tax + l.basketcharge:tax }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge"			 		VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 		VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 				VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 			VALUE = "HST Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 			VALUE = "{ l.hst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 			VALUE = "{ l.hst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt" 		VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"		 		VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.pst_rebatable AND l.pst_rate AND l.tax_type EQ 'hst_rebate' }">
+			<MvASSIGN NAME = "l.pst_rebate" 				VALUE = "{ l.pst_rebatable * ( l.pst_rate / 100 ) }">
+
+			<MvASSIGN NAME = "l.basketcharge"			 	VALUE = "">
+			<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+			<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+			<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+			<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "PST Tax Rebate">
+			<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = "{ 0 - l.pst_rebate ROUND 2 }">
+			<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = "{ 0 - l.pst_rebate ROUND 2 }">
+			<MvASSIGN NAME = "l.basketcharge:tax_exempt" 	VALUE = 0>
+			<MvASSIGN NAME = "l.basketcharge:tax"		 	VALUE = 0.00>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ l.tax_gst }">
+			<MvASSIGN NAME = "l.pst_tax" 					VALUE = "{ l.pst_tax + ( l.gst_tax * ( l.pst_rate / 100 ) ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+			<MvIF EXPR = "{ l.basketcharge:type EQ 'SHIPPING' }">				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.basketcharge:type EQ 'TAX' }">				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.basketcharge:tax_exempt }">					<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.canvatgst:gst EQ 0 AND l.pst_rate EQ 0 }">	<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketcharge_gst_tax"	VALUE = 0.00>
+			<MvASSIGN NAME = "l.basketcharge_pst_tax"	VALUE = 0.00>
+
+			<MvIF EXPR = "{ l.canvatgst:gst GT 0 }">	<MvASSIGN NAME = "l.basketcharge_gst_tax"	VALUE = "{ ( l.basketcharge:amount * ( l.canvatgst:gst / 100 ) ) }">	</MvIF>
+			<MvIF EXPR = "{ l.pst_rate GT 0 }">			<MvASSIGN NAME = "l.basketcharge_pst_tax"	VALUE = "{ ( l.basketcharge:amount * ( l.pst_rate / 100 ) ) }">			</MvIF>
+
+			<MvASSIGN NAME = "l.basketcharge:tax"		VALUE = "{ l.basketcharge_pst_tax + l.basketcharge_gst_tax }">
+
+			<MvASSIGN NAME = "l.pst_tax"				VALUE = "{ l.pst_tax + l.basketcharge_pst_tax }">
+			<MvASSIGN NAME = "l.gst_tax"				VALUE = "{ l.gst_tax + l.basketcharge_gst_tax }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "GST Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = "{ l.gst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = "{ l.gst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id"		VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id"		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type"			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip"		VALUE = "PST Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount"		VALUE = "{ l.pst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.basketcharge:disp_amt"		VALUE = "{ l.pst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt"	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Order" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.order:ship_cntry NE 'CA' }">	<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT l.order:cust_id }">		<MvASSIGN NAME = "l.tax_exempt" VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].TaxExempt_Load_Customer_ID( l.order:cust_id, l.tax_exempt ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tax_exempt }">
+		<MvIF EXPR = "{ NOT g.Store:req_tax }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordercharge"			VALUE = "">
+		<MvASSIGN NAME = "l.ordercharge:order_id"	VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.ordercharge:module_id"	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.ordercharge:type"		VALUE = "TAX">
+		<MvASSIGN NAME = "l.ordercharge:descrip"	VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.ordercharge:amount"		VALUE = 0.00>
+		<MvASSIGN NAME = "l.ordercharge:disp_amt"	VALUE = 0.00>
+		<MvASSIGN NAME = "l.ordercharge:tax_exempt"	VALUE = 0>
+		<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Load_Province( l.order:ship_state, l.canvat ) }">
+		<MvASSIGN NAME = "l.tax_type" 		VALUE = "pst">
+		<MvASSIGN NAME = "l.pst_rate" 		VALUE = "0.00">
+		<MvASSIGN NAME = "l.hst_rate" 		VALUE = "0.00">
+		<MvASSIGN NAME = "l.tax_ship" 		VALUE = 0>
+		<MvASSIGN NAME = "l.tax_gst" 		VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.tax_type" 		VALUE = "{ l.canvat:type }">
+		<MvASSIGN NAME = "l.pst_rate" 		VALUE = "{ l.canvat:pst }">
+		<MvASSIGN NAME = "l.hst_rate" 		VALUE = "{ l.canvat:hst }">
+		<MvASSIGN NAME = "l.tax_ship" 		VALUE = "{ l.canvat:tax_ship }">
+		<MvASSIGN NAME = "l.tax_gst" 		VALUE = "{ l.canvat:tax_gst }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVatGst_Load( l.canvatgst ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pst_rebatable"	VALUE = 0.00>
+	<MvASSIGN NAME = "l.hst_tax"		VALUE = 0.00>
+	<MvASSIGN NAME = "l.pst_tax"		VALUE = 0.00>
+	<MvASSIGN NAME = "l.gst_tax"		VALUE = 0.00>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+		<MvIF EXPR = "{ NOT l.orderitem:taxable }">			<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 300 }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.orderitem_price"			VALUE = "{ l.orderitem:price * l.orderitem:quantity }">
+
+		<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ [ g.Module_Library_DB ].OrderOptionList_Load_Line( l.orderitem:line_id, l.orderoptions ) }">
+			<MvASSIGN NAME = "l.orderitem_price"		VALUE = "{ l.orderitem_price + l.orderoption:price }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ CanVatProduct_Load_Product( l.orderitem:product_id, l.canvat ) }">
+			<MvASSIGN NAME = "l.gst_exempt" 			VALUE = "{ l.canvat:gst_exempt }">
+			<MvASSIGN NAME = "l.pst_exempt" 			VALUE = "{ l.canvat:pst_exempt }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.gst_exempt" 			VALUE = 0>
+			<MvASSIGN NAME = "l.pst_exempt" 			VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.tax_type EQ 'hst' OR l.tax_type EQ 'hst_rebate' }">
+			<MvIF EXPR = "{ l.hst_rate GT 0 }">
+				<MvASSIGN NAME = "l.orderitem:tax"		VALUE = "{ l.orderitem_price * ( l.hst_rate / 100 ) }">
+				<MvASSIGN NAME = "l.hst_tax"			VALUE = "{ l.hst_tax + l.orderitem:tax }">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Tax( l.orderitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( l.tax_type EQ 'hst_rebate' ) AND l.pst_exempt AND l.pst_rate GT 0 }">
+				<MvASSIGN NAME = "l.pst_rebatable"		VALUE = "{ l.pst_rebatable + l.orderitem_price }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ ( ( l.canvatgst:gst GT 0 ) AND ( NOT l.gst_exempt ) ) OR
+							( ( l.pst_rate GT 0 ) AND ( NOT l.pst_exempt ) ) }">
+				<MvASSIGN NAME = "l.orderitem_gst_tax"	VALUE = 0.00>
+				<MvASSIGN NAME = "l.orderitem_pst_tax"	VALUE = 0.00>
+
+				<MvIF EXPR = "{ ( l.canvatgst:gst GT 0 ) AND ( NOT l.gst_exempt ) }">	<MvASSIGN NAME = "l.orderitem_gst_tax" VALUE = "{ l.orderitem_price * ( l.canvatgst:gst / 100 ) }">	</MvIF>
+				<MvIF EXPR = "{ ( l.pst_rate GT 0 ) AND ( NOT l.pst_exempt ) }">		<MvASSIGN NAME = "l.orderitem_pst_tax" VALUE = "{ l.orderitem_price * ( l.pst_rate / 100 ) }">		</MvIF>
+
+				<MvASSIGN NAME = "l.orderitem:tax"		VALUE = "{ l.orderitem_pst_tax + l.orderitem_gst_tax }">
+
+				<MvASSIGN NAME = "l.pst_tax"			VALUE = "{ l.pst_tax + l.orderitem_pst_tax }">
+				<MvASSIGN NAME = "l.gst_tax"			VALUE = "{ l.gst_tax + l.orderitem_gst_tax }">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Tax( l.orderitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.ordercharge_count"	VALUE = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Order( l.order:id, l.ordercharges ) }">
+
+	<MvIF EXPR = "{ l.canvatgst:tax_ship OR l.tax_ship }">
+		<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ l.ordercharge_count }">
+			<MvIF EXPR = "{ l.ordercharge:type EQ 'SHIPPING' }">
+				<MvIF EXPR = "{ l.tax_type EQ 'hst' OR l.tax_type EQ 'hst_rebate' }">
+					<MvIF EXPR = "{ l.hst_rate GT 0 AND l.tax_ship }">
+						<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = "{ l.ordercharge:amount * ( l.hst_rate / 100 ) }">
+						<MvASSIGN NAME = "l.hst_tax"				VALUE = "{ l.hst_tax + l.ordercharge:tax }">
+
+						<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+					</MvIF>
+				<MvELSEIF EXPR = "{ ( l.canvatgst:gst GT 0 AND l.canvatgst:tax_ship ) OR ( l.pst_rate GT 0 AND l.tax_ship ) }">
+					<MvASSIGN NAME = "l.ordercharge_gst_tax"		VALUE = 0.00>
+					<MvASSIGN NAME = "l.ordercharge_pst_tax"		VALUE = 0.00>
+
+					<MvIF EXPR = "{ l.canvatgst:gst GT 0 AND l.canvatgst:tax_ship }">
+						<MvASSIGN NAME = "l.ordercharge_gst_tax"	VALUE = "{ l.ordercharge:amount * ( l.canvatgst:gst / 100 ) }">
+					</MvIF>
+
+					<MvIF EXPR = "{ l.pst_rate GT 0 AND l.tax_ship }">
+						<MvASSIGN NAME = "l.ordercharge_pst_tax"	VALUE = "{ l.ordercharge:amount * ( l.pst_rate / 100 ) }">
+					</MvIF>
+
+					<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = "{ l.ordercharge_pst_tax + l.ordercharge_gst_tax }">
+
+					<MvASSIGN NAME = "l.pst_tax"					VALUE = "{ l.pst_tax + l.ordercharge_pst_tax }">
+					<MvASSIGN NAME = "l.gst_tax"					VALUE = "{ l.gst_tax + l.ordercharge_gst_tax }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tax_type EQ 'hst' OR l.tax_type EQ 'hst_rebate' }">
+		<MvIF EXPR = "{ ( l.hst_rate GT 0 ) }">
+			<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ l.ordercharge_count }">
+				<MvIF EXPR = "{ ( l.ordercharge:type NE 'SHIPPING' ) 	AND
+								( l.ordercharge:type NE 'TAX' ) 		AND
+								( NOT l.ordercharge:tax_exempt ) }">
+
+					<MvASSIGN NAME = "l.ordercharge:tax"	VALUE = "{ l.ordercharge:amount * ( l.hst_rate / 100 ) }">
+					<MvASSIGN NAME = "l.hst_tax"			VALUE = "{ l.hst_tax + l.ordercharge:tax }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordercharge"			 	VALUE = "">
+		<MvASSIGN NAME = "l.ordercharge:order_id" 		VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.ordercharge:module_id" 		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.ordercharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.ordercharge:descrip" 		VALUE = "HST Tax">
+		<MvASSIGN NAME = "l.ordercharge:amount" 		VALUE = "{ l.hst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.ordercharge:disp_amt" 		VALUE = "{ l.hst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.ordercharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.ordercharge:tax"		 	VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.pst_rebatable AND l.pst_rate AND l.tax_type EQ 'hst_rebate' }">
+			<MvASSIGN NAME = "l.pst_rebate" 			VALUE = "{ l.pst_rebatable * ( l.pst_rate / 100 ) }">
+
+			<MvASSIGN NAME = "l.ordercharge"			VALUE = "">
+			<MvASSIGN NAME = "l.ordercharge:order_id"	VALUE = "{ l.order:id }">
+			<MvASSIGN NAME = "l.ordercharge:module_id"	VALUE = "{ l.module:id }">
+			<MvASSIGN NAME = "l.ordercharge:type"		VALUE = "TAX">
+			<MvASSIGN NAME = "l.ordercharge:descrip"	VALUE = "PST Tax Rebate">
+			<MvASSIGN NAME = "l.ordercharge:amount"		VALUE = "{ 0 - l.pst_rebate ROUND 2 }">
+			<MvASSIGN NAME = "l.ordercharge:disp_amt"	VALUE = "{ 0 - l.pst_rebate ROUND 2 }">
+			<MvASSIGN NAME = "l.ordercharge:tax_exempt"	VALUE = 0>
+			<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = 0.00>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ l.tax_gst }">
+			<MvASSIGN NAME = "l.pst_tax" 				VALUE = "{ l.pst_tax + ( l.gst_tax * ( l.pst_rate / 100 ) ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ l.ordercharge_count }">
+			<MvIF EXPR = "{ l.ordercharge:type EQ 'SHIPPING' }">				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.ordercharge:type EQ 'TAX' }">					<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.ordercharge:tax_exempt }">					<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.canvatgst:gst EQ 0 AND l.pst_rate EQ 0 }">	<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.ordercharge_gst_tax"	VALUE = 0.00>
+			<MvASSIGN NAME = "l.ordercharge_pst_tax"	VALUE = 0.00>
+
+			<MvIF EXPR = "{ l.canvatgst:gst GT 0 }">	<MvASSIGN NAME = "l.ordercharge_gst_tax" VALUE = "{ ( l.ordercharge:amount * ( l.canvatgst:gst / 100 ) ) }">	</MvIF>
+			<MvIF EXPR = "{ l.pst_rate GT 0 }">			<MvASSIGN NAME = "l.ordercharge_pst_tax" VALUE = "{ ( l.ordercharge:amount * ( l.pst_rate / 100 ) ) }">			</MvIF>
+
+			<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = "{ l.ordercharge_pst_tax + l.ordercharge_gst_tax }">
+
+			<MvASSIGN NAME = "l.pst_tax"				VALUE = "{ l.pst_tax + l.ordercharge_pst_tax }">
+			<MvASSIGN NAME = "l.gst_tax"				VALUE = "{ l.gst_tax + l.ordercharge_gst_tax }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.ordercharge"			VALUE = "">
+		<MvASSIGN NAME = "l.ordercharge:order_id" 	VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.ordercharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.ordercharge:type" 		VALUE = "TAX">
+		<MvASSIGN NAME = "l.ordercharge:descrip" 	VALUE = "GST Tax">
+		<MvASSIGN NAME = "l.ordercharge:amount" 	VALUE = "{ l.gst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.ordercharge:disp_amt" 	VALUE = "{ l.gst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.ordercharge:tax_exempt" VALUE = 0>
+		<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordercharge"			VALUE = "">
+		<MvASSIGN NAME = "l.ordercharge:order_id"	VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.ordercharge:module_id"	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.ordercharge:type"		VALUE = "TAX">
+		<MvASSIGN NAME = "l.ordercharge:descrip"	VALUE = "PST Tax">
+		<MvASSIGN NAME = "l.ordercharge:amount"		VALUE = "{ l.pst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.ordercharge:disp_amt"	VALUE = "{ l.pst_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.ordercharge:tax_exempt"	VALUE = 0>
+		<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_ProcessOrder" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Head" PARAMETERS = "module var, tab, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Tabs" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.can_view" VALUE = "{ CanI( g.Admin_User_Administrator, g.Admin_User_ID, 'STAX', 1, 0, 0, 0 ) }">
+	<MvIF EXPR = "{ l.can_view AND ( len( g.Edit_Product ) ) }">
+		<MvFUNCTIONRETURN VALUE = "CANVAT:Canadian VAT">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Content" PARAMETERS = "module var, tab, load_fields, product var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ l.product:id }">
+			<MvIF EXPR = "{ NOT CanVatProduct_Load_Product( l.product:id, g.Product_CanVat ) }">
+				<MvASSIGN NAME = "g.Product_CanVat:product_id" VALUE = "{ l.product:id }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'CANVAT' }">
+		<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td>
+				<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Product_CanVAT:gst_exempt, 'Product_CanVat:gst_exempt', '1', 'GST Exempt' ) }">
+		</td></tr>
+		<tr><td>
+				<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Product_CanVAT:pst_exempt, 'Product_CanVat:pst_exempt', '1', 'PST Exempt' ) }">
+		</td></tr>
+		</table>
+
+		<INPUT TYPE = "hidden" NAME = "Product_CanVat:product_id" VALUE = "{ encodeentities( g.Product_CanVat:product_id ) }">
+	<MvELSE>
+		<MvHIDE FIELDS = "g.Product_CanVat">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Product_CanVat:gst_exempt"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_CanVat:gst_exempt ) }">
+	<MvASSIGN NAME = "g.Product_CanVat:pst_exempt"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_CanVat:pst_exempt ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.can_modify" VALUE = "{ CanI( g.Admin_User_Administrator, g.Admin_User_ID, 'PROD', 0, 0, 1, 0 ) }">
+
+	<MvIF EXPR = "{ l.can_modify }">
+		<MvIF EXPR = "{ NOT CanVatProduct_Load_Product( l.product:id, l.null ) }">
+			<MvIF EXPR = "{ NOT CanVatProduct_Insert( g.Product_CanVat ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00025', 'CanVAT Product ID \'' $ l.product:id $ '\' created' ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT CanVatProduct_Update( g.Product_CanVat ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00026', 'CanVAT Product ID \'' $ l.product:id $ '\' updated' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ CanVatProduct_Delete( l.product:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_LowStock" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_OutOfStock" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Store_CanVatGST_Gst" VALUE = "{ trim( g.Store_CanVatGST_Gst ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Store_CanVatGST_Gst, 10, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'CANVAT', 'Store_CanVatGST_Gst', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.canvatgst:gst" 		VALUE = "{ g.Store_CanVatGST_Gst }">
+	<MvASSIGN NAME = "l.canvatgst:tax_ship" VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Store_CanVatGST_Tax_Shipping ) }">
+
+	<MvIF EXPR = "{ NOT CanVatGst_Update( l.canvatgst ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00029', 'CanVAT Configuration updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tabs" 		VALUE = "GT_STORE/CANVAT_GST:Canadian VAT GST">
+	
+	<MvIF EXPR = "{ [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) AND
+	 				[ g.Module_Admin ].CanI( 'STAT', 1, 0, 0, 0 ) }">
+		<MvASSIGN NAME = "l.tabs"	VALUE = "{ l.tabs $ ',CANVAT:Canadian VAT' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.tabs }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT CanVatGst_Load( l.canvatgst ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Store_CanVatGST_Gst"			VALUE = "{ l.canvatgst:gst ROUND 3 }">
+		<MvASSIGN NAME = "g.Store_CanVatGST_Tax_Shipping"	VALUE = "{ l.canvatgst:tax_ship }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Tab_Visible( g.Tab, 'CANVAT_GST' ) }">
+		<MvHIDE FIELDS = "g.Store_CanVatGST_Gst, g.Store_CanVatGST_Tax_Shipping">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_STORE', 'CANVAT_GST' ) }">
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+		<tr><td align="left" valign="top" nowrap>
+			<b>GST:</b>&nbsp;
+		</td><td align="left" valign="top" nowrap width="100%">
+			<span><input type="text" size="10" name="Store_CanVatGST_Gst" value="{ encodeentities( g.Store_CanVatGST_Gst ) }"> %</span><br />
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Store_CanVatGST_Tax_Shipping, 'Store_CanVatGST_Tax_Shipping', 'Yes', 'Apply GST to Shipping' ) }">
+		</td></tr>
+		</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'CANVAT' }">
+		<MvEVAL EXPR = "{ Element_CanVatList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_CanVat_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_CanVatList_JavaScript( l.module ) }"> 
+			<MvEVAL EXPR = "{ Element_CanVat_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new CanVatList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_CanVatList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'settings' }">				<MvEVAL EXPR = "{ Module_Provision_Store_Settings( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'province_delete' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Province_Delete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'province_add' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Province_Add( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'product_delete' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Product_Delete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'product_add' }">			<MvEVAL EXPR = "{ Module_Provision_Store_Product_Add( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CanVatGst_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml,		'GST',			l.settings:gst,		10, 3 ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'TaxShipping',	l.settings:tax_ship ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVatGst_Update( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00033', 'CanVAT Configuration updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Province_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'code', l.code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Delete( l.code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00034', 'CanVAT Province \'' $ l.code $ '\' deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Province_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.province:hst" 		VALUE = 0.000>
+	<MvASSIGN NAME = "l.province:pst" 		VALUE = 0.000>
+	<MvASSIGN NAME = "l.province:tax_ship" 	VALUE = 0>
+	<MvASSIGN NAME = "l.province:tax_gst" 	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 		'R', l.provide_xml,	'Code',			l.province:name ) 														OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 		'R', l.provide_xml,	'Type',			l.province:type,		'HST,PST,HST_REBATE',	'hst,pst,hst_rebate' ) 	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 	'O', l.provide_xml,	'HST',			l.province:hst,			10, 3 ) 										OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 	'O', l.provide_xml,	'PST',			l.province:pst,			10, 3 ) 										OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml,	'TaxShipping',	l.province:tax_ship ) 													OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml,	'TaxGST',		l.province:tax_gst ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ CanVat_Load_Province( l.province:name, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Province \'' $ l.province:name $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Insert( l.province ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00035', 'CanVAT Province \'' $ l.province:name $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Product_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'code', l.code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+	
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Load_Code( l.code, l.product ) }">
+		<MvIF EXPR = "{ NOT CanVatProduct_Delete( l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00036', 'CanVAT Product ID \'' $ l.product:id $ '\' deleted' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Product_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R', l.provide_xml, 'Code', l.code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product \'' $ l.code $ '\' not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CanVatProduct_Load_Product( l.product:id, l.canvat_product ) }">
+		<MvASSIGN NAME = "l.loaded"						VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.loaded"						VALUE = 0>
+		<MvASSIGN NAME = "l.canvat_product:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.canvat_product:gst_exempt"	VALUE = 0>
+		<MvASSIGN NAME = "l.canvat_product:pst_exempt"	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'GSTExempt',	l.canvat_product:gst_exempt ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'PSTExempt',	l.canvat_product:pst_exempt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.loaded }">
+		<MvIF EXPR = "{ NOT CanVatProduct_Update( l.canvat_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00037', 'CanVAT Product ID \'' $ l.product:id $ '\' updated' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT CanVatProduct_Insert( l.canvat_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00038', 'CanVAT Product ID \'' $ l.product:id $ '\' created' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Read" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.canvat:id"			VALUE = "{ CanVat.d.id }">
+	<MvASSIGN NAME = "l.canvat:name"		VALUE = "{ CanVat.d.name }">
+	<MvASSIGN NAME = "l.canvat:type"		VALUE = "{ CanVat.d.type }">
+	<MvASSIGN NAME = "l.canvat:pst"			VALUE = "{ CanVat.d.pst }">
+	<MvASSIGN NAME = "l.canvat:hst"			VALUE = "{ CanVat.d.hst }">
+	<MvASSIGN NAME = "l.canvat:tax_gst"		VALUE = "{ CanVat.d.tax_gst }">
+	<MvASSIGN NAME = "l.canvat:tax_ship"	VALUE = "{ CanVat.d.tax_ship }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Load_ID" PARAMETERS = "id, canvat var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CanVat"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CanVat WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00042', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CanVat.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVat">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-CAN-00043' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ CanVat_Read( l.canvat ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVat">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Insert" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.canvat:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'CanVat' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CanVat
+						  ( id, name, type, pst, hst, tax_gst, tax_ship )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.canvat:id, l.canvat:name, l.canvat:type, l.canvat:pst, l.canvat:hst, l.canvat:tax_gst, l.canvat:tax_ship">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Update" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CanVat
+						  SET
+							type		= ?,
+							pst			= ?,
+							hst			= ?,
+							tax_gst		= ?,
+							tax_ship	= ?
+						  WHERE
+							name		= ?' }"
+			 FIELDS	= "l.canvat:type, l.canvat:pst, l.canvat:hst, l.canvat:tax_gst, l.canvat:tax_ship, l.canvat:name">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Update_ID" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CanVat
+						  SET
+							name		= ?,
+							type		= ?,
+							pst			= ?,
+							hst			= ?,
+							tax_gst		= ?,
+							tax_ship	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.canvat:name, l.canvat:type, l.canvat:pst, l.canvat:hst, l.canvat:tax_gst, l.canvat:tax_ship,
+					   l.canvat:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00044', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Delete" PARAMETERS = "name" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CanVat
+						  WHERE
+							' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'name' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS	= "l.name">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Delete_ID" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CanVat WHERE id = ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00045', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatList_Load_All" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CanVat"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CanVat ORDER BY name' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.canvat_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT CanVat.d.EOF }">
+		<MvASSIGN NAME = "l.canvat_count"	VALUE = "{ l.canvat_count + 1 }">
+		<MvEVAL EXPR = "{ CanVat_Read( l.canvat[ l.canvat_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "CanVat" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVat">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-TAX-CAN-00018', l.canvat_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVat_Load_Province" PARAMETERS = "name, canvat var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CanVat"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CanVat WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'name' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.name">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CanVat.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVat">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-CAN-00019' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ CanVat_Read( l.canvat ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVat">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatGst_Read" PARAMETERS = "canvatgst var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.canvatgst:gst"		VALUE = "{ CanVatGst.d.gst }">
+	<MvASSIGN NAME = "l.canvatgst:tax_ship"	VALUE = "{ CanVatGst.d.tax_ship }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatGst_Insert" PARAMETERS = "canvatgst var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CanVatGst
+						  ( gst, tax_ship )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.canvatgst:gst, l.canvatgst:tax_ship">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatGst_Update" PARAMETERS = "canvatgst var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CanVatGst
+						  SET
+							gst			= ?,
+							tax_ship 	= ?' }"
+			 FIELDS	= "l.canvatgst:gst, l.canvatgst:tax_ship">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatGst_Load" PARAMETERS = "canvatgst var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CanVatGst"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CanVatGst' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ CanVatGst_Read( l.canvatgst ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVatGst">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatProduct_Read" PARAMETERS = "canvatproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.canvatproduct:product_id"	VALUE = "{ CanVatProducts.d.product_id }">
+	<MvASSIGN NAME = "l.canvatproduct:gst_exempt"	VALUE = "{ CanVatProducts.d.gst_exempt }">
+	<MvASSIGN NAME = "l.canvatproduct:pst_exempt"	VALUE = "{ CanVatProducts.d.pst_exempt }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatProduct_Insert" PARAMETERS = "canvatproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CanVatProducts
+						  ( product_id, gst_exempt, pst_exempt )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.canvatproduct:product_id, l.canvatproduct:gst_exempt, l.canvatproduct:pst_exempt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatProduct_Update" PARAMETERS = "canvatproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CanVatProducts
+						  SET
+							gst_exempt	= ?,
+							pst_exempt	= ?
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.canvatproduct:gst_exempt, l.canvatproduct:pst_exempt, l.canvatproduct:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatProduct_Delete" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CanVatProducts
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CanVatProduct_Load_Product" PARAMETERS = "product_id, canvatproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CanVatProducts"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CanVatProducts WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CanVatProducts.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVatProducts">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-CAN-00020' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ CanVatProduct_Read( l.canvatproduct ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVatProducts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature Clientside
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/tax/canvat/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_CanVat_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/canvat/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/canvat/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/canvat/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature JSON
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'CanVatList_Load_Query' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_CanVatList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CanVat_Insert' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_CanVat_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CanVat_Update' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_CanVat_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CanVat_Delete' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_CanVat_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CanVat_Update_TaxShipping' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_CanVat_Update_TaxShipping( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CanVat_Update_TaxGST' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_CanVat_Update_TaxGST( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ int( l.canvat:id ) }">,
+	"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.canvat:name ) }">",
+	"type":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.canvat:type ) }">",
+	"hst":			<MvEVAL EXPR = "{ l.canvat:hst ROUND 3 }">,
+	"pst":			<MvEVAL EXPR = "{ l.canvat:pst ROUND 3 }">,
+	"tax_ship":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.canvat:tax_ship ) }">,
+	"tax_gst":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.canvat:tax_gst ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat_Load" PARAMETERS = "canvat var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'CanVat_ID', l.canvat_id ) }">
+		<MvIF EXPR = "{ NOT CanVat_Load_ID( l.canvat_id, l.canvat ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00046', 'Province not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00053', 'Unable to load province: CanVat_ID must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVatList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 's.name',		'name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'cv.name',		'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'cv.type',		'type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'cv.pst',		'pst' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'cv.hst',		'hst' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'cv.tax_ship',	'tax_ship' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'cv.tax_gst',	'tax_gst' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'cv.*, s.name AS state_name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'CanVat', 'cv' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'cv', g.Store_Table_Prefix $ 'States', 's', 's.code = cv.name', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'name:s.name,type,rate:pst;hst,tax_ship,tax_gst', 's.name' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" 		VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'CanVat', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-CAN-00047', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.rate_count"			VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT CanVat.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.rate_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ CanVat_Read( l.canvat ) }">
+			
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.rate_count ) }">
+				<MvEVAL EXPR = "{ JSON_CanVat( l.canvat ) }">,
+				"state_name": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( CanVat.d.state_name ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "CanVat" ROWS = 1>
+		</MvWHILE>
+		],
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CanVat">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'CanVat_Province',		l.province )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'CanVat_Type',			l.type )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O', 'CanVat_HST',			l.hst, 	10, 3 )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O', 'CanVat_PST',			l.pst, 	10, 3 )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'CanVat_TaxShipping',	l.tax_shipping ) 	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'CanVat_TaxGST',		l.tax_gst ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.type EQ 'hst' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.hst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_HST', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.tax_gst" 	VALUE = 0>
+	<MvELSEIF EXPR = "{ l.type EQ 'pst' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.pst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_PST', g.Validation_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.type EQ 'hst_rebate' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.hst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_HST', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.pst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_PST', g.Validation_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_Type', 'An invalid rate type \'' $ l.type $ '\' was specified for Province \'' $ l.province $ '\'.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( l.province, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_Province', 'Province \'' $ l.province $ '\' does not exist.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CanVat_Load_Province( l.province, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_Province', 'Province \'' $ l.province $ '\' is already assigned a tax rate.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.canvat:name" 		VALUE = "{ l.province }">
+	<MvASSIGN NAME = "l.canvat:type" 		VALUE = "{ l.type }">
+
+	<MvIF EXPR = "{ l.type EQ 'hst' }">
+		<MvASSIGN NAME = "l.canvat:hst" 	VALUE = "{ l.hst }">
+		<MvASSIGN NAME = "l.canvat:pst" 	VALUE = 0.000>
+	<MvELSEIF EXPR = "{ l.type EQ 'hst_rebate' }">
+		<MvASSIGN NAME = "l.canvat:hst" 	VALUE = "{ l.hst }">
+		<MvASSIGN NAME = "l.canvat:pst" 	VALUE = "{ l.pst }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.canvat:hst" 	VALUE = 0.000>
+		<MvASSIGN NAME = "l.canvat:pst" 	VALUE = "{ l.pst }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.canvat:tax_ship" 	VALUE = "{ l.tax_shipping }">
+	<MvASSIGN NAME = "l.canvat:tax_gst" 	VALUE = "{ l.canvat:type EQ 'pst' AND l.tax_gst }">
+
+	<MvIF EXPR = "{ NOT CanVat_Insert( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00048', 'CanVAT Province \'' $ l.canvat:name $ '\' created' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'CanVat_Province',		l.province )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'CanVat_Type',			l.type )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O', 'CanVat_HST',			l.hst, 	10, 3 )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O', 'CanVat_PST',			l.pst, 	10, 3 )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'CanVat_TaxShipping',	l.tax_shipping ) 	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'CanVat_TaxGST',		l.tax_gst ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.type EQ 'hst' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.hst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_HST', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.tax_gst" 	VALUE = 0>
+	<MvELSEIF EXPR = "{ l.type EQ 'pst' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.pst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_PST', g.Validation_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.type EQ 'hst_rebate' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.hst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_HST', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( l.pst, 10, 3 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_PST', g.Validation_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_Type', 'An invalid rate type \'' $ l.type $ '\' was specified for Province \'' $ l.province $ '\'.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( l.province, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_Province', 'Province \'' $ l.province $ '\' does not exist.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_CanVat_Load( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.canvat:name NE l.province }">
+		<MvIF EXPR = "{ CanVat_Load_Province( l.province, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'CanVat_Province', 'Province \'' $ l.province $ '\' is already assigned a tax rate.' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.canvat:name" 		VALUE = "{ l.province }">
+	<MvASSIGN NAME = "l.canvat:type" 		VALUE = "{ l.type }">
+
+	<MvIF EXPR = "{ l.type EQ 'hst' }">
+		<MvASSIGN NAME = "l.canvat:pst" 	VALUE = 0.000>
+		<MvASSIGN NAME = "l.canvat:hst" 	VALUE = "{ l.hst }">
+	<MvELSEIF EXPR = "{ l.type EQ 'hst_rebate' }">
+		<MvASSIGN NAME = "l.canvat:pst" 	VALUE = "{ l.pst }">
+		<MvASSIGN NAME = "l.canvat:hst" 	VALUE = "{ l.hst }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.canvat:pst" 	VALUE = "{ l.pst }">
+		<MvASSIGN NAME = "l.canvat:hst" 	VALUE = 0.000>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.canvat:tax_ship" 	VALUE = "{ l.tax_shipping }">
+	<MvASSIGN NAME = "l.canvat:tax_gst" 	VALUE = "{ l.canvat:type EQ 'pst' AND l.tax_gst }">
+
+	<MvIF EXPR = "{ NOT CanVat_Update_ID( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00049', 'CanVAT Province \'' $ l.canvat:name $ '\' updated' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_CanVat_Load( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Delete_ID( l.canvat:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">	
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00050', 'CanVAT Province \'' $ l.canvat:name $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat_Update_TaxShipping" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_CanVat_Load( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Boolean( 'R', 'CanVat_TaxShipping', l.canvat:tax_ship ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Update_ID( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00051', 'CanVAT Province \'' $ l.canvat:name $ '\' updated' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CanVat_Update_TaxGST" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_CanVat_Load( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Boolean( 'R', 'CanVat_TaxGST', l.canvat:tax_gst ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CanVat_Update_ID( l.canvat ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-CAN-00052', 'CanVAT Province \'' $ l.canvat:name $ '\' updated' ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Copy Feature (copy_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Copy_Product" PARAMETERS = "module var, source_product var, dest_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CanVatProduct_Delete( l.dest_product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CanVatProducts ( product_id, gst_exempt, pst_exempt )
+						  SELECT
+						  	?, gst_exempt, pst_exempt
+						  FROM ' $
+							g.Store_Table_Prefix $ 'CanVatProducts
+						  WHERE
+							product_id = ?' }"
+			 FIELDS = "l.dest_product:id,
+					   l.source_product:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-CAN-00054', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/tax/canvat/functions.mv">
+<MvINCLUDE FILE = "modules/tax/canvat/list.mv">

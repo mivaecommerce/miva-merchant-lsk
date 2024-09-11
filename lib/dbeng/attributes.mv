@@ -1,0 +1,608 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-ATT-
+| Next Error Code: 13   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Attribute_Insert" PARAMETERS = "attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT Attribute_Insert_LowLevel( l.attribute ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.attribute:type EQ 'template' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplate_Increment_ReferenceCount( l.attribute:attemp_id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_attr', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Attribute_Insert( l.module, l.attribute ) }">
+	</MvFOREACH>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Attribute_Update" PARAMETERS = "attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Attribute_Update_LowLevel( l.attribute ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_attr', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Attribute_Update( l.module, l.attribute ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Attribute_Update_Default" PARAMETERS = "attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Attribute_Update_Default_LowLevel( l.attribute ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_attr', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Attribute_Update( l.module, l.attribute ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>	
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Attribute_Update_Inventory" PARAMETERS = "attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.attribute:inventory }">
+		<MvIF EXPR = "{ NOT ProductKit_Delete_All_Product_Attribute( l.attribute:product_id, l.attribute:id ) OR
+						NOT ProductVariant_Delete_All_Product_Attribute( l.attribute:product_id, l.attribute:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Attribute_Update_Inventory_LowLevel( l.attribute ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_attr', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Attribute_Update( l.module, l.attribute ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Attribute_Delete" PARAMETERS = "attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_attr', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Attribute_Delete( l.module, l.attribute ) }">
+	</MvFOREACH>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ l.attribute:type EQ 'template' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplate_Decrement_ReferenceCount( l.attribute:attemp_id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.attribute:type EQ 'template' ) OR l.attribute:inventory }">
+		<MvIF EXPR = "{ NOT ProductKit_Delete_All_Product_Attribute( l.attribute:product_id, l.attribute:id ) OR
+						NOT ProductVariant_Delete_All_Product_Attribute( l.attribute:product_id, l.attribute:id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItems_Delete_All_Attribute( l.attribute:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Option_Delete_All_Attribute( l.attribute:id ) OR
+					NOT Attribute_Delete_ID( l.attribute:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Option_Delete" PARAMETERS = "attribute var, option var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_attr', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Option_Delete( l.module, l.option ) }">
+	</MvFOREACH>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ l.option:id EQ l.attribute:default_id }">
+		<MvASSIGN NAME = "l.attribute:default_id"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT Attribute_Update_Default( l.attribute ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.attribute:inventory }">
+		<MvIF EXPR = "{ NOT ProductKit_Delete_All_Product_Option( l.attribute:product_id, l.attribute:id, l.option:id ) OR
+						NOT ProductVariant_Delete_All_Product_Option( l.attribute:product_id, l.attribute:id, l.option:id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItems_Delete_All_Option( l.attribute:id, l.option:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Option_Delete_ID( l.option:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sorting:  Items to be sorted are processed in three groups.  The input array to the sort function just contains the
+|		    items to be sorted, their desired offsets, and their current offsets.  We initially sort this data into
+|			two groups: items moving up and items moving down.  During processing, items moving down are segregated
+|			into two groups: items moving past the highest current offset, and items moving within the current
+|			data set.
+|
+|			Ties are broken using the items original offset.
+|
+|			The end result is that we process items in the following order:
+|
+|				+-----------------------+  offset  original_offset
+|				|                       |    |            ^
+|				|    Items moving up    |    |            |
+|				|                       |    v            |
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    |            |
+|				| Items moving past end |    |            |
+|				|                       |    v            v
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    ^            |
+|				|   Items moving down   |    |            |
+|				|                       |    |            v
+|				+-----------------------+
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ProductAttributeList_Update_Offsets_PastEnd" PARAMETERS = "product_id, pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.Attributes_Order_AttributeID" 	VALUE = "{ l.pastend[ l.pastend_pos ]:id }">
+		<MvASSIGN NAME = "l.disp_order"						VALUE = "{ StoreKey_Generate( 'ProductAttributeDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+													$ g.Store_Table_Prefix $ 'Attributes 
+												SET 
+													disp_order = ? 
+												WHERE 
+													id = ? AND product_id = ?' }" 
+												FIELDS = "l.disp_order, g.Attributes_Order_AttributeID, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00007', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductAttributeList_Update_Offsets" PARAMETERS = "product_id, attributes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"				VALUE = 0>
+
+	<MvASSIGN NAME = "l.attribute_pos"				VALUE = 1>
+	<MvASSIGN NAME = "l.attribute_count"			VALUE = "{ miva_array_elements( l.attributes ) }">
+	<MvASSIGN NAME = "g.Attributes_Order_ProductID" VALUE = "{ l.product_id }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.attributes, l.attribute_count ) }">
+
+	<MvWHILE EXPR = "{ l.attribute_pos LE l.attribute_count }">
+		<MvASSIGN NAME = "g.Attributes_Order_AttributeID" 	VALUE = "{ l.attributes[ l.attribute_pos ]:id }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current attribute at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				   'Attributes',
+																				   'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'Attributes WHERE id <> ? AND product_id = ? ORDER BY disp_order',
+																				   'g.Attributes_Order_AttributeID, g.Attributes_Order_ProductID',
+																				   l.attributes[ l.attribute_pos ]:offset - 1,
+																				   1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00001', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Attributes.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.attributes[ l.attribute_pos ] }">
+
+			<MvASSIGN NAME = "l.attribute_pos"	VALUE = "{ l.attribute_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+
+			<MvIF EXPR = "{ NOT ProductAttributeList_Update_Offsets_PastEnd( l.product_id, l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ Attributes.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting attributes after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'Attributes 
+													SET 
+														disp_order = disp_order + 1 
+													WHERE 
+														disp_order >= ? AND product_id = ?' }" 
+													FIELDS = "l.disp_order, l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00002', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'ProductAttributeDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the attribute in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'Attributes 
+													SET 
+														disp_order = ? 
+													WHERE 
+														id = ? AND product_id = ?' }" 
+													FIELDS = "l.disp_order, g.Attributes_Order_AttributeID, l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00003', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attribute_pos"	VALUE = "{ l.attribute_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT ProductAttributeList_Update_Offsets_PastEnd( l.product_id, l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>		
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sorting:  Items to be sorted are processed in three groups.  The input array to the sort function just contains the
+|		    items to be sorted, their desired offsets, and their current offsets.  We initially sort this data into
+|			two groups: items moving up and items moving down.  During processing, items moving down are segregated
+|			into two groups: items moving past the highest current offset, and items moving within the current
+|			data set.
+|
+|			Ties are broken using the items original offset.
+|
+|			The end result is that we process items in the following order:
+|
+|				+-----------------------+  offset  original_offset
+|				|                       |    |            ^
+|				|    Items moving up    |    |            |
+|				|                       |    v            |
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    |            |
+|				| Items moving past end |    |            |
+|				|                       |    v            v
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    ^            |
+|				|   Items moving down   |    |            |
+|				|                       |    |            v
+|				+-----------------------+
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ProductAttributeOptionList_Update_Offsets_PastEnd" PARAMETERS = "product_id, attr_id, pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.Options_Order_OptionID" 	VALUE = "{ l.pastend[ l.pastend_pos ]:id }">
+		<MvASSIGN NAME = "l.disp_order"					VALUE = "{ StoreKey_Generate( 'ProductAttributeOptionDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+													$ g.Store_Table_Prefix $ 'Options 
+												SET 
+													disp_order = ? 
+												WHERE 
+													id = ? AND 
+													product_id = ? AND
+													attr_id = ?' }" 
+												FIELDS = "l.disp_order, g.Options_Order_OptionID, l.product_id, l.attr_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00008', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductAttributeOptionList_Update_Offsets" PARAMETERS = "product_id, attr_id, options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"				VALUE = 0>
+
+	<MvASSIGN NAME = "l.option_pos"					VALUE = 1>
+	<MvASSIGN NAME = "l.option_count"				VALUE = "{ miva_array_elements( l.options ) }">
+	<MvASSIGN NAME = "g.Options_Order_ProductID" 	VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "g.Options_Order_AttributeID" 	VALUE = "{ l.attr_id }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.options, l.option_count ) }">
+
+	<MvWHILE EXPR = "{ l.option_pos LE l.option_count }">
+		<MvASSIGN NAME = "g.Options_Order_OptionID" 	VALUE = "{ l.options[ l.option_pos ]:id }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current option at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				 'Options',
+																				 'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'Options WHERE id <> ? AND product_id = ? AND attr_id = ? ORDER BY disp_order',
+																				 'g.Options_Order_OptionID, g.Options_Order_ProductID, g.Options_Order_AttributeID',
+																				 l.options[ l.option_pos ]:offset - 1,
+																				 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00004', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Options.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.options[ l.option_pos ] }">
+
+			<MvASSIGN NAME = "l.option_pos"	VALUE = "{ l.option_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+
+			<MvIF EXPR = "{ NOT ProductAttributeOptionList_Update_Offsets_PastEnd( l.product_id, l.attr_id, l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ Options.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting options after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'Options 
+													SET 
+														disp_order = disp_order + 1 
+													WHERE 
+														disp_order >= ? AND 
+														product_id = ? AND
+														attr_id = ?' }" 
+													FIELDS = "l.disp_order, l.product_id, g.Options_Order_AttributeID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00005', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'ProductAttributeOptionDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the option in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'Options 
+													SET 
+														disp_order = ? 
+													WHERE 
+														id = ? AND 
+														product_id = ? AND
+														attr_id = ?' }" 
+													FIELDS = "l.disp_order, g.Options_Order_OptionID, l.product_id, g.Options_Order_AttributeID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00006', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.option_pos"	VALUE = "{ l.option_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT ProductAttributeOptionList_Update_Offsets_PastEnd( l.product_id, l.attr_id, l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>		
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeIDList_Load_Product_Inventory" PARAMETERS = "product_id, attr_ids var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Attributes"
+				QUERY	= "{ 'SELECT
+								id				AS attr_id,
+								0				AS attmpat_id,
+								disp_order		AS attr_disp_order,
+								0				AS attmpat_disp_order
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes
+							  WHERE
+								product_id		= ?				AND
+								inventory		= 1				AND
+								attemp_id		= 0
+							  UNION ALL
+							  SELECT
+								a.id			AS attr_id,
+								ata.id			AS attmpat_id,
+								a.disp_order	AS attr_disp_order,
+								ata.disporder	AS attmpat_disp_order
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a,
+								' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata
+							  WHERE
+								a.product_id	= ?				AND
+								a.attemp_id		<> 0			AND
+								ata.attemp_id	= a.attemp_id	AND
+								ata.inventory	= 1
+							  ORDER BY
+								attr_disp_order, attmpat_disp_order' }"
+				FIELDS	= "l.product_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Attributes.d.EOF }">
+		<MvASSIGN NAME = "l.attribute_count"												VALUE = "{ l.attribute_count + 1 }">
+
+		<MvASSIGN NAME = "l.attr_ids" INDEX = "{ l.attribute_count }" MEMBER = "attr_id"	VALUE = "{ Attributes.d.attr_id }">
+		<MvASSIGN NAME = "l.attr_ids" INDEX = "{ l.attribute_count }" MEMBER = "attmpat_id"	VALUE = "{ Attributes.d.attmpat_id }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Attributes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-ATT-00010', l.attribute_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeIdentifierList_Load_Product_Inventory" PARAMETERS = "product_id, attributes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Attributes"
+				QUERY	= "{ 'SELECT
+								id				AS attr_id,
+								code			AS attr_code,
+								0				AS attmpat_id,
+								NULL			AS attmpat_code,
+								disp_order		AS attr_disp_order,
+								0				AS attmpat_disp_order
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes 
+							  WHERE
+								product_id		= ?				AND
+								inventory		= 1				AND
+								attemp_id		= 0
+							  UNION ALL
+							  SELECT
+								a.id			AS attr_id,
+								a.code			AS attr_code,
+								ata.id			AS attmpat_id,
+								ata.code		AS attmpat_code,
+								a.disp_order	AS attmpat_disp_order,
+								ata.disporder	AS attmpat_disp_order
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a,
+								' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata
+							  WHERE
+								a.product_id	= ?				AND
+								a.attemp_id		<> 0			AND
+								ata.attemp_id	= a.attemp_id	AND
+								ata.inventory	= 1
+							  ORDER BY
+								attr_disp_order, attmpat_disp_order' }"
+				FIELDS	= "l.product_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ATT-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Attributes.d.EOF }">
+		<MvASSIGN NAME = "l.attribute_count"													VALUE = "{ l.attribute_count + 1 }">
+
+		<MvASSIGN NAME = "l.attributes" INDEX = "{ l.attribute_count }" MEMBER = "attr_id"		VALUE = "{ Attributes.d.attr_id }">
+		<MvASSIGN NAME = "l.attributes" INDEX = "{ l.attribute_count }" MEMBER = "attr_code"	VALUE = "{ Attributes.d.attr_code }">
+		<MvASSIGN NAME = "l.attributes" INDEX = "{ l.attribute_count }" MEMBER = "attmpat_id"	VALUE = "{ Attributes.d.attmpat_id }">
+		<MvASSIGN NAME = "l.attributes" INDEX = "{ l.attribute_count }" MEMBER = "attmpat_code"	VALUE = "{ Attributes.d.attmpat_code }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Attributes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-ATT-00012', l.attribute_count ) }">
+</MvFUNCTION>

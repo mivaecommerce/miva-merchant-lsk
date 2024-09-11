@@ -1,0 +1,177 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-PGR-RNT-
+| Next Error Code: 1    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Action_ApplyCouponToBasket" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Coupon_Code"				VALUE = "{ trim( g.Coupon_Code ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_DB ].Runtime_Coupon_Load_Code( g.Basket:cust_id, g.Basket:bill_email, g.Coupon_Code, l.coupon ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_invalid' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| A coupon cannot be added to the basket unless it applies at least one new discount.  Further,
+	| if the newly added coupon overlaps entirely with discounts provided by an already applied coupon,
+	| the existing coupon is removed.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.basket_pricegroup_count"	VALUE = "{ [ g.Feature_Filename_PGR_UT ].PriceGroupAndModuleList_Load_Basket( g.Basket, l.basket_pricegroups ) }">
+	<MvASSIGN NAME = "l.coupon_pricegroup_count"	VALUE = "{ [ g.Feature_Filename_PGR_DB ].PriceGroupAndModuleList_Load_Coupon( l.coupon:id, l.coupon_pricegroups ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_CreateFromBasket( g.Basket, l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Sanity check to make sure that the new coupon adds at least one discount that is not already applied
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.pricegroups"				VALUE = "{ l.basket_pricegroups }">
+	<MvASSIGN NAME = "l.pricegroup_count"			VALUE = "{ l.basket_pricegroup_count }">
+
+	<MvASSIGN NAME = "l.discarded_pricegroups"		VALUE = "">
+	<MvASSIGN NAME = "l.discarded_pricegroup_count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_PGR_UT ].Discount_Merge_PriceGroups( l.pricegroups, l.pricegroup_count, l.coupon_pricegroups, l.coupon_pricegroup_count, l.discarded_pricegroups, l.discarded_pricegroup_count ) }">
+
+	<MvIF EXPR = "{ l.discarded_pricegroup_count EQ l.coupon_pricegroup_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_ineligible' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Merge the existing price groups with price groups from the new coupon, preferring discounts from the new coupon
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.pricegroups"				VALUE = "{ l.coupon_pricegroups }">
+	<MvASSIGN NAME = "l.pricegroup_count"			VALUE = "{ l.coupon_pricegroup_count }">
+
+	<MvASSIGN NAME = "l.resolved_pricegroups"		VALUE = "">
+	<MvASSIGN NAME = "l.resolved_pricegroup_count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_PGR_UT ].Discount_Merge_PriceGroups( l.pricegroups, l.pricegroup_count, l.basket_pricegroups, l.basket_pricegroup_count, l.null, l.null ) }">
+
+	<MvASSIGN NAME = "l.resolved_pricegroup_count"	VALUE = "{ [ g.Feature_Filename_PGR_UT ].Discount_Resolve_PriceGroup_Exclusions( l.pricegroups, l.pricegroup_count, l.resolved_pricegroups ) }">
+
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_PGR_UT ].DiscountState_Set_PriceGroups( l.discount_state, l.resolved_pricegroups, l.resolved_pricegroup_count ) }">
+
+	<MvCOMMENT>
+	|
+	| Discount the basket with the merged price groups and validate that the new coupon applies before
+	| applying the results to the basket.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_Discount_Basket( l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_Coupon_Applies( l.discount_state, l.coupon:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_ineligible' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_ApplyToBasket( l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_DB ].BasketCoupon_Insert( g.Basket:basket_id, l.coupon:id, [ g.Feature_Filename_PGR_UT ].DiscountState_Coupon_Total( l.discount_state, l.coupon:id ) ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_RemoveUnusedCoupons( l.discount_state, l.deleted_coupons, l.deleted_coupon_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.deleted_coupon_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_removed' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_RemoveCouponFromBasket" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Coupon_Code"	VALUE = "{ trim( g.Coupon_Code ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_DB ].Coupon_Load_Code( g.Coupon_Code, l.coupon ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_DB ].BasketCoupon_Delete( g.Basket:basket_id, l.coupon:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Runtime_Discount_Basket and Runtime_Discount_Basket_LowLevel must be maintainted to be in sync with their JSON counterparts
+| JSON_Runtime_Discount_Basket and JSON_Runtime_Discount_Basket_LowLevel which are located in json/runtime.mv
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_Discount_Basket" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvLOCKFILE FILE = "{ [ g.Feature_Filename_PGR_UT ].Basket_Discount_LockFile( l.basket ) }">
+		<MvASSIGN NAME = "l.result"	VALUE = "{ Runtime_Discount_Basket_LowLevel( l.basket ) }">
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_Discount_Basket_LowLevel" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Load_ID( l.basket:basket_id, l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_CreateFromBasket( l.basket, l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_Load_PriceGroups_Basket( l.basket, l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_Discount_Basket( l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_ApplyToBasket( l.discount_state ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_RemoveUnusedCoupons( l.discount_state, l.deleted_coupons, l.deleted_coupon_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.deleted_coupon_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_removed' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

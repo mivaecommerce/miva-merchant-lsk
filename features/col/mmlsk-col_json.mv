@@ -1,0 +1,783 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-COL-JSON-
+| Next Error Code: 18   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_Collection_Load" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Collection_ID', l.collection_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Load_ID( l.collection_id, l.collection ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-JSON-00001', 'Collection not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_Collection', l.edit_collection ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Load_Code( l.edit_collection, l.collection ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-JSON-00002', 'Collection not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Collection_Code', l.collection_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Load_Code( l.collection_code, l.collection ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-JSON-00003', 'Collection not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-JSON-00004', 'Unable to load collection: One of Collection_ID, Edit_Collection, or Collection_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Collection_OnDemandColumns" PARAMETERS = "collection var, ondemandcolumns var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":					<MvEVAL EXPR = "{ int( l.collection:id ) }">,
+	"code":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.collection:code ) }">",
+	"name":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.collection:name ) }">",
+
+	<MvIF EXPR = "{ l.ondemandcolumns:filter }">
+		<MvIF EXPR = "{ ISNULL l.collection:filter }">
+			"filter":		null,
+		<MvELSE>
+			"filter":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Output( l.collection:filter ) }">,
+		</MvIF>
+	</MvIF>
+
+	"immediate":			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.collection:immediate ) }">,
+	"rebuildkey":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.collection:rebuildkey ) }">",
+	"lastrbld":				<MvEVAL EXPR = "{ int( l.collection:lastrbld ) }">
+
+	<MvIF EXPR = "{ l.ondemandcolumns:product_count }">
+		, "product_count":	<MvEVAL EXPR = "{ int( l.collection:product_count ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionList_Filters" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.available_filters" VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'col.id',			'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'col.code',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'col.name',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'col.immediate',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'col.rebuildkey',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'col.lastrbld',	'' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.available_filters }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionList_OrderBy" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "id:col.id,code:col.code,name:col.name,immediate:col.immediate,rebuildkey:col.rebuildkey,frequency:col.immediate;col.rebuildkey,lastrbld:col.lastrbld">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionList_Collection_Read" PARAMETERS = "collection var, ondemandcolumns var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_COL_DB ].Collection_Read( l.collection ) }">
+	
+	<MvIF EXPR = "{ l.ondemandcolumns:product_count }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Count_Collection( l.collection:id, l.counts ) }">
+			<MvASSIGN NAME = "l.collection:product_count" VALUE = "{ l.counts:automatic + l.counts:manual }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionList_Load_Query" PARAMETERS = "filter var, sort, default_sort, search_query var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseCollectionList_Load_Query_LowLevel( l.filter, l.sort, JSON_BaseCollectionList_Filters(), JSON_BaseCollectionList_OrderBy(), l.default_sort, g.Module_Feature_COL_JSON, 'JSON_CollectionList_Load_Query_Filter', l.search_query, l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionList_Load_Query_LowLevel" PARAMETERS = "filter var, sort, filter_columns, orderby_columns, default_sort, callback_filename, callback_filter, search_query var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"			VALUE = "">
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'col.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Collections', 'col' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.search_query, l.filter, l.filter_columns, l.callback_filename, l.callback_filter, '', l.data ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, l.orderby_columns, l.default_sort ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionIndex_Load_ID" PARAMETERS = "filter var, sort, default_sort, query var, record var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseCollectionIndex_Load_ID_LowLevel( l.filter, l.sort, JSON_BaseCollectionList_Filters(), JSON_BaseCollectionList_OrderBy(), l.default_sort, g.Module_Feature_COL_JSON, 'JSON_CollectionList_Load_Query_Filter', l.query, l.record ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseCollectionIndex_Load_ID_LowLevel" PARAMETERS = "filter var, sort, filter_columns, orderby_columns, default_sort, callback_filename, callback_filter, query var, record var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.collection"	VARIABLE = "l.record:col">
+
+	<MvIF EXPR = "{ ISNULL l.collection }">
+		<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Collections', 'col' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.query, l.filter, l.filter_columns, l.callback_filename, l.callback_filter, '', l.null ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, l.orderby_columns, l.default_sort ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionList_Load_Query_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'ondemandcolumns' }">
+		<MvFOREACH ITERATOR = "l.column_code" ARRAY = "l.filter_value">
+			<MvIF EXPR = "{ ISNULL l.column_code }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.data:ondemandcolumns" MEMBER = "{ l.column_code }" VALUE = 1>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionIndex_Load_ID" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.filter"	VALUE = "">
+	<MvASSIGN NAME = "l.sort"	VALUE = "">
+	<MvASSIGN NAME = "l.query"	VALUE = "">
+	<MvASSIGN NAME = "l.record"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_BaseCollectionIndex_Load_ID( l.filter, l.sort, 'col.id', l.query, l.record ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Index( l.query, l.record, l.index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"index": <MvEVAL EXPR = "{ int( l.index ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.offset"			VALUE = 0>
+	<MvASSIGN NAME = "l.count"			VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_BaseCollectionList_Load_Query( l.filter, l.sort, 'col.id', l.search_query, l.data ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Collections', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-COL-JSON-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.collection_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Collections.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.collection_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ JSON_BaseCollectionList_Collection_Read( l.collection, l.data:ondemandcolumns ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.collection_count ) }">
+				<MvEVAL EXPR = "{ JSON_Collection_OnDemandColumns( l.collection, l.data:ondemandcolumns ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Collections" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Collections">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Collection_Rebuild" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].Collection_Rebuild_Products( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_COL_DB ].Collection_Update_LastRebuild( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Collection_Metrics" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.generate_preview_state" VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Exists( 'Filter' ) }">
+		<MvASSIGN NAME = "l.generate_preview_state" VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter( 'o', 'Filter',	l.filter ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Count_Collection( l.collection:id, l.product_counts )							OR
+					NOT [ g.Module_Library_DB ].CategoryXCollection_Count_Collection( l.collection:id, l.category_count )								OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXCollection_Count_Collection( l.collection:id, l.pricegroup_count )						OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedCollection_Count_Collection( l.collection:id, l.pricegroup_excluded_count )		OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingCollection_Count_Collection( l.collection:id, l.pricegroup_qualifying_count )	OR
+					NOT [ g.Module_Feature_AGR_DB ].AvailGroupXCollection_Count_Collection( l.collection:id, l.availabilitygroup_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.generate_preview_state }">
+		<MvIF EXPR = "{ ISNULL l.filter }">
+			<MvASSIGN NAME = "l.added_product_count"	VALUE = 0>
+			<MvASSIGN NAME = "l.preview_product_count"	VALUE = 0>
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Build common query based on preview filter
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.query"					VALUE = "">
+			<MvASSIGN NAME = "l.available_filters"		VALUE = "{ [ g.Feature_Filename_COL_UT ].Collection_Filters() }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback_With_CustomFields( l.query, l.filter, l.available_filters, g.Module_JSON, '', '', 'JSON_Product_CustomFields_Query_Filter', l.null ) }">
+
+			<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Filter_Contains_Search_Field( l.collection:filter, 'cancat_code', l.null ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'Categories', 'cat', 'prod.cancat_id = cat.id', '' ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_Clear( l.query ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'COUNT( prod.id ) AS total_count' ) }">
+
+			<MvCOMMENT>
+			|
+			| Generate filter preview product count
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.preview_query"			VALUE = "{ l.query }">
+			<MvASSIGN NAME = "l.preview_sql"			VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.preview_query, l.preview_fields ) }">
+
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "Products"
+						QUERY	= "{ l.preview_sql }"
+						FIELDS	= "{ l.preview_fields }">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-COL-JSON-00006', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ Products.d.EOF }">	<MvASSIGN NAME = "l.preview_product_count" VALUE = 0>
+			<MvELSE>							<MvASSIGN NAME = "l.preview_product_count" VALUE = "{ Products.d.total_count }">
+			</MvIF>
+
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+			<MvCOMMENT>
+			|
+			| Generate count of products added via preview filter
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.added_query"			VALUE = "{ l.query }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.added_query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp', 'cxp.col_id = ? AND cxp.product_id = prod.id AND cxp.type = \'A\'', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.added_query, 'cxp.col_id IS NULL', '' ) }">
+
+			<MvASSIGN NAME = "l.added_sql"				VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.added_query, l.added_fields ) }">
+
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "Products"
+						QUERY	= "{ l.added_sql }"
+						FIELDS	= "{ l.added_fields }">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-COL-JSON-00007', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ Products.d.EOF }">	<MvASSIGN NAME = "l.added_product_count" VALUE = 0>
+			<MvELSE>							<MvASSIGN NAME = "l.added_product_count" VALUE = "{ Products.d.total_count }">
+			</MvIF>
+
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"persistent_state":
+		{
+			"product_counts":
+			{
+				"automatic":				<MvEVAL EXPR = "{ int( l.product_counts:automatic ) }">,
+				"manual":					<MvEVAL EXPR = "{ int( l.product_counts:manual ) }">
+			},
+			"assignment_counts":
+			{
+				"category":					<MvEVAL EXPR = "{ int( l.category_count ) }">,
+				"pricegroup":				<MvEVAL EXPR = "{ int( l.pricegroup_count ) }">,
+				"pricegroup_excluded":		<MvEVAL EXPR = "{ int( l.pricegroup_excluded_count ) }">,
+				"pricegroup_qualifying":	<MvEVAL EXPR = "{ int( l.pricegroup_qualifying_count ) }">,
+				"availabilitygroup":		<MvEVAL EXPR = "{ int( l.availabilitygroup_count ) }">
+			}
+		}
+
+		<MvIF EXPR = "{ l.generate_preview_state }">
+			, "preview_state":
+			{
+				"product_change_counts":
+				{
+					"added":				<MvEVAL EXPR = "{ int( l.added_product_count ) }">,
+					"removed":				<MvEVAL EXPR = "{ int( ( l.product_counts:automatic - l.preview_product_count ) + l.added_product_count ) }">
+				}
+			}
+		</MvIF>
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Collection_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.collection"				VALUE = "">
+	<MvASSIGN NAME = "l.collection:immediate"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',		'Code',			l.collection:code )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'Name',			l.collection:name )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o:50',		'RebuildKey',	l.collection:rebuildkey )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Immediate',	l.collection:immediate )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Filter(	'o',		'Filter',		l.collection:filter ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_COL_DB ].Collection_Load_Code( l.collection:code, l.existing_collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A collection with code \'' $ l.existing_collection:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.collection:immediate AND ISNULL l.collection:filter }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Immediate', 'Immediate flag can only be set if a filter is present' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Insert( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.collection:filter }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].Collection_Rebuild_Products( l.collection ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00008', 'Collection \'' $ l.collection:code $ '\' inserted' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_Collection_OnDemandColumns( l.collection, l.null ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Collection_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].Collection_Delete( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00009', 'Collection \'' $ l.collection:code $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionProductIndex_Load_ID" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "">
+	<MvASSIGN NAME = "l.record"		VALUE = "">
+	<MvASSIGN NAME = "l.filter"		VALUE = "">
+	<MvASSIGN NAME = "l.sort"		VALUE = "">
+	<MvASSIGN NAME = "l.assigned"	VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',		l.sort )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.assigned AND NOT l.unassigned }">	<MvASSIGN NAME = "l.default_sort" VALUE = "cxp.disp_order">
+	<MvELSE>											<MvASSIGN NAME = "l.default_sort" VALUE = "prod.disp_order">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_BaseProductIndex_Load_ID( l.filter, l.sort, l.default_sort, l.query, l.record ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Load( l.collection:id, l.record:prod:id, l.record:cxp ) }">
+
+	<MvIF EXPR = "{ l.assigned AND l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp', 'cxp.col_id = ? AND cxp.product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+	<MvELSEIF EXPR = "{ l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp', 'cxp.col_id = ? AND cxp.product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'cxp.product_id IS NULL', '' ) }">
+	<MvELSEIF EXPR = "{ l.assigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'cxp.col_id = ? AND prod.id = cxp.product_id', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+		{
+			"index": -1
+		}
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_SQL_Query_Index_With_CustomFields( l.query, l.record, l.index, l.record:prod:id, g.Module_JSON, 'JSON_Product_CustomFields_Query_Index' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"index": <MvEVAL EXPR = "{ int( l.index ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionProductList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.offset"			VALUE = 0>
+	<MvASSIGN NAME = "l.count"			VALUE = 0>
+	<MvASSIGN NAME = "l.assigned"		VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"		VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+	<MvASSIGN NAME = "l.count_query"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',		l.sort )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',		l.offset )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',		l.count )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Load_Query( l.filter, l.sort, 'prod.disp_order', l.search_query, l.count_query, l.ondemandcolumns ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'cxp.product_id AS assigned' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'cxp.type', '\'A\'' ) $ ' AS assignment_type' ) }">
+
+	<MvIF EXPR = "{ l.assigned AND l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp', 'cxp.col_id = ? AND cxp.product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+	<MvELSEIF EXPR = "{ l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp', 'cxp.col_id = ? AND cxp.product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'cxp.product_id IS NULL OR cxp.type = \'X\'', '' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp', 'cxp.col_id = ? AND cxp.product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'cxp.product_id IS NULL OR cxp.type = \'X\'', '' ) }">
+	<MvELSEIF EXPR = "{ l.assigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'cxp.col_id = ? AND cxp.product_id = prod.id AND cxp.type <> \'X\'', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.count_query, g.Store_Table_Prefix $ 'CollectionXProduct', 'cxp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'cxp.col_id = ? AND cxp.product_id = prod.id AND cxp.type <> \'X\'', [ g.Module_Library_DB ].SQL_Query_Field( l.collection:id ) ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.count_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Load_Query_QueryCustomFields( l.search_query, l.filter, l.count, l.total_count ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-COL-JSON-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_CustomFields_Initialize( l.filter, l.customfield_state ) }">	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data": 
+		[
+		<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.product_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Product_Read( l.product, l.ondemandcolumns ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.product_count ) }">
+				<MvIF EXPR = "{ Products.d.assignment_type EQ 'X' }">
+					"assigned":		false,
+				<MvELSEIF EXPR = "{ Products.d.assignment_type EQ 'M' }">
+					"assigned":		true,
+				<MvELSE>
+					"assigned":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( Products.d.assigned ) }">,
+				</MvIF>
+
+				"assignment_type":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( Products.d.assignment_type ) }">",
+
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_OnDemandColumns( l.product, l.ondemandcolumns ) }">
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_CustomFields_With_Query( l.search_query, l.customfield_state, Products.d.id, 'Products' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionProduct_Update_Assigned" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{	NOT [ g.Module_JSON ].JSON_Input_Boolean( 'R', 'Assigned', l.assigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.assigned }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Load( l.collection:id, l.product:id, l.collectionxproduct ) }">
+			<MvASSIGN NAME = "l.collectionxproduct:type"		VALUE = "X">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Update( l.collectionxproduct ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.collectionxproduct"				VALUE = "">
+			<MvASSIGN NAME = "l.collectionxproduct:col_id"		VALUE = "{ l.collection:id }">
+			<MvASSIGN NAME = "l.collectionxproduct:product_id"	VALUE = "{ l.product:id }">
+			<MvASSIGN NAME = "l.collectionxproduct:type"		VALUE = "X">
+			<MvASSIGN NAME = "l.collectionxproduct:status"		VALUE = "">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Insert( l.collectionxproduct ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00012', 'Product \'' $ l.product:code $ '\' manually excluded from collection \'' $ l.collection:code $'\'' ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].CollectionCategories_Remove_Product( l.collection:id, l.product:id )				OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Remove_Product( l.collection:id, l.product:id )				OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Remove_ExcludedProduct( l.collection:id, l.product:id )		OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Remove_QualifyingProduct( l.collection:id, l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionAvailGroups_Remove_Product( l.collection:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].Category_Remove_Unused_Collection_Product( l.product:id )				OR
+						NOT [ g.Feature_Filename_COL_UT ].PriceGroup_Remove_Unused_Collection_Product( l.product:id )			OR
+						NOT [ g.Feature_Filename_COL_UT ].PriceGroup_Remove_Unused_Collection_ExcludedProduct( l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].PriceGroup_Remove_Unused_Collection_QualifyingProduct( l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].AvailGroup_Remove_Unused_Collection_Product( l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Load( l.collection:id, l.product:id, l.collectionxproduct ) }">
+			<MvASSIGN NAME = "l.collectionxproduct:type"		VALUE = "M">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Update( l.collectionxproduct ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.collectionxproduct"				VALUE = "">
+			<MvASSIGN NAME = "l.collectionxproduct:col_id"		VALUE = "{ l.collection:id }">
+			<MvASSIGN NAME = "l.collectionxproduct:product_id"	VALUE = "{ l.product:id }">
+			<MvASSIGN NAME = "l.collectionxproduct:type"		VALUE = "M">
+			<MvASSIGN NAME = "l.collectionxproduct:status"		VALUE = "">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Insert( l.collectionxproduct ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00014', 'Product \'' $ l.product:code $ '\' manually assigned to collection \'' $ l.collection:code $ '\'' ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].CollectionCategories_Add_Product( l.collection:id, l.product:id )				OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_Product( l.collection:id, l.product:id )			OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_ExcludedProduct( l.collection:id, l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_QualifyingProduct( l.collection:id, l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionAvailGroups_Add_Product( l.collection:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CollectionProduct_Restore_Automatic" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Collection_Load( l.collection ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.member_before"							VALUE = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Load( l.collection:id, l.product:id, l.collectionxproduct ) }">
+
+	<MvIF EXPR = "{ ISNULL l.collection:filter }">
+		<MvASSIGN NAME = "l.member_now"							VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.member_now"							VALUE = "{ [ g.Feature_Filename_COL_UT ].Product_Evaluate_Collections_Apply_Filter( l.collection, l.product ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.member_before AND l.member_now AND l.collectionxproduct:type NE 'A' }">
+		<MvASSIGN NAME = "l.original_collectionxproduct_type"	VALUE = "{ l.collectionxproduct:type }">
+		<MvASSIGN NAME = "l.collectionxproduct:type"			VALUE = "A">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Update( l.collectionxproduct ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.original_collectionxproduct_type EQ 'X' }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].CollectionCategories_Add_Product( l.collection:id, l.product:id )				OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_Product( l.collection:id, l.product:id )			OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_ExcludedProduct( l.collection:id, l.product:id )	OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_QualifyingProduct( l.collection:id, l.product:id )	OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionAvailGroups_Add_Product( l.collection:id, l.product:id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00015', 'Product \'' $ l.product:code $ '\' in collection \'' $ l.collection:code $'\' automatically included' ) }">
+	<MvELSEIF EXPR = "{ l.member_now AND ( NOT l.member_before ) }">
+		<MvASSIGN NAME = "l.collectionxproduct"					VALUE = "">
+		<MvASSIGN NAME = "l.collectionxproduct:col_id"			VALUE = "{ l.collection:id }">
+		<MvASSIGN NAME = "l.collectionxproduct:product_id"		VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.collectionxproduct:type"			VALUE = "A">
+		<MvASSIGN NAME = "l.collectionxproduct:status"			VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Insert( l.collectionxproduct ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].CollectionCategories_Add_Product( l.collection:id, l.product:id )				OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_Product( l.collection:id, l.product:id )			OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_ExcludedProduct( l.collection:id, l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Add_QualifyingProduct( l.collection:id, l.product:id )	OR
+						NOT [ g.Feature_Filename_COL_UT ].CollectionAvailGroups_Add_Product( l.collection:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00016', 'Product \'' $ l.product:code $ '\' assigned to collection \'' $ l.collection:code $ '\'' ) }">
+	<MvELSEIF EXPR = "{ l.member_before AND ( NOT l.member_now ) }">
+		<MvIF EXPR = "{ l.collectionxproduct:type NE 'X' }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].CollectionCategories_Remove_Product( l.collection:id, l.product:id )				OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Remove_Product( l.collection:id, l.product:id )				OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Remove_ExcludedProduct( l.collection:id, l.product:id )		OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionPriceGroups_Remove_QualifyingProduct( l.collection:id, l.product:id )	OR
+							NOT [ g.Feature_Filename_COL_UT ].CollectionAvailGroups_Remove_Product( l.collection:id, l.product:id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Delete( l.collection:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.collectionxproduct:type NE 'X' }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_UT ].Category_Remove_Unused_Collection_Product( l.product:id )				OR
+							NOT [ g.Feature_Filename_COL_UT ].PriceGroup_Remove_Unused_Collection_Product( l.product:id )			OR
+							NOT [ g.Feature_Filename_COL_UT ].PriceGroup_Remove_Unused_Collection_ExcludedProduct( l.product:id )	OR
+							NOT [ g.Feature_Filename_COL_UT ].PriceGroup_Remove_Unused_Collection_QualifyingProduct( l.product:id )	OR
+							NOT [ g.Feature_Filename_COL_UT ].AvailGroup_Remove_Unused_Collection_Product( l.product:id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-COL-JSON-00017', 'Product \'' $ l.product:code $ '\' unassigned from collection \'' $ l.collection:code $ '\'' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"assigned": <MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.member_now ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>

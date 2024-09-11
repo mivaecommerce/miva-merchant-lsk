@@ -1,0 +1,522 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-FCT-UTL-
+| Next Error Code: 9
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "FacetList_Load_All_Cached" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache" VARIABLE = "g.Session:cache:facetlist_load_all">
+
+	<MvIF EXPR = "{ ISNULL l.cache:count }">
+		<MvASSIGN NAME = "l.cache:count"				VALUE = "{ FacetList_Load_All( l.cache:facets ) }">
+		<MvIF EXPR = "{ l.cache:count EQ 0 }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.cache:count EQ 0 }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facets"							VALUE = "{ l.cache:facets }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_All" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ FacetList_Load_Query( l.null, l.facets ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Query_Cached" PARAMETERS = "query var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.cache" VARIABLE = "g.Session:cache:facetlist_load_query">
+		<MvMEMBER NAME = "{ [ g.Module_Library_DB ].SQL_Query_Signature( l.query ) }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ FacetList_Load_Query( l.query, l.cache:facets ) }">
+
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facets"							VALUE = "{ l.cache:facets }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Query" PARAMETERS = "query var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facets"								VALUE = "">
+	<MvASSIGN NAME = "l.facet_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.facetrules_lookup"					VALUE = "">
+	<MvASSIGN NAME = "l.facetrules_count"					VALUE = "{ [ g.Module_Feature_FCT_DB ].FacetRulesList_Load_All( l.facetrules ) }">
+
+	<MvFOREACH ITERATOR = "l.facetrule" ARRAY = "l.facetrules" COUNT = "{ l.facetrules_count }">
+		<MvASSIGNARRAY NAME = "l.facetrules_lookup" VALUE = "{ l.facetrule }">
+			<MvMEMBER NAME = "{ l.facetrule:mod_code }">
+			<MvMEMBER NAME = "{ l.facetrule:facet_code }">
+		</MvASSIGNARRAY>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.loaded_facet" ARRAY = "l.loaded_facets" COUNT = "{ FacetList_Load_All_LowLevel_With_Query( l.query, l.loaded_facets ) }">
+		<MvREFERENCEARRAY NAME = "l.loaded_facet:facetrules" VARIABLE = "l.facetrules_lookup">
+			<MvMEMBER NAME = "{ l.loaded_facet:module:code }">
+			<MvMEMBER NAME = "{ l.loaded_facet:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ISNULL l.loaded_facet:facetrules }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_FCT_DB ].FacetRules_Default( l.loaded_facet:module:code, l.loaded_facet:code, l.loaded_facet:facetrules ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.loaded_facet:handle"			VALUE = "{ l.loaded_facet:facetrules:handle }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.loaded_facet:facetrules:disp_name }">
+			<MvASSIGN NAME = "l.loaded_facet:name"			VALUE = "{ l.loaded_facet:facetrules:disp_name }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.loaded_facet:facetrules:type }">	<MvASSIGN NAME = "l.loaded_facet:type" VALUE = "{ trim( gettoken( l.loaded_facet:allowed_types, ',', 1 ) ) }">
+		<MvELSE>													<MvASSIGN NAME = "l.loaded_facet:type" VALUE = "{ l.loaded_facet:facetrules:type }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.loaded_facet:priority"			VALUE = "{ l.loaded_facet:facetrules:priority }">
+
+		<MvASSIGN NAME = "l.facet_count"					VALUE = "{ miva_array_insert_var( l.facets, l.loaded_facet, -1 ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_sort( l.facets, 'FacetList_Sort_Priority', l.null ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-FCT-UTL-00003', l.facet_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Category_Cached" PARAMETERS = "category var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.category:id LE 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.cache" VARIABLE = "g.Session">
+		<MvMEMBER NAME = "cache">
+		<MvMEMBER NAME = "facetlist_load_category">
+		<MvDIMENSION INDEX = "{ l.category:id }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.cache:count }">
+		<MvASSIGN NAME = "l.cache:count"				VALUE = "{ FacetList_Load_Category( l.category, l.cache:facets ) }">
+		<MvIF EXPR = "{ l.cache:count EQ 0 }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.cache:count EQ 0 }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facets"							VALUE = "{ l.cache:facets }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Category" PARAMETERS = "category var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ FacetList_Load_Category_Query( l.category, l.null, l.facets ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Category_Query_Cached" PARAMETERS = "category var, query var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.category:id LE 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.cache" VARIABLE = "g.Session:cache:facetlist_load_category_query">
+		<MvDIMENSION INDEX = "{ l.category:id }">
+		<MvMEMBER NAME = "{ [ g.Module_Library_DB ].SQL_Query_Signature( l.query ) }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.cache }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ FacetList_Load_Category_Query( l.category, l.query, l.cache:facets ) }">
+
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facets"							VALUE = "{ l.cache:facets }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Category_Query" PARAMETERS = "category var, query var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facet_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.facets"								VALUE = "">
+
+	<MvASSIGN NAME = "l.facetrules_count"					VALUE = "{ [ g.Module_Feature_FCT_DB ].FacetRulesList_Load_All( l.facetrules ) }">
+
+	<MvCOMMENT>
+	|
+	| Build an array of category ids to the root
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.current_category"					VALUE = "{ l.category }">
+
+	<MvWHILE EXPR = "{ 1 }">
+		<MvASSIGN NAME = "l.category_id_count"				VALUE = "{ miva_array_insert( l.category_ids, l.current_category:id, -1 ) }">
+
+		<MvIF EXPR = "{ l.current_category:parent_id EQ 0 }">
+			<MvWHILESTOP>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_ID_Cached( l.current_category:parent_id, l.current_category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvWHILE>
+
+	<MvFOREACH ITERATOR = "l.loaded_facet" ARRAY = "l.loaded_facets" COUNT = "{ FacetList_Load_All_LowLevel_With_Query( l.query, l.loaded_facets ) }">
+		<MvCOMMENT>
+		|
+		| Attempt to load rules at the category level first
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH INDEX = "l.category_pos" ITERATOR = "l.category_id" ARRAY = "l.category_ids" COUNT = "{ l.category_id_count }">
+			<MvREFERENCEARRAY NAME = "l.category_facetrules" VARIABLE = "l.loaded_category_facetrules">
+				<MvDIMENSION INDEX = "{ l.category_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT l.category_facetrules:loaded }">
+				<MvASSIGN NAME = "l.category_facetrules:rules_count"	VALUE = "{ [ g.Module_Feature_FCT_DB ].CategoryFacetRulesList_Load_Category( l.category_id, l.category_facetrules:rules ) }">
+				<MvASSIGN NAME = "l.category_facetrules:loaded"			VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ miva_array_search( l.category_facetrules:rules, 1, l.loaded_facetrules, 'l.loaded_facetrules:mod_code EQ l.loaded_facet:module:code AND l.loaded_facetrules:facet_code EQ l.loaded_facet:code' ) }">
+				<MvIF EXPR = "{ ISNULL l.loaded_facet:facetrules }">
+					<MvASSIGN NAME = "l.loaded_facet:facetrules"		VALUE = "{ l.loaded_facetrules }">
+					<MvASSIGN NAME = "l.loaded_facet:handle"			VALUE = "{ l.loaded_facetrules:handle }">
+				</MvIF>
+
+				<MvCOMMENT>
+				|
+				| Type, if empty, is inherited from the parent category (or global) settings, whichever
+				| we come across first.
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ ISNULL l.loaded_facet:type }">
+					<MvASSIGN NAME = "l.loaded_facet:type"				VALUE = "{ l.loaded_facetrules:type }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT ISNULL l.loaded_facet:type }">
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Load global or default facet rules if there were none at the category level
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ ( ISNULL l.loaded_facet:facetrules ) OR ( ISNULL l.loaded_facet:type ) }">
+			<MvIF EXPR = "{ miva_array_search( l.facetrules, 1, l.loaded_facetrules, 'l.loaded_facetrules:mod_code EQ l.loaded_facet:module:code AND l.loaded_facetrules:facet_code EQ l.loaded_facet:code' ) }">
+				<MvIF EXPR = "{ ISNULL l.loaded_facet:facetrules }">
+					<MvASSIGN NAME = "l.loaded_facet:facetrules"		VALUE = "{ l.loaded_facetrules }">
+					<MvASSIGN NAME = "l.loaded_facet:handle"			VALUE = "{ l.loaded_facetrules:cathandle }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.loaded_facet:type }">
+					<MvASSIGN NAME = "l.loaded_facet:type"				VALUE = "{ l.loaded_facetrules:type }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ ISNULL l.loaded_facet:facetrules }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_FCT_DB ].CategoryFacetRules_Default( l.category:id, l.loaded_facet:module:code, l.loaded_facet:code, l.loaded_facet:facetrules ) }">
+
+				<MvASSIGN NAME = "l.loaded_facet:handle"				VALUE = "{ l.loaded_facet:facetrules:handle }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL l.loaded_facet:facetrules:disp_name }">
+			<MvASSIGN NAME = "l.loaded_facet:name"						VALUE = "{ l.loaded_facet:facetrules:disp_name }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.loaded_facet:type }">
+			<MvASSIGN NAME = "l.loaded_facet:type"						VALUE = "{ trim( gettoken( l.loaded_facet:allowed_types, ',', 1 ) ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.loaded_facet:priority"						VALUE = "{ l.loaded_facet:facetrules:priority }">
+		<MvASSIGN NAME = "l.facet_count"								VALUE = "{ miva_array_insert( l.facets, l.loaded_facet, -1 ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_sort( l.facets, 'FacetList_Sort_Priority', l.null ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-FCT-UTL-00008', l.facet_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_All_LowLevel" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ FacetList_Load_All_LowLevel_With_Query( l.null, l.facets ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_All_LowLevel_With_Query" PARAMETERS = "query var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facet_count" 		VALUE = 0>
+	<MvASSIGN NAME = "l.facets" 			VALUE = "">
+	<MvASSIGN NAME = "l.facets_query"		VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'prod_facet', l.modules ) }">
+		<MvASSIGN NAME = "l.loaded_facets"	VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver LT 10.00 OR ISNULL l.query }">
+			<MvASSIGN NAME = "l.loaded_facet_count"		VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Facets( l.module, l.loaded_facets ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ ISNULL l.facets_query }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_ProductList_Cache( l.query, l.cachedproductlist ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.facets_query"		VALUE = "{ l.query }">
+
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_SELECT_Clear( l.facets_query ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_FROM_Clear( l.facets_query ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE_Clear( l.facets_query ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY_CLEAR( l.facets_query ) }">
+
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facets_query, g.Store_Table_Prefix $ 'CachedProductListXProduct', 'plxp' ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facets_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facets_query, 'plxp.cache_id = ? AND prod.id = plxp.product_id', [ g.Module_Library_DB ].SQL_Query_Field( l.cachedproductlist:id ) ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.copied_facets_query"	VALUE = "{ l.facets_query }">
+			<MvASSIGN NAME = "l.loaded_facet_count" 	VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Facets_Query( l.module, l.copied_facets_query, l.loaded_facets ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.loaded_facet" ARRAY = "l.loaded_facets" COUNT = "{ l.loaded_facet_count }">
+			<MvASSIGN NAME = "l.loaded_facet:module"	VALUE = "{ l.module }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.facet_count"				VALUE = "{ miva_array_copy( l.loaded_facets, 1, l.loaded_facet_count, l.facets, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-FCT-UTL-00007', l.facet_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Values_Query" PARAMETERS = "query var, facets var, facet_count, facets_with_values var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facets_with_values"			VALUE = "">
+	<MvASSIGN NAME = "l.facets_with_values_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ l.facet_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Cache( l.query ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load possible facet values for each facet, applying selections from all other (applied) facets
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.facet" ARRAY = "l.facets" COUNT = "{ l.facet_count }">
+		<MvASSIGN NAME = "l.facet_query"	VALUE = "{ l.query }">
+
+		<MvFOREACH ITERATOR = "l.other_facet" ARRAY = "l.facets" COUNT = "{ l.facet_count }">
+			<MvIF EXPR = "{ l.other_facet:input_value_count AND ( ( l.other_facet:code NE l.facet:code ) OR ( l.other_facet:type EQ 'nested' ) ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Facet( l.facet_query, l.other_facet ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_ProductList_Cache( l.facet_query, l.cachedproductlist ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.values_query"	VALUE = "{ l.facet_query }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_SELECT_Clear( l.values_query ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_FROM_Clear( l.values_query ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE_Clear( l.values_query ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY_Clear( l.values_query ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.values_query, g.Store_Table_Prefix $ 'CachedProductListXProduct', 'plxp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.values_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.values_query, 'plxp.cache_id = ? AND prod.id = plxp.product_id', [ g.Module_Library_DB ].SQL_Query_Field( l.cachedproductlist:id ) ) }">
+
+		<MvCOMMENT>
+		|
+		| If the store is configured to hide out of stock products, or the cached product list contains products that are
+		| hidden when out of stock, then we cannot use the facet cache, because the counts will be incorrect.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.inventorysettings:active AND ( l.inventorysettings:out_hide OR l.cachedproductlist:out_hide ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_HideOutOfStockProducts( l.values_query ) }">
+
+			<MvASSIGN NAME = "l.facet_with_values"							VALUE = "{ l.facet }">
+			<MvASSIGN NAME = "l.facet_with_values:value_count"				VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query( l.facet:module, l.values_query, l.facet, l.facet_with_values:values ) }">
+			<MvASSIGN NAME = "l.facet_with_values:value_count"				VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query_PostProcess( l.facet:module, l.values_query, l.facet_with_values, l.facet_with_values:values, l.facet_with_values:value_count ) }">
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Check to see if we already have these values cached.  Handle race conditions using the "populated" flag to see if
+			| another process requesting the same facet values may be currently caching the results.
+			|
+			</MvCOMMENT>
+
+			<MvWHILE EXPR = "{ 1 }">
+				<MvIF EXPR = "{ [ g.Feature_Filename_FCT_DB ].CachedProductListFacet_Load( l.cachedproductlist:id, l.facet:module:id, l.facet:code, l.facet:type, l.cachedproductlistfacet ) }">
+					<MvWHILESTOP>
+				<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSE>
+					<MvASSIGN NAME = "l.cachedproductlistfacet:cache_id"	VALUE = "{ l.cachedproductlist:id }">
+					<MvASSIGN NAME = "l.cachedproductlistfacet:module_id"	VALUE = "{ l.facet:module:id }">
+					<MvASSIGN NAME = "l.cachedproductlistfacet:facet_code"	VALUE = "{ l.facet:code }">
+					<MvASSIGN NAME = "l.cachedproductlistfacet:type"		VALUE = "{ l.facet:type }">
+					<MvASSIGN NAME = "l.cachedproductlistfacet:populated"	VALUE = 0>
+
+					<MvIF EXPR = "{ NOT [ g.Feature_Filename_FCT_DB ].CachedProductListFacet_Insert( l.cachedproductlistfacet ) }">
+						<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+							<MvWHILECONTINUE>
+						</MvIF>
+
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+
+			<MvIF EXPR = "{ l.cachedproductlistfacet:populated }">
+				<MvCOMMENT>
+				|
+				| Load previously cached values
+				|
+				</MvCOMMENT>
+
+				<MvASSIGN NAME = "l.facet_with_values"					VALUE = "{ l.facet }">
+				<MvASSIGN NAME = "l.facet_with_values:value_count"		VALUE = "{ [ g.Feature_Filename_FCT_DB ].CachedProductListFacetValueList_Load_AsFacetValues( l.cachedproductlistfacet:id, l.facet_with_values:values ) }">
+				<MvASSIGN NAME = "l.facet_with_values:value_count"		VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query_PostProcess( l.facet:module, l.values_query, l.facet_with_values, l.facet_with_values:values, l.facet_with_values:value_count ) }">
+			<MvELSE>
+				<MvLOCKFILE FILE = "{ g.MerchantPath $ 'cachedproductlistfacet_' $ int( g.Store:id ) $ '_' $ int( l.cachedproductlist:id ) $ '_' $ int( l.cachedproductlistfacet:id ) }">
+					<MvASSIGN NAME = "l.result"							VALUE = "{ FacetList_Load_Values_Query_Populate( l.values_query, l.cachedproductlistfacet, l.facet, l.facet_with_values ) }">
+				</MvLOCKFILE>
+
+				<MvIF EXPR = "{ NOT l.result }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.facet_with_values:value_count"		VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query_PostProcess( l.facet:module, l.values_query, l.facet_with_values, l.facet_with_values:values, l.facet_with_values:value_count ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.facet_with_values:value_count OR ( l.facet_with_values:type EQ 'nested' AND l.facet_with_values:input_value_count ) }">
+			<MvASSIGN NAME = "l.facets_with_values_count"				VALUE = "{ miva_array_insert_var( l.facets_with_values, l.facet_with_values, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.facets_with_values_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Load_Values_Query_Populate" PARAMETERS = "query var, cachedproductlistfacet var, facet var, facet_with_values var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_FCT_DB ].CachedProductListFacet_Load( l.cachedproductlistfacet:cache_id, l.cachedproductlistfacet:module_id, l.cachedproductlistfacet:facet_code, l.cachedproductlistfacet:type, l.cachedproductlistfacet ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.cachedproductlistfacet:populated }">
+		<MvASSIGN NAME = "l.facet_with_values"				VALUE = "{ l.facet }">
+		<MvASSIGN NAME = "l.facet_with_values:value_count"	VALUE = "{ [ g.Feature_Filename_FCT_DB ].CachedProductListFacetValueList_Load_AsFacetValues( l.cachedproductlistfacet:id, l.facet_with_values:values ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facet_with_values"					VALUE = "{ l.facet }">
+
+	<MvIF EXPR = "{ l.facet_with_values:variant_source NE 'parts' }">
+		<MvASSIGN NAME = "l.facet_with_values:value_count"	VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query( l.facet:module, l.query, l.facet, l.facet_with_values:values ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.variant_query" 					VALUE = "{ l.query }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.variant_query, g.Store_Table_Prefix $ 'ProductVariants', 'pv' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.variant_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.variant_query, 'prod.id = pv.product_id', '' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.variant_query, 'pv.product_id = pvp.product_id', '' ) }">
+
+		<MvASSIGN NAME = "l.variant_value_count" 			VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query_Variants( l.facet:module, l.variant_query, l.facet, l.variant_values ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'ProductVariants', 'pv', 'pv.product_id = prod.id', l.null ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'pv.variant_id IS NULL', '' ) }">
+
+		<MvASSIGN NAME = "l.facet_value_count"				VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query( l.facet:module, l.query, l.facet, l.facet_values ) }">
+		<MvASSIGN NAME = "l.null"							VALUE = "{ [ g.Module_Root $ l.facet:module:module ].Module_Product_Facet_Values_Query_Merge( l.facet:module, l.facet, l.facet_values, l.facet_value_count, l.variant_values, l.variant_value_count, l.facet_with_values:values, l.facet_with_values:value_count ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.facet_with_values:value_count }">
+		<MvFOREACH INDEX = "l.disp_order" ITERATOR = "l.value" ARRAY = "l.facet_with_values:values" COUNT = "{ l.facet_with_values:value_count }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_FCT_DB ].CachedProductListFacetValue_Insert( l.cachedproductlistfacet:id, l.cachedproductlistfacet:cache_id, int( l.value:count ), l.value:value, l.disp_order ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.facets_with_values_count"		VALUE = "{ miva_array_insert_var( l.facets_with_values, l.facet_with_values, -1 ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cachedproductlistfacet:populated"	VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_FCT_DB ].CachedProductListFacet_Update_Populated( l.cachedproductlistfacet ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Runtime_Sort" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_sort( l.facets, 'FacetList_Sort_Priority', l.null ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FacetList_Sort_Priority" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:priority LT l.right:priority }">			<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:priority GT l.right:priority }">		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.left:name LT l.right:name }">					<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:name GT l.right:name }">				<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>

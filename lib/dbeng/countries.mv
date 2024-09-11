@@ -1,0 +1,200 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-CNT-
+| Next Error Code: 9    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CountryList_Load_Offset_All" PARAMETERS = "offset, search, searchable_fields, max, nextoffset VAR, countries VAR" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query" VALUE =	"SELECT	* FROM Countries">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'Countries', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY name' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Countries',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CNT-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.country_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Countries.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.country_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.country_count" VALUE = "{ l.country_count + 1 }">
+		<MvEVAL EXPR = "{ Country_Read( l.countries[ l.country_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Countries" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Countries.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.country_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Countries">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CNT-00005', l.country_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CountryList_Load_Offset_Store_All" PARAMETERS = "offset, search, searchable_fields, max, nextoffset VAR, countries VAR" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query" VALUE = "{ 'SELECT
+											sc.id		AS id,
+											sc.name		AS name,
+											sc.alpha	AS alpha,
+											sc.iso_code	AS iso_code,
+											1			AS assigned
+										   FROM ' $
+											g.Store_Table_Prefix $ 'StoreCountries sc' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'sc', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+										   UNION ALL
+										   SELECT
+											c.id		AS id,
+											c.name		AS name,
+											c.alpha		AS alpha,
+											c.iso_code	AS iso_code,
+											0			AS assigned
+										   FROM
+											Countries c
+											LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'StoreCountries sc ON sc.id = c.id
+										   WHERE
+											sc.id IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'c', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY name' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Countries',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CNT-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.country_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Countries.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.country_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.country_count" VALUE = "{ l.country_count + 1 }">
+		<MvEVAL EXPR = "{ Country_Read( l.countries[ l.country_count ] ) }">
+		<MvASSIGN NAME = "l.countries" INDEX = "{ l.country_count }" MEMBER = "assigned" VALUE = "{ Countries.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Countries" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Countries.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.country_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Countries">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CNT-00006', l.country_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CountryList_Load_Offset_Store_Assigned" PARAMETERS = "offset, search, searchable_fields, max, nextoffset VAR, countries VAR" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query" VALUE =	"{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'StoreCountries' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'StoreCountries', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY name' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Countries',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CNT-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.country_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Countries.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.country_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.country_count" VALUE = "{ l.country_count + 1 }">
+		<MvEVAL EXPR = "{ Country_Read( l.countries[ l.country_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Countries" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Countries.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.country_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Countries">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CNT-00007', l.country_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CountryList_Load_Offset_Store_Unassigned" PARAMETERS = "offset, search, searchable_fields, max, nextoffset VAR, countries VAR" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query" VALUE =	"{ 'SELECT
+												c.*
+											FROM
+												Countries c
+												LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'StoreCountries s ON s.id = c.id
+											WHERE
+												s.id IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'c', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY name' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Countries',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CNT-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.country_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Countries.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.country_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.country_count" VALUE = "{ l.country_count + 1 }">
+		<MvEVAL EXPR = "{ Country_Read( l.countries[ l.country_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Countries" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Countries.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.country_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Countries">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CNT-00008', l.country_count ) }">
+</MvFUNCTION>

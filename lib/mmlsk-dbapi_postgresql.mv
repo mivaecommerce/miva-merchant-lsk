@@ -1,0 +1,533 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBA-PGS-
+| Next Error Code: 13
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DB_Open" PARAMETERS = "database, username, password" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPEN NAME		= "Merchant"
+			DATABASE	= "{ l.database }"
+			USERNAME	= "{ l.username }"
+			PASSWORD	= "{ l.password }"
+			TYPE		= "PostgreSQL">
+	<MvIF EXPR = "{ g.MvOPEN_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00001', 'Unable to connect to database' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Close" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCLOSE NAME = "Merchant">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Open_PrivateKey" PARAMETERS = "database, username, password" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPEN NAME		= "Merchant_PrivateKey"
+			DATABASE	= "{ l.database }"
+			USERNAME	= "{ l.username }"
+			PASSWORD	= "{ l.password }"
+			TYPE		= "PostgreSQL">
+	<MvIF EXPR = "{ g.MvOPEN_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00002', 'Unable to connect to database' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Close_PrivateKey" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCLOSE NAME = "Merchant_PrivateKey">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Apply_Flags" PARAMETERS = "name, flags" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Parse flags and issue MvDBCOMMANDs for each one
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.pos"	VALUE = 1>
+	<MvASSIGN NAME = "l.flag"	VALUE = "{ gettoken( l.flags, ',', l.pos ) }">
+
+	<MvWHILE EXPR = "{ NOT ISNULL l.flag }">
+		<MvASSIGN NAME = "l.command"	VALUE = "{ gettoken( l.flag, '=', 1 ) }">
+		<MvASSIGN NAME = "l.parameter"	VALUE = "{ gettoken( l.flag, '=', 2 ) }">
+
+		<MvIF EXPR = "{ l.command EQ 'charset' }">
+			<MvQUERY NAME = "{ l.name }" QUERY = "{ 'SET CLIENT_ENCODING=' $ [ g.Library_Filename_Utilities ].AlphaNumericOnly( l.parameter ) }">
+		<MvELSE>
+			<MvDBCOMMAND NAME = "{ l.name }" COMMAND = "{ l.command }" PARAMETER = "{ l.parameter }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.pos"	VALUE = "{ l.pos + 1 }">
+		<MvASSIGN NAME = "l.flag"	VALUE = "{ gettoken( l.flags, ',', l.pos ) }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Type_CHAR" PARAMETERS = "length" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ 'VARCHAR(' $ l.length $ ')' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Type_BOOL" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "SMALLINT">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Type_MEMO" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "TEXT">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Type_INTEGER" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "INTEGER">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Type_NUMBER"	PARAMETERS = "precision, scale" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.precision }">
+		<MvIF EXPR = "{ l.scale }">
+			<MvFUNCTIONRETURN VALUE = "{ 'NUMERIC(' $ l.precision $ ',' $ l.scale $ ')' }">
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ 'NUMERIC(' $ l.precision $ ')' }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "INTEGER">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Type_DOUBLE" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "DOUBLE PRECISION">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Lock_Table" PARAMETERS = "primary_table, additional_tables" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "BEGIN">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"			VALUE = "{ 'LOCK TABLE ' $ l.primary_table }">
+	<MvFOREACH ITERATOR = "l.table" ARRAY = "l.tables" COUNT = "{ miva_splitstring( l.additional_tables, ',', l.tables, 'trim' ) }">
+		<MvIF EXPR = "{ NOT ISNULL l.table }">
+			<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ', ' $ l.table }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.query"			VALUE = "{ l.query $ ' IN ACCESS EXCLUSIVE MODE' }">
+
+	<MvQUERY NAME = "Merchant" QUERY = "{ l.query }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Unlock_Table" PARAMETERS = "primary_table" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "COMMIT">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Increment_Requires_Lock" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Index_DESC" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "DESC">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Compare_CaseSensitive" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.value }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Compare_UPPER" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.value $ ' )' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Compare_TimeT" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.value $ ' AS INTEGER )' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Max_INTEGER" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "2147483647">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Max_NUMBER" PARAMETERS = "precision, scale" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.precision EQ 10 ) AND ( l.scale EQ 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "99999999.99">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.scale NE 0 }">
+		<MvIF EXPR = "{ l.scale GT l.precision }">
+			<MvFUNCTIONRETURN VALUE = "0">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.precision"	VALUE = "{ l.precision - l.scale }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.value"			VALUE = "">
+	<MvASSIGN NAME = "l.pos"			VALUE = 1>
+
+	<MvWHILE EXPR = "{ l.pos LE l.precision }">
+		<MvASSIGN NAME = "l.value"		VALUE = "{ l.value $ '9' }">
+		<MvASSIGN NAME = "l.pos"		VALUE = "{ l.pos + 1 }">
+	</MvWHILE>
+
+	<MvIF EXPR = "{ l.scale }">
+		<MvASSIGN NAME = "l.value"		VALUE = "{ l.value $ '.' }">
+		<MvASSIGN NAME = "l.pos"		VALUE = 1>
+
+		<MvWHILE EXPR = "{ l.pos LE l.scale }">
+			<MvASSIGN NAME = "l.value"	VALUE = "{ l.value $ '9' }">
+			<MvASSIGN NAME = "l.pos"	VALUE = "{ l.pos + 1 }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Error_IsIndexDuplicate" PARAMETERS = "error" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ( 'duplicate key' CIN l.error ) GT 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Error_IndexDuplicate" PARAMETERS = "error_code, error_message" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, 'duplicate key: ' $ l.error_message ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_OPENVIEW_Range" PARAMETERS = "db, view, query, fields, offset, count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.offset"	VALUE = "{ int( l.offset ) }">
+	<MvASSIGN NAME = "l.count"	VALUE = "{ int( l.count ) }">
+
+	<MvIF EXPR = "{ l.offset LT 0 }">			<MvASSIGN NAME = "l.offset"	VALUE = 0>	</MvIF>
+	<MvIF EXPR = "{ l.count LT 0 }">			<MvASSIGN NAME = "l.count"	VALUE = 0>	</MvIF>
+
+	<MvIF EXPR = "{ l.offset AND l.count }">	<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' LIMIT ' $ l.count $ ' OFFSET ' $ l.offset }">
+	<MvELSEIF EXPR = "{ l.offset }">			<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' LIMIT ALL OFFSET ' $ l.offset }">
+	<MvELSEIF EXPR = "{ l.count }">				<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' LIMIT ' $ l.count }">
+	</MvIF>
+
+	<MvOPENVIEW NAME = "{ l.db }" VIEW = "{ l.view }" QUERY = "{ l.query }" FIELDS = "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Drop_Index" PARAMETERS = "table, index" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP INDEX ' $ l.index }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Index_Exists" PARAMETERS = "table, index, exists var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.exists" VALUE = 0>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Index_Exists"
+				QUERY	= "{ 'SELECT * FROM pg_indexes WHERE UPPER( tablename ) = UPPER( ? ) AND UPPER( indexname ) = UPPER( ? )' }"
+				FIELDS	= "l.table, l.index">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.exists" VALUE = "{ NOT Index_Exists.d.EOF }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Index_Exists">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_TableList_Load" PARAMETERS = "tables var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "Tables"
+				QUERY 	= "{ 'SELECT table_name FROM information_schema.tables WHERE table_catalog = CURRENT_DATABASE() AND table_schema = CURRENT_SCHEMA() ORDER BY table_name ASC' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBA-PGS-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.table_count" VALUE = 0>
+	
+	<MvWHILE EXPR = "{ NOT Tables.d.EOF }">
+		<MvASSIGN NAME = "l.tables" INDEX = "{ ++l.table_count }" VALUE = "{ Tables.d.table_name }">
+	
+		<MvSKIP NAME = "Merchant" VIEW = "Tables" ROWS = 1>
+	</MvWHILE>
+	
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Tables">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-DBA-PGS-00010', l.table_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Table_Optimize" PARAMETERS = "table" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'VACUUM FULL ' $ l.table }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBA-PGS-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Table_Analyze" PARAMETERS = "table" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'ANALYZE ' $ l.table }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBA-PGS-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Escape_Identifier" PARAMETERS = "keyword" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ '"' $ l.keyword $ '"' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_FULLTEXT_Supported" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Create_FULLTEXT_Index" PARAMETERS = "table, index, columns" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-PGS-00006', 'PostgreSQL does not support FULLTEXT indexes' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_IFNULL" PARAMETERS = "expr1, expr2" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.expr1 $ ', ' $ l.expr2 $ ' )' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_Normalize_Value" PARAMETERS = "type, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'CHAR' }">		<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">	<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ l.type EQ 'INTEGER' }">
+		<MvASSIGN NAME = "l.value" VALUE = "{ int( l.value ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">
+		<MvASSIGN NAME = "l.value" VALUE = "{ l.value - 0 }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">
+		<MvASSIGN NAME = "l.value" VALUE = "{ l.value - 0.0 }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">
+		<MvIF EXPR = "{ l.value }">
+			<MvASSIGN NAME = "l.value" VALUE = 1>
+		<MvELSE>
+			<MvASSIGN NAME = "l.value" VALUE = 0>
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_EQ" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DB_Filter_Normalize_Value( l.type, l.value ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) = UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) = UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) = UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) = UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_NE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DB_Filter_Normalize_Value( l.type, l.value ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) <> UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) <> UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) <> ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) <> UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) <> UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_GT" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DB_Filter_Normalize_Value( l.type, l.value ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) > UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) > UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) > ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) > UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) > UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_GE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DB_Filter_Normalize_Value( l.type, l.value ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) >= UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) >= UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) >= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) >= UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) >= UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_LT" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DB_Filter_Normalize_Value( l.type, l.value ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) < UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) < UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) < ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) < UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) < UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_LE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DB_Filter_Normalize_Value( l.type, l.value ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) <= UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) <= UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) <= ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) <= UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) <= UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_CO" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) LIKE UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) LIKE UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_NC" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) NOT LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) NOT LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) NOT LIKE UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) NOT LIKE UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_LIKE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) LIKE UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) LIKE UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_NOTLIKE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) NOT LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ 'UPPER( ' $ l.column $ ' ) NOT LIKE UPPER( ? )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'CAST( COALESCE( ' $ l.column $ ', 0 ) AS TEXT ) NOT LIKE ?' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'UPPER( COALESCE( ' $ l.column $ ', \'\' ) ) NOT LIKE UPPER( ? )' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'UPPER( CAST( ' $ l.column $ ' AS TEXT ) ) NOT LIKE UPPER( ? )' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_TRUE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = \'1\'' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = \'1\'' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = 1' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', \'\' ) = \'1\'' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) = \'1\'' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_FALSE" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = \'0\'' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' = \'0\'' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', 0 ) = 0' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', \'\' ) = \'0\'' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ 'CAST( ' $ l.column $ ' AS TEXT ) = \'0\'' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Filter_ISNULL" PARAMETERS = "type, column, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'INTEGER' }">				<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NUMBER' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'DOUBLE' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'BOOL' }">			<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'CHAR' }">			<MvFUNCTIONRETURN VALUE = "{ '( ' $ l.column $ ' IS NULL OR ' $ l.column $ ' = \'\' )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'MEMO' }">			<MvFUNCTIONRETURN VALUE = "{ '( ' $ l.column $ ' IS NULL OR ' $ l.column $ ' = \'\' )' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_INTEGER' }">	<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_NUMBER' }">		<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_BOOL' }">		<MvFUNCTIONRETURN VALUE = "{ l.column $ ' IS NULL' }">
+	<MvELSEIF EXPR = "{ l.type EQ 'NULL_CHAR' }">		<MvFUNCTIONRETURN VALUE = "{ 'COALESCE( ' $ l.column $ ', \'\' ) = \'\'' }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ '( CAST( ' $ l.column $ ' AS TEXT ) IS NULL OR CAST( ' $ l.column $ ' AS TEXT ) = \'\' )' }">
+	</MvIF>
+</MvFUNCTION>

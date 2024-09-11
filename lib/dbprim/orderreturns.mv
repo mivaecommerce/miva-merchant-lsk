@@ -1,0 +1,171 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-ORT-
+| Next Error Code: 11    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "OrderReturn_Read" PARAMETERS = "orderreturn var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderreturn:id"			VALUE = "{ OrderReturns.d.id }">
+	<MvASSIGN NAME = "l.orderreturn:order_id"	VALUE = "{ OrderReturns.d.order_id }">
+	<MvASSIGN NAME = "l.orderreturn:code"		VALUE = "{ OrderReturns.d.code }">
+	<MvASSIGN NAME = "l.orderreturn:status"		VALUE = "{ OrderReturns.d.status }">
+	<MvASSIGN NAME = "l.orderreturn:dt_issued"	VALUE = "{ OrderReturns.d.dt_issued }">
+	<MvASSIGN NAME = "l.orderreturn:dt_recvd"	VALUE = "{ OrderReturns.d.dt_recvd }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturn_Insert" PARAMETERS = "orderreturn var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderreturn:id"				VALUE = "{ StoreKey_Generate( 'OrderReturns' ) }">
+	<MvASSIGN NAME = "l.orderreturn:code"			VALUE = "{ padl( l.orderreturn:order_id, 5, '0' ) $ '-' $
+															   padl( s.tm_year, 4, '0' ) $ padl( s.tm_mon, 2, '0' ) $ padl( s.tm_mday, 2, '0' ) $ '-' $
+															   padl( l.orderreturn:id, 5, '0' ) }">
+
+	<MvIF EXPR = "{ ISNULL l.orderreturn:dt_issued }">
+		<MvASSIGN NAME = "l.orderreturn:dt_issued"	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.orderreturn:dt_recvd }">
+		<MvASSIGN NAME = "l.orderreturn:dt_recvd"	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT OrderReturn_Insert_LowLevel( l.orderreturn ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_orderreturn', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderReturn_Insert( l.module, l.orderreturn ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturn_Load_ID" PARAMETERS = "rma_id, orderreturn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderReturns"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'OrderReturns WHERE id = ?' }"
+				FIELDS	= "l.rma_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ OrderReturns.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderReturns">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-ORT-00002' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ OrderReturn_Read( l.orderreturn ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderReturns">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturnList_Load_Order" PARAMETERS = "order_id, orderreturns var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderReturns"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'OrderReturns WHERE order_id = ? ORDER BY id' }"
+				FIELDS	= "l.order_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderreturn_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT OrderReturns.d.EOF }">
+		<MvEVAL EXPR = "{ OrderReturn_Read( l.orderreturns[ ++l.orderreturn_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "OrderReturns" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderReturns">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-ORT-00010', l.orderreturn_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturnList_Load_Status" PARAMETERS = "order_id, status, orderreturns var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderReturns"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'OrderReturns WHERE order_id = ? AND status = ?' }"
+				FIELDS	= "l.order_id, l.status">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderreturn_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT OrderReturns.d.EOF }">
+		<MvASSIGN NAME = "l.orderreturn_count"	VALUE = "{ l.orderreturn_count + 1 }">
+		<MvEVAL EXPR = "{ OrderReturn_Read( l.orderreturns[ l.orderreturn_count ] ) }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "OrderReturns" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderReturns">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-ORT-00008', l.orderreturn_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturn_Insert_LowLevel" PARAMETERS = "orderreturn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'OrderReturns
+						  ( id, order_id, code, status, dt_issued, dt_recvd )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.orderreturn:id, l.orderreturn:order_id, l.orderreturn:code, l.orderreturn:status,
+					   l.orderreturn:dt_issued, l.orderreturn:dt_recvd">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturn_Update_Status_LowLevel" PARAMETERS = "orderreturn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'OrderReturns
+						  SET
+							status		= ?,
+							dt_recvd	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.orderreturn:status, l.orderreturn:dt_recvd,
+					   l.orderreturn:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturn_Delete_LowLevel" PARAMETERS = "rma_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'OrderReturns WHERE id = ?' }"
+			 FIELDS	= "l.rma_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderReturn_Delete_All_Order" PARAMETERS = "order_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'OrderReturns WHERE order_id = ?' }"
+			 FIELDS	= "l.order_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-ORT-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

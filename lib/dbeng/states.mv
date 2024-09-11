@@ -1,0 +1,197 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-STA-
+| Next Error Code: 7    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StateList_Load_Offset" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, states var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'States' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'States', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY code' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'States',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-STA-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT States.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.state_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.state_count" VALUE = "{ l.state_count + 1 }">
+		<MvEVAL EXPR = "{ State_Read( l.states[ l.state_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "States" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ States.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.state_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-STA-00002', l.state_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateList_Update_Offsets" PARAMETERS = "states var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"						VALUE = 0>
+
+	<MvASSIGN NAME = "l.state_pos"							VALUE = 1>
+	<MvASSIGN NAME = "l.state_count"						VALUE = "{ miva_array_elements( l.states ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.states, l.state_count ) }">
+
+	<MvWHILE EXPR = "{ l.state_pos LE l.state_count }">
+		<MvASSIGN NAME = "g.States_Order_StateCode"			VALUE = "{ l.states[ l.state_pos ]:code }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current state at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				   'States',
+																				   'SELECT code, disp_order FROM ' $ g.Store_Table_Prefix $ 'States WHERE code <> ? ORDER BY disp_order',
+																				   'g.States_Order_StateCode',
+																				   l.states[ l.state_pos ]:offset - 1,
+																				   1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-STA-00003', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ States.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.states[ l.state_pos ] }">
+
+			<MvASSIGN NAME = "l.state_pos"	VALUE = "{ l.state_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+
+			<MvIF EXPR = "{ NOT States_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ States.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting states after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' 
+									$ g.Store_Table_Prefix $ 'States 
+								  SET 
+									disp_order = disp_order + 1 
+								  WHERE 
+									disp_order >= ?' }" 
+					 FIELDS	= "l.disp_order">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-STA-00004', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'StateDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the state in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' 
+									$ g.Store_Table_Prefix $ 'States 
+								  SET 
+									disp_order = ? 
+								  WHERE 
+									code = ?' }" 
+					 FIELDS	= "l.disp_order, g.States_Order_StateCode">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-STA-00005', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.state_pos"	VALUE = "{ l.state_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT States_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>		
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "States_Update_Offsets_PastEnd" PARAMETERS = "pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.States_Order_StateCode" 	VALUE = "{ l.pastend[ l.pastend_pos ]:code }">
+		<MvASSIGN NAME = "l.disp_order"					VALUE = "{ StoreKey_Generate( 'StateDisplayOrder' ) }">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE ' 
+								$ g.Store_Table_Prefix $ 'States 
+							  SET 
+								disp_order = ? 
+							  WHERE 
+								code = ?' }" 
+				 FIELDS	= "l.disp_order, g.States_Order_StateCode">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-STA-00006', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

@@ -1,0 +1,620 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-PAY-COD-
+| Next Error Code: 13    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cod">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "COD">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0200">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.00">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to enable COD payments.  If you enable this module, \"COD\" appears in the Pay With drop-down list.  It is an offline module; payment is received after the order is created.  When a customer selects COD as the payment method, the order status is set to authorized but you have to manually capture funds by editing the order and clicking the Capture button.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, payment, vis_payment, provision_store">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'COD
+						  (
+							price		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ ',
+							message		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()			$ ',
+							tax_exempt	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cod"			VALUE = "">
+	<MvASSIGN NAME = "l.cod:price"		VALUE = 0.00>
+	<MvASSIGN NAME = "l.cod:message"	VALUE = "">
+	<MvASSIGN NAME = "l.cod:tax_exempt"	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ COD_Insert( l.cod ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'COD' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Payment Processing Feature (payment)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PaymentModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Method_Capabilities" PARAMETERS = "module var, method_code, capabilities var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_LeftNavigation" PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Manipulate_Shipping" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT COD_Load_Cached( l.cod ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.cod:price EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_charge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basket_charge:module_id" 	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basket_charge:type" 		VALUE = "PAYMENT">
+	<MvASSIGN NAME = "l.basket_charge:descrip" 		VALUE = "COD Charge">
+	<MvASSIGN NAME = "l.basket_charge:amount" 		VALUE = "{ l.cod:price }">
+	<MvASSIGN NAME = "l.basket_charge:disp_amt" 	VALUE = "{ l.cod:price }">
+	<MvASSIGN NAME = "l.basket_charge:tax_exempt" 	VALUE = "{ l.cod:tax_exempt }">
+	<MvASSIGN NAME = "l.basket_charge:tax"		 	VALUE = 0.00>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.basket_charge ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize" PARAMETERS = "module var, code, order var, amount" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT COD_Load_Cached( l.cod ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.cod:price NE 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Load( l.order:id, l.module:id, 'PAYMENT', l.null ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.order_charge:order_id" 		VALUE = "{ l.order:id }">
+			<MvASSIGN NAME = "l.order_charge:module_id" 	VALUE = "{ l.module:id }">
+			<MvASSIGN NAME = "l.order_charge:type" 			VALUE = "PAYMENT">
+			<MvASSIGN NAME = "l.order_charge:descrip" 		VALUE = "COD Charge">
+			<MvASSIGN NAME = "l.order_charge:amount" 		VALUE = "{ l.cod:price }">
+			<MvASSIGN NAME = "l.order_charge:disp_amt" 		VALUE = "{ l.cod:price }">
+			<MvASSIGN NAME = "l.order_charge:tax_exempt" 	VALUE = "{ l.cod:tax_exempt }">
+			<MvASSIGN NAME = "l.order_charge:tax"		 	VALUE = 0.00>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.order_charge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.order_total"				VALUE = "{ [ g.Module_Library_DB ].Order_Total( l.order:id ) }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v56_Order_Update_Total( l.order, l.order_total ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Create( l.order:id,
+																	 0,
+																	 3, 
+																	 0,
+																	 l.amount, l.amount,
+																	 l.module:id,
+																	 l.null,
+																	 l.null ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>	
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Field" PARAMETERS = "module var, order var, pay_data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Fields" PARAMETERS = "module var, order var, pay_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Hide_Additional_Fields" PARAMETERS = "module var, order var, pay_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Invalid" PARAMETERS = "module var, order var, pay_data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Methods" PARAMETERS = "module var, order var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "code"	VALUE = "COD">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "name"	VALUE = "COD">
+ 
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Prompt" PARAMETERS = "module var, order var, pay_data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Runtime_Authorize_PaymentCard" PARAMETERS = "module var, module_data, paymentcard var, total" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_PaymentCard" PARAMETERS = "module var, module_data, order var, paymentcard var, total" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>	
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Authorize_Validate" PARAMETERS = "module var, order var, pay_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Content" PARAMETERS = "module var, tab, load_fields, pay_data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Delete" PARAMETERS = "module var, pay_data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Head" PARAMETERS = "module var, tab, order var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Update" PARAMETERS = "module var, pay_data var, secure_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_OrderPayment_Capture" PARAMETERS = "module var, order var, auth_payment var, auth_pay_data var, auth_secure_data var, amount" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT COD_Load_Cached( l.cod ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.auth_payment:type NE 1 ) AND ( l.auth_payment:type NE 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00008', 'Invalid transaction type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.auth_payment:available LT l.amount }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00009', 'Capture amount exceeds authorization amount' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Reduce the available amount of the authorization
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.auth_payment:available"	VALUE = "{ l.auth_payment:available - l.amount }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Update_Amounts( l.auth_payment ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create a capture transaction
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Create( l.order:id,
+																	 l.auth_payment:id,
+																	 4, 
+																	 0,
+																	 l.amount, l.amount,
+																	 l.module:id,
+																	 l.null,
+																	 l.null ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_OrderPayment_Refund" PARAMETERS = "module var, order var, capture_payment var, capture_pay_data var, capture_secure_data var, amount" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.capture_payment:type NE 2 ) AND ( l.capture_payment:type NE 4 ) AND ( l.capture_payment:type NE 5 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00010', 'Invalid transaction type' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Update the remaining available amount
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.capture_payment:available" VALUE = "{ l.capture_payment:available - l.amount }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Update_Amounts( l.capture_payment ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create a refund transaction
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Create( l.order:id,
+																	 l.capture_payment:id,
+																	 6, 
+																	 0,
+																	 l.amount, 0.00,
+																	 l.module:id,
+																	 l.null,
+																	 l.null ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_OrderPayment_VOID" PARAMETERS = "module var, order var, auth_payment var, auth_pay_data var, auth_secure_data var, amount" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.auth_payment:type NE 1 ) AND ( l.auth_payment:type NE 2 ) AND ( l.auth_payment:type NE 3 ) AND ( l.auth_payment:type NE 4 ) AND ( l.auth_payment:type NE 5 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00011', 'Invalid transaction type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.amount NE l.auth_payment:available }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00012', 'Voids must be for the entire transaction amount' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Update the authorization
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.auth_payment:available" VALUE = "{ l.auth_payment:available - l.amount }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Update_Amounts( l.auth_payment ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create a void transaction
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Create( l.order:id,
+																	 l.auth_payment:id,
+																	 7, 
+																	 0,
+																	 l.amount, 0.00,
+																	 l.module:id,
+																	 l.null,
+																	 l.null ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "COD">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Field" PARAMETERS = "module var, data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Fields" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Hide_Additional_Fields" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Invalid" PARAMETERS = "module var, data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Message" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ COD_Load( l.cod ) }">
+		<MvFUNCTIONRETURN VALUE = "{ l.cod:message }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "code"	VALUE = "COD">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "name"	VALUE = "COD">
+ 
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Enabled_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "code"	VALUE = "COD">
+	<MvASSIGN NAME = "l.methods" INDEX = 1 MEMBER = "name"	VALUE = "COD">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Prompt" PARAMETERS = "module var, data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_URL" PARAMETERS = "module var, url" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Validate" PARAMETERS = "module var, pay_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Process" PARAMETERS = "module var, data var, secure_data var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "COD">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Fields" PARAMETERS = "module var, data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Label" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Value" PARAMETERS = "module var, field_id, data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Authorize" PARAMETERS = "module var, module_data, total, data var, secure_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT COD_Load_Cached( l.cod ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.cod:price EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Load( g.Basket:basket_id, l.module:id, 'PAYMENT', l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Runtime_Authorize" PARAMETERS = "module var, module_data, total" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PaymentModule_Authorize( l.module, l.module_data, l.total, l.null, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderPayment_Create( g.Basket:order_id,
+																	 0,
+																	 3, 
+																	 0,
+																	 l.total, l.total,
+																	 l.module:id,
+																	 l.null,
+																	 l.null ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Payment Settings Screen Feature (vis_payment)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Payment_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Payment_COD:price"		VALUE = "{ trim( g.Payment_COD:price ) }">
+	<MvASSIGN NAME = "g.Payment_COD:tax_exempt"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Payment_COD:tax_exempt ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_Required( g.Payment_COD:price ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'COD', 'Payment_COD:price', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT COD_Update( g.Payment_COD ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-COD-00006', 'COD Configuration updated' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "COD:COD">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT COD_Load( g.Payment_COD ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'COD' }">
+		<table border=0 cellpadding=2 cellspacing=0>
+		<tr><td nowrap>
+			<b>Charge:</b>
+		</td><td width="100%">
+			<input type="text" name="Payment_COD:price" size=10 value="{ encodeentities( g.Payment_COD:price ) ROUND 2 }">
+		</td></tr>
+
+		<tr><td nowrap valign="top">
+			Message:
+		</td><td width="100%">
+			<textarea name="Payment_COD:message" rows=10 cols=58 wrap="off"><MIVA STANDARDOUTPUTLEVEL = "text, html"><MvEVAL EXPR = "{ encodeentities( g.Payment_COD:message ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"></textarea>
+		</td></tr>
+
+		<tr><td nowrap valign="top">
+			&nbsp;
+		</td><td width="100%">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox_With_Label( g.Payment_COD:tax_exempt, 'Payment_COD:tax_exempt', 'Yes', 'Tax Exempt' ) }">
+		</td></tr>
+		</table>
+	<MvELSE>
+		<MvHIDE FIELDS = "g.Payment_COD">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT COD_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(		'O', l.provide_xml,	'Price',		l.settings:price, 10, 2 )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o', l.provide_xml,	'Message',		l.settings:message )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'o', l.provide_xml,	'TaxExempt',	l.settings:tax_exempt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT COD_Update( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-COD-00007', 'COD Configuration updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Database Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "COD_Load" PARAMETERS = "cod var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+			    VIEW	= "COD"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'COD' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cod:price"		VALUE = "{ COD.d.price }">
+	<MvASSIGN NAME = "l.cod:message"	VALUE = "{ COD.d.message }">
+	<MvASSIGN NAME = "l.cod:tax_exempt"	VALUE = "{ COD.d.tax_exempt }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "COD">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "COD_Load_Cached" PARAMETERS = "cod var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:cod:cod_load_cached">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ COD_Load( l.cache:cod ) }">
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cod"							VALUE = "{ l.cache:cod }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "COD_Insert" PARAMETERS = "cod var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'COD
+						  ( price, message, tax_exempt )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.cod:price, l.cod:message, l.cod:tax_exempt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "COD_Update" PARAMETERS = "cod var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'COD
+						  SET
+							price		= ?,
+							message		= ?,
+							tax_exempt	= ?' }"
+			 FIELDS	= "l.cod:price, l.cod:message, l.cod:tax_exempt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-COD-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

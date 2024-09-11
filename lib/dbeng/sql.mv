@@ -1,0 +1,989 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-SQL-
+| Next Error Code: 3    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SQL_Search_Clause" PARAMETERS = "search_string, searchable_correlation, searchable_fields, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g._search_values"	VALUE = "">
+
+    <MvASSIGN NAME = "l.word_pos"		VALUE = 1>
+    <MvASSIGN NAME = "l.word"			VALUE = "{ toupper( gettoken( l.search_string, ' ', l.word_pos ) ) }">
+
+    <MvWHILE EXPR = "{ len( l.word ) }">
+        <MvIF EXPR = "{ l.word_pos GT 1 }">
+            <MvASSIGN NAME = "l.search_clause" VALUE = "{ l.search_clause $ ' ) AND ( ' }">
+        </MvIF>
+
+		<MvASSIGN NAME = "l.field_pos"		VALUE = 1>
+		<MvASSIGN NAME = "l.field"			VALUE = "{ trim( gettoken( l.searchable_fields, ',', l.field_pos ) ) }">
+
+		<MvWHILE EXPR = "{ len( l.field ) }">
+			<MvIF EXPR = "{ ':' IN l.field }">
+				<MvASSIGN NAME = "l.type"	VALUE = "{ gettoken( l.field, ':', 2 ) }">
+				<MvASSIGN NAME = "l.field"	VALUE = "{ gettoken( l.field, ':', 1 ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.type"	VALUE = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ ( NOT ISNULL l.searchable_correlation ) AND ( ( '.' IN l.field ) EQ 0 ) }">
+				<MvASSIGN NAME = "l.field"	VALUE = "{ l.searchable_correlation $ '.' $ l.field }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.type EQ 'time_t_date' }">
+				<MvASSIGN NAME = "l.month"	VALUE = "{ gettoken( l.word, '/', 1 ) }">
+				<MvASSIGN NAME = "l.day"	VALUE = "{ gettoken( l.word, '/', 2 ) }">
+				<MvASSIGN NAME = "l.year"	VALUE = "{ gettoken( l.word, '/', 3 ) }">
+				<MvASSIGN NAME = "l.low"	VALUE = "{ mktime_t( l.year, l.month, l.day, 0, 0, 0, g.Merchant_Local_Timezone ) }">
+
+				<MvIF EXPR = "{ l.low GT 0 }">
+					<MvIF EXPR = "{ l.field_pos GT 1 }">
+						<MvASSIGN NAME = "l.search_clause"	VALUE = "{ l.search_clause $ ' OR ' }">
+					</MvIF>
+
+					<MvIF EXPR = "{ len( l.fields ) }">
+						<MvASSIGN NAME = "l.fields"		VALUE = "{ l.fields $ ',' }">
+					</MvIF>
+
+					<MvASSIGN NAME = "l.fields"			VALUE = "{ l.fields $ 'g._search_values[' $ l.word_pos $ '][' $ l.field_pos $ ']:low, g._search_values[' $ l.word_pos $ '][' $ l.field_pos $ ']:high' }">
+					<MvASSIGN NAME = "l.search_clause"	VALUE = "{ l.search_clause $ '( ' $ l.field $ ' >= ? AND ' $ l.field $ ' <= ? )' }">
+
+					<MvASSIGNARRAY NAME = "g._search_values" VALUE = "{ l.low }">
+						<MvDIMENSION INDEX = "{ l.word_pos }">
+						<MvDIMENSION INDEX = "{ l.field_pos }">
+						<MvMEMBER NAME = "low">
+					</MvASSIGNARRAY>
+
+					<MvASSIGNARRAY NAME = "g._search_values" VALUE = "{ l.low + ( 24 * 60 * 60 ) - 1 }">
+						<MvDIMENSION INDEX = "{ l.word_pos }">
+						<MvDIMENSION INDEX = "{ l.field_pos }">
+						<MvMEMBER NAME = "high">
+					</MvASSIGNARRAY>
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ l.field_pos GT 1 }">
+					<MvASSIGN NAME = "l.search_clause"	VALUE = "{ l.search_clause $ ' OR ' }">
+				</MvIF>
+
+				<MvIF EXPR = "{ len( l.fields ) }">
+					<MvASSIGN NAME = "l.fields"		VALUE = "{ l.fields $ ',' }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.fields"			VALUE = "{ l.fields $ 'g._search_values[' $ l.word_pos $ '][' $ l.field_pos $ ']' }">
+				<MvASSIGN NAME = "l.search_clause"	VALUE = "{ l.search_clause $ '( ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( l.field ) $ ' LIKE ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' )' }">
+
+				<MvASSIGNARRAY NAME = "g._search_values" VALUE = "{ '%' $ l.word $ '%' }">
+					<MvDIMENSION INDEX = "{ l.word_pos }">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvASSIGNARRAY>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.field_pos"	VALUE = "{ l.field_pos + 1 }">
+			<MvASSIGN NAME = "l.field"		VALUE = "{ trim( gettoken( l.searchable_fields, ',', l.field_pos ) ) }">
+		</MvWHILE>
+
+        <MvASSIGN NAME = "l.word_pos"	VALUE = "{ l.word_pos + 1 }">
+        <MvASSIGN NAME = "l.word"		VALUE = "{ toupper( gettoken( l.search_string, ' ', l.word_pos ) ) }">
+    </MvWHILE>
+
+    <MvIF EXPR = "{ len( l.search_clause ) }">
+        <MvFUNCTIONRETURN VALUE = "{ ' ( ' $ l.search_clause $ ' ) ' }">
+    <MvELSE>
+        <MvFUNCTIONRETURN VALUE = "">
+    </MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Count" PARAMETERS = "count_query, fields, total_count var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "TotalCount"
+				QUERY	= "{ l.count_query }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SQL-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT TotalCount.d.EOF }">
+		<MvASSIGN NAME = "l.total_count" VALUE = "{ l.total_count + TotalCount.d.total_count }">
+		<MvSKIP NAME = "Merchant" VIEW = "TotalCount" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "TotalCount">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Sort_Field" PARAMETERS = "sort, direction var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ substring_var( l.sort, 1, 1 ) EQ '-' }">
+		<MvASSIGN NAME = "l.field"		VALUE = "{ substring_var( l.sort, 2, len_var( l.sort ) - 1 ) }">
+		<MvASSIGN NAME = "l.direction"	VALUE = "DESC">
+	<MvELSE>
+		<MvASSIGN NAME = "l.field"		VALUE = "{ l.sort }">
+		<MvASSIGN NAME = "l.direction"	VALUE = "ASC">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.field }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_UNION" PARAMETERS = "query var, union_query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:union_all"	VALUE = 0>
+	<MvASSIGN NAME = "l.query:union_count"	VALUE = "{ miva_array_insert_var( l.query:union, l.union_query, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_UNION_ALL" PARAMETERS = "query var, union_query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:union_all"	VALUE = 1>
+	<MvASSIGN NAME = "l.query:union_count"	VALUE = "{ miva_array_insert_var( l.query:union, l.union_query, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_DISTINCT" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:select_distinct"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_DISTINCT_With_COUNT_SELECT" PARAMETERS = "query var, count_select" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:select_distinct"				VALUE = 1>
+	<MvASSIGN NAME = "l.query:select_distinct_count_select"	VALUE = "{ l.count_select }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Is_DISTINCT" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.query:select_distinct }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_Clear" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:select"			VALUE = "">
+	<MvASSIGN NAME = "l.query:select_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.query:select_distinct"	VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_DISTINCT" PARAMETERS = "query var, select" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, l.select ) }">
+	<MvEVAL EXPR = "{ SQL_Query_DISTINCT( l.query ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT" PARAMETERS = "query var, select" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:select_count"	VALUE = "{ miva_array_insert_var( l.query:select, l.select, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_NULL_CHAR" PARAMETERS = "query var, column, alias" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.column, '\'\'' ) $ ' AS ' $ l.alias ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_NULL_INTEGER" PARAMETERS = "query var, column, alias" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.column, '0' ) $ ' AS ' $ l.alias ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_NULL_NUMBER" PARAMETERS = "query var, column, alias" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.column, '0' ) $ ' AS ' $ l.alias ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_NULL_BOOL" PARAMETERS = "query var, column, alias" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.column, '0' ) $ ' AS ' $ l.alias ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_FROM_Clear" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:total_join_count"	VALUE = 0>
+
+	<MvASSIGN NAME = "l.query:from"				VALUE = "">
+	<MvASSIGN NAME = "l.query:from_count"		VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_FROM" PARAMETERS = "query var, table_name, alias" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:total_join_count"	VALUE = "{ l.query:total_join_count + 1 }">
+
+	<MvASSIGN NAME = "l.table:name"				VALUE = "{ l.table_name }">
+	<MvASSIGN NAME = "l.table:alias"			VALUE = "{ l.alias }">
+
+	<MvASSIGN NAME = "l.query:from_count"		VALUE = "{ miva_array_insert_var( l.query:from, l.table, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_FROM_Before" PARAMETERS = "query var, before_alias, table_name, alias" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:total_join_count"	VALUE = "{ l.query:total_join_count + 1 }">
+
+	<MvASSIGN NAME = "l.table:name"				VALUE = "{ l.table_name }">
+	<MvASSIGN NAME = "l.table:alias"			VALUE = "{ l.alias }">
+
+	<MvASSIGN NAME = "l.index"					VALUE = "{ miva_array_search( l.query:from, 1, l.before_table, 'l.before_table:alias EQ l.before_alias' ) }">
+	<MvIF EXPR = "{ l.index EQ 0 }">
+		<MvASSIGN NAME = "l.index"				VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query:from_count"		VALUE = "{ miva_array_insert_var( l.query:from, l.table, l.index ) }">	
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_LEFT_OUTER_JOIN" PARAMETERS = "query var, master_correlation_name, table_name, correlation_name, on_clause, fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ miva_array_search( l.query:from, 1, l.table, 'l.table:alias EQ l.master_correlation_name' ) }">
+		<MvASSIGN NAME = "l.query:total_join_count"		VALUE = "{ l.query:total_join_count + 1 }">
+
+		<MvASSIGN NAME = "l.left_join:table"			VALUE = "{ l.table_name }">
+		<MvASSIGN NAME = "l.left_join:alias"			VALUE = "{ l.correlation_name }">
+		<MvASSIGN NAME = "l.left_join:on_clause"		VALUE = "{ l.on_clause }">
+		<MvASSIGN NAME = "l.left_join:fields"			VALUE = "{ l.fields }">
+
+		<MvASSIGN NAME = "l.table:left_join_count"		VALUE = "{ miva_array_insert_var( l.table:left_joins, l.left_join, -1 ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_WHERE_Clear" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:where_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.query:where"					VALUE = "">
+	
+	<MvASSIGN NAME = "l.query:where_field_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.query:where_fields"				VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SUB_WHERE_BEGIN" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:subwhere_pos"									VALUE = "{ l.query:subwhere_pos + 1 }">
+	<MvASSIGN NAME = "l.query:subwheres" INDEX = "{ l.query:subwhere_pos }"	VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SUB_WHERE_END" PARAMETERS = "query var, default_joining_clause" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_SUB_WHERE_END_Clause( l.query, '', l.default_joining_clause ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SUB_WHERE_END_First" PARAMETERS = "query var, default_joining_clause" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_SUB_WHERE_END_Clause_Position( l.query, '', l.default_joining_clause, 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SUB_WHERE_END_Clause" PARAMETERS = "query var, outer_joining_clause, default_inner_joining_clause" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_SUB_WHERE_END_Clause_Position( l.query, l.outer_joining_clause, l.default_inner_joining_clause, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SUB_WHERE_END_Clause_Position" PARAMETERS = "query var, outer_joining_clause, default_inner_joining_clause, index" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.query:subwhere_pos LE 0 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.subwhere" VARIABLE = "l.query:subwheres">
+		<MvDIMENSION INDEX = "{ l.query:subwhere_pos }">
+	</MvREFERENCEARRAY>
+
+	<MvASSIGN NAME = "l.query:subwhere_pos"	VALUE = "{ l.query:subwhere_pos - 1 }">
+
+	<MvIF EXPR = "{ l.subwhere:where_count }">
+		<MvCAPTURE VARIABLE = "l.where">
+			<MvEVAL EXPR = "( ">
+
+			<MvFOREACH ITERATOR = "l.entry" ARRAY = "l.subwhere:where" INDEX = "l.pos" COUNT = "{ l.subwhere:where_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = " ">
+
+					<MvIF EXPR = "{ NOT ISNULL l.entry:joining_clause }">	<MvEVAL EXPR = "{ l.entry:joining_clause }">
+					<MvELSE>												<MvEVAL EXPR = "{ l.default_inner_joining_clause }">
+					</MvIF>
+					
+					<MvEVAL EXPR = " ">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ l.entry:sql }">
+			</MvFOREACH>
+
+			<MvEVAL EXPR = " )">
+		</MvCAPTURE>
+
+		<MvEVAL EXPR = "{ SQL_Query_WHERE_Clause_Position( l.query, l.outer_joining_clause, l.where, l.subwhere:fields $ '', l.index ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_WHERE" PARAMETERS = "query var, where_sql, fields" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_WHERE_Clause( l.query, '', l.where_sql, l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_WHERE_First" PARAMETERS = "query var, where_sql, fields" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.where:joining_clause"		VALUE = "">
+	<MvASSIGN NAME = "l.where:sql"					VALUE = "{ l.where_sql }">
+
+	<MvASSIGN NAME = "l.query:where_count"			VALUE = "{ miva_array_insert_var( l.query:where, l.where, 1 ) }">
+	<MvASSIGN NAME = "l.query:where_field_count"	VALUE = "{ miva_array_insert_var( l.query:where_fields, l.fields, 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_WHERE_Clause" PARAMETERS = "query var, joining_clause, where_sql, fields" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_WHERE_Clause_Position( l.query, l.joining_clause, l.where_sql, l.fields, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_WHERE_Clause_Position" PARAMETERS = "query var, joining_clause, where_sql, fields, index" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.where_sql }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.where:joining_clause"				VALUE = "{ l.joining_clause }">
+	<MvASSIGN NAME = "l.where:sql"							VALUE = "{ l.where_sql }">
+
+	<MvIF EXPR = "{ l.query:subwhere_pos LE 0 }">
+		<MvASSIGN NAME = "l.query:where_count"				VALUE = "{ miva_array_insert_var( l.query:where, l.where, l.index ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.fields }">
+			<MvASSIGN NAME = "l.query:where_field_count"	VALUE = "{ miva_array_insert_var( l.query:where_fields, l.fields, l.index ) }">
+		</MvIF>
+	<MvELSE>
+		<MvREFERENCEARRAY NAME = "l.subwhere" VARIABLE = "l.query:subwheres">
+			<MvDIMENSION INDEX = "{ l.query:subwhere_pos }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.subwhere:where_count"			VALUE = "{ miva_array_insert_var( l.subwhere:where, l.where, l.index ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.fields }">
+			<MvASSIGN NAME = "l.subwhere:field_count"		VALUE = "{ miva_array_insert_var( l.subwhere:fields, l.fields, l.index ) }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Clear" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:orderby"					VALUE = "">
+	<MvASSIGN NAME = "l.query:orderby_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.query:orderby_relevance"		VALUE = "">
+	<MvASSIGN NAME = "l.query:orderby_relevance_count"	VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY" PARAMETERS = "query var, column, direction" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, l.column, '', l.direction, '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag" PARAMETERS = "query var, column, direction, flag" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, l.column, '', l.direction, l.flag ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag_With_Alias" PARAMETERS = "query var, column, column_alias, direction, flag" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_ORDER_BY_Flag_With_Alias_And_Member( l.query, l.column, l.column_alias, l.column, l.direction, l.flag ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag_With_Alias_And_Member" PARAMETERS = "query var, column, column_alias, member, direction, flag" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ miva_array_search( l.query:orderby, 1, l.existing_orderby, 'l.existing_orderby:column EQ l.column' ) EQ 0 }">
+		<MvASSIGN NAME = "l.orderby"				VALUE = "">
+		<MvASSIGN NAME = "l.orderby:column"			VALUE = "{ l.column }">
+		<MvASSIGN NAME = "l.orderby:column_alias"	VALUE = "{ l.column_alias }">
+		<MvASSIGN NAME = "l.orderby:member"			VALUE = "{ l.member }">
+		<MvASSIGN NAME = "l.orderby:direction"		VALUE = "{ l.direction }">
+		<MvASSIGN NAME = "l.orderby:flag"			VALUE = "{ l.flag }">
+
+		<MvASSIGN NAME = "l.query:orderby_count"	VALUE = "{ miva_array_insert_ref( l.query:orderby, l.orderby, -1 ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Relevance" PARAMETERS = "query var, search, columns, operator, weight" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderby_relevance"				VALUE = "">
+	<MvASSIGN NAME = "l.orderby_relevance:search"		VALUE = "{ l.search }">
+	<MvASSIGN NAME = "l.orderby_relevance:columns"		VALUE = "{ l.columns }">
+	<MvASSIGN NAME = "l.orderby_relevance:operator"		VALUE = "{ l.operator }">
+	<MvASSIGN NAME = "l.orderby_relevance:weight"		VALUE = "{ l.weight }">
+
+	<MvASSIGN NAME = "l.query:orderby_relevance_count"	VALUE = "{ miva_array_insert_ref( l.query:orderby_relevance, l.orderby_relevance, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_GROUP_BY" PARAMETERS = "query var, columns" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:groupby_count"	VALUE = "{ miva_array_insert_var( l.query:groupby, l.columns, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Search_Clause" PARAMETERS = "query var, search_string, searchable_correlation, searchable_fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.search_clause" VALUE = "{ SQL_Search_Clause( l.search_string, l.searchable_correlation, l.searchable_fields, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.search_clause }">
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.search_clause, l.fields ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Build_Count" PARAMETERS = "query, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:orderby_count"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT l.query:select_distinct }">
+		<MvASSIGN NAME = "l.query:select"			VALUE = "COUNT( * ) AS total_count">
+	<MvELSE>
+		<MvASSIGN NAME = "l.query:select_distinct"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT ISNULL l.query:select_distinct_count_select }">	<MvASSIGN NAME = "l.query:select" VALUE = "{ 'COUNT( DISTINCT ' $ l.query:select_distinct_count_select $ ' ) AS total_count' }">
+		<MvELSE>															<MvASSIGN NAME = "l.query:select" VALUE = "{ 'COUNT( DISTINCT ' $ l.query:select $ ' ) AS total_count' }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_Build( l.query, l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Build" PARAMETERS = "query var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.left_fields"		VALUE = "">
+	<MvASSIGN NAME = "l.left_field_count"	VALUE = 0>
+
+	<MvCAPTURE VARIABLE = "l.sql">
+		<MvIF EXPR = "{ NOT ISNULL l.query:select }">
+			<MvEVAL EXPR = "SELECT ">
+
+			<MvIF EXPR = "{ l.query:select_distinct }">
+				<MvEVAL EXPR = "DISTINCT ">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ l.query:select }">
+			<MvEVAL EXPR = " FROM ">
+
+			<MvFOREACH INDEX = "l.pos" ITERATOR = "l.table" ARRAY = "l.query:from" COUNT = "{ l.query:from_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = ", ">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ l.table:name }">
+				<MvEVAL EXPR = " ">
+				<MvEVAL EXPR = "{ l.table:alias }">
+
+				<MvFOREACH ITERATOR = "l.left_join" ARRAY = "l.table:left_joins" COUNT = "{ l.table:left_join_count }">
+					<MvEVAL EXPR = " LEFT OUTER JOIN ">
+					<MvEVAL EXPR = "{ l.left_join:table }">
+					<MvEVAL EXPR = " ">
+					<MvEVAL EXPR = "{ l.left_join:alias }">
+					<MvEVAL EXPR = " ON ">
+					<MvEVAL EXPR = "{ l.left_join:on_clause }">
+
+					<MvIF EXPR = "{ NOT ISNULL l.left_join:fields }">
+						<MvASSIGN NAME = "l.left_field_count" VALUE = "{ miva_array_insert_var( l.left_fields, l.left_join:fields, -1 ) }">
+					</MvIF>
+				</MvFOREACH>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.query:where_count }">
+				<MvEVAL EXPR = " WHERE">
+				<MvFOREACH INDEX = "l.pos" ITERATOR = "l.where" ARRAY = "l.query:where" COUNT = "{ l.query:where_count }">
+					<MvIF EXPR = "{ l.pos EQ 1 }">							<MvEVAL EXPR = " ">
+					<MvELSEIF EXPR = "{ ISNULL l.where:joining_clause }">	<MvEVAL EXPR = " AND ">
+					<MvELSE>
+						<MvEVAL EXPR = " ">
+						<MvEVAL EXPR = "{ l.where:joining_clause }">
+						<MvEVAL EXPR = " ">
+					</MvIF>
+
+					<MvEVAL EXPR = "{ l.where:sql }">
+				</MvFOREACH>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.field_count"		VALUE = "{ miva_array_merge_ref( l.left_fields, 1, l.left_field_count, l.all_fields, -1 ) }">
+		<MvASSIGN NAME = "l.field_count"		VALUE = "{ miva_array_merge_ref( l.query:where_fields, 1, l.query:where_field_count, l.all_fields, -1 ) }">
+
+		<MvIF EXPR = "{ l.query:groupby_count }">
+			<MvEVAL EXPR = " GROUP BY ">
+			<MvEVAL EXPR = "{ l.query:groupby }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( NOT ISNULL l.query:select ) AND l.query:union_count }">
+			<MvEVAL EXPR = " UNION ">
+			
+			<MvIF EXPR = "{ l.query:union_all }">
+				<MvEVAL EXPR = "ALL ">
+			</MvIF>
+		</MvIF>
+
+		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.union_query" ARRAY = "l.query:union" COUNT = "{ l.query:union_count }">
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				<MvEVAL EXPR = " UNION ">
+				
+				<MvIF EXPR = "{ l.query:union_all }">
+					<MvEVAL EXPR = "ALL ">
+				</MvIF>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ SQL_Query_Build( l.union_query, l.union_fields ) }">
+			<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_insert_var( l.all_fields, l.union_fields, -1 ) }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.query:orderby_count OR l.query:orderby_relevance_count }">
+			<MvEVAL EXPR = " ">
+			<MvEVAL EXPR = "{ SQL_Query_Build_ORDER_BY_With_Relevance( l.query, l.orderby_fields ) }">
+
+			<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_insert_var( l.all_fields, l.orderby_fields, -1 ) }">
+		</MvIF>
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.fields"	VALUE = "{ l.all_fields $ '' }">
+	<MvFUNCTIONRETURN VALUE = "{ l.sql }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY_With_Relevance" PARAMETERS = "query var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.order_by">
+		<MvIF EXPR = "{ ( ( l.query:orderby_relevance_count ) AND ( g.Native_DBAPI EQ 'mysql' ) ) OR
+						( l.query:orderby_count ) }">
+			<MvEVAL EXPR = "ORDER BY ">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( l.query:orderby_relevance_count ) AND ( g.Native_DBAPI EQ 'mysql' ) }">
+			<MvEVAL EXPR = "( ">
+
+			<MvFOREACH ITERATOR = "l.orderby_relevance" ARRAY = "l.query:orderby_relevance" INDEX = "l.pos" COUNT = "{ l.query:orderby_relevance_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = " + ">
+				</MvIF>
+
+				<MvIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_BOOLEAN' }">
+					<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) ) * ? )' }">
+					<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) * ? )' }">
+					</MvIF>
+				<MvELSEIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_NATURAL' }">
+					<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) ) * ? )' }">
+					<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) * ? )' }">
+					</MvIF>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:search ), -1 ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:weight ), -1 ) }">
+			</MvFOREACH>
+
+			<MvEVAL EXPR = " ) DESC">
+
+			<MvIF EXPR = "{ l.query:orderby_count }">
+				<MvEVAL EXPR = ", ">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.query:orderby_count }">
+			<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" INDEX = "l.pos" COUNT = "{ l.query:orderby_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = ", ">
+				</MvIF>
+
+				<MvIF EXPR = "{ l.query:union_count AND ( NOT ISNULL l.orderby:column_alias ) }">							<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
+				<MvELSEIF EXPR = "{ ( ( 'null_' IN l.orderby:flag ) EQ 1 ) AND ( NOT ISNULL l.orderby:column_alias ) }">	<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
+				<MvELSE>																									<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.order_by">
+		<MvIF EXPR = "{ l.query:orderby_count }">
+			<MvEVAL EXPR = "ORDER BY ">
+
+			<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" INDEX = "l.pos" COUNT = "{ l.query:orderby_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = ", ">
+				</MvIF>
+
+				<MvIF EXPR = "{ l.query:union_count AND ( NOT ISNULL l.orderby:column_alias ) }">							<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
+				<MvELSEIF EXPR = "{ ( ( 'null_' IN l.orderby:flag ) EQ 1 ) AND ( NOT ISNULL l.orderby:column_alias ) }">	<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
+				<MvELSE>																									<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY_Unaliased" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.order_by">
+		<MvIF EXPR = "{ l.query:orderby_count }">
+			<MvEVAL EXPR = "ORDER BY ">
+
+			<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" INDEX = "l.pos" COUNT = "{ l.query:orderby_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = ", ">
+				</MvIF>
+
+				<MvIF EXPR = "{ l.orderby:flag EQ 'null_char' }">			<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '\'\'' ) $ ' ' $ l.orderby:direction }">
+				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_integer' }">	<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
+				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_number' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
+				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_bool' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
+				<MvELSE>													<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Count" PARAMETERS = "query, total_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.sql" VALUE = "{ SQL_Query_Build_Count( l.query, l.fields ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Count( l.sql, l.fields, l.total_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Index" PARAMETERS = "query, loaded_record var, index var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "g.Session:cache:sql_query_index" VARIABLE = "l.loaded_record">
+
+	<MvIF EXPR = "{ l.query:orderby_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-SQL-00002', 'Query has no sort criteria' ) }">
+	<MvELSEIF EXPR = "{ l.query:orderby_count EQ 1 }">
+		<MvREFERENCEARRAY NAME = "l.orderby" VARIABLE = "l.query:orderby">
+			<MvDIMENSION INDEX = 1>
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.member"				VALUE = "{ glosub( l.orderby:member, '.', ':' ) }">
+		<MvASSIGN NAME = "l.value"				VALUE = "{ miva_variable_value( 'g.Session:cache:sql_query_index:' $ l.member ) }">
+
+		<MvIF EXPR = "{ l.orderby:flag EQ 'null_char' }">			<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'CHAR',	l.value ) }">
+		<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_memo' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'MEMO',	l.value ) }">
+		<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_integer' }">	<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'INTEGER',	l.value ) }">
+		<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_number' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'NUMBER',	l.value ) }">
+		<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_double' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'DOUBLE',	l.value ) }">
+		<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_bool' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'BOOL',	l.value ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.orderby:direction EQ 'ASC' }">	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, '( ' $ l.orderby:column $ ' < ? )', SQL_Query_Field( l.value ) ) }">
+		<MvELSE>											<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, '( ' $ l.orderby:column $ ' > ? )', SQL_Query_Field( l.value ) ) }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.orderbylist"		VALUE = "{ l.query:orderby }">
+		<MvASSIGN NAME = "l.fields"				VALUE = "">
+		<MvASSIGN NAME = "l.where" 				VALUE = "{ SQL_Query_Index_OrderBy( l.query, l.orderbylist, l.fields ) }">
+
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.where, l.fields ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_Count( l.query, l.index ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Index_OrderBy" PARAMETERS = "query, orderbylist var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderby"			VALUE = "{ miva_array_shift( l.orderbylist ) }">
+	<MvASSIGN NAME = "l.member"				VALUE = "{ glosub( l.orderby:member, '.', ':' ) }">
+	<MvASSIGN NAME = "l.value"				VALUE = "{ miva_variable_value( 'g.Session:cache:sql_query_index:' $ l.member ) }">
+	<MvASSIGN NAME = "l.normalized_value"	VALUE = "{ l.value }">
+
+	<MvIF EXPR = "{ l.orderby:flag EQ 'null_char' }">			<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'CHAR',	l.normalized_value ) }">
+	<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_memo' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'MEMO',	l.normalized_value ) }">
+	<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_integer' }">	<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'INTEGER',	l.normalized_value ) }">
+	<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_number' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'NUMBER',	l.normalized_value ) }">
+	<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_double' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'DOUBLE',	l.normalized_value ) }">
+	<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_bool' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_Normalize_Value( 'BOOL',	l.normalized_value ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.where">
+		<MvEVAL EXPR = "( ">
+
+		<MvASSIGN NAME = "l.field_count" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.normalized_value ), -1 ) }">
+
+		<MvIF EXPR = "{ l.orderby:direction EQ 'DESC' }">	<MvEVAL EXPR = "{ l.orderby:column $ ' > ? ' }">
+		<MvELSEIF EXPR = "{ l.value GT 0 }">				<MvEVAL EXPR = "{ '( ' $ l.orderby:column $ ' IS NULL OR ' $ l.orderby:column $ ' < ? ) ' }">
+		<MvELSE>											<MvEVAL EXPR = "{ l.orderby:column $ ' < ? ' }">
+		</MvIF>
+
+		<MvIF EXPR = "{ miva_array_elements( l.orderbylist ) GT 0 }">
+			<MvEVAL EXPR = "OR ">
+			<MvEVAL EXPR = "( ">
+
+			<MvASSIGN NAME = "l.field_count" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.normalized_value ), -1 ) }">
+
+			<MvIF EXPR = "{ ISNULL l.value }">													<MvEVAL EXPR = "{ '( ' $ l.orderby:column $ ' IS NULL OR ' $ l.orderby:column $ ' = ? ) ' }">
+			<MvELSEIF EXPR = "{ ( l.value EQ 0 ) AND ( l.orderby:flag EQ 'null_integer' ) }"> 	<MvEVAL EXPR = "{ '( ' $ l.orderby:column $ ' IS NULL OR ' $ l.orderby:column $ ' = ? ) ' }">
+			<MvELSEIF EXPR = "{ ( l.value EQ 0 ) AND ( l.orderby:flag EQ 'null_number' ) }"> 	<MvEVAL EXPR = "{ '( ' $ l.orderby:column $ ' IS NULL OR ' $ l.orderby:column $ ' = ? ) ' }">
+			<MvELSEIF EXPR = "{ ( l.value EQ 0 ) AND ( l.orderby:flag EQ 'null_double' ) }"> 	<MvEVAL EXPR = "{ '( ' $ l.orderby:column $ ' IS NULL OR ' $ l.orderby:column $ ' = ? ) ' }">
+			<MvELSEIF EXPR = "{ ( l.value EQ 0 ) AND ( l.orderby:flag EQ 'null_bool' ) }"> 		<MvEVAL EXPR = "{ '( ' $ l.orderby:column $ ' IS NULL OR ' $ l.orderby:column $ ' = ? ) ' }">
+			<MvELSE>								   											<MvEVAL EXPR = "{ l.orderby:column $ ' = ? ' }">
+			</MvIF>
+
+			<MvEVAL EXPR = "AND ">
+			<MvEVAL EXPR = "{ SQL_Query_Index_OrderBy( l.query, l.orderbylist, l.fields ) }">
+			<MvEVAL EXPR = ") ">
+		</MvIF>
+
+		<MvEVAL EXPR = ") ">
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.where }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_OrderBy_Fields" PARAMETERS = "query var, sort, list, default_sort" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.sort_field"							VALUE = "{ SQL_Sort_Field( l.sort, l.sort_direction ) }">
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ miva_splitstring( l.list, ',', l.fields, 'trim' ) }">
+		<MvIF EXPR = "{ ':' IN l.field }">
+			<MvASSIGN NAME = "l.field_value"				VALUE = "{ gettoken( l.field, ':', 1 ) }">
+			<MvASSIGN NAME = "l.correlation"				VALUE = "{ gettoken( l.field, ':', 2 ) }">
+			<MvASSIGN NAME = "l.flag" 						VALUE = "{ gettoken( l.field, ':', 3 ) }">
+		<MvELSEIF EXPR = "{ '.' IN l.field }">
+			<MvASSIGN NAME = "l.field_value"				VALUE = "{ gettoken( l.field, '.', 2 ) }">
+			<MvASSIGN NAME = "l.correlation"				VALUE = "{ l.field }">
+			<MvASSIGN NAME = "l.flag" 						VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "l.field_value"				VALUE = "{ l.field }">
+			<MvASSIGN NAME = "l.correlation"				VALUE = "{ l.field }">
+			<MvASSIGN NAME = "l.flag" 						VALUE = "">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.field_value EQ l.sort_field }">
+			<MvASSIGN NAME = "l.subcorrelation_count"					VALUE = "{ miva_splitstring( l.correlation, ';', l.subcorrelations, 'trim' ) }">
+			<MvFOREACH ITERATOR = "l.subcorrelation" ARRAY = "l.subcorrelations" COUNT = "{ l.subcorrelation_count }">
+				<MvASSIGN NAME = "l.subcorrelation_field"				VALUE = "{ gettoken( l.subcorrelation, '/', 1 ) }">
+				<MvASSIGN NAME = "l.subcorrelation_alias"				VALUE = "{ gettoken( l.subcorrelation, '/', 2 ) }">
+				<MvASSIGN NAME = "l.subcorrelation_flag"				VALUE = "{ gettoken( l.subcorrelation, '/', 3 ) }">
+				<MvASSIGN NAME = "l.subcorrelation_column"				VALUE = "{ SQL_Sort_Field( l.subcorrelation_field, l.subcorrelation_sort_direction ) }">
+
+				<MvCOMMENT>
+				|
+				| Default to the top-level field specifier only if we have a single subcorrelation, i.e. field:abc.def, and not
+				| if we have a structure similar to field:abc.def;ghi.jkl
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ ( l.subcorrelation_count EQ 1 ) AND ( ISNULL l.subcorrelation_alias ) }">
+					<MvASSIGN NAME = "l.subcorrelation_alias"			VALUE = "{ l.field_value }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.subcorrelation_flag }">
+					<MvASSIGN NAME = "l.subcorrelation_flag"			VALUE = "{ l.flag }">
+				</MvIF>
+
+				<MvCOMMENT>
+				|
+				| Subcorrelation direction works as the default sort direction does below
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ l.subcorrelation_sort_direction EQ 'ASC' }">
+					<MvASSIGN NAME = "l.subcorrelation_sort_direction"	VALUE = "{ l.sort_direction }">
+				<MvELSEIF EXPR = "{ l.sort_direction EQ 'DESC' }">
+					<MvASSIGN NAME = "l.subcorrelation_sort_direction"	VALUE = "ASC">
+				</MvIF>
+
+				<MvCOMMENT>
+				|
+				| Specify an alias only if the correlation appears to be a reference to a specific column.  This permits structures such as
+				| ship_addr1:ship_addr, where "ship_addr" is a result column name/may be an alias.
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ '.' IN l.subcorrelation_column }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, l.subcorrelation_column, l.subcorrelation_alias, l.subcorrelation_sort_direction, l.subcorrelation_flag ) }">
+				<MvELSE>											<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag( l.query, l.subcorrelation_column, l.subcorrelation_sort_direction, l.subcorrelation_flag ) }">
+				</MvIF>
+			</MvFOREACH>
+
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.default_correlation"				VALUE = "{ gettoken( l.default_sort, ':', 1 ) }">
+	<MvASSIGN NAME = "l.default_flag" 						VALUE = "{ gettoken( l.default_sort, ':', 2 ) }">
+
+	<MvFOREACH ITERATOR = "l.subcorrelation" ARRAY = "l.subcorrelations" COUNT = "{ miva_splitstring( l.default_correlation, ';', l.subcorrelations, 'trim' ) }">
+		<MvASSIGN NAME = "l.default_sort_field"				VALUE = "{ gettoken( l.subcorrelation, '/', 1 ) }">
+		<MvASSIGN NAME = "l.default_sort_alias"				VALUE = "{ gettoken( l.subcorrelation, '/', 2 ) }">
+		<MvASSIGN NAME = "l.default_sort_flag"				VALUE = "{ gettoken( l.subcorrelation, '/', 3 ) }">
+		<MvASSIGN NAME = "l.default_sort_column"			VALUE = "{ SQL_Sort_Field( l.default_sort_field, l.default_sort_direction ) }">
+
+		<MvIF EXPR = "{ ISNULL l.default_sort_field }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.default_sort_flag }">
+			<MvASSIGN NAME = "l.default_sort_flag"			VALUE = "{ l.default_flag }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| A descending default sort direction indicates that the default sort direction should always
+		| be the opposite of the primary sort direction.  Otherwise, the default sort direction
+		| should always be the same as the primary sort direction.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.default_sort_direction EQ 'ASC' }">
+			<MvASSIGN NAME = "l.default_sort_direction"		VALUE = "{ l.sort_direction }">
+		<MvELSEIF EXPR = "{ l.sort_direction EQ 'DESC' }">
+			<MvASSIGN NAME = "l.default_sort_direction"		VALUE = "ASC">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, l.default_sort_column, l.default_sort_alias, l.default_sort_direction, l.default_sort_flag ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Set_Signature_Data" PARAMETERS = "query var, key, value" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGNARRAY NAME = "l.query:signature_data" VALUE = "{ l.value }">
+		<MvMEMBER NAME = "{ l.key }">
+	</MvASSIGNARRAY>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Data_Reference" PARAMETERS = "query var, key, ref var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.ref:data" VARIABLE = "l.query">
+		<MvMEMBER NAME = "data">
+		<MvMEMBER NAME = "{ l.key }">
+	</MvREFERENCEARRAY>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Data_Clear" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:data"	VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Data_Copy" PARAMETERS = "query var, from_query var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.member" ARRAY = "l.members" COUNT = "{ miva_struct_members( l.from_query:data, l.members ) }">
+		<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.from_query">
+			<MvMEMBER NAME = "data">
+			<MvMEMBER NAME = "{ l.member }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.query:data" MEMBER = "{ l.member }" VALUE = "{ l.value }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Data_Copy_Key" PARAMETERS = "query var, from_query var, key" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.from_query">
+		<MvMEMBER NAME = "data">
+		<MvMEMBER NAME = "{ l.key }">
+	</MvREFERENCEARRAY>
+
+	<MvASSIGN NAME = "l.query:data" MEMBER = "{ l.key }" VALUE = "{ l.value }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Search_Operator_Conversion" PARAMETERS = "query var, columnlist, operator, value, outer_joining_clause, inner_joining_clause" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_Search_Operator_Conversion_With_Type( l.query, '', l.columnlist, l.operator, l.value, l.outer_joining_clause, l.inner_joining_clause ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Search_Operator_Conversion_With_Type" PARAMETERS = "query var, type, columnlist, operator, value, outer_joining_clause, inner_joining_clause" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.operator EQ 'CO' OR l.operator EQ 'NC' }">	<MvASSIGN NAME = "l.value" VALUE = "{ '%' $ l.value $ '%' }">
+	<MvELSEIF EXPR = "{ l.operator EQ 'FULLTEXT' }">				<MvASSIGN NAME = "l.value" VALUE = "{ '"' $ l.value $ '"' }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+	<MvIF EXPR = "{ l.operator EQ 'FULLTEXT' AND g.Native_DBAPI EQ 'mysql' }">					<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'MATCH( ' $ l.columnlist $ ' ) AGAINST ( ? IN BOOLEAN MODE )', SQL_Query_Field( l.value ) ) }">
+	<MvELSEIF EXPR = "{ l.operator EQ 'FULLTEXT_BOOLEAN' AND g.Native_DBAPI EQ 'mysql' }">		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'MATCH( ' $ l.columnlist $ ' ) AGAINST ( ? IN BOOLEAN MODE )', SQL_Query_Field( l.value ) ) }">
+	<MvELSEIF EXPR = "{ l.operator EQ 'FULLTEXT_NATURAL' AND g.Native_DBAPI EQ 'mysql' }">		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'MATCH( ' $ l.columnlist $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE )', SQL_Query_Field( l.value ) ) }">
+	<MvELSE>
+		<MvFOREACH ITERATOR = "l.column" ARRAY = "l.columns" INDEX = "l.pos" COUNT = "{ miva_splitstring( l.columnlist, ',', l.columns, 'trim' ) }">
+			<MvIF EXPR = "{ l.operator EQ 'NULL' }">								<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, [ g.Library_Filename_Native_DBAPI ].DB_Filter_ISNULL( l.type, l.column, l.value ), '' ) }">
+			<MvELSEIF EXPR = "{ l.operator EQ 'IN' OR l.operator EQ 'NOT_IN' }">	<MvEVAL EXPR = "{ SQL_Query_Search_CommaSeparatedList_With_Type( l.query, l.type, l.column, l.operator, l.value ) }">
+			<MvELSE>
+				<MvIF EXPR = "{ l.operator EQ 'EQ' }">			<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_EQ(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'GT' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_GT(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'GE' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_GE(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'LT' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_LT(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'LE' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_LE(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'CO' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_CO(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NC' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_NC(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'LIKE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_LIKE(		l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_NOTLIKE(	l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NE' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_NE(			l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'TRUE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_TRUE(		l.type, l.column, l.value ) }">
+				<MvELSEIF EXPR = "{ l.operator EQ 'FALSE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_FALSE(		l.type, l.column, l.value ) }">
+				<MvELSE>										<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.operator EQ 'TRUE' OR l.operator EQ 'FALSE' }">	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.where_sql, '' ) }">
+				<MvELSE>															<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.where_sql, SQL_Query_Field( l.value ) ) }">
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END_Clause( l.query, l.outer_joining_clause, l.inner_joining_clause ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Search_CommaSeparatedList" PARAMETERS = "query var, column, operator, value" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_Search_CommaSeparatedList_With_Type( l.query, '', l.column, l.operator, l.value ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Search_CommaSeparatedList_With_Type" PARAMETERS = "query var, type, column, operator, value" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+	<MvFOREACH ITERATOR = "l.in_value" ARRAY = "l.in_values" COUNT = "{ miva_splitstring( l.value, ',', l.in_values, 'trim' ) }">
+		<MvIF EXPR = "{ ISNULL l.in_value }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.operator EQ 'IN' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_EQ( l.type, l.column, l.in_value ) }">
+		<MvELSE>								<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_NE( l.type, l.column, l.in_value ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.where_sql, SQL_Query_Field( l.in_value ) ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.operator EQ 'IN' }">	<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
+	<MvELSE>								<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Field" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGNARRAY NAME = "g.Session:cache:sql:values" VALUE = "{ l.value }">
+		<MvDIMENSION INDEX = "{ ++g.Session:cache:sql:value_count }">
+	</MvASSIGNARRAY>
+
+	<MvFUNCTIONRETURN VALUE = "{ 'g.Session:cache:sql:values[' $ g.Session:cache:sql:value_count $ ']' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Signature" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Signature is calculated as the MD5 sum of the relevant query fields and the parameter values
+	| Current list of "relevant" fields:
+	|
+	|	DISTINCT
+	|	FROM (including LEFT OUTER JOINS)
+	|	WHERE
+	|	GROUP BY
+	|	ORDER BY
+	|	Query signature data
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.left_fields"		VALUE = "">
+	<MvASSIGN NAME = "l.left_field_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.table" ARRAY = "l.query:from" COUNT = "{ l.query:from_count }">
+		<MvFOREACH ITERATOR = "l.left_join" ARRAY = "l.table:left_joins" COUNT = "{ l.table:left_join_count }">
+			<MvIF EXPR = "{ NOT ISNULL l.left_join:fields }">
+				<MvASSIGN NAME = "l.left_field_count" VALUE = "{ miva_array_insert_var( l.left_fields, l.left_join:fields, -1 ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_merge_ref( l.left_fields, 1, l.left_field_count, l.all_fields, -1 ) }">
+	<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_merge_ref( l.query:where_fields, 1, l.query:where_field_count, l.all_fields, -1 ) }">
+
+	<MvFOREACH INDEX = "l.field_pos" ITERATOR = "l.field" ARRAY = "l.all_fields" COUNT = "{ l.field_count }">
+		<MvFOREACH ITERATOR = "l.individual_field" ARRAY = "l.individual_fields" COUNT = "{ miva_splitstring( l.field, ',', l.individual_fields, 'trim' ) }">
+			<MvASSIGN NAME = "l.null"	VALUE = "{ miva_array_insert_var( l.field_values, miva_variable_value( l.individual_field ), -1 ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ crypto_md5( l.query:select_distinct						$ ':' $
+											 miva_array_serialize( l.query:from )			$ ':' $
+											 miva_array_serialize( l.query:where )			$ ':' $
+											 miva_array_serialize( l.query:groupby )		$ ':' $ 
+											 miva_array_serialize( l.query:orderby )		$ ':' $
+											 miva_array_serialize( l.query:signature_data )	$ ':' $
+											 miva_array_serialize( l.field_values ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Total_Join_Count" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.query:total_join_count }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| SQL_Query_LEFT_OUTER_JOIN_ON appends to an existing left join on clause and fields
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SQL_Query_LEFT_OUTER_JOIN_ON" PARAMETERS = "query var, correlation_name, on_clause, fields" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.table" ARRAY = "l.query:from" COUNT = "{ l.query:from_count }">
+		<MvIF EXPR = "{ miva_array_search( l.table:left_joins, 1, l.left_join, 'l.left_join:alias EQ l.correlation_name' ) }">
+			<MvASSIGN NAME = "l.left_join:on_clause" VALUE = "{ l.left_join:on_clause $ ' ' $ l.on_clause }">
+
+			<MvIF EXPR = "{ ISNULL l.left_join:fields }">	<MvASSIGN NAME = "l.left_join:fields" VALUE = "{ l.fields }">
+			<MvELSE>										<MvASSIGN NAME = "l.left_join:fields" VALUE = "{ l.left_join:fields $ ',' $ l.fields }">
+			</MvIF>
+			
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Correlation_Is_LEFT_OUTER_JOIN" PARAMETERS = "query var, correlation_name" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.table" ARRAY = "l.query:from" COUNT = "{ l.query:from_count }">
+		<MvIF EXPR = "{ miva_array_search( l.table:left_joins, 1, l.left_join, 'l.left_join:alias EQ l.correlation_name' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>

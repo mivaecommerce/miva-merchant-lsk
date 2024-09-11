@@ -1,0 +1,584 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-INC-
+| Next Error Code: 2    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Buffer_Add_Field" PARAMETERS = "buffer var, delimiter, value" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ len_var( l.buffer ) EQ 0 }">
+        <MvASSIGN NAME = "l.buffer" VALUE = "{ l.value }">
+    <MvELSE>
+        <MvASSIGN NAME = "l.buffer" VALUE = "{ l.buffer $ l.delimiter $ l.value }">
+    </MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Buffer_Add_Encoded" PARAMETERS = "buffer var, delimiter, value" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ len_var( l.buffer ) EQ 0 }">
+        <MvASSIGN NAME = "l.buffer" VALUE = "{ miva_csv_encode( l.value, l.delimiter ) }">
+    <MvELSE>
+        <MvASSIGN NAME = "l.buffer" VALUE = "{ l.buffer $ l.delimiter $ miva_csv_encode( l.value, l.delimiter ) }">
+    </MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Field_Encode" PARAMETERS = "string, delimiter" STANDARDOUTPUTLEVEL = "">
+    <MvFUNCTIONRETURN VALUE = "{ miva_csv_encode( l.string, l.delimiter ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Miva_Fwriteln" PARAMETERS = "output, buffer" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.buffer" VALUE = "{ l.buffer $ asciichar( 10 ) }">
+
+	<MvIF EXPR = "{ NOT fexists( l.output ) }">
+        <MvIF EXPR = "{ file_create( l.output, 'data', l.buffer ) EQ -1 }">
+            <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-INC-00000', 'Unable to create ' $ l.output $ ': ' $ file_last_error() ) }">
+        </MvIF>
+    <MvELSE>
+        <MvIF EXPR = "{ file_append( l.output, 'data', l.buffer ) EQ -1 }">
+            <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-INC-00001', 'Unable to append to ' $ l.output $ ': ' $ file_last_error() ) }">
+        </MvIF>
+	</MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_Product_CustomFields_BuildExecutionPlan" PARAMETERS = "customfield_list var, customfield_count, customfield_plan var, output_struct var, output_array var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Build an execution plan so that the selected field module version/call logic
+	| is not executed for each product being initialized.
+	|
+	| plan[n]				- one entry per field or set of fields, per product execution simply iterates over this array
+	| 	:module				- reference to cached modules
+	| 	:output_module_code	- "safed" module code
+	| 
+	| 	:field_map			- causes a call to Module_Product_Fields_Mapped
+	| 			- or -
+	| 	:field_code			- causes a call to Module_Product_Field_Value
+	| 	:output_field_code
+	|
+	| output_struct			- a semi-opaque variable that will be passed to Export_Product_CustomFields
+	| output_array			- an array that will receive the custom field values in the order passed in through customfield_list
+	|						  the members in this array are set up to reference the by-name fields in output_struct
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.customfield_plan"							VALUE = "">
+
+	<MvIF EXPR = "{ l.customfield_count LE 0 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.field_pos"									VALUE = 1>
+	<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+		<MvDIMENSION INDEX = 1>
+	</MvREFERENCEARRAY>
+
+	<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+		<MvREFERENCEARRAY NAME = "l.module" VARIABLE = "l.customfield_plan:cached_modules">
+			<MvMEMBER NAME = "{ l.field:module:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ l.module:skip }">
+			<MvASSIGN NAME = "l.field_pos"							VALUE = "{ l.field_pos + 1 }">
+			<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+				<MvWHILESTOP>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+				<MvDIMENSION INDEX = "{ l.field_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvWHILECONTINUE>
+		<MvELSEIF EXPR = "{ ISNULL l.module:module }">
+			<MvASSIGN NAME = "l.module"								VALUE = "{ l.field:module }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) OR
+							NOT l.module:feature_hash:fields_prod OR
+							NOT l.module:active }">
+				<MvASSIGN NAME = "l.module:skip"					VALUE = 1>
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvWHILECONTINUE>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.output_module_code"						VALUE = "{ glosub( l.module:code, '-', '_' ) }">
+
+		<MvIF EXPR = "{ ( l.module:api_ver LT 5.72 ) OR ( NOT l.module:feature_hash:fields_prod_map ) }">
+			<MvCOMMENT>
+			|
+			| Execution plan must include one entry per field for this module
+			|
+			</MvCOMMENT>
+
+			<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+				<MvASSIGN NAME = "l.output_field_code"				VALUE = "{ glosub( l.field:code, '-', '_' ) }">
+
+				<MvREFERENCEARRAY NAME = "{ 'l.output_array[' $ l.field_pos $ ']' }" VARIABLE = "l.output_struct">
+					<MvMEMBER NAME = "{ l.output_module_code }">
+					<MvMEMBER NAME = "{ l.output_field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan_pos"						VALUE = "{ l.plan_pos + 1 }">
+
+				<MvREFERENCEARRAY NAME = "l.plan" VARIABLE = "l.customfield_plan:plan">
+					<MvDIMENSION INDEX = "{ l.plan_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.plan:module" VARIABLE = "l.customfield_plan:cached_modules">
+					<MvMEMBER NAME = "{ l.field:module:code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan:output_module_code"		VALUE = "{ l.output_module_code }">
+				<MvASSIGN NAME = "l.plan:field_code"				VALUE = "{ l.field:code }">
+				<MvASSIGN NAME = "l.plan:output_field_code"			VALUE = "{ l.output_field_code }">
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.field:module:code NE l.module:code }">
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Execution plan may query all fields from this module at once
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.plan_pos"							VALUE = "{ l.plan_pos + 1 }">
+
+			<MvREFERENCEARRAY NAME = "l.plan" VARIABLE = "l.customfield_plan:plan">
+				<MvDIMENSION INDEX = "{ l.plan_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.plan:output_module_code"			VALUE = "{ l.output_module_code }">
+
+			<MvREFERENCEARRAY NAME = "l.plan:module" VARIABLE = "l.customfield_plan:cached_modules">
+				<MvMEMBER NAME = "{ l.field:module:code }">
+			</MvREFERENCEARRAY>
+
+			<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+				<MvASSIGN NAME = "l.output_field_code"				VALUE = "{ glosub( l.field:code, '-', '_' ) }">
+
+				<MvREFERENCEARRAY NAME = "{ 'l.output_array[' $ l.field_pos $ ']' }" VARIABLE = "l.output_struct">
+					<MvMEMBER NAME = "{ l.output_module_code }">
+					<MvMEMBER NAME = "{ l.output_field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan:field_map" MEMBER = "{ l.field:code }"	VALUE = "{ l.output_field_code }">
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.field:module:code NE l.module:code }">
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+		</MvIF>
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_Product_CustomFields" PARAMETERS = "customfield_plan var, product_id, output_struct var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.plan" ARRAY = "l.customfield_plan:plan">
+		<MvIF EXPR = "{ NOT ISNULL l.plan:field_map }">
+			<MvREFERENCEARRAY NAME = "l.module_output" VARIABLE = "l.output_struct">
+				<MvMEMBER NAME = "{ l.plan:output_module_code }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.plan:module:module ].Module_Product_Fields_Mapped( l.plan:module, l.product_id, l.plan:field_map, l.module_output ) }">
+		<MvELSE>
+			<MvASSIGNARRAY NAME = "l.output_struct" VALUE = "{ [ g.Module_Root $ l.plan:module:module ].Module_Product_Field_Value( l.plan:module, l.product_id, l.plan:field_code ) }">
+				<MvMEMBER NAME = "{ l.plan:output_module_code }">
+				<MvMEMBER NAME = "{ l.plan:output_field_code }">
+			</MvASSIGNARRAY>
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_Category_CustomFields_BuildExecutionPlan" PARAMETERS = "customfield_list var, customfield_count, customfield_plan var, output_struct var, output_array var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Build an execution plan so that the selected field module version/call logic
+	| is not executed for each category being initialized.
+	|
+	| plan[n]				- one entry per field or set of fields, per category execution simply iterates over this array
+	| 	:module				- reference to cached modules
+	| 	:output_module_code	- "safed" module code
+	| 
+	| 	:field_map			- causes a call to Module_Category_Fields_Mapped
+	| 			- or -
+	| 	:field_code			- causes a call to Module_Category_Field_Value
+	| 	:output_field_code
+	|
+	| output_struct			- a semi-opaque variable that will be passed to Export_Category_CustomFields
+	| output_array			- an array that will receive the custom field values in the order passed in through customfield_list
+	|						  the members in this array are set up to reference the by-name fields in output_struct
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.customfield_plan"							VALUE = "">
+
+	<MvIF EXPR = "{ l.customfield_count LE 0 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.field_pos"									VALUE = 1>
+	<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+		<MvDIMENSION INDEX = 1>
+	</MvREFERENCEARRAY>
+
+	<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+		<MvREFERENCEARRAY NAME = "l.module" VARIABLE = "l.customfield_plan:cached_modules">
+			<MvMEMBER NAME = "{ l.field:module:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ l.module:skip }">
+			<MvASSIGN NAME = "l.field_pos"							VALUE = "{ l.field_pos + 1 }">
+			<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+				<MvWHILESTOP>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+				<MvDIMENSION INDEX = "{ l.field_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvWHILECONTINUE>
+		<MvELSEIF EXPR = "{ ISNULL l.module:module }">
+			<MvASSIGN NAME = "l.module"								VALUE = "{ l.field:module }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) OR
+							NOT l.module:feature_hash:fields_cat OR
+							NOT l.module:active }">
+				<MvASSIGN NAME = "l.module:skip"					VALUE = 1>
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvWHILECONTINUE>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.output_module_code"						VALUE = "{ glosub( l.module:code, '-', '_' ) }">
+
+		<MvIF EXPR = "{ ( l.module:api_ver LT 5.72 ) OR ( NOT l.module:feature_hash:fields_prod_map ) }">
+			<MvCOMMENT>
+			|
+			| Execution plan must include one entry per field for this module
+			|
+			</MvCOMMENT>
+
+			<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+				<MvASSIGN NAME = "l.output_field_code"				VALUE = "{ glosub( l.field:code, '-', '_' ) }">
+
+				<MvREFERENCEARRAY NAME = "{ 'l.output_array[' $ l.field_pos $ ']' }" VARIABLE = "l.output_struct">
+					<MvMEMBER NAME = "{ l.output_module_code }">
+					<MvMEMBER NAME = "{ l.output_field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan_pos"						VALUE = "{ l.plan_pos + 1 }">
+
+				<MvREFERENCEARRAY NAME = "l.plan" VARIABLE = "l.customfield_plan:plan">
+					<MvDIMENSION INDEX = "{ l.plan_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.plan:module" VARIABLE = "l.customfield_plan:cached_modules">
+					<MvMEMBER NAME = "{ l.field:module:code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan:output_module_code"		VALUE = "{ l.output_module_code }">
+				<MvASSIGN NAME = "l.plan:field_code"				VALUE = "{ l.field:code }">
+				<MvASSIGN NAME = "l.plan:output_field_code"			VALUE = "{ l.output_field_code }">
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.field:module:code NE l.module:code }">
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Execution plan may query all fields from this module at once
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.plan_pos"							VALUE = "{ l.plan_pos + 1 }">
+
+			<MvREFERENCEARRAY NAME = "l.plan" VARIABLE = "l.customfield_plan:plan">
+				<MvDIMENSION INDEX = "{ l.plan_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.plan:output_module_code"			VALUE = "{ l.output_module_code }">
+
+			<MvREFERENCEARRAY NAME = "l.plan:module" VARIABLE = "l.customfield_plan:cached_modules">
+				<MvMEMBER NAME = "{ l.field:module:code }">
+			</MvREFERENCEARRAY>
+
+			<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+				<MvASSIGN NAME = "l.output_field_code"				VALUE = "{ glosub( l.field:code, '-', '_' ) }">
+
+				<MvREFERENCEARRAY NAME = "{ 'l.output_array[' $ l.field_pos $ ']' }" VARIABLE = "l.output_struct">
+					<MvMEMBER NAME = "{ l.output_module_code }">
+					<MvMEMBER NAME = "{ l.output_field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan:field_map" MEMBER = "{ l.field:code }"	VALUE = "{ l.output_field_code }">
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.field:module:code NE l.module:code }">
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+		</MvIF>
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_Category_CustomFields" PARAMETERS = "customfield_plan var, cat_id, output_struct var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.plan" ARRAY = "l.customfield_plan:plan">
+		<MvIF EXPR = "{ NOT ISNULL l.plan:field_map }">
+			<MvREFERENCEARRAY NAME = "l.module_output" VARIABLE = "l.output_struct">
+				<MvMEMBER NAME = "{ l.plan:output_module_code }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.plan:module:module ].Module_Category_Fields_Mapped( l.plan:module, l.cat_id, l.plan:field_map, l.module_output ) }">
+		<MvELSE>
+			<MvASSIGNARRAY NAME = "l.output_struct" VALUE = "{ [ g.Module_Root $ l.plan:module:module ].Module_Category_Field_Value( l.plan:module, l.cat_id, l.plan:field_code ) }">
+				<MvMEMBER NAME = "{ l.plan:output_module_code }">
+				<MvMEMBER NAME = "{ l.plan:output_field_code }">
+			</MvASSIGNARRAY>
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_Order_CustomFields_BuildExecutionPlan" PARAMETERS = "customfield_list var, customfield_count, customfield_plan var, output_struct var, output_array var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Build an execution plan so that the selected field module version/call logic
+	| is not executed for each order being initialized.
+	|
+	| plan[n]				- one entry per field or set of fields, per order execution simply iterates over this array
+	| 	:module				- reference to cached modules
+	| 	:output_module_code	- "safed" module code
+	| 
+	| 	:field_map			- causes a call to Module_Order_Fields_Mapped
+	| 			- or -
+	| 	:field_code			- causes a call to Module_Order_Field_Value
+	| 	:output_field_code
+	|
+	| output_struct			- a semi-opaque variable that will be passed to Export_Order_CustomFields
+	| output_array			- an array that will receive the custom field values in the order passed in through customfield_list
+	|						  the members in this array are set up to reference the by-name fields in output_struct
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.customfield_plan"							VALUE = "">
+
+	<MvIF EXPR = "{ l.customfield_count LE 0 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.field_pos"									VALUE = 1>
+	<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+		<MvDIMENSION INDEX = 1>
+	</MvREFERENCEARRAY>
+
+	<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+		<MvREFERENCEARRAY NAME = "l.module" VARIABLE = "l.customfield_plan:cached_modules">
+			<MvMEMBER NAME = "{ l.field:module:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ l.module:skip }">
+			<MvASSIGN NAME = "l.field_pos"							VALUE = "{ l.field_pos + 1 }">
+			<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+				<MvWHILESTOP>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+				<MvDIMENSION INDEX = "{ l.field_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvWHILECONTINUE>
+		<MvELSEIF EXPR = "{ ISNULL l.module:module }">
+			<MvASSIGN NAME = "l.module"								VALUE = "{ l.field:module }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) OR
+							NOT l.module:feature_hash:fields_ordr OR
+							NOT l.module:active }">
+				<MvASSIGN NAME = "l.module:skip"					VALUE = 1>
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvWHILECONTINUE>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.output_module_code"						VALUE = "{ glosub( l.module:code, '-', '_' ) }">
+
+		<MvIF EXPR = "{ NOT l.module:feature_hash:fields_ordr_map }">
+			<MvCOMMENT>
+			|
+			| Execution plan must include one entry per field for this module
+			|
+			</MvCOMMENT>
+
+			<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+				<MvASSIGN NAME = "l.output_field_code"				VALUE = "{ glosub( l.field:code, '-', '_' ) }">
+
+				<MvREFERENCEARRAY NAME = "{ 'l.output_array[' $ l.field_pos $ ']' }" VARIABLE = "l.output_struct">
+					<MvMEMBER NAME = "{ l.output_module_code }">
+					<MvMEMBER NAME = "{ l.output_field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan_pos"						VALUE = "{ l.plan_pos + 1 }">
+
+				<MvREFERENCEARRAY NAME = "l.plan" VARIABLE = "l.customfield_plan:plan">
+					<MvDIMENSION INDEX = "{ l.plan_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.plan:module" VARIABLE = "l.customfield_plan:cached_modules">
+					<MvMEMBER NAME = "{ l.field:module:code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan:output_module_code"		VALUE = "{ l.output_module_code }">
+				<MvASSIGN NAME = "l.plan:field_code"				VALUE = "{ l.field:code }">
+				<MvASSIGN NAME = "l.plan:output_field_code"			VALUE = "{ l.output_field_code }">
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.field:module:code NE l.module:code }">
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Execution plan may query all fields from this module at once
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.plan_pos"							VALUE = "{ l.plan_pos + 1 }">
+
+			<MvREFERENCEARRAY NAME = "l.plan" VARIABLE = "l.customfield_plan:plan">
+				<MvDIMENSION INDEX = "{ l.plan_pos }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.plan:output_module_code"			VALUE = "{ l.output_module_code }">
+
+			<MvREFERENCEARRAY NAME = "l.plan:module" VARIABLE = "l.customfield_plan:cached_modules">
+				<MvMEMBER NAME = "{ l.field:module:code }">
+			</MvREFERENCEARRAY>
+
+			<MvWHILE EXPR = "{ l.field_pos LE l.customfield_count }">
+				<MvASSIGN NAME = "l.output_field_code"				VALUE = "{ glosub( l.field:code, '-', '_' ) }">
+
+				<MvREFERENCEARRAY NAME = "{ 'l.output_array[' $ l.field_pos $ ']' }" VARIABLE = "l.output_struct">
+					<MvMEMBER NAME = "{ l.output_module_code }">
+					<MvMEMBER NAME = "{ l.output_field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.plan:field_map" MEMBER = "{ l.field:code }"	VALUE = "{ l.output_field_code }">
+
+				<MvASSIGN NAME = "l.field_pos"						VALUE = "{ l.field_pos + 1 }">
+				<MvIF EXPR = "{ l.field_pos GT l.customfield_count }">
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvREFERENCEARRAY NAME = "l.field" VARIABLE = "l.customfield_list">
+					<MvDIMENSION INDEX = "{ l.field_pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.field:module:code NE l.module:code }">
+					<MvWHILESTOP>
+				</MvIF>
+			</MvWHILE>
+		</MvIF>
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_Order_CustomFields" PARAMETERS = "customfield_plan var, order_id, output_struct var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.plan" ARRAY = "l.customfield_plan:plan">
+		<MvIF EXPR = "{ NOT ISNULL l.plan:field_map }">
+			<MvREFERENCEARRAY NAME = "l.module_output" VARIABLE = "l.output_struct">
+				<MvMEMBER NAME = "{ l.plan:output_module_code }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.plan:module:module ].Module_Order_Fields_Mapped( l.plan:module, l.order_id, l.plan:field_map, l.module_output ) }">
+		<MvELSE>
+			<MvASSIGNARRAY NAME = "l.output_struct" VALUE = "{ [ g.Module_Root $ l.plan:module:module ].Module_Order_Field_Value( l.plan:module, l.order_id, l.plan:field_code ) }">
+				<MvMEMBER NAME = "{ l.plan:output_module_code }">
+				<MvMEMBER NAME = "{ l.plan:output_field_code }">
+			</MvASSIGNARRAY>
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>

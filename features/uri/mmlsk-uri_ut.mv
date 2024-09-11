@@ -1,0 +1,1793 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-URI-UTL-
+| Next Error Code: 9
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URI_Dispatch_Request" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Store_Code"					VALUE = "{ trim( g.Store_Code ) }">
+	<MvASSIGN NAME = "g.Screen"						VALUE = "{ trim( g.Screen ) }">
+	<MvASSIGN NAME = "g.Session_ID"					VALUE = "{ trim( g.Session_ID ) }">
+	<MvASSIGN NAME = "g.Store_Count"				VALUE = "">
+	<MvASSIGN NAME = "g.Store"						VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Dispatch_Request( l.urisettings:module, l.urisettings ) }">
+	<MvELSE>																						<MvFUNCTIONRETURN VALUE = "{ URI_Dispatch_Request_LowLevel( l.urisettings ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Dispatch_Request_LowLevel" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Open Store
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "g.Store_Count"				VALUE = "{ [ g.Module_Library_DB ].StoreList_Load_All( l.stores ) }">
+
+	<MvIF EXPR = "{ g.Session:uri:store_id }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.stores, 1, l.store, 'l.store:id EQ g.Session:uri:store_id' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00005', 'URI references an invalid store ID' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Store_Code"				VALUE = "{ l.store:code }">
+	<MvELSEIF EXPR = "{ ISNULL g.Store_Code }">
+		<MvIF EXPR = "{ g.Store_Count EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00006', 'No stores exist.  Please use the administration utility to create one.' ) }">
+		<MvELSEIF EXPR = "{ g.Store_Count EQ 1 }">
+			<MvASSIGN NAME = "g.Store_Code"			VALUE = "{ l.stores[ 1 ]:code }">
+		<MvELSEIF EXPR = "{ g.Domain:stsl_id EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00007', 'There is no user interface configured for store selection.<BR>Please use the administration interface to select a user interface module.' ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].SetRuntimePaths() }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( g.Domain:stsl_id, l.module ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].UIModule_StoreSelection_Render() }">
+			<MvFUNCTIONRETURN VALUE = -1>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session_ID"					VALUE = "{ [ g.Module_Library_Utilities ].DetermineSessionID() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Store_Open( g.Store_Code, g.Store ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Handle redirects
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( NOT ISNULL g.Session:uri ) AND ( NOT g.Session:uri:canonical ) AND ( g.Session:uri:status NE 200 ) }">
+		<MvIF EXPR = "{ NOT URI_Dispatch_Redirect( g.Session:uri ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Determine g.Screen
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ISNULL g.Screen ) AND ( NOT ISNULL g.Session:uri ) }">
+		<MvIF EXPR = "{ NOT ISNULL g.Session:uri:screen }">
+			<MvASSIGN NAME = "g.Screen"				VALUE = "{ g.Session:uri:screen }">
+		<MvELSEIF EXPR = "{ NOT ISNULL g.Session:uri:page_code }">
+			<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( g.Session:uri:page_code, l.page ) }">
+				<MvASSIGN NAME = "g.Screen"			VALUE = "{ l.page:code }">
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "g.Session:uri"	VALUE = "">
+				<MvASSIGN NAME = "g.Screen"			VALUE = "{ l.urisettings:def_screen }">
+
+				<MvIF EXPR = "{ strcasecmp( l.urisettings:def_store, g.Store_Code ) NE 0 }">
+					<MvCOMMENT>
+					|
+					| Close and reopen the default store
+					|
+					</MvCOMMENT>
+
+					<MvASSIGN NAME = "g.Store_Code"	VALUE = "{ l.urisettings:def_store }">
+					<MvASSIGN NAME = "g.Session_ID"	VALUE = "{ [ g.Module_Library_Utilities ].DetermineSessionID() }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Store_Open( g.Store_Code, g.Store ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		<MvELSEIF EXPR = "{ g.Session:uri:cat_id }">
+			<MvASSIGN NAME = "g.Screen"				VALUE = "CTGY">
+		<MvELSEIF EXPR = "{ g.Session:uri:product_id }">
+			<MvASSIGN NAME = "g.Screen"				VALUE = "PROD">
+		<MvELSEIF EXPR = "{ g.Session:uri:feed_id }">
+			<MvASSIGN NAME = "g.Screen"				VALUE = "FEED">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Dispatch_Redirect" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.url"				VALUE = "">
+	<MvASSIGN NAME = "l.flags:force_secure" VALUE = "{ g.Secure }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.uri:screen }">
+		<MvASSIGN NAME = "l.url"			VALUE = "{ Store_Screen_URL( l.uri:screen, l.flags ) }">
+	<MvELSEIF EXPR = "{ NOT ISNULL l.uri:page_code }">
+		<MvASSIGN NAME = "l.url"			VALUE = "{ Store_Page_Code_URL( l.uri:page_code, l.flags ) }">
+	<MvELSEIF EXPR = "{ l.uri:cat_id }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Load_ID( l.uri:cat_id, l.category ) }">
+			<MvASSIGN NAME = "l.url"		VALUE = "{ Store_Category_URL( l.category, l.flags ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.uri:product_id }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Load_ID( l.uri:product_id, l.product ) }">
+			<MvASSIGN NAME = "l.url"		VALUE = "{ Store_Product_URL( l.product, l.flags ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.uri:feed_id }">
+		<MvIF EXPR = "{ [ g.Module_Feature_FDS_DB ].Feed_Load_ID( l.uri:feed_id, l.feed ) }">
+			<MvASSIGN NAME = "l.url"		VALUE = "{ Store_Feed_URL( l.feed, l.flags ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.url }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00008', 'Invalid URI' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"				VALUE = "{ miva_output_header( 'Location', l.url ) }">
+
+	<MvIF EXPR = "{ l.uri:status EQ 301 }">			<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '301 Moved Permanently' ) }">
+	<MvELSEIF EXPR = "{ l.uri:status EQ 303 }">		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '303 See Other' ) }">
+	<MvELSEIF EXPR = "{ l.uri:status EQ 307 }">		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '307 Temporary Redirect' ) }">
+	<MvELSE>										<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '302 Found' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Parse_Request" PARAMETERS = "uri" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Parse_Request( l.urisettings:module, l.urisettings, l.uri ) }">
+	<MvELSE>																						<MvFUNCTIONRETURN VALUE = "{ URI_Parse_Request_LowLevel( l.urisettings, l.uri ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Parse_Request_LowLevel" PARAMETERS = "urisettings var, uri" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.normalized_uri"	VALUE = "{ URI_Normalize( l.uri ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Load_URI( l.normalized_uri, g.Session:uri ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Store_Code"	VALUE = "{ l.urisettings:def_store }">
+		<MvASSIGN NAME = "g.Screen"		VALUE = "{ l.urisettings:def_screen }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Default_Settings" PARAMETERS = "settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings:store"					VALUE = "{ g.Store }">
+	<MvASSIGN NAME = "l.settings:store:slugified_code"	VALUE = "{ URI_Slugify( g.Store:code ) }">
+	<MvASSIGN NAME = "l.settings:store:slugified_name"	VALUE = "{ URI_Slugify( g.Store:name ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Screen_New" PARAMETERS = "code, name" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Screen_New( l.urisettings:module, l.urisettings, l.code, l.name ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Screen_New_LowLevel( l.urisettings:pg_gen, l.code, l.name ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Screen_New_LowLevel" PARAMETERS = "pg_gen, code, name" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.pg_gen }">												<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/page.mvc' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:page:slugified_code"	VALUE = "{ URI_Slugify( l.code ) }">
+	<MvASSIGN NAME = "l.settings:page:slugified_name"	VALUE = "{ URI_Slugify( l.name ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Root $ 'templates/uri/page.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"						VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"						VALUE = "{ l.code }">
+	<MvASSIGN NAME = "l.uri:store_id"					VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"					VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"						VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.uri:canonical"					VALUE = 1>
+	<MvASSIGN NAME = "l.uri:status"						VALUE = 200>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Insert_NoDuplicates( l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Screen_Update" PARAMETERS = "code, name" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Screen_Update( l.urisettings:module, l.urisettings, l.urisettings:pg_regen, l.code, l.name ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Screen_Update_LowLevel( l.urisettings:pg_regen, l.code, l.name ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Screen_Update_WithPageRegenerate" PARAMETERS = "pg_regen, code, name" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Screen_Update( l.urisettings:module, l.urisettings, l.pg_regen, l.code, l.name ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Screen_Update_LowLevel( l.pg_regen, l.code, l.name ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Screen_Update_LowLevel" PARAMETERS = "pg_regen, code, name" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.pg_regen }">											<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/page.mvc' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:page"					VALUE = "{ l.page }">
+	<MvASSIGN NAME = "l.settings:page:slugified_code"	VALUE = "{ URI_Slugify( l.code ) }">
+	<MvASSIGN NAME = "l.settings:page:slugified_name"	VALUE = "{ URI_Slugify( l.name ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Root $ 'templates/uri/page.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"						VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"						VALUE = "{ l.code }">
+	<MvASSIGN NAME = "l.uri:store_id"					VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"					VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"						VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"					VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate( l.pg_regen, l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Page_New" PARAMETERS = "page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Page_New( l.urisettings:module, l.urisettings, l.urisettings:pg_gen, l.page ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_Is_Primary() }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_New_LowLevel( l.urisettings:pg_gen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Page_New_WithPageGenerate" PARAMETERS = "pg_gen, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Page_New( l.urisettings:module, l.urisettings, l.pg_gen, l.page ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_New_LowLevel( l.pg_gen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Page_New_LowLevel" PARAMETERS = "pg_gen, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.pg_gen }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/page.mvc' ) }">		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URIList_Load_Page_Code( l.page:code, l.null ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_Update_LowLevel( l.urisettings:pg_regen, l.page ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:page"					VALUE = "{ l.page }">
+	<MvASSIGN NAME = "l.settings:page:slugified_code"	VALUE = "{ URI_Slugify( l.page:code ) }">
+	<MvASSIGN NAME = "l.settings:page:slugified_name"	VALUE = "{ URI_Slugify( l.page:name ) }">
+	<MvASSIGN NAME = "l.settings:page:slugified_title"	VALUE = "{ URI_Slugify( l.page:title ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Root $ 'templates/uri/page.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"						VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"						VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"					VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"					VALUE = "{ l.page:code }">
+	<MvASSIGN NAME = "l.uri:cat_id"						VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.uri:canonical"					VALUE = 1>
+	<MvASSIGN NAME = "l.uri:status"						VALUE = 200>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Insert_NoDuplicates( l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Page_Update" PARAMETERS = "page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Page_Update( l.urisettings:module, l.urisettings, l.urisettings:pg_regen, l.page ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_Is_Primary() }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_Update_LowLevel( l.urisettings:pg_regen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Page_Update_WithPageRegenerate" PARAMETERS = "pg_regen, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Page_Update( l.urisettings:module, l.urisettings, l.pg_regen, l.page ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_Update_LowLevel( l.pg_regen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Page_Update_LowLevel" PARAMETERS = "pg_regen, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.pg_regen }">											<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/page.mvc' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:page"					VALUE = "{ l.page }">
+	<MvASSIGN NAME = "l.settings:page:slugified_code"	VALUE = "{ URI_Slugify( l.page:code ) }">
+	<MvASSIGN NAME = "l.settings:page:slugified_name"	VALUE = "{ URI_Slugify( l.page:name ) }">
+	<MvASSIGN NAME = "l.settings:page:slugified_title"	VALUE = "{ URI_Slugify( l.page:title ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Root $ 'templates/uri/page.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"						VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"						VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"					VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"					VALUE = "{ l.page:code }">
+	<MvASSIGN NAME = "l.uri:cat_id"						VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"					VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate( l.pg_regen, l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Handle_Page_Code_Change" PARAMETERS = "original_page var, new_page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Handle_Page_Code_Change( l.urisettings:module, l.urisettings, l.original_page, l.new_page ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Handle_Page_Code_Change_LowLevel( l.original_page, l.new_page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Handle_Page_Code_Change_LowLevel" PARAMETERS = "original_page var, new_page var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| When a page's code is modified, the following semantic is applied to retain linkage between pages and
+	| URIs. When either of the following two conditions exists, the page_code value on existing URIs is updated
+	| to follow the change to the page:
+	|
+	| 1.  The modification occurs on the primary branch
+	| 2.  The modification occurs on any other branch, but the page code exists only on the modified branch
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ strcasecmp( l.original_page:code, l.new_page:code ) NE 0 }">
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_Is_Primary() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_URI_DB ].URI_Update_Page_Code_All( l.original_page:code, l.new_page:code ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Code_OtherBranch( [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID(), l.original_page:code, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_URI_DB ].URI_Update_Page_Code_All( l.original_page:code, l.new_page:code ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Handle_Primary_Branch_Change" PARAMETERS = "original_primary_branch_id, new_primary_branch_id" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| When changing the primary branch, any pages that exist on the new primary branch, but do not exist on
+	| the old primary branch, should have new URIs generated provided no existing URIs are present.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.original_primary_branch_id NE l.new_primary_branch_id }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Handle_Primary_Branch_Change( l.urisettings:module, l.urisettings, l.original_primary_branch_id, l.new_primary_branch_id ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ URI_Handle_Primary_Branch_Change_LowLevel( l.urisettings:pg_gen, l.original_primary_branch_id, l.new_primary_branch_id ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Handle_Primary_Branch_Change_LowLevel" PARAMETERS = "pg_gen, original_primary_branch_id, new_primary_branch_id" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.page" ARRAY = "l.pages" COUNT = "{ [ g.Module_Feature_TUI_DB ].PageList_Load_NotOnOtherBranch( l.new_primary_branch_id, l.original_primary_branch_id, l.pages ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URIList_Load_Page_Code( l.page:code, l.null ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT URI_Generate_Page_New_LowLevel( l.pg_gen, l.page ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Page_Delete" PARAMETERS = "page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Page_Delete( l.urisettings:module, l.urisettings, l.page ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Page_Delete_LowLevel( l.urisettings:pg_delete, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Page_Delete_LowLevel" PARAMETERS = "pg_delete, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.pg_delete }">																																		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_OtherBranch( [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID(), l.page:code, l.null ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_URI_DB ].URI_Delete_All_Page( l.page:code ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Branch_Page_New" PARAMETERS = "dest_branch var, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Branch_Page_New( l.urisettings:module, l.urisettings, l.dest_branch, l.page ) }">
+	<MvELSEIF EXPR = "{ l.dest_branch:id NE [ g.Module_Feature_TUI_MGR ].TemplateManager_Primary_Branch_ID() }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Branch_Page_New_LowLevel( l.urisettings:pg_gen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Branch_Page_New_LowLevel" PARAMETERS = "pg_gen, page var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_New_WithPageGenerate( l.pg_gen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Branch_Page_Update" PARAMETERS = "dest_branch var, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Branch_Page_Update( l.urisettings:module, l.urisettings, l.dest_branch, l.page ) }">
+	<MvELSEIF EXPR = "{ l.dest_branch:id NE [ g.Module_Feature_TUI_MGR ].TemplateManager_Primary_Branch_ID() }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Branch_Page_Update_LowLevel( l.urisettings:pg_regen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Branch_Page_Update_LowLevel" PARAMETERS = "pg_regen, page var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Page_Update_WithPageRegenerate( l.pg_regen, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Category_New" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.category:active }"> 															<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Category_New( l.urisettings:module, l.urisettings, l.category ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Category_New_LowLevel( l.urisettings:ct_gen, l.category ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Category_New_LowLevel" PARAMETERS = "ct_gen, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.ct_gen }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/category.mvc' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:category"						VALUE = "{ l.category }">
+	<MvASSIGN NAME = "l.settings:category:slugified_code"		VALUE = "{ URI_Slugify( l.category:code ) }">
+	<MvASSIGN NAME = "l.settings:category:slugified_name"		VALUE = "{ URI_Slugify( l.category:name ) }">
+	<MvASSIGN NAME = "l.settings:category:slugified_page_title"	VALUE = "{ URI_Slugify( l.category:page_title ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"								VALUE = "{ [ g.Module_Root $ 'templates/uri/category.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"								VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"								VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"							VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"							VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"								VALUE = "{ l.category:id }">
+	<MvASSIGN NAME = "l.uri:product_id"							VALUE = 0>
+	<MvASSIGN NAME = "l.uri:canonical"							VALUE = 1>
+	<MvASSIGN NAME = "l.uri:status"								VALUE = 200>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Insert_NoDuplicates( l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Category_Update" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.category:active }"> 														<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">	<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Category_Update( l.urisettings:module, l.urisettings, l.urisettings:ct_regen, l.category ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Category_Update_LowLevel( l.urisettings:ct_regen, l.category ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Category_Update_WithCategoryRegenerate" PARAMETERS = "ct_regen, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Category_Update( l.urisettings:module, l.urisettings, l.ct_regen, l.category ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Category_Update_LowLevel( l.ct_regen, l.category ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Category_Update_LowLevel" PARAMETERS = "ct_regen, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.ct_regen }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/category.mvc' ) }">		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:category"						VALUE = "{ l.category }">
+	<MvASSIGN NAME = "l.settings:category:slugified_code"		VALUE = "{ URI_Slugify( l.category:code ) }">
+	<MvASSIGN NAME = "l.settings:category:slugified_name"		VALUE = "{ URI_Slugify( l.category:name ) }">
+	<MvASSIGN NAME = "l.settings:category:slugified_page_title"	VALUE = "{ URI_Slugify( l.category:page_title ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"								VALUE = "{ [ g.Module_Root $ 'templates/uri/category.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"								VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"								VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"							VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"							VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"								VALUE = "{ l.category:id }">
+	<MvASSIGN NAME = "l.uri:product_id"							VALUE = 0>
+	<MvASSIGN NAME = "l.uri:feed_id"							VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate( l.ct_regen, l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Category_Delete" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Category_Delete( l.urisettings:module, l.urisettings, l.category ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Category_Delete_LowLevel( l.urisettings:ct_delete, l.category ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Category_Delete_LowLevel" PARAMETERS = "ct_delete, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.ct_delete }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_URI_DB ].URI_Delete_All_Category( l.category:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Product_New" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.product:active }">															<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Product_New( l.urisettings:module, l.urisettings, l.product ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Product_New_LowLevel( l.urisettings:pr_gen, l.product ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Product_New_LowLevel" PARAMETERS = "pr_gen, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.pr_gen }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/product.mvc' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:product"						VALUE = "{ l.product }">
+	<MvASSIGN NAME = "l.settings:product:slugified_code"		VALUE = "{ URI_Slugify( l.product:code ) }">
+	<MvASSIGN NAME = "l.settings:product:slugified_name"		VALUE = "{ URI_Slugify( l.product:name ) }">
+	<MvASSIGN NAME = "l.settings:product:slugified_page_title"	VALUE = "{ URI_Slugify( l.product:page_title ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"								VALUE = "{ [ g.Module_Root $ 'templates/uri/product.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"								VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"								VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"							VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"							VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"								VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"							VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.uri:canonical"							VALUE = 1>
+	<MvASSIGN NAME = "l.uri:status"								VALUE = 200>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Insert_NoDuplicates( l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Product_Update" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.product:active }">														<MvFUNCTIONRETURN VALUE = 1> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">	<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Product_Update( l.urisettings:module, l.urisettings, l.urisettings:pr_regen, l.product ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Product_Update_LowLevel( l.urisettings:pr_regen, l.product ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Product_Update_WithProductRegenerate" PARAMETERS = "pr_regen, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Generate_Product_Update( l.urisettings:module, l.urisettings, l.pr_regen, l.product ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Generate_Product_Update_LowLevel( l.pr_regen, l.product ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_Product_Update_LowLevel" PARAMETERS = "pr_regen, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.pr_regen }">												<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT sexists( g.Module_Root $ 'templates/uri/product.mvc' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ URI_Generate_Default_Settings( l.settings ) }">
+
+	<MvASSIGN NAME = "l.settings:product"						VALUE = "{ l.product }">
+	<MvASSIGN NAME = "l.settings:product:slugified_code"		VALUE = "{ URI_Slugify( l.product:code ) }">
+	<MvASSIGN NAME = "l.settings:product:slugified_name"		VALUE = "{ URI_Slugify( l.product:name ) }">
+	<MvASSIGN NAME = "l.settings:product:slugified_page_title"	VALUE = "{ URI_Slugify( l.product:page_title ) }">
+
+	<MvCAPTURE VARIABLE = "l.uri:uri">
+		<MvASSIGN NAME = "l.null"								VALUE = "{ [ g.Module_Root $ 'templates/uri/product.mvc' ].Template_Render( l.null, l.settings ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.uri:uri"								VALUE = "{ substring_var( l.uri:uri, 1, 254 ) }">
+	<MvASSIGN NAME = "l.uri:screen"								VALUE = "">
+	<MvASSIGN NAME = "l.uri:store_id"							VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri:page_code"							VALUE = "">
+	<MvASSIGN NAME = "l.uri:cat_id"								VALUE = 0>
+	<MvASSIGN NAME = "l.uri:product_id"							VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.uri:feed_id"							VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate( l.pr_regen, l.uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Product_Delete" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Product_Delete( l.urisettings:module, l.urisettings, l.product ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Product_Delete_LowLevel( l.urisettings:pr_delete, l.product ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Product_Delete_LowLevel" PARAMETERS = "pr_delete, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.pr_delete }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_URI_DB ].URI_Delete_All_Product( l.product:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Slugify" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ slugify( l.value ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Append_ID" PARAMETERS = "id, uri" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.id_len"				VALUE = "{ len_var( l.id ) }">
+	<MvASSIGN NAME = "l.uri_len"			VALUE = "{ len_var( l.uri ) }">
+
+	<MvASSIGN NAME = "l.dot_pos"			VALUE = "{ [ g.Module_Library_Utilities ].LastIndexOf( '.', l.uri, l.uri_len ) }">
+
+	<MvCOMMENT>
+	|
+	| If the ID will fit without truncation, just add it
+	|
+	| Note: Lengths used in this function are 253 rather than 254 to ensure that the leading slash
+	|       is never overwritten.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.uri_len + 1 + l.id_len ) LE 253 }">
+		<MvIF EXPR = "{ l.dot_pos }">
+			<MvASSIGN NAME = "l.ext"		VALUE = "{ substring_var( l.uri, l.dot_pos, l.uri_len - l.dot_pos + 1 ) }">
+			<MvASSIGN NAME = "l.uri"		VALUE = "{ substring_var( l.uri, 1, l.dot_pos - 1 ) }">
+			<MvASSIGN NAME = "l.uri_len"	VALUE = "{ len_var( l.uri ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ substring_var( l.uri, 1, l.uri_len ) $ '-' $ l.id $ l.ext }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there is room pre-extension, put it there.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.dot_pos GT ( 1 + 1 + l.id_len ) ) AND ( ( l.dot_pos + 1 + l.id_len ) LE 253 ) }">
+		<MvASSIGN NAME = "l.ext"			VALUE = "{ substring_var( l.uri, l.dot_pos, l.uri_len - l.dot_pos + 1 ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ substring_var( l.uri, 1, l.dot_pos - 1 - 1 - l.id_len ) $ '-' $ l.id $ l.ext }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Otherwise, just stick the ID at the end of the URI and hope for the best
+	|
+	</MvCOMMENT>
+
+	<MvFUNCTIONRETURN VALUE = "{ substring_var( l.uri, 1, 254 - 1 - l.id_len ) $ '-' $ l.id }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Insert_NoDuplicates" PARAMETERS = "uri var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.uri:id }">
+		<MvASSIGN NAME = "l.uri:id"		VALUE = "{ [ g.Module_Library_DB ].DomainKey_Generate( 'URIs' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Insert( l.uri ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.uri:uri"	VALUE = "{ URI_Append_ID( l.uri:id, l.uri:uri ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Insert( l.uri ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Regenerate" PARAMETERS = "regen_setting, new_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.action"	VALUE = "{ gettoken( l.regen_setting, ':', 1 ) }">
+	<MvASSIGN NAME = "l.status"	VALUE = "{ gettoken( l.regen_setting, ':', 2 ) }">
+
+	<MvIF EXPR = "{ l.action EQ 'new' }">			<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate_Add( l.status, l.new_uri ) }">
+	<MvELSEIF EXPR = "{ l.action EQ 'replace' }">	<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate_Replace( l.status, l.new_uri ) }">
+	<MvELSEIF EXPR = "{ l.action EQ 'sole' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URIList_Load_Item( l.new_uri, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ URI_Regenerate_Replace( l.status, l.new_uri ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Regenerate_Add" PARAMETERS = "status, new_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.new_uri:canonical"			VALUE = 0>
+
+	<MvIF EXPR = "{ ISNULL l.status }">
+		<MvASSIGN NAME = "l.new_uri:status"			VALUE = 200>
+	<MvELSE>
+		<MvASSIGN NAME = "l.new_uri:status"			VALUE = "{ l.status }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there is an existing URI that points to the same item, do nothing
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Load_URI( l.new_uri:uri, l.existing_uri ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ ( l.existing_uri:screen EQ l.new_uri:screen )			AND
+						( l.existing_uri:store_id EQ l.new_uri:store_id )		AND
+						( l.existing_uri:page_code EQ l.new_uri:page_code )		AND
+						( l.existing_uri:cat_id EQ l.new_uri:cat_id )			AND
+						( l.existing_uri:product_id EQ l.new_uri:product_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URI_Insert_NoDuplicates( l.new_uri ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Regenerate_Replace" PARAMETERS = "status, new_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Load_URI( l.new_uri:uri, l.existing_uri ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ ( l.existing_uri:screen NE l.new_uri:screen )			OR
+						( l.existing_uri:store_id NE l.new_uri:store_id )		OR
+						( l.existing_uri:page_code NE l.new_uri:page_code )		OR
+						( l.existing_uri:cat_id NE l.new_uri:cat_id )			OR
+						( l.existing_uri:product_id NE l.new_uri:product_id ) }">
+		<MvASSIGN NAME = "l.existing_uri"					VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.existing_uri:canonical }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Load_Item_Canonical( l.new_uri, l.canonical_uri ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvCOMMENT>
+		|
+		| Check to see if the existing canonical URI is the same as this URI with the appended unique ID
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ URI_Append_ID( l.canonical_uri:id, l.new_uri:uri ) EQ l.canonical_uri:uri }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Make the existing URI canonical (if there was one) or insert the new URI
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.existing_uri:id }">
+		<MvASSIGN NAME = "l.existing_uri:canonical"			VALUE = 1>
+		<MvASSIGN NAME = "l.existing_uri:status"			VALUE = 200>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Update( l.existing_uri ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.new_uri:canonical"				VALUE = 1>
+		<MvASSIGN NAME = "l.new_uri:status"					VALUE = 200>
+
+		<MvIF EXPR = "{ NOT URI_Insert_NoDuplicates( l.new_uri ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Update the old canonical URI (if any) according to the regen settings
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.canonical_uri:id }">
+		<MvIF EXPR = "{ ISNULL l.status }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Delete( l.canonical_uri ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.canonical_uri:status"		VALUE = "{ l.status }">
+			<MvASSIGN NAME = "l.canonical_uri:canonical"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URI_Update( l.canonical_uri ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Update URI global settings ([pg|ct|pr]_regen fields):
+|
+|																			incoming canonical													incoming non-canonical
+|	never							xx_regen	null
+|	add noncannonical				xx_regen	new (null ~= 200)			decanonize existing canonical, set status to config status			Add with explicit status if exists, config status if not
+|													:301					"						"											"													"
+|													:302					"						"											"													"
+|													:303					"						"											"													"
+|													:307					"						"											"													"
+|	replace (options)				xx_regen	replace 
+|													(null)					delete old canonical
+|													:301					Decanonize with this status											"													"
+|													:302																						"													"
+|													:303																						"													"
+|													:307																						"													"
+|													:200					"						"											"													"
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URI_Manage_Existing_Decanonize" PARAMETERS = "existing_canonical_uri var, status" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.existing_canonical_uri:status"		VALUE = "{ l.status }">
+	<MvASSIGN NAME = "l.existing_canonical_uri:canonical"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Update( l.existing_canonical_uri ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Manage_Existing_Canonical" PARAMETERS = "uri_record var, existing_canonical_uri var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_canonical_uri:id }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.uri_record:page_code OR NOT ISNULL l.uri_record:screen }">
+		<MvASSIGN NAME = "l.regen"		VALUE = "{ l.urisettings:pg_regen }">
+	<MvELSEIF EXPR = "{ l.uri_record:cat_id }">
+		<MvASSIGN NAME = "l.regen"		VALUE = "{ l.urisettings:ct_regen }">
+	<MvELSEIF EXPR = "{ l.uri_record:feed_id }">
+		<MvASSIGN NAME = "l.regen"		VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.regen"		VALUE = "{ l.urisettings:pr_regen }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.action"			VALUE = "{ gettoken( l.regen, ':', 1 ) }">
+	<MvASSIGN NAME = "l.status"			VALUE = "{ gettoken( l.regen, ':', 2 ) }">
+
+	<MvIF EXPR = "{ l.action EQ 'new' }">
+		<MvIF EXPR = "{ NOT l.status }">
+			<MvASSIGN NAME = "l.status"	VALUE = 200>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT URI_Manage_Existing_Decanonize( l.existing_canonical_uri, l.status ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.action EQ 'replace' }">
+		<MvIF EXPR = "{ ISNULL l.status }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Delete( l.existing_canonical_uri ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT URI_Manage_Existing_Decanonize( l.existing_canonical_uri, l.status ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ ISNULL l.action }">
+		<MvIF EXPR = "{ NOT URI_Manage_Existing_Decanonize( l.existing_canonical_uri, 200 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00002', 'Unexpected regeneration action: ' $ l.action ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Base" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ URL_Base_WithFlags( l.urisettings, '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Base_WithFlags" PARAMETERS = "urisettings var, flags" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_URL_Base( l.urisettings:module, l.urisettings, l.flags ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.urisettings:urlprefix }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Base_Secure" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ URL_Base_Secure_WithFlags( l.urisettings, '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Base_Secure_WithFlags" PARAMETERS = "urisettings var, flags" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_URL_Base_Secure( l.urisettings:module, l.urisettings, l.flags ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Domain:mm_surl OR
+					ISNULL l.urisettings:surlprefix }">	<MvFUNCTIONRETURN VALUE = "{ URL_Base_WithFlags( l.urisettings, l.flags ) }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.urisettings:surlprefix }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Base_RR" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ URL_Base_RR_WithFlags( l.urisettings, '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Base_RR_WithFlags" PARAMETERS = "urisettings var, flags" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_URL_Base_RR( l.urisettings:module, l.urisettings, l.flags ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Secure }">			<MvFUNCTIONRETURN VALUE = "{ gettoken( URL_Base_Secure_WithFlags( l.urisettings, l.flags ), ':', 2 ) }">
+	<MvELSE>								<MvFUNCTIONRETURN VALUE = "{ gettoken( URL_Base_WithFlags( l.urisettings, l.flags ), ':', 2 ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Build_Flags" PARAMETERS = "flags_string" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.flags"		VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.flag" ARRAY = "l.parsed_flags" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.flags_string, ',', l.parsed_flags ) }">
+		<MvASSIGN NAME = "l.flag"	VALUE = "{ tolower( l.flag ) }">
+
+		<MvIF EXPR = "{ l.flag EQ 'secure' }">				<MvASSIGN NAME = "l.flags:secure"		VALUE = 1>
+		<MvELSEIF EXPR = "{ l.flag EQ 'force_secure' }">	<MvASSIGN NAME = "l.flags:force_secure"	VALUE = 1>
+		<MvELSEIF EXPR = "{ l.flag EQ 'rr' }">				<MvASSIGN NAME = "l.flags:rr"			VALUE = 1>
+		<MvELSEIF EXPR = "{ l.flag EQ 'sep' }">				<MvASSIGN NAME = "l.flags:sep"			VALUE = 1>
+		<MvELSEIF EXPR = "{ l.flag EQ 'nostore' }">			<MvASSIGN NAME = "l.flags:nostore"		VALUE = 1>
+		<MvELSEIF EXPR = "{ l.flag EQ 'nosession' }">		<MvASSIGN NAME = "l.flags:nosession"	VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.flags }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Build_Flags_With_Context" PARAMETERS = "flags_string, context_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.flags"				VALUE = "{ URL_Build_Flags( l.flags_string ) }">
+	<MvASSIGN NAME = "l.flags:context_id"	VALUE = "{ l.context_id }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.flags }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Build_URI" PARAMETERS = "urisettings var, flags, uri, parameters" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_URL_Build( l.urisettings:module, l.urisettings, l.flags, l.uri, l.parameters ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI_LowLevel( l.urisettings, l.flags, l.uri, l.parameters ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Build_URI_LowLevel" PARAMETERS = "urisettings var, flags, uri, parameters" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.flags:rr }">									<MvASSIGN NAME = "l.url" VALUE = "{ URL_Base_RR_WithFlags( l.urisettings, l.flags ) }">
+	<MvELSEIF EXPR = "{ g.Domain:mm_secure OR l.flags:secure }">	<MvASSIGN NAME = "l.url" VALUE = "{ URL_Base_Secure_WithFlags( l.urisettings, l.flags ) }">
+	<MvELSE>														<MvASSIGN NAME = "l.url" VALUE = "{ URL_Base_WithFlags( l.urisettings, l.flags ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.url_len"			VALUE = "{ len_var( l.url ) }">
+	<MvIF EXPR = "{ ( substring_var( l.url, l.url_len, 1 ) EQ '/' ) AND ( substring_var( l.uri, 1, 1 ) EQ '/' ) }">
+		<MvASSIGN NAME = "l.url"			VALUE = "{ substring_var( l.url, 1, l.url_len - 1 ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.url"				VALUE = "{ l.url $ l.uri }">
+
+	<MvCOMMENT>
+	|
+	| The logic here is intended to mirror the logic in SetRuntimeURLs
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.flags:nosession }">
+		<MvIF EXPR = "{ g.Domain:mm_params EQ 'always' }">
+			<MvASSIGN NAME = "l.parameters"		VALUE = "{ URL_Append_Parameter( l.parameters, 'Session_ID',			g.Session_ID ) }">
+
+			<MvIF EXPR = "{ ( ISNULL l.urisettings:surlprefix ) OR ( g.Secure AND ( l.flags:secure OR l.flags:rr ) ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Customer_Session_ID',	g.Customer_Session_ID ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Affiliate_Session_ID',	g.Affiliate_Session_ID ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Checkout_Session_ID',	g.Checkout_Session_ID ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ g.Domain:mm_params EQ 'switch' }">
+			<MvIF EXPR = "{ ( g.Secure OR l.flags:secure ) AND ( NOT ISNULL l.urisettings:surlprefix ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Session_ID',			g.Session_ID ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.parameters }">
+		<MvIF EXPR = "{ l.flags:sep }">
+			<MvASSIGN NAME = "l.url"	VALUE = "{ l.url $ '?' }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.url"		VALUE = "{ l.url $ '?' $ l.parameters }">
+
+		<MvIF EXPR = "{ l.flags:sep }">
+			<MvASSIGN NAME = "l.url"	VALUE = "{ l.url $ '&' }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.url }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Build_Long" PARAMETERS = "flags, parameters" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL g.Domain:mm_surl AND ( g.Domain:mm_secure OR l.flags:secure OR g.Secure ) }">	<MvASSIGN NAME = "l.url" VALUE = "{ g.Domain:mm_surl }">
+	<MvELSE>																									<MvASSIGN NAME = "l.url" VALUE = "{ g.Domain:mm_url }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.flags:rr }">
+		<MvASSIGN NAME = "l.url"				VALUE = "{ gettoken( l.url, ':', 2 ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| The logic here is intended to mirror the logic in SetRuntimeURLs
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.flags:nosession }">
+		<MvIF EXPR = "{ g.Domain:mm_params EQ 'always' }">
+			<MvASSIGN NAME = "l.parameters"		VALUE = "{ URL_Append_Parameter( l.parameters, 'Session_ID',			g.Session_ID ) }">
+
+			<MvIF EXPR = "{ ( ISNULL g.Domain:mm_surl ) OR ( g.Secure AND ( l.flags:secure OR l.flags:rr ) ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Customer_Session_ID',	g.Customer_Session_ID ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Affiliate_Session_ID',	g.Affiliate_Session_ID ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Checkout_Session_ID',	g.Checkout_Session_ID ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ g.Domain:mm_params EQ 'switch' }">
+			<MvIF EXPR = "{ ( g.Secure OR l.flags:secure ) AND ( NOT ISNULL g.Domain:mm_surl ) }">
+				<MvASSIGN NAME = "l.parameters"	VALUE = "{ URL_Append_Parameter( l.parameters, 'Session_ID',			g.Session_ID ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.flags:nostore }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Store_Count_Cached() GT 1 }">
+			<MvASSIGN NAME = "l.parameters"		VALUE = "{ URL_Prepend_Parameter( l.parameters, 'Store_Code',			g.Store:code ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.url"					VALUE = "{ l.url $ l.parameters }">
+
+	<MvIF EXPR = "{ l.flags:sep AND ( NOT ISNULL l.parameters ) }">
+		<MvASSIGN NAME = "l.url"				VALUE = "{ l.url $ '&' }">
+	<MvELSEIF EXPR = "{ ( NOT l.flags:sep ) AND ( ISNULL l.parameters ) }">
+		<MvASSIGN NAME = "l.url"				VALUE = "{ substring( l.url, 1, len_var( l.url ) - 1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.url }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Prepend_Parameter" PARAMETERS = "existing_parameters, name, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.value }">							<MvFUNCTIONRETURN VALUE = "{ l.existing_parameters }">
+	<MvELSEIF EXPR = "{ NOT ISNULL l.existing_parameters }">	<MvFUNCTIONRETURN VALUE = "{ encodeattribute( l.name ) $ '=' $ encodeattribute( l.value ) $ '&' $ l.existing_parameters }">
+	<MvELSE>													<MvFUNCTIONRETURN VALUE = "{ encodeattribute( l.name ) $ '=' $ encodeattribute( l.value ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_Append_Parameter" PARAMETERS = "existing_parameters, name, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.value }">							<MvFUNCTIONRETURN VALUE = "{ l.existing_parameters }">
+	<MvELSEIF EXPR = "{ NOT ISNULL l.existing_parameters }">	<MvFUNCTIONRETURN VALUE = "{ l.existing_parameters $ '&' $ encodeattribute( l.name ) $ '=' $ encodeattribute( l.value ) }">
+	<MvELSE>													<MvFUNCTIONRETURN VALUE = "{ encodeattribute( l.name ) $ '=' $ encodeattribute( l.value ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Normalize" PARAMETERS = "uri" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ l.uri }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Secure AND ( NOT ISNULL l.urisettings:surlprefix ) }">	<MvASSIGN NAME = "l.prefix"	VALUE = "{ l.urisettings:surlprefix }">
+	<MvELSE>																	<MvASSIGN NAME = "l.prefix"	VALUE = "{ l.urisettings:urlprefix }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Strip the method and hostname off the URL prefix
+	|
+	</MvCOMMENT>
+
+	<MvFOR COUNT = "{ 3 }">
+		<MvASSIGN NAME = "l.pos"	VALUE = "{ '/' IN l.prefix }">
+		<MvIF EXPR = "{ l.pos EQ 0 }">
+			<MvFORSTOP>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.prefix"	VALUE = "{ substring_var( l.prefix, l.pos + 1, len_var( l.prefix ) - l.pos ) }">
+	</MvFOR>
+
+	<MvCOMMENT>
+	|
+	| If the URI starts with the prefix, remove it
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.prefix_len"	VALUE = "{ len_var( l.prefix ) }">
+	<MvIF EXPR = "{ l.prefix_len AND ( ( ( '/' $ l.prefix ) CIN l.uri ) EQ 1 ) }">
+		<MvASSIGN NAME = "l.uri"	VALUE = "{ substring_var( l.uri, l.prefix_len + 1, len_var( l.uri ) - l.prefix_len ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove parameters
+	|
+	</MvCOMMENT>
+
+	<MvFUNCTIONRETURN VALUE = "{ gettoken( l.uri, '?', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_To_URI" PARAMETERS = "url" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Strip protocol
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.protocol_end"	VALUE = "{ '://' EIN l.url }">
+	<MvASSIGN NAME = "l.url"			VALUE = "{ substring_var( l.url, l.protocol_end + 1, len_var( l.url ) - l.protocol_end ) }">
+
+	<MvCOMMENT>
+	|
+	| Strip hostname
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.slash_pos"		VALUE = "{ '/' IN l.url }">
+
+	<MvIF EXPR = "{ l.slash_pos EQ 0 }">	<MvFUNCTIONRETURN VALUE = "/">
+	<MvELSE>								<MvFUNCTIONRETURN VALUE = "{ substring_var( l.url, l.slash_pos, len_var( l.url ) - l.slash_pos + 1 ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URL_To_Normalized_URI" PARAMETERS = "url" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ URI_Normalize( URL_To_URI( l.url ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Update_RewriteRules" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ 'Apache' CIN s.server_software }">
+		<MvFUNCTIONRETURN VALUE = "{ URI_Update_htaccess( l.urisettings ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Update_htaccess" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri"					VALUE = "{ URL_To_URI( g.Domain:mm_url ) }">
+	<MvASSIGN NAME = "l.merchant_pos"			VALUE = "{ 'merchant.mvc' IN l.uri }">
+
+	<MvIF EXPR = "{ l.merchant_pos LE 2 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00001', 'Unable to generate htaccess rules: the URL path to Miva Merchant (merchant.mvc) is in the root or not present.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.uri_rewrite_rules"		VALUE = "{ URI_Generate_htaccess( l.uri, l.urisettings ) }">
+
+	<MvLOCKFILE FILE = ".htaccess">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ file_read( '/.htaccess', 'script', l.existing_rules ) }">
+
+		<MvASSIGN NAME = "l.start_pos"			VALUE = "{ '### Begin - Miva Merchant URI Management' IN l.existing_rules }">
+		<MvIF EXPR = "{ l.start_pos EQ 0 }">
+			<MvIF EXPR = "{ NOT sexists( '/.htaccess' ) }">
+				<MvASSIGN NAME = "l.null"		VALUE = "{ file_create( '/.htaccess', 'script', l.uri_rewrite_rules ) }">
+			<MvELSE>
+				<MvIF EXPR = "{ ( NOT ISNULL l.existing_rules ) AND ( substring_var( l.existing_rules, len_var( l.existing_rules ), 1 ) NE asciichar( 10 ) ) }">
+					<MvCAPTURE VARIABLE = "l.uri_rewrite_rules">
+						<MvEVAL EXPR = "{ asciichar( 10 ) }">
+						<MvEVAL EXPR = "{ l.uri_rewrite_rules }">
+					</MvCAPTURE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.null"		VALUE = "{ file_append( '/.htaccess', 'script', l.uri_rewrite_rules ) }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.end_pos"		VALUE = "{ '### End - Miva Merchant URI Management' EIN l.existing_rules }">
+			<MvIF EXPR = "{ l.end_pos }">
+				<MvASSIGN NAME = "l.end_pos"	VALUE = "{ l.end_pos + 1 + ( substring_var( l.existing_rules, l.end_pos + 1, 1 ) EQ asciichar( 10 ) ) }">
+				<MvASSIGN NAME = "l.rules"		VALUE = "{ substring_var( l.existing_rules, 1, l.start_pos - 1 ) $
+														   substring_var( l.existing_rules, l.end_pos, len_var( l.existing_rules ) - l.end_pos + 1 ) $
+														   l.uri_rewrite_rules }">
+
+				<MvASSIGN NAME = "l.null"		VALUE = "{ sdelete( '/.htaccess' ) }">
+				<MvASSIGN NAME = "l.null"		VALUE = "{ file_create( '/.htaccess', 'script', l.rules ) }">
+			</MvIF>
+		</MvIF>
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Generate_htaccess" PARAMETERS = "uri var, urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.merchant_pos"						VALUE = "{ 'merchant.mvc' IN l.uri }">
+	<MvASSIGN NAME = "l.norewrite_uri"						VALUE = "{ substring_var( l.uri, 1, l.merchant_pos - 1 ) }">
+	<MvASSIGN NAME = "l.uri_uri"							VALUE = "{ glosub( l.uri, 'merchant.mvc', 'uri.mvc' ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL g.Domain:mm_surl }">
+		<MvASSIGN NAME = "l.secure_uri"						VALUE = "{ URL_To_URI( g.Domain:mm_surl ) }">
+		<MvIF EXPR = "{ l.secure_uri NE l.uri }">
+			<MvASSIGN NAME = "l.secure_merchant_pos"		VALUE = "{ 'merchant.mvc' IN l.secure_uri }">
+
+			<MvIF EXPR = "{ l.secure_merchant_pos }">
+				<MvASSIGN NAME = "l.secure_norewrite_uri"	VALUE = "{ substring_var( l.secure_uri, 1, l.secure_merchant_pos - 1 ) }">
+				<MvASSIGN NAME = "l.secure_uri_uri"			VALUE = "{ glosub( l.secure_uri, 'merchant.mvc', 'uri.mvc' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( '?' EIN l.uri_uri ) EQ len_var( l.uri_uri ) }">
+		<MvASSIGN NAME = "l.uri_uri"						VALUE = "{ substring_var( l.uri_uri, 1, len_var( l.uri_uri ) - 1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( '?' EIN l.secure_uri_uri ) EQ len_var( l.secure_uri_uri ) }">
+		<MvASSIGN NAME = "l.secure_uri_uri"					VALUE = "{ substring_var( l.secure_uri_uri, 1, len_var( l.secure_uri_uri ) - 1 ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.uri_rewrite_rules"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">### Begin - Miva Merchant URI Management: Direct all non-file URIs to Miva Merchant
+RewriteEngine on
+
+<MvIF EXPR = "{ ( NOT ISNULL l.secure_uri ) AND ( l.secure_uri NE l.uri ) }">
+RewriteCond %{HTTPS} !=on
+</MvIF>
+RewriteCond %{REQUEST_FILENAME} !-s
+RewriteCond %{REQUEST_URI} !^<MvEVAL EXPR = "{ l.norewrite_uri }">.*$
+RewriteCond %{REQUEST_URI} !\.(gif|jpg|jpeg|jpe|xbm|png|svg|ico|webp)$
+RewriteRule ^(.*)$ <MvEVAL EXPR = "{ l.uri_uri }"> [QSA,L]
+
+<MvIF EXPR = "{ ( NOT ISNULL l.secure_uri ) AND ( l.secure_uri NE l.uri ) }">
+RewriteCond %{HTTPS} =on
+RewriteCond %{REQUEST_FILENAME} !-s
+RewriteCond %{REQUEST_URI} !^<MvEVAL EXPR = "{ l.secure_norewrite_uri }">.*$
+RewriteCond %{REQUEST_URI} !\.(gif|jpg|jpeg|jpe|xbm|png|svg|ico|webp)$
+RewriteRule ^(.*)$ <MvEVAL EXPR = "{ l.secure_uri_uri }"> [QSA,L]
+</MvIF>
+### End - Miva Merchant URI Management
+<MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.uri_rewrite_rules }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Session_Data" PARAMETERS = "data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Session_Data( l.urisettings:module, l.urisettings, l.data ) }">
+	<MvELSEIF EXPR = "{ l.urisettings:source NE 'uri' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00003', 'URI Source is not URI Management' ) }">
+	<MvELSEIF EXPR = "{ ISNULL g.Session:uri }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-URI-UTL-00004', 'Session has no URI' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data:uri" VALUE = "{ g.Session:uri }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Screen_URL" PARAMETERS = "screen, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Screen_URL( l.urisettings:module, l.urisettings, l.screen, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Screen_URL_LowLevel( l.urisettings, l.screen, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Screen_URL_LowLevel" PARAMETERS = "urisettings var, screen, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ g.Domain:mm_secure OR l.flags:force_secure }">	<MvASSIGN NAME = "l.url_flags:secure" VALUE = 1>
+	<MvELSEIF EXPR = "{ g.Store:ui_mod:api_ver GE 9.04 }">			<MvASSIGN NAME = "l.url_flags:secure" VALUE = "{ [ g.Module_Root $ g.Store:ui_mod:module ].StoreUIModule_Screen_Secure( g.Store:ui_mod, l.screen ) }">
+	<MvELSE>														<MvASSIGN NAME = "l.url_flags:secure" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URI_Load_Screen_Canonical( l.screen, l.uri ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI( l.urisettings, l.url_flags, l.uri:uri, '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">	<MvASSIGN NAME = "l.url" VALUE = "{ Legacy_SEO_URL_Secure( l.seo_settings, l.screen ) }">
+			<MvELSE>								<MvASSIGN NAME = "l.url" VALUE = "{ Legacy_SEO_URL( l.seo_settings, l.screen ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">	<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSE>								<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=' $ encodeattribute( l.screen ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Page_URL" PARAMETERS = "page var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Page_URL( l.urisettings:module, l.urisettings, l.page, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Page_URL_LowLevel( l.urisettings, l.page, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Page_URL_LowLevel" PARAMETERS = "urisettings var, page var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"		VALUE = "{ g.Domain:mm_secure OR l.page:secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URI_Load_Page_Canonical( l.page:code, l.uri ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI( l.urisettings, l.url_flags, l.uri:uri, '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">	<MvASSIGN NAME = "l.url" VALUE = "{ Legacy_SEO_URL_Secure( l.seo_settings, l.page:code ) }">
+			<MvELSE>								<MvASSIGN NAME = "l.url" VALUE = "{ Legacy_SEO_URL( l.seo_settings, l.page:code ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">	<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSE>								<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=' $ encodeattribute( l.page:code ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Page_Code_URL" PARAMETERS = "page_code, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Page_Code_URL( l.urisettings:module, l.urisettings, l.page_code, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Page_Code_URL_LowLevel( l.urisettings, l.page_code, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Page_Code_URL_LowLevel" PARAMETERS = "urisettings var, page_code, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.page_code, l.page ) }">
+		<MvFUNCTIONRETURN VALUE = "{ Store_Page_URL( l.page, l.flags ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Page does not exist.  Return the Screen URI if one exists and the source
+	| is uri, otherwise return a legacy_seo URL or a long URL.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.url_flags:sep"					VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"				VALUE = "{ g.Domain:mm_secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"			VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URI_Load_Screen_Canonical( l.page_code, l.uri ) }">
+			<MvIF EXPR = "{ NOT l.url_flags:secure AND g.Store:ui_mod:api_ver GE 9.04 }">
+				<MvASSIGN NAME = "l.url_flags:secure"	VALUE = "{ [ g.Module_Root $ g.Store:ui_mod:module ].StoreUIModule_Screen_Secure( g.Store:ui_mod, l.page_code ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI( l.urisettings, l.url_flags, l.uri:uri, '' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">	<MvASSIGN NAME = "l.url" VALUE = "{ Legacy_SEO_URL_Secure( l.seo_settings, l.page_code ) }">
+			<MvELSE>								<MvASSIGN NAME = "l.url" VALUE = "{ Legacy_SEO_URL( l.seo_settings, l.page_code ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">	<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSE>								<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=' $ encodeattribute( l.page_code ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Category_URL" PARAMETERS = "category var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Category_URL( l.urisettings:module, l.urisettings, l.category, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Category_URL_LowLevel( l.urisettings, l.category, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Category_URL_LowLevel" PARAMETERS = "urisettings var, category var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.category:page_code }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.category:page_code, l.page ) }">	</MvIF>
+	<MvIF EXPR = "{ ISNULL l.page }"> 					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( 'CTGY', l.page ) }">				</MvIF>
+
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"		VALUE = "{ g.Domain:mm_secure OR l.page:secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URI_Load_Category_Canonical( l.category:id, l.uri ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI( l.urisettings, l.url_flags, l.uri:uri, '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">
+				<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Category_SecureURL_with( l.seo_settings, l.category:code ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Category_URL_with( l.seo_settings, l.category:code ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">				<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSEIF EXPR = "{ l.seo_settings:sl_active }">	<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.url $ '&' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=CTGY&Category_Code=' $ encodeattribute( l.category:code ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Category_Code_URL" PARAMETERS = "category_code, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Category_Code_URL( l.urisettings:module, l.urisettings, l.category_code, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Category_Code_URL_LowLevel( l.urisettings, l.category_code, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Category_Code_URL_LowLevel" PARAMETERS = "urisettings var, category_code, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Load_Code_Cached( l.category_code, l.category ) }">
+		<MvFUNCTIONRETURN VALUE = "{ Store_Category_URL( l.category, l.flags ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Category does not exist.  Return a legacy_seo URL or a long URL.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ISNULL l.page }">
+		<MvASSIGN NAME = "l.null" 				VALUE = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( 'CTGY', l.page ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"		VALUE = "{ g.Domain:mm_secure OR l.page:secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">
+				<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Category_SecureURL_with( l.seo_settings, l.category_code ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Category_URL_with( l.seo_settings, l.category_code ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">				<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSEIF EXPR = "{ l.seo_settings:sl_active }">	<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.url $ '&' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=CTGY&Category_Code=' $ encodeattribute( l.category_code ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Product_URL" PARAMETERS = "product var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Product_URL( l.urisettings:module, l.urisettings, l.product, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Product_URL_LowLevel( l.urisettings, l.product, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Product_URL_LowLevel" PARAMETERS = "urisettings var, product var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.product:page_code }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.product:page_code, l.page ) }">	</MvIF>
+	<MvIF EXPR = "{ ISNULL l.page }">					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( 'PROD', l.page ) }"> 				</MvIF>
+
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"		VALUE = "{ g.Domain:mm_secure OR l.page:secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URI_Load_Product_Canonical( l.product:id, l.uri ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI( l.urisettings, l.url_flags, l.uri:uri, '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">
+				<MvIF EXPR = "{ NOT ISNULL l.flags:category_code }">	<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Breadcrumb_SecureURL_with( l.seo_settings, l.flags:category_code, l.product:code ) }">
+				<MvELSE>												<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Product_SecureURL_with( l.seo_settings, l.product:code ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT ISNULL l.flags:category_code }">	<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Breadcrumb_URL_with( l.seo_settings, l.flags:category_code, l.product:code ) }">
+				<MvELSE>												<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Product_URL_with( l.seo_settings, l.product:code ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">				<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSEIF EXPR = "{ l.seo_settings:sl_active }">	<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.url $ '&' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.flags:category_code }"> 	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=PROD&Product_Code=' $ encodeattribute( l.product:code ) $ '&Category_Code=' $ encodeattribute( l.flags:category_code ) ) }">
+	<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=PROD&Product_Code=' $ encodeattribute( l.product:code ) ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Product_Code_URL" PARAMETERS = "product_code, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Product_Code_URL( l.urisettings:module, l.urisettings, l.product_code, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Product_Code_URL_LowLevel( l.urisettings, l.product_code, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Product_Code_URL_LowLevel" PARAMETERS = "urisettings var, product_code, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Load_Code_Cached( l.product_code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ Store_Product_URL( l.product, l.flags ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Product does not exist.  Return a legacy_seo URL or a long URL.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" 					VALUE = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( 'PROD', l.page ) }">
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"		VALUE = "{ g.Domain:mm_secure OR l.page:secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+			<MvIF EXPR = "{ l.url_flags:secure }">
+				<MvIF EXPR = "{ NOT ISNULL l.flags:category_code }">	<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Breadcrumb_SecureURL_with( l.seo_settings, l.flags:category_code, l.product_code ) }">
+				<MvELSE>												<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Product_SecureURL_with( l.seo_settings, l.product_code ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT ISNULL l.flags:category_code }">	<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Breadcrumb_URL_with( l.seo_settings, l.flags:category_code, l.product_code ) }">
+				<MvELSE>												<MvASSIGN NAME = "l.url" VALUE = "{ SEOSettings_Product_URL_with( l.seo_settings, l.product_code ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.url_flags:sep }">				<MvFUNCTIONRETURN VALUE = "{ l.url }">
+			<MvELSEIF EXPR = "{ l.seo_settings:sl_active }">	<MvFUNCTIONRETURN VALUE = "{ l.url $ '?' }">
+			<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.url $ '&' }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.flags:category_code }"> 	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=PROD&Product_Code=' $ encodeattribute( l.product_code ) $ '&Category_Code=' $ encodeattribute( l.flags:category_code ) ) }">
+	<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=PROD&Product_Code=' $ encodeattribute( l.product_code ) ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Feed_URL" PARAMETERS = "feed var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Feed_URL( l.urisettings:module, l.urisettings, l.feed, l.flags ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Feed_URL_LowLevel( l.urisettings, l.feed, l.flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Feed_URL_LowLevel" PARAMETERS = "urisettings var, feed var, flags var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.url_flags:sep"			VALUE = "{ l.flags:sep }">
+	<MvASSIGN NAME = "l.url_flags:secure"		VALUE = "{ g.Domain:mm_secure OR l.flags:force_secure }">
+	<MvASSIGN NAME = "l.url_flags:nosession"	VALUE = "{ l.flags:nosession }">
+
+	<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URI_Load_Feed_Canonical( l.feed:id, l.uri ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URL_Build_URI( l.urisettings, l.url_flags, l.uri:uri, '' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ URL_Build_Long( l.url_flags, 'Screen=FEED&Feed_Code=' $ encodeattribute( l.feed:code ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_URL_Context_ID" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Store_URL_Context_ID( l.urisettings:module, l.urisettings ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_URL_Context_List" PARAMETERS = "contexts var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.contexts" VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ URISettings_Source_Is_Valid_Module( l.urisettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.urisettings:module:module ].URIModule_Store_URL_Context_List( l.urisettings:module, l.urisettings, l.contexts ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Domain_NonSecure_Origin" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Determine the base domain URL, falling back to the configured Non-Secure URL to Miva Merchant
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.origin"					VALUE = "{ g.Domain:mm_url }">
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_URI_DB ].URISettings_Load_Cached( l.urisettings ) }">
+		<MvIF EXPR = "{ l.urisettings:source EQ 'uri' }">
+			<MvASSIGN NAME = "l.origin"			VALUE = "{ URL_Base( l.urisettings ) }">
+		<MvELSEIF EXPR = "{ l.urisettings:source EQ 'legacy_seo' }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].SEOSettings_Load_Cached( l.seo_settings ) AND l.seo_settings:sl_active }">
+				<MvASSIGN NAME = "l.origin"		VALUE = "{ SEOSettings_URLPrefix_with( l.seo_settings ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Strip everything after the domain name, including any trailing slash
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.end_of_protocol"		VALUE = "{ '://' EIN l.origin }">
+	<MvIF EXPR = "{ l.end_of_protocol }">
+		<MvASSIGN NAME = "l.trailing_slash_pos"	VALUE = "{ indexof( '/', l.origin, l.end_of_protocol + 1 ) }">
+
+		<MvIF EXPR = "{ l.trailing_slash_pos }">
+			<MvASSIGN NAME = "l.origin"			VALUE = "{ substring_var( l.origin, 1, l.trailing_slash_pos - 1 ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.origin }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URISettings_Source_Is_Valid_Module" PARAMETERS = "urisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.urisettings:source EQ 'module' AND l.urisettings:module:id }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/component/seo_include.mv">

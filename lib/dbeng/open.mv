@@ -1,0 +1,162 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-OPN-
+| Next Error Code: 5    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "OpenDataFiles" PARAMETERS = "merchant_version, domain var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ OpenDataFiles_Source( l.merchant_version, 'runtime', l.domain ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OpenDataFiles_Source" PARAMETERS = "merchant_version, source, domain var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_DBAPI ].DB_Open_Source( l.source ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Domain_Load( l.domain ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.merchant_version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.domain:version NE l.merchant_version }">
+		<MvASSIGN NAME = "g.Version_Mismatch" VALUE = 1>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-OPN-00004', 'Database version mismatch.  Expected ' $ encodeentities( l.merchant_version ) $ ', found ' $ encodeentities( l.domain:version ) ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Open" PARAMETERS = "code, store var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Stores"
+				QUERY	= "{ 'SELECT
+								s.*,
+								currncy_mod.id			AS currncy_mod_id,
+								currncy_mod.code		AS currncy_mod_code,
+								currncy_mod.name		AS currncy_mod_name,
+								currncy_mod.provider	AS currncy_mod_provider,
+								currncy_mod.api_ver		AS currncy_mod_api_ver,
+								currncy_mod.version		AS currncy_mod_version,
+								currncy_mod.module		AS currncy_mod_module,
+								currncy_mod.refcount	AS currncy_mod_refcount,
+								currncy_mod.active		AS currncy_mod_active,
+								tax_mod.id				AS tax_mod_id,
+								tax_mod.code			AS tax_mod_code,
+								tax_mod.name			AS tax_mod_name,
+								tax_mod.provider		AS tax_mod_provider,
+								tax_mod.api_ver			AS tax_mod_api_ver,
+								tax_mod.version			AS tax_mod_version,
+								tax_mod.module			AS tax_mod_module,
+								tax_mod.refcount		AS tax_mod_refcount,
+								tax_mod.active			AS tax_mod_active,
+								ui_mod.id				AS ui_mod_id,
+								ui_mod.code				AS ui_mod_code,
+								ui_mod.name				AS ui_mod_name,
+								ui_mod.provider			AS ui_mod_provider,
+								ui_mod.api_ver			AS ui_mod_api_ver,
+								ui_mod.version			AS ui_mod_version,
+								ui_mod.module			AS ui_mod_module,
+								ui_mod.refcount			AS ui_mod_refcount,
+								ui_mod.active			AS ui_mod_active,
+								boxpack_mod.id			AS boxpack_mod_id,
+								boxpack_mod.code		AS boxpack_mod_code,
+								boxpack_mod.name		AS boxpack_mod_name,
+								boxpack_mod.provider	AS boxpack_mod_provider,
+								boxpack_mod.api_ver		AS boxpack_mod_api_ver,
+								boxpack_mod.version		AS boxpack_mod_version,
+								boxpack_mod.module		AS boxpack_mod_module,
+								boxpack_mod.refcount	AS boxpack_mod_refcount,
+								boxpack_mod.active		AS boxpack_mod_active
+							  FROM
+								Stores s
+								LEFT OUTER JOIN Modules currncy_mod ON currncy_mod.id = s.currncy_id
+								LEFT OUTER JOIN Modules tax_mod ON tax_mod.id = s.tax_id
+								LEFT OUTER JOIN Modules ui_mod ON ui_mod.id = s.ui_id
+								LEFT OUTER JOIN Modules boxpack_mod ON boxpack_mod.id = s.boxpack_id
+							  WHERE
+								' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( 's.code' ) $ ' = ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-OPN-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Stores.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Stores">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-OPN-00002', 'Unable to open store \'' $ l.code $ '\'' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Store_Read( l.store ) }">
+
+	<MvASSIGN NAME = "l.store:currncy_mod:id"		VALUE = "{ Stores.d.currncy_mod_id }">
+	<MvASSIGN NAME = "l.store:currncy_mod:code"		VALUE = "{ Stores.d.currncy_mod_code }">
+	<MvASSIGN NAME = "l.store:currncy_mod:name"		VALUE = "{ Stores.d.currncy_mod_name }">
+	<MvASSIGN NAME = "l.store:currncy_mod:provider"	VALUE = "{ Stores.d.currncy_mod_provider }">
+	<MvASSIGN NAME = "l.store:currncy_mod:api_ver"	VALUE = "{ Stores.d.currncy_mod_api_ver }">
+	<MvASSIGN NAME = "l.store:currncy_mod:version"	VALUE = "{ Stores.d.currncy_mod_version }">
+	<MvASSIGN NAME = "l.store:currncy_mod:module"	VALUE = "{ Stores.d.currncy_mod_module }">
+	<MvASSIGN NAME = "l.store:currncy_mod:refcount"	VALUE = "{ Stores.d.currncy_mod_refcount }">
+	<MvASSIGN NAME = "l.store:currncy_mod:active"	VALUE = "{ Stores.d.currncy_mod_active }">
+
+	<MvASSIGN NAME = "l.store:tax_mod:id"			VALUE = "{ Stores.d.tax_mod_id }">
+	<MvASSIGN NAME = "l.store:tax_mod:code"			VALUE = "{ Stores.d.tax_mod_code }">
+	<MvASSIGN NAME = "l.store:tax_mod:name"			VALUE = "{ Stores.d.tax_mod_name }">
+	<MvASSIGN NAME = "l.store:tax_mod:provider"		VALUE = "{ Stores.d.tax_mod_provider }">
+	<MvASSIGN NAME = "l.store:tax_mod:api_ver"		VALUE = "{ Stores.d.tax_mod_api_ver }">
+	<MvASSIGN NAME = "l.store:tax_mod:version"		VALUE = "{ Stores.d.tax_mod_version }">
+	<MvASSIGN NAME = "l.store:tax_mod:module"		VALUE = "{ Stores.d.tax_mod_module }">
+	<MvASSIGN NAME = "l.store:tax_mod:refcount"		VALUE = "{ Stores.d.tax_mod_refcount }">
+	<MvASSIGN NAME = "l.store:tax_mod:active"		VALUE = "{ Stores.d.tax_mod_active }">
+
+	<MvASSIGN NAME = "l.store:ui_mod:id"			VALUE = "{ Stores.d.ui_mod_id }">
+	<MvASSIGN NAME = "l.store:ui_mod:code"			VALUE = "{ Stores.d.ui_mod_code }">
+	<MvASSIGN NAME = "l.store:ui_mod:name"			VALUE = "{ Stores.d.ui_mod_name }">
+	<MvASSIGN NAME = "l.store:ui_mod:provider"		VALUE = "{ Stores.d.ui_mod_provider }">
+	<MvASSIGN NAME = "l.store:ui_mod:api_ver"		VALUE = "{ Stores.d.ui_mod_api_ver }">
+	<MvASSIGN NAME = "l.store:ui_mod:version"		VALUE = "{ Stores.d.ui_mod_version }">
+	<MvASSIGN NAME = "l.store:ui_mod:module"		VALUE = "{ Stores.d.ui_mod_module }">
+	<MvASSIGN NAME = "l.store:ui_mod:refcount"		VALUE = "{ Stores.d.ui_mod_refcount }">
+	<MvASSIGN NAME = "l.store:ui_mod:active"		VALUE = "{ Stores.d.ui_mod_active }">
+
+	<MvASSIGN NAME = "l.store:boxpack_mod:id"		VALUE = "{ Stores.d.boxpack_mod_id }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:code"		VALUE = "{ Stores.d.boxpack_mod_code }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:name"		VALUE = "{ Stores.d.boxpack_mod_name }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:provider"	VALUE = "{ Stores.d.boxpack_mod_provider }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:api_ver"	VALUE = "{ Stores.d.boxpack_mod_api_ver }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:version"	VALUE = "{ Stores.d.boxpack_mod_version }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:module"	VALUE = "{ Stores.d.boxpack_mod_module }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:refcount"	VALUE = "{ Stores.d.boxpack_mod_refcount }">
+	<MvASSIGN NAME = "l.store:boxpack_mod:active"	VALUE = "{ Stores.d.boxpack_mod_active }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Stores">
+
+	<MvASSIGN NAME = "g.Store_Table_Prefix"			VALUE = "{ 's' $ padl( l.store:id, 2, '0' ) $ '_' }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Determine_Branch( l.store ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.store:framework"			VALUE = "{ l.store:branch:framework }">
+	<MvASSIGN NAME = "g.Store_Framework_Inuse"		VALUE = "{ l.store:framework }">
+
+	<MvASSIGN NAME = "g.Session:cache"				VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

@@ -1,0 +1,141 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-NTE-
+| Next Error Code: 8   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Note_Read" PARAMETERS = "note var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.note:id" 				VALUE = "{ Notes.d.id }">
+	<MvASSIGN NAME = "l.note:cust_id" 			VALUE = "{ Notes.d.cust_id }">
+	<MvASSIGN NAME = "l.note:account_id" 		VALUE = "{ Notes.d.account_id }">
+	<MvASSIGN NAME = "l.note:order_id" 			VALUE = "{ Notes.d.order_id }">
+	<MvASSIGN NAME = "l.note:user_id" 			VALUE = "{ Notes.d.user_id }">
+	<MvASSIGN NAME = "l.note:notetext" 			VALUE = "{ Notes.d.notetext }">
+	<MvASSIGN NAME = "l.note:dtstamp" 			VALUE = "{ Notes.d.dtstamp }">
+	<MvASSIGN NAME = "l.note:cust_login"		VALUE = "{ Notes.d.cust_login }">
+	<MvASSIGN NAME = "l.note:business_title"	VALUE = "{ Notes.d.business_title }">
+	<MvASSIGN NAME = "l.note:admin_user" 		VALUE = "{ Notes.d.admin_user }">
+
+	<MvIF EXPR = "{ l.note:cust_id AND ISNULL l.note:cust_login }">			<MvASSIGN NAME = "l.note:cust_login" 		VALUE = "<Deleted Customer>">			</MvIF>
+	<MvIF EXPR = "{ l.note:account_id AND ISNULL l.note:business_title }">	<MvASSIGN NAME = "l.note:business_title" 	VALUE = "<Deleted Business Account>">	</MvIF>
+	<MvIF EXPR = "{ l.note:user_id AND ISNULL l.note:admin_user }">			<MvASSIGN NAME = "l.note:admin_user" 		VALUE = "<Deleted User>">				</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Note_Load_ID" PARAMETERS = "id, note var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Notes"
+				QUERY	= "{ 'SELECT
+								n.*,
+								users.name	AS admin_user,
+								cust.login	AS cust_login,
+								ba.title	AS business_title
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Notes n
+								LEFT OUTER JOIN Users users ON users.id = n.user_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Customers cust ON cust.id = n.cust_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'BusinessAccounts ba ON ba.id = n.account_id
+							  WHERE
+								n.id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-NTE-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Notes.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Notes">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-NTE-00003' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Note_Read( l.note ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Notes">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Note_Insert_LowLevel" PARAMETERS = "note var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'Notes
+						  ( id, cust_id, account_id, order_id, user_id, notetext, dtstamp )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.note:id, l.note:cust_id, l.note:account_id, l.note:order_id, l.note:user_id, l.note:notetext, l.note:dtstamp">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-NTE-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Note_Update" PARAMETERS = "note var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Notes
+					   SET
+						notetext	= ?
+					   WHERE
+						id			= ?' }"
+			 FIELDS	= "l.note:notetext,
+					   l.note:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-NTE-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Note_Delete_LowLevel" PARAMETERS = "note var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'Notes WHERE id = ?' }"
+			 FIELDS	= "l.note:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-NTE-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "NoteList_Load_Order" PARAMETERS = "order_id, notes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "Notes"
+				QUERY 	= "{ 'SELECT
+								n.*,
+								users.name	AS admin_user,
+								cust.login	AS cust_login,
+								ba.title	AS business_title
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Notes n
+								LEFT OUTER JOIN Users users ON users.id = n.user_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Customers cust ON cust.id = n.cust_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'BusinessAccounts ba ON ba.id = n.account_id
+							  WHERE
+								n.order_id = ?' }"
+				FIELDS	= "l.order_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-NTE-00006', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Notes.d.EOF }">
+		<MvEVAL EXPR = "{ Note_Read( l.notes[ ++l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Notes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Notes">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-NTE-00007', l.count ) }">
+</MvFUNCTION>

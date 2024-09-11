@@ -1,0 +1,1348 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CMP-MV-SEST-
+| Next Error Code: 5    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-mv-shipestimate">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Shipping Estimate">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "The Shipping Estimate feature allows customers to get shipping estimates for their current basket or individual products without having to start the checkout process.  You can add this feature to any page in your store but it is usually added to the Product and Basket pages.  After installing the module, go to User Interface > Pages to edit the Template code for the pages on which you want shipping estimates to appear (for example, BASK and PROD).  See the Miva Merchant PR8 Reference guide for details on enabling this feature.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "component, component_prov, skins, data_store, util">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature data_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( 'shipestimate_rates', l.item ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Item( 'shipestimate_rates', l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( 'shipestimate', l.item ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Item( 'shipestimate', l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Code( 'SERT', l.page ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ Generate_SERT_Code( l.template_code ) }">
+
+		<MvASSIGN NAME = "l.page:admin"								VALUE = 0>
+		<MvASSIGN NAME = "l.page:code"								VALUE = "SERT">
+		<MvASSIGN NAME = "l.page:name"								VALUE = "Shipping Estimate Rates">
+		<MvASSIGN NAME = "l.page:ui_id"								VALUE = 0>
+		<MvASSIGN NAME = "l.page:settings:created_by_shipestimate"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Page_LowLevel( l.page, l.template_code ) }">	<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'product' ) }">				<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'shipestimate_rates' ) }">	<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.working_branch_id" VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() }">
+
+	<MvFOREACH ITERATOR = "l.branch" ARRAY = "l.branches" COUNT = "{ [ g.Module_Feature_TUI_DB ].BranchList_Load_Page_Code( l.page_code, l.branches ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Branch_Code( l.branch:id, l.page_code, l.page ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ NOT l.page:settings:created_by_shipestimate }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.working_branch_id NE l.branch:id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Push_WorkingBranchStack( l.branch ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Delete_Page( l.page ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.working_branch_id NE l.branch:id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Pop_WorkingBranchStack() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature util
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation"  PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature component
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ComponentModule_Tabs" PARAMETERS = "module var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">
+		<MvASSIGN NAME = "l.tab" VALUE = "shipestimate_rates:Shipping Estimate Rates">
+	<MvELSE>
+		<MvASSIGN NAME = "l.tab" VALUE = "{ l.item $ ':Shipping Estimate' }">
+
+		<MvIF EXPR = "{ l.item NE 'shipestimate' }">
+			<MvASSIGN NAME = "l.tab" VALUE = "{ l.tab $ ' (' $ l.item $ ')' }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.tab }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Validate" PARAMETERS = "module var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">
+		<MvASSIGN NAME = "l.fields:sort_by"			VALUE = "{ trim( l.fields:sort_by ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplate_Load_Filename( l.fields:template_filename, l.managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.fields:advanced"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:advanced ) }">
+	<MvASSIGN NAME = "l.fields:mode"				VALUE = "{ trim( l.fields:mode ) }">
+	<MvASSIGN NAME = "l.fields:ship_fname"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_fname ) }">
+	<MvASSIGN NAME = "l.fields:ship_lname"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_lname ) }">
+	<MvASSIGN NAME = "l.fields:ship_email"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_email ) }">
+	<MvASSIGN NAME = "l.fields:ship_comp"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_comp ) }">
+	<MvASSIGN NAME = "l.fields:ship_phone"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_phone ) }">
+	<MvASSIGN NAME = "l.fields:ship_fax"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_fax ) }">
+	<MvASSIGN NAME = "l.fields:ship_addr1"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_addr1 ) }">
+	<MvASSIGN NAME = "l.fields:ship_addr2"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_addr2 ) }">
+	<MvASSIGN NAME = "l.fields:ship_city"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_city ) }">
+	<MvASSIGN NAME = "l.fields:ship_state"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_state ) }">
+	<MvASSIGN NAME = "l.fields:ship_zip"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_zip ) }">
+	<MvASSIGN NAME = "l.fields:ship_cntry"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_cntry ) }">
+	<MvASSIGN NAME = "l.fields:ship_res"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.fields:ship_res ) }">
+	<MvASSIGN NAME = "l.fields:results_page"		VALUE = "{ trim( l.fields:results_page ) }">
+	<MvASSIGN NAME = "l.fields:results_display"		VALUE = "{ trim( l.fields:results_display ) }">
+
+	<MvFOREACH ITERATOR = "l.country" ARRAY = "l.fields:ship_countries">
+		<MvASSIGN NAME = "l.country"				VALUE = "{ trim( l.country ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.fields:advanced }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.fields:template_code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( l.item, l.field_prefix $ 'template_code', g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Update" PARAMETERS = "module var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">
+		<MvASSIGN NAME = "l.settings:sort_by"		VALUE = "{ l.fields:sort_by }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplate_Load_Filename( l.settings:template_filename, l.managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:advanced"			VALUE = "{ l.fields:advanced }">
+	<MvASSIGN NAME = "l.settings:mode"				VALUE = "{ l.fields:mode }">
+	<MvASSIGN NAME = "l.settings:ship_fname"		VALUE = "{ l.fields:ship_fname }">
+	<MvASSIGN NAME = "l.settings:ship_lname"		VALUE = "{ l.fields:ship_lname }">
+	<MvASSIGN NAME = "l.settings:ship_email"		VALUE = "{ l.fields:ship_email }">
+	<MvASSIGN NAME = "l.settings:ship_comp"			VALUE = "{ l.fields:ship_comp }">
+	<MvASSIGN NAME = "l.settings:ship_phone"		VALUE = "{ l.fields:ship_phone }">
+	<MvASSIGN NAME = "l.settings:ship_fax"			VALUE = "{ l.fields:ship_fax }">
+	<MvASSIGN NAME = "l.settings:ship_addr1"		VALUE = "{ l.fields:ship_addr1 }">
+	<MvASSIGN NAME = "l.settings:ship_addr2"		VALUE = "{ l.fields:ship_addr2 }">
+	<MvASSIGN NAME = "l.settings:ship_city"			VALUE = "{ l.fields:ship_city }">
+	<MvASSIGN NAME = "l.settings:ship_state"		VALUE = "{ l.fields:ship_state }">
+	<MvASSIGN NAME = "l.settings:ship_zip"			VALUE = "{ l.fields:ship_zip }">
+	<MvASSIGN NAME = "l.settings:ship_cntry"		VALUE = "{ l.fields:ship_cntry }">
+	<MvASSIGN NAME = "l.settings:ship_res"			VALUE = "{ l.fields:ship_res }">
+	<MvASSIGN NAME = "l.settings:results_page"		VALUE = "{ l.fields:results_page }">
+	<MvASSIGN NAME = "l.settings:results_display"	VALUE = "{ l.fields:results_display }">
+	<MvASSIGN NAME = "l.settings:ship_countries"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT miva_array_elements( l.fields:ship_countries ) AND NOT ISNULL l.fields:ship_countries }">
+		<MvASSIGN NAME = "l.settings:ship_countries" MEMBER = "{ l.fields:ship_countries }" VALUE = "1">
+	<MvELSE>
+		<MvFOREACH ITERATOR = "l.country" ARRAY = "l.fields:ship_countries">
+			<MvASSIGN NAME = "l.settings:ship_countries" MEMBER = "{ l.country }" VALUE = "1">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.fields:advanced }">
+		<MvEVAL EXPR = "{ Generate_ShippingEstimate_Code( l.item, l.settings, l.fields:template_code ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_CreateIfModified_ManagedTemplateVersion( l.managedtemplate, '', l.fields:template_code, l.settings ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Admin ].FieldError( l.item, l.field_prefix $ 'template_code', g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Update_Requires_Version" PARAMETERS = "module var, page var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_PostUpdate" PARAMETERS = "module var, page var, item, field_prefix, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Content" PARAMETERS = "module var, item, tab, load_fields, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">	<MvFUNCTIONRETURN VALUE = "{ ComponentModule_Content_ShippingEstimateRates_Configuration( l.module, l.item, l.tab, l.load_fields, l.field_prefix, l.fields, l.settings ) }">
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ ComponentModule_Content_ShippingEstimate_Configuration( l.module, l.item, l.tab, l.load_fields, l.field_prefix, l.fields, l.settings ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Defaults" PARAMETERS = "module var, item, settings var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Assign" PARAMETERS = "module var, page var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">
+		<MvASSIGN NAME = "l.settings:sort_by"			VALUE = "none">
+	<MvELSE>
+		<MvEVAL EXPR = "{ ShippingEstimate_Defaults( l.item, l.settings ) }">
+		<MvEVAL EXPR = "{ Generate_ShippingEstimate_Code( l.item, l.settings, l.template_source ) }">
+
+		<MvASSIGN NAME = "l.settings:template_filename"	VALUE = "{ tolower( l.page:code ) $ '-' $ tolower( l.item ) $ '.mvc' }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_ManagedTemplate_NoDuplicates( l.template_source, l.settings, l.settings:template_filename ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Unassign" PARAMETERS = "module var, page var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Delete_ManagedTemplate_Filename( l.settings:template_filename ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Copy" PARAMETERS = "module var, item, source_branch var, source_page var, source_settings var, dest_branch var, dest_page var, dest_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Branch_Head( l.source_branch:id, l.source_settings:template_filename, l.source_templateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateAndVersion_Load_Branch_Filename( l.dest_branch:id, l.dest_settings:template_filename, l.dest_managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dest_settings"						VALUE = "{ l.source_settings }">
+	<MvASSIGN NAME = "l.dest_settings:template_filename"	VALUE = "{ l.dest_managedtemplate:version:settings:template_filename }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_CreateIfModified_ManagedTemplateVersion( l.dest_managedtemplate, '', l.source_templateversion:source, l.dest_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.source_branch:id EQ l.dest_branch:id }">	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-CMP-MV-SEST-00003', l.module:name $ ' settings copied from page \'' $ l.source_page:code $ '\' to page \'' $ l.dest_page:code $ '\' for item \'' $ l.item $ '\' on branch \'' $ l.dest_branch:name $ '\'' ) }">
+	<MvELSE>													<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-CMP-MV-SEST-00004', l.module:name $ ' settings copied from page \'' $ l.source_page:code $ '\' to page \'' $ l.dest_page:code $ '\' for item \'' $ l.item $ '\' from branch \'' $ l.source_branch:name $ '\' to branch \'' $ l.dest_branch:name $ '\'' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item EQ 'shipestimate_rates' }">
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Initialize_Item( l.all_settings, 'product' ) AND NOT ISNULL l.all_settings:product:code }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ ComponentModule_Initialize_ShippingEstimate_SingleProduct( l.module, l.item, l.all_settings, l.settings ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.null" VALUE = "{ ComponentModule_Initialize_ShippingEstimate_EntireBasket( l.module, l.item, l.all_settings, l.settings ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ g.Basket:cust_id }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_fname"		VALUE = "{ g.Customer:ship_fname }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_lname"		VALUE = "{ g.Customer:ship_lname }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_email"		VALUE = "{ g.Customer:ship_email }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_comp"			VALUE = "{ g.Customer:ship_comp }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_phone"		VALUE = "{ g.Customer:ship_phone }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_fax"			VALUE = "{ g.Customer:ship_fax }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_addr1"		VALUE = "{ g.Customer:ship_addr1 }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_addr2"		VALUE = "{ g.Customer:ship_addr2 }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_city"			VALUE = "{ g.Customer:ship_city }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_state_select"	VALUE = "{ g.Customer:ship_state }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_zip"			VALUE = "{ g.Customer:ship_zip }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_cntry"		VALUE = "{ g.Customer:ship_cntry }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_res"			VALUE = "{ g.Customer:ship_res }">
+		<MvELSEIF EXPR = "{ ISNULL g.ShipEstimate:ship_cntry }">
+			<MvASSIGN NAME = "g.ShipEstimate:ship_cntry"		VALUE = "{ g.Store:country }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize_ShippingEstimate_EntireBasket" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_basket"	VALUE = "{ g.Basket }">
+
+	<MvASSIGN NAME = "g.Basket:ship_fname"	VALUE = "{ trim( g.ShipEstimate:ship_fname ) }">
+	<MvASSIGN NAME = "g.Basket:ship_lname"	VALUE = "{ trim( g.ShipEstimate:ship_lname ) }">
+	<MvASSIGN NAME = "g.Basket:ship_email"	VALUE = "{ trim( g.ShipEstimate:ship_email ) }">
+	<MvASSIGN NAME = "g.Basket:ship_comp"	VALUE = "{ trim( g.ShipEstimate:ship_comp ) }">
+	<MvASSIGN NAME = "g.Basket:ship_phone"	VALUE = "{ trim( g.ShipEstimate:ship_phone ) }">
+	<MvASSIGN NAME = "g.Basket:ship_fax"	VALUE = "{ trim( g.ShipEstimate:ship_fax ) }">
+	<MvASSIGN NAME = "g.Basket:ship_addr1"	VALUE = "{ trim( g.ShipEstimate:ship_addr1 ) }">
+	<MvASSIGN NAME = "g.Basket:ship_addr2"	VALUE = "{ trim( g.ShipEstimate:ship_addr2 ) }">
+	<MvASSIGN NAME = "g.Basket:ship_city"	VALUE = "{ trim( g.ShipEstimate:ship_city ) }">
+	<MvASSIGN NAME = "g.Basket:ship_state"	VALUE = "{ trim( g.ShipEstimate:ship_state ) }">
+	<MvASSIGN NAME = "g.Basket:ship_zip"	VALUE = "{ trim( g.ShipEstimate:ship_zip ) }">
+	<MvASSIGN NAME = "g.Basket:ship_cntry"	VALUE = "{ trim( g.ShipEstimate:ship_cntry ) }">
+	<MvASSIGN NAME = "g.Basket:ship_res"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.ShipEstimate:ship_res ) }">
+
+	<MvIF EXPR = "{ ISNULL g.Basket:ship_state }">
+		<MvASSIGN NAME = "g.basket:ship_state" VALUE = "{ g.ShipEstimate:ship_state_select }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:shippingmethod_count" VALUE = "{ [ g.Module_Feature_SHP_UT ].ShippingMethodList_Load_Basket( l.settings:shippingmethods ) }">
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.settings:shippingmethods">
+		<MvASSIGN NAME = "l.method:formatted_price" VALUE = "{ [ g.Module_Root $ g.Store_Module_Currency:module ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.method:price ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.settings:sort_by EQ 'lowest_price' }">		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':price', 1 ) }">
+	<MvELSEIF EXPR = "{ l.settings:sort_by EQ 'highest_price' }">   <MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':price', -1 ) }">
+	<MvELSEIF EXPR = "{ l.settings:sort_by EQ 'name_asc' }">        <MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':name', 1 ) }">
+	<MvELSEIF EXPR = "{ l.settings:sort_by EQ 'name_desc' }">       <MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':name', -1 ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Basket"					VALUE = "{ l.original_basket }">
+	<MvASSIGN NAME = "l.settings:mode"			VALUE = "basket">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize_ShippingEstimate_SingleProduct" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.temp_basket:cust_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.temp_basket:order_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.temp_basket:order_proc"	VALUE = 0>
+	<MvASSIGN NAME = "l.temp_basket:ship_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.temp_basket:session_id"	VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "l.temp_basket:lastupdate"	VALUE = "{ s.dyn_time_t }">
+	<MvASSIGN NAME = "l.temp_basket:ship_fname"	VALUE = "{ trim( g.ShipEstimate:ship_fname ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_lname"	VALUE = "{ trim( g.ShipEstimate:ship_lname ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_email"	VALUE = "{ trim( g.ShipEstimate:ship_email ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_comp"	VALUE = "{ trim( g.ShipEstimate:ship_comp ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_phone"	VALUE = "{ trim( g.ShipEstimate:ship_phone ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_fax"	VALUE = "{ trim( g.ShipEstimate:ship_fax ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_addr1"	VALUE = "{ trim( g.ShipEstimate:ship_addr1 ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_addr2"	VALUE = "{ trim( g.ShipEstimate:ship_addr2 ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_city"	VALUE = "{ trim( g.ShipEstimate:ship_city ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_state"	VALUE = "{ trim( g.ShipEstimate:ship_state ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_zip"	VALUE = "{ trim( g.ShipEstimate:ship_zip ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_cntry"	VALUE = "{ trim( g.ShipEstimate:ship_cntry ) }">
+	<MvASSIGN NAME = "l.temp_basket:ship_res"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.ShipEstimate:ship_res ) }">
+
+	<MvIF EXPR = "{ ISNULL l.temp_basket:ship_state }">
+		<MvASSIGN NAME = "l.temp_basket:ship_state"	VALUE = "{ g.ShipEstimate:ship_state_select }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Insert( l.temp_basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.item:basket_id"			VALUE = "{ l.temp_basket:basket_id }">
+	<MvASSIGN NAME = "l.item:product_id"		VALUE = "{ l.all_settings:product:id }">
+	<MvASSIGN NAME = "l.item:code"				VALUE = "{ l.all_settings:product:code }">
+	<MvASSIGN NAME = "l.item:name"				VALUE = "{ l.all_settings:product:name }">
+	<MvASSIGN NAME = "l.item:price"				VALUE = "{ l.all_settings:product:price }">
+	<MvASSIGN NAME = "l.item:weight"			VALUE = "{ l.all_settings:product:weight }">
+	<MvASSIGN NAME = "l.item:taxable"			VALUE = "{ l.all_settings:product:taxable }">
+	<MvASSIGN NAME = "l.item:upsold"			VALUE = 0>
+	<MvASSIGN NAME = "l.item:quantity"			VALUE = 1>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Insert( l.item ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_basket"		VALUE = "{ g.Basket }">
+	<MvASSIGN NAME = "g.Basket"					VALUE = "{ l.temp_basket }">
+
+	<MvASSIGN NAME = "l.settings:shippingmethod_count" VALUE = "{ [ g.Module_Feature_SHP_UT ].ShippingMethodList_Load_Basket( l.settings:shippingmethods ) }">
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.settings:shippingmethods" COUNT = "{ l.settings:shippingmethod_count }">
+		<MvASSIGN NAME = "l.method:formatted_price" VALUE = "{ [ g.Module_Root $ g.Store_Module_Currency:module ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.method:price ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.settings:sort_by EQ 'lowest_price' }">		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':price', 1 ) }">
+	<MvELSEIF EXPR = "{ l.settings:sort_by EQ 'highest_price' }">   <MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':price', -1 ) }">
+	<MvELSEIF EXPR = "{ l.settings:sort_by EQ 'name_asc' }">        <MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':name', 1 ) }">
+	<MvELSEIF EXPR = "{ l.settings:sort_by EQ 'name_desc' }">       <MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.settings:shippingmethods, ':name', -1 ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Basket"					VALUE = "{ l.original_basket }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ [ g.Module_Library_DB ].Basket_Reset( l.temp_basket ) }">
+	<MvASSIGN NAME = "l.settings:mode"			VALUE = "product">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Prerender" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_Head" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_Start" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item NE 'shipestimate_rates' }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Render_Template( l.settings:template_filename, l.all_settings ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_End" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Content_ShippingEstimateRates_Configuration" PARAMETERS = "module var, item, tab, load_fields, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvASSIGN NAME = "l.fields:sort_by" VALUE = "{ l.settings:sort_by }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab NE 'shipestimate_rates' }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].TUI_Hide_ComponentFields( l.field_prefix, 'sort_by' ) }">
+	<MvELSE>
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+			<tr>
+				<td align="left" nowrap><b>Sort Shipping Methods By:</b></td>
+				<td align="left" width="100%">
+					<select name="{ encodeentities( l.field_prefix ) $ 'sort_by' }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'none',			l.fields:sort_by, 'None' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'lowest_price',	l.fields:sort_by, 'Lowest Price First' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'highest_price',	l.fields:sort_by, 'Highest Price First' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'name_asc',		l.fields:sort_by, 'Name Ascending' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'name_desc',		l.fields:sort_by, 'Name Descending' ) }">
+					</select>
+				</td>
+			</tr>
+		</table>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Content_ShippingEstimate_Configuration" PARAMETERS = "module var, item, tab, load_fields, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current( l.settings:template_filename, l.templateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvASSIGN NAME = "l.fields:advanced"					VALUE = "{ l.settings:advanced }">
+		<MvASSIGN NAME = "l.fields:mode"						VALUE = "{ l.settings:mode }">
+		<MvASSIGN NAME = "l.fields:ship_fname"					VALUE = "{ l.settings:ship_fname }">
+		<MvASSIGN NAME = "l.fields:ship_lname"					VALUE = "{ l.settings:ship_lname }">
+		<MvASSIGN NAME = "l.fields:ship_email"					VALUE = "{ l.settings:ship_email }">
+		<MvASSIGN NAME = "l.fields:ship_comp"					VALUE = "{ l.settings:ship_comp }">
+		<MvASSIGN NAME = "l.fields:ship_phone"					VALUE = "{ l.settings:ship_phone }">
+		<MvASSIGN NAME = "l.fields:ship_fax"					VALUE = "{ l.settings:ship_fax }">
+		<MvASSIGN NAME = "l.fields:ship_addr1"					VALUE = "{ l.settings:ship_addr1 }">
+		<MvASSIGN NAME = "l.fields:ship_addr2"					VALUE = "{ l.settings:ship_addr2 }">
+		<MvASSIGN NAME = "l.fields:ship_city"					VALUE = "{ l.settings:ship_city }">
+		<MvASSIGN NAME = "l.fields:ship_state"					VALUE = "{ l.settings:ship_state }">
+		<MvASSIGN NAME = "l.fields:ship_zip"					VALUE = "{ l.settings:ship_zip }">
+		<MvASSIGN NAME = "l.fields:ship_cntry"					VALUE = "{ l.settings:ship_cntry }">
+		<MvASSIGN NAME = "l.fields:ship_res"					VALUE = "{ l.settings:ship_res }">
+		<MvASSIGN NAME = "l.fields:results_page"				VALUE = "{ l.settings:results_page }">
+		<MvASSIGN NAME = "l.fields:results_display"				VALUE = "{ l.settings:results_display }">
+		<MvASSIGN NAME = "l.fields:template_code"				VALUE = "{ l.templateversion:source }">
+		<MvASSIGN NAME = "l.fields:template_filename"			VALUE = "{ l.settings:template_filename }">
+		<MvASSIGN NAME = "l.null"								VALUE = "{ [ g.Module_Library_Utilities ].StructureMembers( l.settings:ship_countries, l.fields:ship_countries ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab NE l.item }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].TUI_Hide_ComponentFields( l.field_prefix, 'template_code,template_filename,advanced,mode,ship_fname,ship_lname,ship_email,ship_comp,ship_phone,ship_fax,ship_addr1,ship_addr2,ship_city,ship_state,ship_zip,ship_cntry,ship_res,results_page,results_display,ship_countries' ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].Element_PageLookup_Dialog_CSS() }">
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_AD ].Element_Feature_TUI_JavaScript_Combined_Begin() }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].Element_PageLookup_Dialog_JavaScript() }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].Element_Feature_TUI_JavaScript_Combined_End() }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].TUI_Hide_ComponentFields( l.field_prefix, 'template_filename' ) }">
+
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+			<MvIF EXPR = "{ l.fields:advanced }">
+				<tr>
+					<td colspan="2" width="100%">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawTemplateTextArea_WithRecall( l.field_prefix $ 'template_code', l.fields:template_code, 20, 100, l.templateversion:templ_id ) }">
+					</td>
+				</tr>
+
+				<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].TUI_Hide_ComponentFields( l.field_prefix, 'mode,ship_fname,ship_lname,ship_email,ship_comp,ship_phone,ship_fax,ship_addr1,ship_addr2,ship_city,ship_state,ship_zip,ship_cntry,ship_res,results_page,results_display,ship_countries' ) }">
+			<MvELSE>
+				<tr>
+					<td align="left" nowrap><b>Mode:</b></td>
+					<td align="left" width="100%">
+						<select name="{ encodeentities( l.field_prefix ) $ 'mode' }">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'basket',		l.fields:mode, 'Entire Basket' ) }">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'product',		l.fields:mode, 'Single Product' ) }">
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td align="left" valign="top" nowrap><b>Address Fields:</b></td>
+					<td align="left" width="100%">
+						<table border="0" cellpadding="2" cellspacing="0" width="100%">
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_fname,	l.field_prefix $ 'ship_fname',	1, 'Shipping First Name' ) }"></td>
+								<td width="100%" nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_lname,	l.field_prefix $ 'ship_lname',	1, 'Shipping Last Name' ) }"></td>
+							</tr>
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_email,	l.field_prefix $ 'ship_email',	1, 'Shipping Email' ) }"></td>
+								<td width="100%" nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_comp,	l.field_prefix $ 'ship_comp',	1, 'Shipping Company' ) }"></td>
+							</tr>
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_phone,	l.field_prefix $ 'ship_phone',	1, 'Shipping Phone' ) }"></td>
+								<td width="100%" nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_fax,	l.field_prefix $ 'ship_fax',	1, 'Shipping Fax' ) }"></td>
+							</tr>
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_addr1,	l.field_prefix $ 'ship_addr1',	1, 'Shipping Address' ) }"></td>
+								<td width="100%" nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_addr2,	l.field_prefix $ 'ship_addr2',	1, 'Shipping Address2' ) }"></td>
+							</tr>
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_city,	l.field_prefix $ 'ship_city',	1, 'Shipping City' ) }"></td>
+								<td width="100%" nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_state,	l.field_prefix $ 'ship_state',	1, 'Shipping State' ) }"></td>
+							</tr>
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_zip,	l.field_prefix $ 'ship_zip',	1, 'Shipping Zip' ) }"></td>
+								<td width="100%" nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_cntry,	l.field_prefix $ 'ship_cntry',	1, 'Shipping Country' ) }"></td>
+							</tr>
+							<tr>
+								<td nowrap><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( l.fields:ship_res,	l.field_prefix $ 'ship_res',	1, 'Ship Residential' ) }"></td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+				<tr>
+					<td align="left" nowrap><b>Results Page:</b></td>
+					<td align="left" width="100%">
+						<input type="text" id="shipestimate_results_page" name="{ encodeentities( l.field_prefix ) $ 'results_page' }" value="{ encodeentities( l.fields:results_page ) }" />
+
+						<a href="JavaScript:PageLookupDialog( 'shipestimate_results_page' );" style="position: relative; top: 4px;"><img alt="Lookup" border="0" src="{ g.AdminGraphics_Path $ 'lookup.gif' }"></a>
+					</td>
+				</tr>
+				<tr>
+					<td align="left" valign="top" nowrap><b>Results Display:</b></td>
+					<td align="left" width="100%">
+						<table border="0" cellpadding="2" cellspacing="0" width="100%">
+							<tr>
+								<td width="100%" nowrap>
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( l.field_prefix $ 'results_display', 'window',	l.fields:results_display, 'Open in New Window' ) }">
+								</td>
+							</tr>
+							<tr>
+								<td width="100%" nowrap>
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( l.field_prefix $ 'results_display', 'inline',	l.fields:results_display, 'Display Inline' ) }">
+								</td>
+							</tr>
+						</table>
+					</td>
+				</tr>
+				<tr>
+					<td align="left" valign="top" nowrap><b>Shipping Countries:</b></td>
+					<td align="left" width="100%">
+						<select name="{ encodeentities( l.field_prefix ) $ 'ship_countries' }" size="5" multiple>
+							<MvIF EXPR = "{ NOT miva_array_elements( l.fields:ship_countries ) AND NOT ISNULL l.fields:ship_countries }">
+								<MvASSIGN NAME = "l.ship_countries" MEMBER = "{ l.fields:ship_countries }" VALUE = "1">
+							<MvELSE>
+								<MvFOREACH ITERATOR = "l.country" ARRAY = "l.fields:ship_countries">
+									<MvASSIGN NAME = "l.ship_countries" MEMBER = "{ l.country }" VALUE = "1">
+								</MvFOREACH>
+							</MvIF>
+
+							<MvFOREACH ITERATOR = "l.country" ARRAY = "l.countries" COUNT = "{ [ g.Module_Library_DB ].StoreCountryList_Load_All( l.countries ) }">
+								<MvREFERENCEARRAY NAME = "l.selected" VARIABLE = "l.ship_countries">
+									<MvMEMBER NAME = "{ l.country:alpha }">
+								</MvREFERENCEARRAY>
+
+								<MvIF EXPR = "{ l.selected }">
+									<option value="{ encodeentities( l.country:alpha ) }" selected><MvEVAL EXPR = "{ encodeentities( l.country:name ) }"></option>
+								<MvELSE>
+									<option value="{ encodeentities( l.country:alpha ) }"><MvEVAL EXPR = "{ encodeentities( l.country:name ) }"></option>
+								</MvIF>
+							</MvFOREACH>
+						</select>
+					</td>
+				</tr>
+
+				<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].Element_PageLookup_Dialog_HTML() }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_AD ].TUI_Hide_ComponentFields( l.field_prefix, 'template_code' ) }">
+			</MvIF>
+
+			<tr><td colspan=2>&nbsp;</td></tr>
+
+			<tr>
+				<td nowrap>&nbsp;</td>
+				<td width="100%">
+					<input type="hidden" name="{ encodeentities( l.field_prefix ) $ 'advanced' }" value="{ encodeentities( l.fields:advanced ) }">
+
+					<MvIF EXPR = "{ l.fields:advanced }">
+						<a href="#" onclick="{ 'Toggle( \'' $ [ g.Module_Admin ].JavaScriptEncode( l.field_prefix ) $ 'advanced' $ '\', 0 ); return false;' }">Point + Click Mode</a>
+					<MvELSE>
+						<a href="#" onclick="{ 'Toggle( \'' $ [ g.Module_Admin ].JavaScriptEncode( l.field_prefix ) $ 'advanced' $ '\', 1 ); return false;' }">Advanced Mode</a>
+					</MvIF>
+				</td>
+			</tr>
+		</table>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature component_prov
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ComponentModule_Provision" PARAMETERS = "module var, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'code', l.item ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'shipestimate_rates_update' }">	<MvEVAL EXPR = "{ ComponentModule_Provision_ShipEstimate_Rates_Update( l.module, l.child_xml, l.settings ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'shipestimate_update' }">		<MvEVAL EXPR = "{ ComponentModule_Provision_ShipEstimate_Update( l.module, l.item, l.child_xml, l.settings ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Provision_ShipEstimate_Rates_Update" PARAMETERS = "module var, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'R', l.provide_xml, 'Sort_By', l.settings:sort_by, 'None, Lowest Price First, Highest Price First, Name Ascending, Name Descending',
+																													 'none, lowest_price,		highest_price,		 name_asc,		 name_desc' ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Provision_ShipEstimate_Update" PARAMETERS = "module var, item, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.working_settings" VALUE = "{ l.settings }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'O', l.provide_xml,	'Mode',					l.working_settings:mode,			'basket,product',	'basket,product' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_FirstName',		l.working_settings:ship_fname )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_LastName',		l.working_settings:ship_lname )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Email',			l.working_settings:ship_email )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Company',			l.working_settings:ship_comp )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Phone',			l.working_settings:ship_phone )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Fax',				l.working_settings:ship_fax )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Address',			l.working_settings:ship_addr1 )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Address2',		l.working_settings:ship_addr2 )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_City',			l.working_settings:ship_city )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_State',			l.working_settings:ship_state )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Zip',				l.working_settings:ship_zip )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Country',			l.working_settings:ship_cntry )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O', l.provide_xml,	'Ship_Residential',		l.working_settings:ship_res )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'O', l.provide_xml,	'Results_Page',			l.working_settings:results_page )											OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'O', l.provide_xml,	'Results_Display',		l.working_settings:results_display, 'window,inline',	'window,inline' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'O', l.provide_xml,	'Notes',				l.notes ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'Shipping_Countries' ) }">
+		<MvEVAL EXPR = "{ ComponentModule_Provision_ShippingCountries( l.module, l.provide_xml:tags:Shipping_Countries[ 1 ], l.working_settings ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'Template' ) }">
+		<MvASSIGN NAME = "l.source"						VALUE = "{ trim( l.provide_xml:tags:Template[ 1 ]:value ) }">
+		<MvASSIGN NAME = "l.working_settings:advanced"	VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.working_settings:advanced"	VALUE = 0>
+
+		<MvEVAL EXPR = "{ Generate_ShippingEstimate_Code( l.item, l.working_settings, l.source ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplate_Load_Filename( l.settings:template_filename, l.managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Unable to load template' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_CreateIfModified_ManagedTemplateVersion( l.managedtemplate, l.notes, l.source, l.working_settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings" VALUE = "{ l.working_settings }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Provision_ShippingCountries" PARAMETERS = "module var, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.country_count"				VALUE = "{ [ g.Module_Library_DB ].StoreCountryList_Load_All( l.countries ) }">
+	<MvASSIGN NAME = "l.settings:ship_countries"	VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.child" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name"	VALUE = "{ tolower( trim( l.child:name ) ) }">
+		<MvASSIGN NAME = "l.code"	VALUE = "{ toupper( trim( l.child:attribute:code ) ) }">
+
+		<MvIF EXPR = "{ l.name NE 'shipping_country' }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Tag "' $ l.name $ '" is not supported' ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.country_exists"			VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.country" ARRAY = "l.countries" COUNT = "{ l.country_count }">
+				<MvIF EXPR = "{ toupper( l.country:alpha ) EQ l.code }">
+					<MvASSIGN NAME = "l.country_exists" VALUE = 1>
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.country_exists }">
+				<MvASSIGN NAME = "l.settings:ship_countries" MEMBER = "{ l.code }" VALUE = 1>
+			<MvELSE>
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Shipping_Country "' $ l.code $ '" is not a supported country code' ) }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature skins
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Description" PARAMETERS = "module var, item var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item:code EQ 'shipestimate_rates' }">
+		<MvFUNCTIONRETURN VALUE = "{ 'Exports the Settings for the Shipping Estimate Rates Item' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ 'Exports the Shipping Estimate ' $ l.item:code $ ' Item template' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export" PARAMETERS = "module var, output var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.output">
+		<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ [ g.Module_Feature_TUI_DB ].ItemList_Load_Module( l.module:id, l.items ) }">
+			<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item( l.module, l.item, l.item_output ) }">
+			<MvEVAL EXPR = "{ l.item_output }">
+		</MvFOREACH>
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item" PARAMETERS = "module var, item, output var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.item:code EQ 'shipestimate_rates' }">	<MvFUNCTIONRETURN VALUE = "{ SkinsComponentModule_Export_Item_Rates( l.module, l.item, l.output ) }">
+	<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ SkinsComponentModule_Export_Item_Page( l.module, l.item, l.output ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_Rates" PARAMETERS = "module var, item, output var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.output">
+		<MvFOREACH ITERATOR = "l.page" ARRAY = "l.pages" COUNT = "{ [ g.Module_Feature_TUI_DB ].PageList_Load_Item( l.item:id, l.pages ) }">
+			<MvIF EXPR = "{ l.page:settings:shipestimate_rates:sort_by EQ 'lowest_price' }">		<MvASSIGN NAME = "l.sort_by" VALUE = "Lowest Price First">
+			<MvELSEIF EXPR = "{ l.page:settings:shipestimate_rates:sort_by EQ 'highest_price' }">	<MvASSIGN NAME = "l.sort_by" VALUE = "Highest Price First">
+			<MvELSEIF EXPR = "{ l.page:settings:shipestimate_rates:sort_by EQ 'name_asc' }">		<MvASSIGN NAME = "l.sort_by" VALUE = "Name Ascending">
+			<MvELSEIF EXPR = "{ l.page:settings:shipestimate_rates:sort_by EQ 'name_desc' }">		<MvASSIGN NAME = "l.sort_by" VALUE = "Name Descending">
+			<MvELSE>																				<MvASSIGN NAME = "l.sort_by" VALUE = "None">
+			</MvIF>
+
+			<MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<Page_Update code="{ l.page:code }">
+				<Item code="{ l.item:code }">
+					<ShipEstimate_Rates_Update>
+						<Sort_By><MvEVAL EXPR = "{ encodeentities( l.sort_by ) }"></Sort_By>
+					</ShipEstimate_Rates_Update>
+				</Item>
+			</Page_Update><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvFOREACH>
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_Page" PARAMETERS = "module var, item, output var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.output" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+		<MvFOREACH ITERATOR = "l.page" ARRAY = "l.pages" COUNT = "{ [ g.Module_Feature_TUI_DB ].PageList_Load_Item( l.item:id, l.pages ) }">
+			<MvREFERENCE NAME = "l.item_settings"	VARIABLE = "{ 'l.page:settings:' $ l.item:code }">
+			<MvASSIGN NAME = "l.country_count"		VALUE = "{ [ g.Module_Library_DB ].StoreCountryList_Load_All( l.countries ) }">
+
+			<Page_Update code="{ l.page:code }">
+				<Item code="{ l.item:code }">
+					<ShipEstimate_Update>
+						<Mode><MvEVAL EXPR = "{ miva_cdata_encode( l.item_settings:mode ) }"></Mode>
+						<Ship_FirstName><MvIF EXPR = "{ l.item_settings:ship_fname }">Yes<MvELSE>No</MvIF></Ship_FirstName>
+						<Ship_LastName><MvIF EXPR = "{ l.item_settings:ship_lname }">Yes<MvELSE>No</MvIF></Ship_LastName>
+						<Ship_Email><MvIF EXPR = "{ l.item_settings:ship_email }">Yes<MvELSE>No</MvIF></Ship_Email>
+						<Ship_Company><MvIF EXPR = "{ l.item_settings:ship_comp }">Yes<MvELSE>No</MvIF></Ship_Company>
+						<Ship_Phone><MvIF EXPR = "{ l.item_settings:ship_phone }">Yes<MvELSE>No</MvIF></Ship_Phone>
+						<Ship_Fax><MvIF EXPR = "{ l.item_settings:ship_fax }">Yes<MvELSE>No</MvIF></Ship_Fax>
+						<Ship_Address><MvIF EXPR = "{ l.item_settings:ship_addr1 }">Yes<MvELSE>No</MvIF></Ship_Address>
+						<Ship_Address2><MvIF EXPR = "{ l.item_settings:ship_addr2 }">Yes<MvELSE>No</MvIF></Ship_Address2>
+						<Ship_City><MvIF EXPR = "{ l.item_settings:ship_city }">Yes<MvELSE>No</MvIF></Ship_City>
+						<Ship_State><MvIF EXPR = "{ l.item_settings:ship_state }">Yes<MvELSE>No</MvIF></Ship_State>
+						<Ship_Zip><MvIF EXPR = "{ l.item_settings:ship_zip }">Yes<MvELSE>No</MvIF></Ship_Zip>
+						<Ship_Country><MvIF EXPR = "{ l.item_settings:ship_cntry }">Yes<MvELSE>No</MvIF></Ship_Country>
+						<Ship_Residential><MvIF EXPR = "{ l.item_settings:ship_res }">Yes<MvELSE>No</MvIF></Ship_Residential>
+						<Results_Page><MvEVAL EXPR = "{ miva_cdata_encode( l.item_settings:results_page ) }"></Results_Page>
+						<Results_Display><MvEVAL EXPR = "{ miva_cdata_encode( l.item_settings:results_display ) }"></Results_Display>
+						<Shipping_Countries>
+							<MvFOREACH ITERATOR = "l.country" ARRAY = "l.countries" COUNT = "{ l.country_count }">
+								<MvREFERENCEARRAY NAME = "l.selected" VARIABLE = "l.item_settings:ship_countries">
+									<MvMEMBER NAME = "{ l.country:alpha }">
+								</MvREFERENCEARRAY>
+
+								<MvIF EXPR = "{ l.selected }">
+									<Shipping_Country code="{ l.country:alpha }" />
+								</MvIF>
+							</MvFOREACH>
+						</Shipping_Countries>
+
+						<MvIF EXPR = "{ l.item_settings:advanced }">
+							<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current( l.item_settings:template_filename, l.templateversion ) }">
+								<Template><MvEVAL EXPR = "{ miva_cdata_encode( l.templateversion:source ) }"></Template>
+							</MvIF>
+						</MvIF>
+
+						<Notes>#Set_Current_Time#</Notes>
+					</ShipEstimate_Update>
+				</Item>
+			</Page_Update>
+		</MvFOREACH>
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	ShippingEstimate Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShippingEstimate_Defaults" PARAMETERS = "item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings:advanced"						VALUE = 0>
+	<MvASSIGN NAME = "l.settings:mode"							VALUE = "basket">
+	<MvASSIGN NAME = "l.settings:ship_fname"					VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_lname"					VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_email"					VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_comp"						VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_phone"					VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_fax"						VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_addr1"					VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_addr2"					VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_city"						VALUE = 0>
+	<MvASSIGN NAME = "l.settings:ship_state"					VALUE = 1>
+	<MvASSIGN NAME = "l.settings:ship_zip"						VALUE = 1>
+	<MvASSIGN NAME = "l.settings:ship_cntry"					VALUE = 1>
+	<MvASSIGN NAME = "l.settings:ship_res"						VALUE = 0>
+	<MvASSIGN NAME = "l.settings:results_page"					VALUE = "SERT">
+	<MvASSIGN NAME = "l.settings:results_display"				VALUE = "window">
+
+	<MvASSIGN NAME = "l.settings:ship_countries"								VALUE = "">
+	<MvASSIGN NAME = "l.settings:ship_countries" MEMBER = "{ g.Store:country }" VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_ShippingEstimate_Code" PARAMETERS = "item, settings var, template_source var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.item_js"	VALUE = "{ [ g.Module_Library_Utilities ].AlphaNumericOnly( l.item ) }">
+
+	<MvCAPTURE VARIABLE = "l.template_source"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+<style>
+	.<MvEVAL EXPR = "{ l.item_js $ '_dialog' }">
+	{
+		display: none;
+		z-index: 11;
+		position: absolute;
+		background: #FFF;
+		padding: 8px;
+		border: 1px solid #434343;
+	}
+	
+	.<MvEVAL EXPR = "{ l.item_js $ '_backing' }">
+	{
+		display: none;
+		z-index: 10;
+		position: absolute;
+		top: 0px;
+		left: 0px;
+		width: 100%;
+		background: #FFF;
+		opacity: 0.5;
+		filter: alpha(opacity=50);
+	}
+
+	#<MvEVAL EXPR = "{ l.item_js $ '_inputfields_tbody' }"> input[type="text"], #<MvEVAL EXPR = "{ l.item_js $ '_inputfields_tbody' }"> select
+	{
+		width: 98%;
+	}
+</style>
+
+<mvt:if expr="g.Secure">
+	<form method="get" name="{ l.item_js $ '_form' }" action="&mvte:global:secure_sessionurl;" target="{ l.item_js }">
+<mvt:else>
+	<form method="get" name="{ l.item_js $ '_form' }" action="&mvte:global:sessionurl;" target="{ l.item_js }">
+</mvt:if>
+	<input type="hidden" name="Screen" value="{ encodeentities( l.settings:results_page ) }" />
+	<input type="hidden" name="Store_Code" value="&mvte:store:code;" /><MIVA STANDARDOUTPUTLEVEL = "">
+	
+<MvIF EXPR = "{ l.settings:mode EQ 'product' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	<input type="hidden" name="Product_Code" value="&mvte:global:Product_Code;" /><MIVA STANDARDOUTPUTLEVEL = "">
+</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	
+	<div id="{ l.item_js $ '_dialog' }" class="{ l.item_js $ '_dialog' }">
+		<table id="{ l.item_js $ '_table' }" width="350">
+			<tbody id="{ l.item_js $ '_close_tbody' }">
+				<tr>
+					<td align="right" colspan="2"><a href="#" id="{ l.item_js $ '_close' }">Close</a></td>
+				</tr>
+			</tbody>
+			<tbody id="{ l.item_js $ '_inputfields_tbody' }"><MIVA STANDARDOUTPUTLEVEL = "">
+
+			<MvIF EXPR = "{ l.settings:mode EQ 'product' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td align="center" colspan="2"><b>Calculate Shipping: &mvt:product:name;</b></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td align="center" colspan="2"><b>Calculate Shipping: Basket</b></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td align="center" colspan="2">&nbsp;</td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+
+			<MvIF EXPR = "{ l.settings:ship_fname }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_fname' }"><b>First Name:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_fname" value="&mvte:global:ShipEstimate:ship_fname;" id="{ l.item_js $ '_fname' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_fname' }" name="ShipEstimate:ship_fname" value="&mvte:global:ShipEstimate:ship_fname;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_lname }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_lname' }"><b>Last Name:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_lname" value="&mvte:global:ShipEstimate:ship_lname;" id="{ l.item_js $ '_lname' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_lname' }" name="ShipEstimate:ship_lname" value="&mvte:global:ShipEstimate:ship_lname;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_email }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_email' }"><b>Email:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_email" value="&mvte:global:ShipEstimate:ship_email;" id="{ l.item_js $ '_email' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_email' }" name="ShipEstimate:ship_email" value="&mvte:global:ShipEstimate:ship_email;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_comp }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_comp' }"><b>Company:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_comp" value="&mvte:global:ShipEstimate:ship_comp;" id="{ l.item_js $ '_comp' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_comp' }" name="ShipEstimate:ship_comp" value="&mvte:global:ShipEstimate:ship_comp;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_phone }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_phone' }"><b>Phone:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_phone" value="&mvte:global:ShipEstimate:ship_phone;" id="{ l.item_js $ '_phone' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_phone' }" name="ShipEstimate:ship_phone" value="&mvte:global:ShipEstimate:ship_phone;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_fax }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_fax' }"><b>Fax:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_fax" value="&mvte:global:ShipEstimate:ship_fax;" id="{ l.item_js $ '_fax' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_fax' }" name="ShipEstimate:ship_fax" value="&mvte:global:ShipEstimate:ship_fax;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_addr1 }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_addr1' }"><b>Address:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_addr1" value="&mvte:global:ShipEstimate:ship_addr1;" id="{ l.item_js $ '_addr1' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_addr1' }" name="ShipEstimate:ship_addr1" value="&mvte:global:ShipEstimate:ship_addr1;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_addr2 }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_addr2' }"><b>Address 2:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_addr2" value="&mvte:global:ShipEstimate:ship_addr2;" id="{ l.item_js $ '_addr2' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_addr2' }" name="ShipEstimate:ship_addr2" value="&mvte:global:ShipEstimate:ship_addr2;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_city }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_city' }"><b>City:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_city" value="&mvte:global:ShipEstimate:ship_city;" id="{ l.item_js $ '_city' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_city' }" name="ShipEstimate:ship_city" value="&mvte:global:ShipEstimate:ship_city;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_state }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_state_select' }"><b>State/Province:</b></label></td>
+					<td width="100%">
+						<select name="ShipEstimate:ship_state_select" id="{ l.item_js $ '_state_select' }"><MIVA STANDARDOUTPUTLEVEL = "">
+						<MvFOREACH ITERATOR = "l.state" ARRAY = "l.states" COUNT = "{ [ g.Module_Library_DB ].StateList_Load_All( l.states ) }">
+							<MvIF EXPR = "{ NOT ISNULL l.state:code }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+							<mvt:if expr="{ 'g.ShipEstimate:ship_state_select EQ \'' $ [ g.Module_Library_Utilities ].AlphaNumericOnly( l.state:code ) $ '\'' }">
+								<option value="{ encodeentities( l.state:code ) }" selected><MvEVAL EXPR = "{ encodeentities( l.state:name ) }"></option>
+							<mvt:else>
+								<option value="{ encodeentities( l.state:code ) }"><MvEVAL EXPR = "{ encodeentities( l.state:name ) }"></option>
+							</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+							<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+							<option value=""><MvEVAL EXPR = "{ encodeentities( l.state:name ) }"></option><MIVA STANDARDOUTPUTLEVEL = "">
+							</MvIF>
+						</MvFOREACH><MIVA STANDARDOUTPUTLEVEL = "text, html">
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_state' }">Other State/Province:</label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_state" value="&mvte:global:ShipEstimate:ship_state;" id="{ l.item_js $ '_state' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_state' }" name="ShipEstimate:ship_state" value="&mvte:global:ShipEstimate:ship_state;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_zip }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_zip' }"><b>ZIP/Postal Code:</b></label></td>
+					<td width="100%"><MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="text" name="ShipEstimate:ship_zip" value="&mvte:global:ShipEstimate:ship_zip;" id="{ l.item_js $ '_zip' }" class="textfield" /><MvELSE><input type="text" id="{ l.item_js $ '_zip' }" name="ShipEstimate:ship_zip" value="&mvte:global:ShipEstimate:ship_zip;" /></MvIF></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF>
+			
+			<MvIF EXPR = "{ l.settings:ship_cntry }">
+				<MvIF EXPR = "{ [ g.Module_Library_Utilities ].StructureMembers( l.settings:ship_countries, l.members ) EQ 1 }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td colspan="2"><input type="hidden" name="ShipEstimate:ship_cntry" value="{ encodeentities( l.members[ 1 ] ) }" /></td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+				<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap align="right"><label for="{ l.item_js $ '_country' }"><b>Country:</b></label></td>
+					<td>
+						<select name="ShipEstimate:ship_cntry" id="{ l.item_js $ '_country' }"><MIVA STANDARDOUTPUTLEVEL = "">
+
+						<MvFOREACH ITERATOR = "l.country" ARRAY = "l.countries" COUNT = "{ [ g.Module_Library_DB ].StoreCountryList_Load_All( l.countries ) }">
+							<MvREFERENCEARRAY NAME = "l.selected" VARIABLE = "l.settings:ship_countries">
+								<MvMEMBER NAME = "{ l.country:alpha }">
+							</MvREFERENCEARRAY>
+
+							<MvIF EXPR = "{ l.selected }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+							<mvt:if expr="{ 'g.ShipEstimate:ship_cntry EQ \'' $ [ g.Module_Library_Utilities ].AlphaNumericOnly( l.country:alpha ) $ '\'' }">
+								<option value="{ encodeentities( l.country:alpha ) }" selected><MvEVAL EXPR = "{ encodeentities( l.country:name ) }"></option>
+							<mvt:else>
+								<option value="{ encodeentities( l.country:alpha ) }"><MvEVAL EXPR = "{ encodeentities( l.country:name ) }"></option>
+							</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+							</MvIF>
+						</MvFOREACH>
+						
+						<MIVA STANDARDOUTPUTLEVEL = "text, html">
+						</select>
+					</td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:ship_res }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<tr>
+					<td nowrap>&nbsp;</td>
+					<td width="100%" >
+						<label>
+							<mvt:if expr="g.ShipEstimate:ship_res">
+								<input id="{ l.item_js $ '_res' }" type="checkbox" name="ShipEstimate:ship_res" value="Yes" checked />
+							<mvt:else>
+								<input id="{ l.item_js $ '_res' }" type="checkbox" name="ShipEstimate:ship_res" value="Yes" />
+							</mvt:if>
+
+							<b>Address is a Residence</b>
+						</label>
+					</td>
+				</tr><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			</tbody>
+			<tbody id="{ l.item_js $ '_shippingmethods_tbody' }">
+				<tr>
+					<td align="center" id="{ l.item_js $ '_shippingmethods' }" colspan="2"></td>
+				</tr>
+			</tbody>
+			<tbody id="{ l.item_js $ '_controllers_tbody' }">
+				<tr>
+					<td align="right" colspan="2">
+						<MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="submit" id="{ l.item_js $ '_calculate' }" class="button" value="Calculate Shipping" /><MvELSE><input type="submit" id="{ l.item_js $ '_calculate' }" value="Calculate Shipping" /></MvIF><MIVA STANDARDOUTPUTLEVEL = "">
+	
+					<MvIF EXPR = "{ l.settings:results_display EQ 'inline' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+						<MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }"><input type="button" id="{ l.item_js $ '_recalculate' }" class="button" value="Recalculate Shipping" /><MvELSE><input type="button" id="{ l.item_js $ '_recalculate' }" value="Recalculate Shipping" /></MvIF><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					</td>
+				</tr>
+			</tbody>
+		</table>
+	</div>
+
+	<a href="#" id="{ l.item_js $ '_show' }">Estimate Shipping</a>
+</form>
+<div id="{ l.item_js $ '_backing' }" class="{ l.item_js $ '_backing' }"></div>
+
+<script type="text/javascript">
+	function <MvEVAL EXPR = "{ l.item_js }">()
+	{
+		var self = this;
+
+		this.dialog                     = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_dialog' }">' );
+		this.backing                    = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_backing' }">' );
+		this.inputfields_tbody          = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_inputfields_tbody' }">' );
+		this.shippingmethods_tbody      = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_shippingmethods_tbody' }">' );
+		this.shippingmethods            = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_shippingmethods' }">' );
+		this.body                       = document.getElementsByTagName( 'body' )[ 0 ];
+
+		this.close                      = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_close' }">' );<MIVA STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:results_display EQ 'inline' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		this.recalculate                = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_recalculate' }">' );
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		this.calculate                  = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_calculate' }">' );
+		this.show                       = document.getElementById( '<MvEVAL EXPR = "{ l.item_js $ '_show' }">' );
+	
+		if ( this.close )               this.close.onclick         = function() { self.Hide(); return false; }<MIVA STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:results_display EQ 'inline' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		if ( this.recalculate )         this.recalculate.onclick   = function() { self.Show(); return false; }
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		if ( this.calculate )           this.calculate.onclick     = function() { self.Calculate(); return false; }
+		if ( this.show )                this.show.onclick          = function() { self.Show(); return false; }
+		if ( this.backing )             this.backing.onclick       = function() { self.Hide(); return false; }
+	}
+
+	<MvEVAL EXPR = "{ l.item_js }">.prototype.Show = function()
+	{
+		var self = this;
+
+		this.dialog.style.display                 = 'block';
+		this.backing.style.display                = 'inline-block';
+		this.shippingmethods_tbody.style.display  = 'none';
+		this.inputfields_tbody.style.display      = '';<MIVA STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:results_display EQ 'inline' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		this.recalculate.style.display            = 'none';
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		this.calculate.style.display              = 'inline-block';
+
+		window.scrollTo( 0, 0 );
+	
+		window.onresize = function() { self.Resize(); }
+		
+		self.Resize();
+	}
+
+	<MvEVAL EXPR = "{ l.item_js }">.prototype.Hide = function()
+	{
+		this.dialog.style.display   = 'none';
+		this.backing.style.display  = 'none';
+	}<MIVA STANDARDOUTPUTLEVEL = "">
+	
+	<MvIF EXPR = "{ l.settings:results_display NE 'inline' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+
+	<MvEVAL EXPR = "{ l.item_js }">.prototype.Calculate = function()
+	{
+		document.<MvEVAL EXPR = "{ l.item_js $ '_form' }">.submit();
+		this.Hide();
+	}<MIVA STANDARDOUTPUTLEVEL = "">
+	<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+
+	<MvEVAL EXPR = "{ l.item_js }">.prototype.Calculate = function()
+	{
+		var iframe;
+		var self = this;
+
+		try
+		{
+			iframe = document.createElement( '<iframe name="{ l.item_js $ '_iframe' }">' );
+		}
+		catch ( exception )
+		{
+			iframe = document.createElement( 'iframe' );
+		}
+
+		iframe.id                                 = '<MvEVAL EXPR = "{ l.item_js $ '_iframe' }">';
+		iframe.name                               = '<MvEVAL EXPR = "{ l.item_js $ '_iframe' }">';
+		iframe.style.display                      = 'none';
+		
+		this.shippingmethods.innerHTML	          = '<br />loading...<br /><br />';
+		this.shippingmethods_tbody.style.display  = '';
+		this.inputfields_tbody.style.display      = 'none';
+		this.recalculate.style.display            = 'none';
+		this.calculate.style.display              = 'none';
+
+		this.body.insertBefore( iframe, this.body.firstChild );
+
+		if ( iframe.attachEvent )   iframe.attachEvent( "onload", function() { self.Replace( iframe ); } );
+		else                        iframe.onload = function() { self.Replace( iframe ); };
+		
+		document.<MvEVAL EXPR = "{ l.item_js $ '_form' }">.target = '<MvEVAL EXPR = "{ l.item_js $ '_iframe' }">';
+		document.<MvEVAL EXPR = "{ l.item_js $ '_form' }">.submit();
+	}
+
+	<MvEVAL EXPR = "{ l.item_js }">.prototype.Replace = function( iframe )
+	{
+		var content;
+		var self = this;
+
+		content                         = ( iframe.contentWindow.document.getElementById( 'shipestimate_rates' ) || iframe.contentWindow.document.body ).innerHTML;
+		this.shippingmethods.innerHTML	= content;
+		this.recalculate.style.display  = 'inline-block';
+
+		setTimeout( function(){ iframe.parentNode.removeChild( iframe ); }, 1 );
+	}<MIVA STANDARDOUTPUTLEVEL = "">
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+
+	<MvEVAL EXPR = "{ l.item_js }">.prototype.Resize = function()
+	{
+		if ( document.documentElement.clientHeight > document.body.scrollHeight )
+		{
+			if ( this.backing ) this.backing.style.height = document.documentElement.clientHeight + 'px';
+		}
+		else
+		{
+			if ( this.backing ) this.backing.style.height = ( document.body.scrollHeight > document.documentElement.scrollHeight ) ? document.body.scrollHeight + 'px' : document.documentElement.scrollHeight + 'px';
+		}
+		
+		if ( this.dialog ) this.dialog.style.left = ( ( document.body.offsetWidth / 2 ) - ( this.dialog.offsetWidth / 2 ) ) + 'px';
+		if ( this.dialog ) this.dialog.style.top  = 100 + 'px';
+	}
+
+	var <MvEVAL EXPR = "{ l.item_js $ '_init' }"> = new <MvEVAL EXPR = "{ l.item_js }">();
+</script><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_SERT_Code" PARAMETERS = "template_source var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.template_source"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+<mvt:item name="html_profile" />
+	<head>
+		<title>&mvt:store:name;: Shipping Estimate Rates</title>
+		<base href="&mvte:global:basehref;" /><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ ( g.Store:ui_mod:code EQ 'cssui' )	OR
+						( ( g.Store:ui_mod:code EQ 'mmui' ) AND 
+						  ( g.Store_Framework_Inuse EQ 'css_fw' ) ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<mvt:item name="head" param="css_list" /><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<mvt:item name="head" param="head_tag" />
+	</head>
+	<body>
+		<div id="shipestimate_rates">
+			<table width="350" border="0">
+				<thead>
+					<mvt:if expr="l.settings:shipestimate_rates:mode EQ 'product'">
+						<tr>
+							<th align="center" colspan="2"><b>Calculate Shipping: &mvt:product:name;</b></th>
+						</tr>
+					<mvt:else>
+						<tr>
+							<th align="center" colspan="2"><b>Calculate Shipping: Basket</b></th>
+						</tr>
+					</mvt:if>
+
+					<tr>
+						<th nowrap align="left">Shipping Method</th>
+						<th nowrap align="right">Price</th>
+					</tr>
+				</thead>
+				<tbody>
+					<mvt:if expr="NOT l.settings:shipestimate_rates:shippingmethod_count">
+						<tr>
+							<td align="left" colspan="2">Unable to estimate shipping rates, please check your address and try again</td>
+						</tr>
+					<mvt:else>
+						<mvt:foreach iterator="method" array="shipestimate_rates:shippingmethods">
+							<mvt:if expr="NOT ISNULL l.settings:method:formatted_price">
+								<tr>
+									<td align="left" valign="top">&mvt:method:name;</td>
+									<td nowrap align="right" valign="top">&mvt:method:formatted_price;</td>
+								</tr>
+							<mvt:else>
+								<tr>
+									<td align="left" valign="top">&mvt:method:name;</td>
+									<td nowrap align="right" valign="top"><i>N/A</i></td>
+								</tr>
+							</mvt:if>
+						</mvt:foreach>
+					</mvt:if>
+				</tbody>
+			</table>
+		</div>
+	</body>
+</html><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>

@@ -1,0 +1,4191 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-COL-UT-
+| Next Error Code: 176   
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| Rebuild Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Collection_Rebuild_Products" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Collection_Rebuild_Products_Prepare( l.collection ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT Collection_Rebuild_Products_Apply_Filter( l.collection ) }">		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT Collection_Rebuild_Products_Process_Additions( l.collection ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT Collection_Rebuild_Products_Process_Deletions( l.collection ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT Collection_Rebuild_Products_Process_Unused( l.collection ) }">		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Rebuild_Products_Prepare" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CollectionXProduct
+						  SET
+							status		= \'D\'
+						  WHERE
+							col_id		= ? AND
+							type		= \'A\'' }"
+			 FIELDS	= "l.collection:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00111', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Rebuild_Products_Apply_Filter" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.collection:filter }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Determine product inclusion based on collection filter.
+	| Existing records get their status cleared, new records get a status of "I".
+	|
+	| This leaves us with one of three status values in sNN_CollectionXProduct:
+	|
+	|	D		Product is no longer a member, deletion must be propagated to subordinate assignments
+	|	I		Product is a new member, insertion must be propagated to subordinate assignments
+	|	<blank> Product status has not changed, allowing the record to be ignored
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.data"				VALUE = "">
+	<MvASSIGN NAME = "l.membership_query"	VALUE = "">
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "{ Collection_Filters() }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.membership_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback_With_CustomFields( l.membership_query, l.collection:filter, l.available_filters, g.Module_JSON, '', '', 'JSON_Product_CustomFields_Query_Filter', l.data ) }">
+
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Filter_Contains_Search_Field( l.collection:filter, 'cancat_code', l.null ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.membership_query, 'prod', g.Store_Table_Prefix $ 'Categories', 'cat', 'prod.cancat_id = cat.id', '' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_Clear( l.membership_query ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.membership_query, '?, prod.id, \'A\', \'I\'' ) }">
+
+	<MvASSIGN NAME = "l.membership_sql"		VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.membership_query, l.membership_fields ) }">
+
+	<MvASSIGN NAME = "l.null"				VALUE = "{ miva_array_insert( l.fields, 'l.collection:id', -1 ) }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ miva_array_insert_var( l.fields, l.membership_fields, -1 ) }">
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME   = "Merchant"
+				 QUERY  = "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CollectionXProduct ( col_id, product_id, type, status ) ' $ l.membership_sql $ ' ON DUPLICATE KEY UPDATE status = \'\'' }"
+				 FIELDS = "{ miva_joinstring( l.fields, ',', '' ) }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00112', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME   = "Merchant"
+				 QUERY  = "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CollectionXProduct ( col_id, product_id, type, status ) ' $ l.membership_sql $ ' ON CONFLICT ( col_id, product_id ) DO UPDATE SET status = \'\'' }"
+				 FIELDS = "{ miva_joinstring( l.fields, ',', '' ) }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00113', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Rebuild_Products_Process_Additions" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.collection:filter }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CollectionCategories_Rebuild_Add_Products( l.collection:id )			OR
+					NOT CollectionPriceGroups_Rebuild_Add_Products( l.collection:id )			OR
+					NOT CollectionPriceGroups_Rebuild_Add_ExcludedProducts( l.collection:id )	OR
+					NOT CollectionPriceGroups_Rebuild_Add_QualifyingProducts( l.collection:id )	OR
+					NOT CollectionAvailGroups_Rebuild_Add_Products( l.collection:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'colprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Collection_Rebuild_Add_Products( l.module, l.collection:id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Replace_Status_Collection( l.collection:id, 'I', '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Rebuild_Products_Process_Deletions" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CollectionCategories_Rebuild_Remove_Products( l.collection:id )				OR
+					NOT CollectionPriceGroups_Rebuild_Remove_Products( l.collection:id )			OR
+					NOT CollectionPriceGroups_Rebuild_Remove_ExcludedProducts( l.collection:id )	OR
+					NOT CollectionPriceGroups_Rebuild_Remove_QualifyingProducts( l.collection:id )	OR
+					NOT CollectionAvailGroups_Rebuild_Remove_Products( l.collection:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'colprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Collection_Rebuild_Remove_Products( l.module, l.collection:id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Delete_All_Collection_Status( l.collection:id, 'D' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Rebuild_Products_Process_Unused" PARAMETERS = "collection var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CollectionCategories_Rebuild_Remove_Unused_Products( l.collection:id )				OR
+					NOT CollectionPriceGroups_Rebuild_Remove_Unused_Products( l.collection:id )				OR
+					NOT CollectionPriceGroups_Rebuild_Remove_Unused_ExcludedProducts( l.collection:id )		OR
+					NOT CollectionPriceGroups_Rebuild_Remove_Unused_QualifyingProducts( l.collection:id )	OR
+					NOT CollectionAvailGroups_Rebuild_Remove_Unused_Products( l.collection:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'colprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Collection_Rebuild_Remove_Unreferenced_Products( l.module, l.collection:id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductCollections"
+				QUERY	= "{ 'SELECT
+								c.*,
+								cxp.product_id,
+								cxp.type
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Collections c
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct cxp ON cxp.col_id = c.id AND cxp.product_id = ?
+							  WHERE
+								c.immediate		= 1			AND
+								c.filter		IS NOT NULL	AND
+								(
+									cxp.type	IS NULL		OR
+									cxp.type	= \'A\'
+								)
+							  ORDER BY
+								c.id' }"
+				FIELDS	= "l.product:id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00145', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.postprocess_removals" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT ProductCollections.d.EOF }">
+		<MvASSIGN NAME = "l.collection:id"			VALUE = "{ ProductCollections.d.id }">
+		<MvASSIGN NAME = "l.collection:code"		VALUE = "{ ProductCollections.d.code }">
+		<MvASSIGN NAME = "l.collection:name"		VALUE = "{ ProductCollections.d.name }">
+		<MvASSIGN NAME = "l.collection:immediate"	VALUE = "{ ProductCollections.d.immediate }">
+		<MvASSIGN NAME = "l.collection:rebuildkey"	VALUE = "{ ProductCollections.d.rebuildkey }">
+		<MvASSIGN NAME = "l.collection:lastrbld"	VALUE = "{ ProductCollections.d.lastrbld }">
+		<MvASSIGN NAME = "l.null"					VALUE = "{ miva_json_decode( ProductCollections.d.filter, l.collection:filter ) }">
+
+		<MvASSIGN NAME = "l.member_before"			VALUE = "{ NOT ISNULL ProductCollections.d.product_id }">
+		<MvASSIGN NAME = "l.member_now"				VALUE = "{ Product_Evaluate_Collections_Apply_Filter( l.collection, l.product ) }">
+
+		<MvIF EXPR = "{ l.member_now AND ( NOT l.member_before ) }">
+			<MvIF EXPR = "{ NOT Product_Evaluate_Collections_Process_Addition( l.collection, l.product ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductCollections">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.member_before AND ( NOT l.member_now ) }">
+			<MvIF EXPR = "{ NOT Product_Evaluate_Collections_Process_Deletion( l.collection, l.product ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductCollections">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.postprocess_removals" VALUE = 1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductCollections" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductCollections">
+
+	<MvCOMMENT>
+	|
+	| If we removed the product from any collections (decrementing colcount on a subordinate assignment),
+	| perform post-processing operations (cleaning up records with colcount = 0)
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.postprocess_removals }">
+		<MvIF EXPR = "{ NOT Product_Evaluate_Collections_Process_Unused( l.product ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections_Process_Addition" PARAMETERS = "collection var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.collectionxproduct"				VALUE = "">
+	<MvASSIGN NAME = "l.collectionxproduct:col_id"		VALUE = "{ l.collection:id }">
+	<MvASSIGN NAME = "l.collectionxproduct:product_id"	VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.collectionxproduct:type"		VALUE = "A">
+	<MvASSIGN NAME = "l.collectionxproduct:status"		VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_COL_DB ].CollectionXProduct_Insert( l.collectionxproduct ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CollectionCategories_Add_Product( l.collection:id, l.product:id )				OR
+					NOT CollectionPriceGroups_Add_Product( l.collection:id, l.product:id )				OR
+					NOT CollectionPriceGroups_Add_ExcludedProduct( l.collection:id, l.product:id )		OR
+					NOT CollectionPriceGroups_Add_QualifyingProduct( l.collection:id, l.product:id )	OR
+					NOT CollectionAvailGroups_Add_Product( l.collection:id, l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'colprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Collection_Product_Add( l.module, l.collection:id, l.product:id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections_Process_Deletion" PARAMETERS = "collection var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CollectionCategories_Remove_Product( l.collection:id, l.product:id )			OR
+					NOT CollectionPriceGroups_Remove_Product( l.collection:id, l.product:id )			OR
+					NOT CollectionPriceGroups_Remove_ExcludedProduct( l.collection:id, l.product:id )	OR
+					NOT CollectionPriceGroups_Remove_QualifyingProduct( l.collection:id, l.product:id )	OR
+					NOT CollectionAvailGroups_Remove_Product( l.collection:id, l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'colprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Collection_Product_Remove( l.module, l.collection:id, l.product:id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_COL_DB ].CollectionXProduct_Delete( l.collection:id, l.product:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections_Process_Unused" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Category_Remove_Unused_Collection_Product( l.product:id )				OR
+					NOT PriceGroup_Remove_Unused_Collection_Product( l.product:id )				OR
+					NOT PriceGroup_Remove_Unused_Collection_ExcludedProduct( l.product:id )		OR
+					NOT PriceGroup_Remove_Unused_Collection_QualifyingProduct( l.product:id )	OR
+					NOT AvailGroup_Remove_Unused_Collection_Product( l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'colprod', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Collection_Product_Remove_Unreferenced( l.module, l.product:id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections_Apply_Filter" PARAMETERS = "collection var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.available_filters" VALUE = "{ Collection_MivaScript_Filters() }">
+	<MvASSIGN NAME = "l.search_expression" VALUE = "1 EQ 1">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_MivaScript_Callback_With_CustomFields( l.search_expression, l.collection:filter, l.available_filters, g.Module_Feature_COL_UT, '', '', 'Product_Evaluate_Collections_Apply_Filter_CustomFields_Filter', l.null ) }">
+
+	<MvIF EXPR = "{ l.product:cancat_id }">
+		<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Filter_Contains_Search_Field( l.collection:filter, 'cancat_code', l.null ) }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Load_ID_Cached( l.product:cancat_id, l.category ) }">
+				<MvASSIGN NAME = "l.product:cancat_code" VALUE = "{ l.category:code }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_ref( l.records, l.product, -1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_search( l.records, 1, l.record, l.search_expression ) GT 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections_Apply_Filter_CustomFields_Filter" PARAMETERS = "expression var, field_count var, outer_joining_clause, inner_joining_clause, module var, search_field, search_operator, search_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.customfields" VARIABLE = "g.Session:cache:collection_evaluate_filter_mivascript:customfields">
+		<MvMEMBER NAME = "{ l.module:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT l.customfields:loaded }">
+		<MvASSIGN NAME = "l.customfields:loaded"		VALUE = 1>
+		<MvASSIGN NAME = "l.customfields:field_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Fields( l.module, l.customfields:fields ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.customfields:fields, 1, l.customfield, 'l.customfield:code EQ l.search_field' ) }">	<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'multitext' }">																		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customfield:type EQ 'text' }">					<MvASSIGN NAME = "l.type" VALUE = "CHAR">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'checkbox' }">			<MvASSIGN NAME = "l.type" VALUE = "BOOL">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'code' }">				<MvASSIGN NAME = "l.type" VALUE = "CHAR">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'currency' }">			<MvASSIGN NAME = "l.type" VALUE = "DOUBLE">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'date' }">				<MvASSIGN NAME = "l.type" VALUE = "INTEGER">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'datetime' }">			<MvASSIGN NAME = "l.type" VALUE = "INTEGER">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'imageupload' }">			<MvASSIGN NAME = "l.type" VALUE = "CHAR">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'customupload' }">		<MvASSIGN NAME = "l.type" VALUE = "CHAR">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'name' }">				<MvASSIGN NAME = "l.type" VALUE = "CHAR">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'numeric' }">				<MvASSIGN NAME = "l.type" VALUE = "NUMBER">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'numeric_optional' }">	<MvASSIGN NAME = "l.type" VALUE = "NUMBER">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'textarea' }">			<MvASSIGN NAME = "l.type" VALUE = "MEMO">
+	<MvELSEIF EXPR = "{ l.customfield:type EQ 'choice' }">				<MvASSIGN NAME = "l.type" VALUE = "CHAR">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_index"		VALUE = "{ ++l.field_count }">
+	<MvASSIGN NAME = "l.search_field_index"	VALUE = "{ ++l.field_count }">
+
+	<MvASSIGNARRAY NAME = "g.filter_value"	VALUE = "{ l.module }">
+		<MvDIMENSION INDEX = "{ l.module_index }">
+	</MvASSIGNARRAY>
+
+	<MvASSIGNARRAY NAME = "g.filter_value"	VALUE = "{ l.search_field }">
+		<MvDIMENSION INDEX = "{ l.search_field_index }">
+	</MvASSIGNARRAY>
+
+	<MvASSIGN NAME = "l.variable" VALUE = "{ 'Product_Evaluate_Collections_Apply_Filter_CustomField_Value( l.product, g.filter_value[' $ l.module_index $ '], g.filter_value[' $ l.search_field_index $ '] )' }">
+
+	<MvIF EXPR = "{ l.search_operator EQ 'IN' OR l.search_operator EQ 'NOT_IN' }">
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_CommaSeparatedList_With_Type( l.expression, l.type, l.inner_joining_clause, l.variable, l.search_field, l.search_operator, l.search_value ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.local_expression" VALUE = "">
+
+		<MvIF EXPR = "{ l.search_operator EQ 'NULL' }">
+			<MvASSIGN NAME = "l.local_expression" VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_NULL( l.type, l.variable, l.value_variable ) }">
+		<MvELSE>
+			<MvREFERENCEARRAY NAME = "l.filter_variable" VARIABLE = "g.filter_value">
+				<MvDIMENSION INDEX = "{ ++l.field_count }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.value_variable"		VALUE = "{ 'g.filter_value[' $ l.field_count $ ']' }">
+			<MvASSIGN NAME = "l.filter_variable"	VALUE = "{ l.search_value }">
+
+			<MvIF EXPR = "{ l.search_operator EQ 'EQ' }">			<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_EQ( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'GT' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_GT( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'GE' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_GE( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'LT' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_LT( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'LE' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_LE( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'NE' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_NE( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'CO' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_CO( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'NC' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_NC( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'LIKE' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_LIKE( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_NOTLIKE( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'TRUE' }">		<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_TRUE( l.type, l.variable, l.value_variable ) }">
+			<MvELSEIF EXPR = "{ l.search_operator EQ 'FALSE' }">	<MvASSIGN NAME = "l.local_expression"	VALUE = "{ [ g.Module_JSON ].JSON_Search_Filter_MivaScript_Compare_FALSE( l.type, l.variable, l.value_variable ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL l.local_expression }">
+			<MvIF EXPR = "{ NOT ISNULL l.expression }">
+				<MvASSIGN NAME = "l.expression" VALUE = "{ l.expression $ ' ' $ l.inner_joining_clause $ ' ' }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.expression" VALUE = "{ l.expression $ l.local_expression }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Evaluate_Collections_Apply_Filter_CustomField_Value" PARAMETERS = "product var, module var, field_code" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Value( l.module, l.product:id, l.field_code ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Category Collection Assign/Unassign Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CollectionCategories_Add_Product" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_CategoryXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl ON cxcl.col_id = ? AND cxcl.cat_id = cxp.cat_id
+							  SET
+								cxp.colcount	= cxp.colcount + 1
+							  WHERE
+								cxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00001', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct AS cxp
+							  SET
+								colcount		= cxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection AS cxcl
+							  WHERE
+								cxcl.col_id		= ?				AND
+								cxcl.cat_id		= cxp.cat_id	AND
+								cxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00002', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_CategoryXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl ON cxcl.col_id = ? AND cxcl.cat_id = cxpce.cat_id
+							  SET
+								cxpce.colcount		= cxpce.colcount + 1
+							  WHERE
+								cxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00003', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions AS cxpce
+							  SET
+								colcount			= cxpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection AS cxcl
+							  WHERE
+								cxcl.col_id			= ?				AND
+								cxcl.cat_id			= cxpce.cat_id	AND
+								cxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00004', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_CategoryXProduct must be handled individually so that disp_order can be generated
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionCategories"
+				QUERY	= "{ 'SELECT
+								cxcl.cat_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON cxp.cat_id = cxcl.cat_id AND cxp.product_id = ?
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce ON cxpce.cat_id = cxcl.cat_id AND cxpce.product_id = ?
+							  WHERE
+								cxcl.col_id	= ?			AND
+								cxp.product_id IS NULL	AND
+								cxpce.product_id IS NULL' }"
+				FIELDS	= "l.product_id, l.product_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionCategories.d.EOF }">
+		<MvASSIGN NAME = "l.categoryxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.categoryxproduct:cat_id"		VALUE = "{ CollectionCategories.d.cat_id }">
+		<MvASSIGN NAME = "l.categoryxproduct:product_id"	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.categoryxproduct:automatic"		VALUE = 1>
+		<MvASSIGN NAME = "l.categoryxproduct:colcount"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Insert( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionCategories">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionCategories" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionCategories">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionCategories_Remove_Product" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_CategoryXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl ON cxcl.col_id = ? AND cxcl.cat_id = cxp.cat_id
+							  SET
+								cxp.colcount	= cxp.colcount - 1
+							  WHERE
+								cxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00006', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct AS cxp
+							  SET
+								colcount		= cxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection AS cxcl
+							  WHERE
+								cxcl.col_id		= ?				AND
+								cxcl.cat_id		= cxp.cat_id	AND
+								cxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00007', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_CategoryXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl ON cxcl.col_id = ? AND cxcl.cat_id = cxpce.cat_id
+							  SET
+								cxpce.colcount		= cxpce.colcount - 1
+							  WHERE
+								cxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00008', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions AS cxpce
+							  SET
+								colcount			= cxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection AS cxcl
+							  WHERE
+								cxcl.col_id			= ?				AND
+								cxcl.cat_id			= cxpce.cat_id	AND
+								cxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00009', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Remove_Unused_Collection_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Discard sNN_CategoryXProductCollectionExclusions records that have reached colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions WHERE product_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_CategoryXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CategoryXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE product_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CategoryXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].CategoryXProduct_Read( l.categoryxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Delete( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CategoryXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionCategories_Rebuild_Add_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_CategoryXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl ON cxcl.col_id = ? AND cxcl.cat_id = cxp.cat_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = cxcl.col_id AND clxp.product_id = cxp.product_id AND clxp.status = \'I\'
+							  SET
+								cxp.colcount = cxp.colcount + 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00115', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+							  SET
+								colcount		= cxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	cxcl.col_id		= ?					AND
+							  	cxcl.cat_id		= cxp.cat_id		AND
+							  	clxp.col_id		= cxcl.col_id		AND
+							  	clxp.product_id	= cxp.product_id	AND
+							  	clxp.status		= \'I\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00116', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_CategoryXProduct must be handled individually so that disp_order can be generated
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionCategories"
+				QUERY	= "{ 'SELECT
+								clxp.product_id,
+								cxcl.cat_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = cxcl.col_id AND clxp.status = \'I\'
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON cxp.cat_id = cxcl.cat_id AND cxp.product_id = clxp.product_id
+							  WHERE
+								cxcl.col_id	= ?				AND
+								clxp.product_id IS NOT NULL	AND
+								cxp.product_id IS NULL' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00117', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionCategories.d.EOF }">
+		<MvASSIGN NAME = "l.categoryxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.categoryxproduct:cat_id"		VALUE = "{ CollectionCategories.d.cat_id }">
+		<MvASSIGN NAME = "l.categoryxproduct:product_id"	VALUE = "{ CollectionCategories.d.product_id }">
+		<MvASSIGN NAME = "l.categoryxproduct:automatic"		VALUE = 1>
+		<MvASSIGN NAME = "l.categoryxproduct:colcount"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Insert( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionCategories">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionCategories" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionCategories">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionCategories_Rebuild_Remove_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl ON cxcl.col_id = ? AND cxcl.cat_id = cxp.cat_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = cxcl.col_id AND clxp.product_id = cxp.product_id AND clxp.status = \'D\'
+							  SET
+								cxp.colcount = cxp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00118', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+							  SET
+								colcount		= cxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	cxcl.col_id		= ?					AND
+							  	cxcl.cat_id		= cxp.cat_id		AND
+							  	clxp.col_id		= cxcl.col_id		AND
+							  	clxp.product_id	= cxp.product_id	AND
+							  	clxp.status		= \'D\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00119', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionCategories_Rebuild_Remove_Unused_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "CategoryXProduct"
+				QUERY	= "{ 'SELECT
+								cxp.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CategoryXCollection cxcl,
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+							  WHERE
+								cxcl.col_id		= ?				AND
+								cxp.cat_id		= cxcl.cat_id	AND
+								cxp.automatic	= 1				AND
+								cxp.colcount	= 0' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00120', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CategoryXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].CategoryXProduct_Read( l.categoryxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Delete( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CategoryXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Price Group Collection Assign/Unassign Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Add_Product" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxp.pgrp_id
+							  SET
+								pgxp.colcount	= pgxp.colcount + 1
+							  WHERE
+								pgxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00012', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct AS pgxp
+							  SET
+								colcount		= pgxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id	= ?				AND
+								pgxcl.pgrp_id	= pgxp.pgrp_id	AND
+								pgxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00013', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxpce.pgrp_id
+							  SET
+								pgxpce.colcount		= pgxpce.colcount + 1
+							  WHERE
+								pgxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00014', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions AS pgxpce
+							  SET
+								colcount			= pgxpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?					AND
+								pgxcl.pgrp_id		= pgxpce.pgrp_id	AND
+								pgxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00015', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroups"
+				QUERY	= "{ 'SELECT
+								pgxcl.pgrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp ON pgxp.pgrp_id = pgxcl.pgrp_id AND pgxp.product_id = ?
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce ON pgxpce.pgrp_id = pgxcl.pgrp_id AND pgxpce.product_id = ?
+							  WHERE
+								pgxcl.col_id = ?		AND
+								pgxp.product_id IS NULL	AND
+								pgxpce.product_id IS NULL' }"
+				FIELDS	= "l.product_id, l.product_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroups.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxproduct:pgrp_id"		VALUE = "{ CollectionPriceGroups.d.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxproduct:product_id"	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Insert( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroups" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Remove_Product" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxp.pgrp_id
+							  SET
+								pgxp.colcount	= pgxp.colcount - 1
+							  WHERE
+								pgxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00017', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct AS pgxp
+							  SET
+								colcount		= pgxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id	= ?				AND
+								pgxcl.pgrp_id	= pgxp.pgrp_id	AND
+								pgxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00018', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxpce.pgrp_id
+							  SET
+								pgxpce.colcount		= pgxpce.colcount - 1
+							  WHERE
+								pgxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00019', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions AS pgxpce
+							  SET
+								colcount			= pgxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?					AND
+								pgxcl.pgrp_id		= pgxpce.pgrp_id	AND
+								pgxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00020', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Remove_Unused_Collection_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Discard sNN_PriceGroupXProductCollectionExclusions records that have reached colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions WHERE product_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct WHERE product_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Read( l.pricegroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Delete( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Add_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxp.pgrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.product_id = pgxp.product_id AND clxp.status = \'I\'
+							  SET
+								pgxp.colcount = pgxp.colcount + 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00121', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+							  SET
+								colcount		= pgxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	pgxcl.col_id	= ?					AND
+							  	pgxcl.pgrp_id	= pgxp.pgrp_id		AND
+							  	clxp.col_id		= pgxcl.col_id		AND
+							  	clxp.product_id	= pgxp.product_id	AND
+							  	clxp.status		= \'I\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00122', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroups"
+				QUERY	= "{ 'SELECT
+								clxp.product_id,
+								pgxcl.pgrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.status = \'I\'
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp ON pgxp.pgrp_id = pgxcl.pgrp_id AND pgxp.product_id = clxp.product_id
+							  WHERE
+								pgxcl.col_id	= ?			AND
+								clxp.product_id IS NOT NULL	AND
+								pgxp.product_id IS NULL' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00123', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroups.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxproduct:pgrp_id"		VALUE = "{ CollectionPriceGroups.d.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxproduct:product_id"	VALUE = "{ CollectionPriceGroups.d.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Insert( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroups" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Remove_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxp.pgrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.product_id = pgxp.product_id AND clxp.status = \'D\'
+							  SET
+								pgxp.colcount = pgxp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00124', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+							  SET
+								colcount		= pgxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	pgxcl.col_id	= ?					AND
+							  	pgxcl.pgrp_id	= pgxp.pgrp_id		AND
+							  	clxp.col_id		= pgxcl.col_id		AND
+							  	clxp.product_id	= pgxp.product_id	AND
+							  	clxp.status		= \'D\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00125', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Remove_Unused_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "PriceGroupXProduct"
+				QUERY	= "{ 'SELECT
+								pgxp.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+							  WHERE
+								pgxcl.col_id	= ?				AND
+								pgxp.pgrp_id	= pgxcl.pgrp_id	AND
+								pgxp.automatic	= 1				AND
+								pgxp.colcount	= 0' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00126', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Read( l.pricegroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Delete( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Price Group Exclusion Collection Assign/Unassign Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Add_ExcludedProduct" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXExcludedProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxep.pgrp_id
+							  SET
+								pgxep.colcount		= pgxep.colcount + 1
+							  WHERE
+								pgxep.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00023', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct AS pgxep
+							  SET
+								colcount			= pgxep.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?				AND
+								pgxcl.pgrp_id		= pgxep.pgrp_id	AND
+								pgxep.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00024', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXExcludedProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxepce.pgrp_id
+							  SET
+								pgxepce.colcount	= pgxepce.colcount + 1
+							  WHERE
+								pgxepce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00025', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions AS pgxepce
+							  SET
+								colcount			= pgxepce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?					AND
+								pgxcl.pgrp_id		= pgxepce.pgrp_id	AND
+								pgxepce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00026', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXExcludedProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroupsExcluded"
+				QUERY	= "{ 'SELECT
+								pgxcl.pgrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep ON pgxep.pgrp_id = pgxcl.pgrp_id AND pgxep.product_id = ?
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce ON pgxepce.pgrp_id = pgxcl.pgrp_id AND pgxepce.product_id = ?
+							  WHERE
+								pgxcl.col_id = ?			AND
+								pgxep.product_id IS NULL	AND
+								pgxepce.product_id IS NULL' }"
+				FIELDS	= "l.product_id, l.product_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00027', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroupsExcluded.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:pgrp_id"		VALUE = "{ CollectionPriceGroupsExcluded.d.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:product_id"	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Insert( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroupsExcluded">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroupsExcluded" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroupsExcluded">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Remove_ExcludedProduct" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXExcludedProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxep.pgrp_id
+							  SET
+								pgxep.colcount		= pgxep.colcount - 1
+							  WHERE
+								pgxep.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00028', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct AS pgxep
+							  SET
+								colcount			= pgxep.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?				AND
+								pgxcl.pgrp_id		= pgxep.pgrp_id	AND
+								pgxep.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00029', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXExcludedProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxepce.pgrp_id
+							  SET
+								pgxepce.colcount	= pgxepce.colcount - 1
+							  WHERE
+								pgxepce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00030', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions AS pgxepce
+							  SET
+								colcount			= pgxepce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?					AND
+								pgxcl.pgrp_id		= pgxepce.pgrp_id	AND
+								pgxepce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00031', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Remove_Unused_Collection_ExcludedProduct" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Discard sNN_PriceGroupXExcludedProductCollectionExclusions records that have reached colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions WHERE product_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00032', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXExcludedProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXExcludedProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct WHERE product_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00033', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXExcludedProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedProduct_Read( l.pricegroupxexcludedproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Delete( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Add_ExcludedProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXExcludedProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxep.pgrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.product_id = pgxep.product_id AND clxp.status = \'I\'
+							  SET
+								pgxep.colcount = pgxep.colcount + 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00127', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+							  SET
+								colcount		= pgxep.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	pgxcl.col_id	= ?					AND
+							  	pgxcl.pgrp_id	= pgxep.pgrp_id		AND
+							  	clxp.col_id		= pgxcl.col_id		AND
+							  	clxp.product_id	= pgxep.product_id	AND
+							  	clxp.status		= \'I\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00128', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXExcludedProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroups"
+				QUERY	= "{ 'SELECT
+								clxp.product_id,
+								pgxcl.pgrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.status = \'I\'
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep ON pgxep.pgrp_id = pgxcl.pgrp_id AND pgxep.product_id = clxp.product_id
+							  WHERE
+								pgxcl.col_id	= ?			AND
+								clxp.product_id IS NOT NULL	AND
+								pgxep.product_id IS NULL' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00129', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroups.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:pgrp_id"		VALUE = "{ CollectionPriceGroups.d.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:product_id"	VALUE = "{ CollectionPriceGroups.d.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Insert( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroups" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Remove_ExcludedProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxep.pgrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.product_id = pgxep.product_id AND clxp.status = \'D\'
+							  SET
+								pgxep.colcount = pgxep.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00130', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+							  SET
+								colcount		= pgxep.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	pgxcl.col_id	= ?					AND
+							  	pgxcl.pgrp_id	= pgxep.pgrp_id		AND
+							  	clxp.col_id		= pgxcl.col_id		AND
+							  	clxp.product_id	= pgxep.product_id	AND
+							  	clxp.status		= \'D\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00131', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Remove_Unused_ExcludedProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "PriceGroupXExcludedProduct"
+				QUERY	= "{ 'SELECT
+								pgxep.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+							  WHERE
+								pgxcl.col_id	= ?				AND
+								pgxep.pgrp_id	= pgxcl.pgrp_id	AND
+								pgxep.automatic	= 1				AND
+								pgxep.colcount	= 0' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00132', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXExcludedProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedProduct_Read( l.pricegroupxexcludedproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Delete( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Price Group Qualifying Collection Assign/Unassign Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Add_QualifyingProduct" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXQualifyingProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxqp.pgrp_id
+							  SET
+								pgxqp.colcount		= pgxqp.colcount + 1
+							  WHERE
+								pgxqp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00034', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct AS pgxqp
+							  SET
+								colcount			= pgxqp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?				AND
+								pgxcl.pgrp_id		= pgxqp.pgrp_id	AND
+								pgxqp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00035', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXQualifyingProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxqpce.pgrp_id
+							  SET
+								pgxqpce.colcount	= pgxqpce.colcount + 1
+							  WHERE
+								pgxqpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00036', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions AS pgxqpce
+							  SET
+								colcount			= pgxqpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?					AND
+								pgxcl.pgrp_id		= pgxqpce.pgrp_id	AND
+								pgxqpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00037', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXQualifyingProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroupsQualifying"
+				QUERY	= "{ 'SELECT
+								pgxcl.pgrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp ON pgxqp.pgrp_id = pgxcl.pgrp_id AND pgxqp.product_id = ?
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce ON pgxqpce.pgrp_id = pgxcl.pgrp_id AND pgxqpce.product_id = ?
+							  WHERE
+								pgxcl.col_id = ?			AND
+								pgxqp.product_id IS NULL	AND
+								pgxqpce.product_id IS NULL' }"
+				FIELDS	= "l.product_id, l.product_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00038', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroupsQualifying.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:pgrp_id"		VALUE = "{ CollectionPriceGroupsQualifying.d.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:product_id"	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:automatic"		VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:colcount"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Insert( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroupsQualifying">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroupsQualifying" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroupsQualifying">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Remove_QualifyingProduct" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXQualifyingProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxqp.pgrp_id
+							  SET
+								pgxqp.colcount		= pgxqp.colcount - 1
+							  WHERE
+								pgxqp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00039', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct AS pgxqp
+							  SET
+								colcount			= pgxqp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?				AND
+								pgxcl.pgrp_id		= pgxqp.pgrp_id	AND
+								pgxqp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00040', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXQualifyingProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxqpce.pgrp_id
+							  SET
+								pgxqpce.colcount	= pgxqpce.colcount - 1
+							  WHERE
+								pgxqpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00041', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions AS pgxqpce
+							  SET
+								colcount			= pgxqpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection AS pgxcl
+							  WHERE
+								pgxcl.col_id		= ?					AND
+								pgxcl.pgrp_id		= pgxqpce.pgrp_id	AND
+								pgxqpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00042', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Remove_Unused_Collection_QualifyingProduct" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Discard sNN_PriceGroupXQualifyingProductCollectionExclusions records that have reached colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions WHERE product_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00043', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXQualifyingProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXQualifyingProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct WHERE product_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00044', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXQualifyingProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingProduct_Read( l.pricegroupxqualifyingproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Delete( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Add_QualifyingProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxqp.pgrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.product_id = pgxqp.product_id AND clxp.status = \'I\'
+							  SET
+								pgxqp.colcount = pgxqp.colcount + 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00133', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+							  SET
+								colcount		= pgxqp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	pgxcl.col_id	= ?					AND
+							  	pgxcl.pgrp_id	= pgxqp.pgrp_id		AND
+							  	clxp.col_id		= pgxcl.col_id		AND
+							  	clxp.product_id	= pgxqp.product_id	AND
+							  	clxp.status		= \'I\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00134', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXQualifyingProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroups"
+				QUERY	= "{ 'SELECT
+								clxp.product_id,
+								pgxcl.pgrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.status = \'I\'
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp ON pgxqp.pgrp_id = pgxcl.pgrp_id AND pgxqp.product_id = clxp.product_id
+							  WHERE
+								pgxcl.col_id	= ?			AND
+								clxp.product_id IS NOT NULL	AND
+								pgxqp.product_id IS NULL' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00135', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroups.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:pgrp_id"		VALUE = "{ CollectionPriceGroups.d.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:product_id"	VALUE = "{ CollectionPriceGroups.d.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:automatic"		VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:colcount"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Insert( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroups" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroups">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Remove_QualifyingProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl ON pgxcl.col_id = ? AND pgxcl.pgrp_id = pgxqp.pgrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = pgxcl.col_id AND clxp.product_id = pgxqp.product_id AND clxp.status = \'D\'
+							  SET
+								pgxqp.colcount = pgxqp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00136', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+							  SET
+								colcount		= pgxqp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	pgxcl.col_id	= ?					AND
+							  	pgxcl.pgrp_id	= pgxqp.pgrp_id		AND
+							  	clxp.col_id		= pgxcl.col_id		AND
+							  	clxp.product_id	= pgxqp.product_id	AND
+							  	clxp.status		= \'D\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00137', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionPriceGroups_Rebuild_Remove_Unused_QualifyingProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "PriceGroupXQualifyingProduct"
+				QUERY	= "{ 'SELECT
+								pgxqp.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingCollection pgxcl,
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+							  WHERE
+								pgxcl.col_id	= ?				AND
+								pgxqp.pgrp_id	= pgxcl.pgrp_id	AND
+								pgxqp.automatic	= 1				AND
+								pgxqp.colcount	= 0' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00138', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXQualifyingProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingProduct_Read( l.pricegroupxqualifyingproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Delete( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Availability Group Assign/Unassign Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CollectionAvailGroups_Add_Product" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_AvailGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxc ON agxc.col_id = ? AND agxc.agrp_id = agxp.agrp_id
+							  SET
+								agxp.colcount	= agxp.colcount + 1
+							  WHERE
+								agxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00045', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct AS agxp
+							  SET
+								colcount		= agxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection AS agxc
+							  WHERE
+								agxc.col_id		= ?				AND
+								agxc.agrp_id	= agxp.agrp_id	AND
+								agxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00046', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_AvailGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxc ON agxc.col_id = ? AND agxc.agrp_id = agxpce.agrp_id
+							  SET
+								agxpce.colcount		= agxpce.colcount + 1
+							  WHERE
+								agxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00047', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions AS agxpce
+							  SET
+								colcount			= agxpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection AS agxc
+							  WHERE
+								agxc.col_id			= ?					AND
+								agxc.agrp_id		= agxpce.agrp_id	AND
+								agxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00048', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_AvailGroupXProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionAvailGroups"
+				QUERY	= "{ 'SELECT
+								agxc.agrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxc
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp ON agxp.agrp_id = agxc.agrp_id AND agxp.product_id = ?
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce ON agxpce.agrp_id = agxc.agrp_id AND agxpce.product_id = ?
+							  WHERE
+								agxc.col_id	= ?			AND
+								agxp.product_id IS NULL	AND
+								agxpce.product_id IS NULL' }"
+				FIELDS	= "l.product_id, l.product_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00049', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionAvailGroups.d.EOF }">
+		<MvASSIGN NAME = "l.availgroupxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.availgroupxproduct:agrp_id"		VALUE = "{ CollectionAvailGroups.d.agrp_id }">
+		<MvASSIGN NAME = "l.availgroupxproduct:product_id"	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.availgroupxproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.availgroupxproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Insert( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionAvailGroups">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionAvailGroups" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionAvailGroups">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionAvailGroups_Remove_Product" PARAMETERS = "col_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_AvailGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxc ON agxc.col_id = ? AND agxc.agrp_id = agxp.agrp_id
+							  SET
+								agxp.colcount	= agxp.colcount - 1
+							  WHERE
+								agxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00050', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct AS agxp
+							  SET
+								colcount		= agxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection AS agxc
+							  WHERE
+								agxc.col_id		= ?				AND
+								agxc.agrp_id	= agxp.agrp_id	AND
+								agxp.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00051', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_AvailGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxc ON agxc.col_id = ? AND agxc.agrp_id = agxpce.agrp_id
+							  SET
+								agxpce.colcount		= agxpce.colcount - 1
+							  WHERE
+								agxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00052', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions AS agxpce
+							  SET
+								colcount			= agxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection AS agxc
+							  WHERE
+								agxc.col_id			= ?					AND
+								agxc.agrp_id		= agxpce.agrp_id	AND
+								agxpce.product_id	= ?' }"
+				 FIELDS	= "l.col_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00053', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AvailGroup_Remove_Unused_Collection_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Discard sNN_AvailGroupXProductCollectionExclusions records that have reached colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions WHERE product_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00054', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_AvailGroupXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AvailGroupXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct WHERE product_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00055', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT AvailGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_DB ].AvailGroupXProduct_Read( l.availgroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Delete( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "AvailGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionAvailGroups_Rebuild_Add_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_AvailGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxcl ON agxcl.col_id = ? AND agxcl.agrp_id = agxp.agrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = agxcl.col_id AND clxp.product_id = agxp.product_id AND clxp.status = \'I\'
+							  SET
+								agxp.colcount = agxp.colcount + 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00139', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+							  SET
+								colcount		= agxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	agxcl.col_id	= ?					AND
+							  	agxcl.agrp_id	= agxp.agrp_id		AND
+							  	clxp.col_id		= agxcl.col_id		AND
+							  	clxp.product_id	= agxp.product_id	AND
+							  	clxp.status		= \'I\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00140', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_AvailGroupXProduct must be handled individually so that notifications can be dispatched
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionAvailGroups"
+				QUERY	= "{ 'SELECT
+								clxp.product_id,
+								agxcl.agrp_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxcl
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = agxcl.col_id AND clxp.status = \'I\'
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp ON agxp.agrp_id = agxcl.agrp_id AND agxp.product_id = clxp.product_id
+							  WHERE
+								agxcl.col_id	= ?			AND
+								clxp.product_id IS NOT NULL	AND
+								agxp.product_id IS NULL' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00141', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionAvailGroups.d.EOF }">
+		<MvASSIGN NAME = "l.availgroupxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.availgroupxproduct:agrp_id"		VALUE = "{ CollectionAvailGroups.d.agrp_id }">
+		<MvASSIGN NAME = "l.availgroupxproduct:product_id"	VALUE = "{ CollectionAvailGroups.d.product_id }">
+		<MvASSIGN NAME = "l.availgroupxproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.availgroupxproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Insert( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionAvailGroups">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionAvailGroups" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionAvailGroups">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionAvailGroups_Rebuild_Remove_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxcl ON agxcl.col_id = ? AND agxcl.agrp_id = agxp.agrp_id
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = agxcl.col_id AND clxp.product_id = agxp.product_id AND clxp.status = \'D\'
+							  SET
+								agxp.colcount = agxp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00142', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+							  SET
+								colcount		= agxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxcl,
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+							  WHERE
+							  	agxcl.col_id	= ?					AND
+							  	agxcl.agrp_id	= agxp.agrp_id		AND
+							  	clxp.col_id		= agxcl.col_id		AND
+							  	clxp.product_id	= agxp.product_id	AND
+							  	clxp.status		= \'D\'' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00143', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CollectionAvailGroups_Rebuild_Remove_Unused_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "AvailGroupXProduct"
+				QUERY	= "{ 'SELECT
+								agxp.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AvailGroupXCollection agxcl,
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+							  WHERE
+								agxcl.col_id	= ?				AND
+								agxp.agrp_id	= agxcl.agrp_id	AND
+								agxp.automatic	= 1				AND
+								agxp.colcount	= 0' }"
+				FIELDS	= "l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00144', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT AvailGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_DB ].AvailGroupXProduct_Read( l.availgroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Delete( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "AvailGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Downstream Object Assign / Unassign Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Category_Add_Collection_Products" PARAMETERS = "cat_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_CategoryXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = cxp.product_id AND clxp.type <> \'X\'
+							  SET
+								cxp.colcount	= cxp.colcount + 1
+							  WHERE
+								cxp.cat_id		= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00056', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct AS cxp
+							  SET
+								colcount		= cxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= cxp.product_id	AND
+								cxp.cat_id		= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00057', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_CategoryXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = cxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								cxpce.colcount	= cxpce.colcount + 1
+							  WHERE
+								cxpce.cat_id	= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00058', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions AS cxpce
+							  SET
+								colcount		= cxpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id = cxpce.product_id	AND
+								cxpce.cat_id	= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00059', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_CategoryXProduct must be handled individually so that disp_order can be generated
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionProducts"
+				QUERY	= "{ 'SELECT
+								clxp.product_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON cxp.cat_id = ? AND cxp.product_id = clxp.product_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce ON cxpce.product_id = clxp.product_id AND cxpce.cat_id = ?
+							  WHERE
+								clxp.col_id			= ?			AND
+								clxp.type			<> \'X\'	AND
+								cxp.product_id		IS NULL		AND
+								cxpce.product_id	IS NULL' }"
+				FIELDS	= "l.cat_id, l.cat_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00060', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionProducts.d.EOF }">
+		<MvASSIGN NAME = "l.categoryxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.categoryxproduct:cat_id"		VALUE = "{ l.cat_id }">
+		<MvASSIGN NAME = "l.categoryxproduct:product_id"	VALUE = "{ CollectionProducts.d.product_id }">
+		<MvASSIGN NAME = "l.categoryxproduct:automatic"		VALUE = 1>
+		<MvASSIGN NAME = "l.categoryxproduct:colcount"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Insert( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProducts">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionProducts" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProducts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Remove_Collection_Products" PARAMETERS = "cat_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_CategoryXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = cxp.product_id AND clxp.type <> \'X\'
+							  SET
+								cxp.colcount	= cxp.colcount - 1
+							  WHERE
+								cxp.cat_id		= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00061', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct AS cxp
+							  SET
+								colcount		= cxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= cxp.product_id	AND
+								cxp.cat_id		= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00062', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on existing sNN_CategoryXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = cxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								cxpce.colcount	= cxpce.colcount - 1
+							  WHERE
+								cxpce.cat_id	= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00063', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions AS cxpce
+							  SET
+								colcount		= cxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id = cxpce.product_id	AND
+								cxpce.cat_id	= ?' }"
+				 FIELDS	= "l.col_id, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00064', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_CategoryXProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions WHERE cat_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.cat_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00065', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_CategoryXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CategoryXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE cat_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.cat_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00066', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CategoryXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].CategoryXProduct_Read( l.categoryxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Delete( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CategoryXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Remove_All_Category_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_CategoryXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = cxp.product_id AND clxp.type <> \'X\'
+							  SET
+								cxp.colcount = cxp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00146', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct AS cxp
+							  SET
+								colcount		= cxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id	= cxp.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00147', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on existing sNN_CategoryXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions cxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = cxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								cxpce.colcount = cxpce.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00148', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions AS cxpce
+							  SET
+								colcount		= cxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id = cxpce.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00149', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_CategoryXProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CategoryXProductCollectionExclusions WHERE colcount = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00150', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_CategoryXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CategoryXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE automatic = 1 AND colcount = 0' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00151', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CategoryXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].CategoryXProduct_Read( l.categoryxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_CategoryXProduct_Delete( l.categoryxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CategoryXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Add_Collection_Products" PARAMETERS = "pgrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxp.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxp.colcount	= pgxp.colcount + 1
+							  WHERE
+								pgxp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00067', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct AS pgxp
+							  SET
+								colcount		= pgxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= pgxp.product_id	AND
+								pgxp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00068', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxpce.colcount	= pgxpce.colcount + 1
+							  WHERE
+								pgxpce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00069', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions AS pgxpce
+							  SET
+								colcount		= pgxpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id = pgxpce.product_id	AND
+								pgxpce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00070', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXProduct must be handled individually so that notifications can be performed
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionProducts"
+				QUERY	= "{ 'SELECT
+								clxp.product_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp ON pgxp.pgrp_id = ? AND pgxp.product_id = clxp.product_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce ON pgxpce.product_id = clxp.product_id AND pgxpce.pgrp_id = ?
+							  WHERE
+								clxp.col_id			= ?			AND
+								clxp.type			<> \'X\'	AND
+								pgxp.product_id		IS NULL		AND
+								pgxpce.product_id	IS NULL' }"
+				FIELDS	= "l.pgrp_id, l.pgrp_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00071', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionProducts.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxproduct:pgrp_id"		VALUE = "{ l.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxproduct:product_id"	VALUE = "{ CollectionProducts.d.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Insert( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProducts">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionProducts" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProducts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Remove_Collection_Products" PARAMETERS = "pgrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxp.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxp.colcount	= pgxp.colcount - 1
+							  WHERE
+								pgxp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00072', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct AS pgxp
+							  SET
+								colcount		= pgxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= pgxp.product_id	AND
+								pgxp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00073', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxpce.colcount	= pgxpce.colcount - 1
+							  WHERE
+								pgxpce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00074', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions AS pgxpce
+							  SET
+								colcount		= pgxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id = pgxpce.product_id	AND
+								pgxpce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00075', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_PriceGroupXProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions WHERE pgrp_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00076', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct WHERE pgrp_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00077', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Read( l.pricegroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Delete( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Remove_All_PriceGroup_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct pgxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxp.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxp.colcount = pgxp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00152', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProduct AS pgxp
+							  SET
+								colcount		= pgxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id	= pgxp.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00153', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on existing sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions pgxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxpce.colcount = pgxpce.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00154', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions AS pgxpce
+							  SET
+								colcount		= pgxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id = pgxpce.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00155', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_PriceGroupXProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProductCollectionExclusions WHERE colcount = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00156', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct WHERE automatic = 1 AND colcount = 0' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00157', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Read( l.pricegroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXProduct_Delete( l.pricegroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Add_Collection_ExcludedProducts" PARAMETERS = "pgrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXExcludedProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxep.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxep.colcount	= pgxep.colcount + 1
+							  WHERE
+								pgxep.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00078', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct AS pgxep
+							  SET
+								colcount		= pgxep.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= pgxep.product_id	AND
+								pgxep.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00079', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXExcludedProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxepce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxepce.colcount	= pgxepce.colcount + 1
+							  WHERE
+								pgxepce.pgrp_id		= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00080', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions AS pgxepce
+							  SET
+								colcount		= pgxepce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?						AND
+								clxp.type		<> \'X\'				AND
+								clxp.product_id = pgxepce.product_id	AND
+								pgxepce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00081', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXExcludedProduct must be handled individually so that notifications can be performed
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionPriceGroupsExcluded"
+				QUERY	= "{ 'SELECT
+								clxp.product_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep ON pgxep.pgrp_id = ? AND pgxep.product_id = clxp.product_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce ON pgxepce.product_id = clxp.product_id AND pgxepce.pgrp_id = ?
+							  WHERE
+								clxp.col_id			= ?			AND
+								clxp.type			<> \'X\'	AND
+								pgxep.product_id	IS NULL		AND
+								pgxepce.product_id	IS NULL' }"
+				FIELDS	= "l.pgrp_id, l.pgrp_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00082', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionPriceGroupsExcluded.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:pgrp_id"		VALUE = "{ l.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:product_id"	VALUE = "{ CollectionPriceGroupsExcluded.d.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxexcludedproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Insert( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroupsExcluded">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionPriceGroupsExcluded" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionPriceGroupsExcluded">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Remove_Collection_ExcludedProducts" PARAMETERS = "pgrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXExcludedProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxep.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxep.colcount	= pgxep.colcount - 1
+							  WHERE
+								pgxep.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00083', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct AS pgxep
+							  SET
+								colcount		= pgxep.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= pgxep.product_id	AND
+								pgxep.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00084', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxepce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxepce.colcount	= pgxepce.colcount - 1
+							  WHERE
+								pgxepce.pgrp_id		= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00085', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions AS pgxepce
+							  SET
+								colcount		= pgxepce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?						AND
+								clxp.type		<> \'X\'				AND
+								clxp.product_id = pgxepce.product_id	AND
+								pgxepce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00086', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_PriceGroupXExcludedProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions WHERE pgrp_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00087', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXExcludedProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXExcludedProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct WHERE pgrp_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00088', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXExcludedProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedProduct_Read( l.pricegroupxexcludedproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Delete( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Remove_All_PriceGroup_ExcludedProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXExcludedProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct pgxep
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxep.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxep.colcount = pgxep.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00158', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct AS pgxep
+							  SET
+								colcount		= pgxep.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id	= pgxep.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00159', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on existing sNN_PriceGroupXExcludedProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions pgxepce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxepce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxepce.colcount = pgxepce.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00160', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions AS pgxepce
+							  SET
+								colcount		= pgxepce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id = pgxepce.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00161', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_PriceGroupXExcludedProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProductCollectionExclusions WHERE colcount = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00162', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXExcludedProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXExcludedProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXExcludedProduct WHERE automatic = 1 AND colcount = 0' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00163', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXExcludedProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedProduct_Read( l.pricegroupxexcludedproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXExcludedProduct_Delete( l.pricegroupxexcludedproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXExcludedProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Add_Collection_QualifyingProducts" PARAMETERS = "pgrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXQualifyingProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxqp.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxqp.colcount	= pgxqp.colcount + 1
+							  WHERE
+								pgxqp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00089', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct AS pgxqp
+							  SET
+								colcount		= pgxqp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'				AND
+								clxp.product_id	= pgxqp.product_id	AND
+								pgxqp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00090', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXQualifyingProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxqpce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxqpce.colcount	= pgxqpce.colcount + 1
+							  WHERE
+								pgxqpce.pgrp_id		= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00091', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions AS pgxqpce
+							  SET
+								colcount		= pgxqpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?						AND
+								clxp.type		<> \'X\'				AND
+								clxp.product_id = pgxqpce.product_id	AND
+								pgxqpce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00092', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_PriceGroupXQualifyingProduct must be handled individually so that notifications can be performed
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionProductsQualifying"
+				QUERY	= "{ 'SELECT
+								clxp.product_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp ON pgxqp.pgrp_id = ? AND pgxqp.product_id = clxp.product_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce ON pgxqpce.product_id = clxp.product_id AND pgxqpce.pgrp_id = ?
+							  WHERE
+								clxp.col_id			= ?			AND
+								clxp.type			<> \'X\'	AND
+								pgxqp.product_id	IS NULL		AND
+								pgxqpce.product_id	IS NULL' }"
+				FIELDS	= "l.pgrp_id, l.pgrp_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00093', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionProductsQualifying.d.EOF }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:pgrp_id"		VALUE = "{ l.pgrp_id }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:product_id"	VALUE = "{ CollectionProductsQualifying.d.product_id }">
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:automatic"		VALUE = 1>
+		<MvASSIGN NAME = "l.pricegroupxqualifyingproduct:colcount"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Insert( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProductsQualifying">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionProductsQualifying" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProductsQualifying">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PriceGroup_Remove_Collection_QualifyingProducts" PARAMETERS = "pgrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXQualifyingProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxqp.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxqp.colcount	= pgxqp.colcount - 1
+							  WHERE
+								pgxqp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00094', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct AS pgxqp
+							  SET
+								colcount		= pgxqp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= pgxqp.product_id	AND
+								pgxqp.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00095', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxqpce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxqpce.colcount	= pgxqpce.colcount - 1
+							  WHERE
+								pgxqpce.pgrp_id		= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00096', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions AS pgxqpce
+							  SET
+								colcount		= pgxqpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?						AND
+								clxp.type		<> \'X\'				AND
+								clxp.product_id = pgxqpce.product_id	AND
+								pgxqpce.pgrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.pgrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00097', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_PriceGroupXQualifyingProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions WHERE pgrp_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00098', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Records to be deleted in sNN_PriceGroupXQualifyingProduct must be handled individually so that disp_order can be generated
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXQualifyingProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct WHERE pgrp_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00099', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXQualifyingProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingProduct_Read( l.pricegroupxqualifyingproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Delete( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Remove_All_PriceGroup_QualifyingProducts" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_PriceGroupXQualifyingProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct pgxqp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxqp.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxqp.colcount = pgxqp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00164', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct AS pgxqp
+							  SET
+								colcount		= pgxqp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id	= pgxqp.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00165', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on existing sNN_PriceGroupXQualifyingProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions pgxqpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = pgxqpce.product_id AND clxp.type <> \'X\'
+							  SET
+								pgxqpce.colcount = pgxqpce.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00166', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions AS pgxqpce
+							  SET
+								colcount		= pgxqpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id = pgxqpce.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00167', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_PriceGroupXQualifyingProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProductCollectionExclusions WHERE colcount = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00168', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_PriceGroupXQualifyingProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PriceGroupXQualifyingProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXQualifyingProduct WHERE automatic = 1 AND colcount = 0' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00169', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT PriceGroupXQualifyingProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupXQualifyingProduct_Read( l.pricegroupxqualifyingproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].v10_PriceGroupXQualifyingProduct_Delete( l.pricegroupxqualifyingproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroupXQualifyingProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AvailGroup_Add_Collection_Products" PARAMETERS = "agrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_PriceGroupXQualifyingProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = agxp.product_id AND clxp.type <> \'X\'
+							  SET
+								agxp.colcount	= agxp.colcount + 1
+							  WHERE
+								agxp.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00100', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct AS agxp
+							  SET
+								colcount		= agxp.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= agxp.product_id	AND
+								agxp.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00101', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Increment col_count on existing sNN_AvailGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = agxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								agxpce.colcount	= agxpce.colcount + 1
+							  WHERE
+								agxpce.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00102', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions AS agxpce
+							  SET
+								colcount		= agxpce.colcount + 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id = agxpce.product_id	AND
+								agxpce.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00103', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| New records to be inserted in sNN_AvailGroupXProduct must be handled individually so that notifications can be performed
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CollectionProducts"
+				QUERY	= "{ 'SELECT
+								clxp.product_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp ON agxp.agrp_id = ? AND agxp.product_id = clxp.product_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce ON agxpce.product_id = clxp.product_id AND agxpce.agrp_id = ?
+							  WHERE
+								clxp.col_id			= ?			AND
+								clxp.type			<> \'X\'	AND
+								agxp.product_id		IS NULL		AND
+								agxpce.product_id	IS NULL' }"
+				FIELDS	= "l.agrp_id, l.agrp_id, l.col_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00104', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT CollectionProducts.d.EOF }">
+		<MvASSIGN NAME = "l.availgroupxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.availgroupxproduct:agrp_id"		VALUE = "{ l.agrp_id }">
+		<MvASSIGN NAME = "l.availgroupxproduct:product_id"	VALUE = "{ CollectionProducts.d.product_id }">
+		<MvASSIGN NAME = "l.availgroupxproduct:automatic"	VALUE = 1>
+		<MvASSIGN NAME = "l.availgroupxproduct:colcount"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Insert( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProducts">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CollectionProducts" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CollectionProducts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AvailGroup_Remove_Collection_Products" PARAMETERS = "agrp_id, col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_AvailGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = agxp.product_id AND clxp.type <> \'X\'
+							  SET
+								agxp.colcount	= agxp.colcount - 1
+							  WHERE
+								agxp.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00105', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct AS agxp
+							  SET
+								colcount		= agxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id	= agxp.product_id	AND
+								agxp.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00106', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_AvailGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = agxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								agxpce.colcount	= agxpce.colcount - 1
+							  WHERE
+								agxpce.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00107', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions AS agxpce
+							  SET
+								colcount		= agxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?					AND
+								clxp.type		<> \'X\'			AND
+								clxp.product_id = agxpce.product_id	AND
+								agxpce.agrp_id	= ?' }"
+				 FIELDS	= "l.col_id, l.agrp_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00108', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_AvailGroupXProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions WHERE agrp_id = ? AND colcount = 0' }"
+			 FIELDS	= "l.agrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00109', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_AvailGroupXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AvailGroupXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct WHERE agrp_id = ? AND automatic = 1 AND colcount = 0' }"
+				FIELDS	= "l.agrp_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00110', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT AvailGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_DB ].AvailGroupXProduct_Read( l.availgroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Delete( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "AvailGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_Remove_All_AvailGroup_Products" PARAMETERS = "col_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Decrement col_count on sNN_AvailGroupXProduct records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct agxp
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = agxp.product_id AND clxp.type <> \'X\'
+							  SET
+								agxp.colcount = agxp.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00170', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProduct AS agxp
+							  SET
+								colcount		= agxp.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id	= agxp.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00171', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Decrement col_count on existing sNN_AvailGroupXProductCollectionExclusions records
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions agxpce
+								INNER JOIN ' $ g.Store_Table_Prefix $ 'CollectionXProduct clxp ON clxp.col_id = ? AND clxp.product_id = agxpce.product_id AND clxp.type <> \'X\'
+							  SET
+								agxpce.colcount = agxpce.colcount - 1' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00172', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions AS agxpce
+							  SET
+								colcount		= agxpce.colcount - 1
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CollectionXProduct AS clxp
+							  WHERE
+								clxp.col_id		= ?			AND
+								clxp.type		<> \'X\'	AND
+								clxp.product_id = agxpce.product_id' }"
+				 FIELDS	= "l.col_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00173', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete records in sNN_AvailGroupXProductCollectionExclusions where assignments have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProductCollectionExclusions WHERE colcount = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00174', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove automatic sNN_AvailGroupXProduct assignments that have reached a colcount of 0
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AvailGroupXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct WHERE automatic = 1 AND colcount = 0' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-COL-UT-00175', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT AvailGroupXProduct.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_DB ].AvailGroupXProduct_Read( l.availgroupxproduct ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].v10_AvailGroupXProduct_Delete( l.availgroupxproduct ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "AvailGroupXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailGroupXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Collection_Filters" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.available_filters" VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'prod.id', 		'id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.code',		'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.sku',		'sku' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.name',		'name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.thumbnail',	'thumbnail' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.image',		'image' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.price',		'price' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.cost',		'cost' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.descrip',	'descrip' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.weight',		'weight' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'prod.taxable',	'taxable' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'prod.active',		'active' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.page_title',	'page_title' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'prod.dt_created',	'dt_created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'prod.dt_updated',	'dt_updated' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NULL_CHAR(	l.available_filters, 'cat.code',		'cancat_code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.page_code',	'page_code' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.available_filters }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Collection_MivaScript_Filters" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.available_filters" VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_INTEGER(	l.available_filters, 'id', 			'l.record:id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'code',		'l.record:code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'sku',			'l.record:sku' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'name',		'l.record:name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'thumbnail',	'l.record:thumbnail' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'image',		'l.record:image' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_NUMBER(		l.available_filters, 'price',		'l.record:price' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_NUMBER(		l.available_filters, 'cost',		'l.record:cost' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'descrip',		'l.record:descrip' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_NUMBER(		l.available_filters, 'weight',		'l.record:weight' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_BOOL(		l.available_filters, 'taxable',		'l.record:taxable' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_BOOL(		l.available_filters, 'active',		'l.record:active' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'page_title',	'l.record:page_title' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_INTEGER(	l.available_filters, 'dt_created',	'l.record:dt_created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_INTEGER(	l.available_filters, 'dt_updated',	'l.record:dt_updated' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'cancat_code',	'l.record:cancat_code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_MivaScript_CHAR(		l.available_filters, 'page_code',	'l.record:page_code' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.available_filters }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "json/mivascript.mv">

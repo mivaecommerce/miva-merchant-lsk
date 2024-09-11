@@ -1,0 +1,76 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CMP-MV-STDOIF-
+| Next Error Code: 1    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"        VALUE = "mmlsk-cmp-mv-stdorderitemfields">
+	<MvASSIGN NAME = "l.module:name"        VALUE = "Standard Order Item Fields">
+	<MvASSIGN NAME = "l.module:provider"    VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"     VALUE = "10.08">
+	<MvASSIGN NAME = "l.module:features"    VALUE = "component, component_prov, skins">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Order_ID }">
+		<MvASSIGN NAME = "g.Order_ID"			VALUE = "{ g.OrderForItems_ID }">	<MvCOMMENT> For backwards compatibility with PR7 </MvCOMMENT>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderitem_count"		VALUE = "{ miva_array_elements( l.settings:items ) }">
+
+	<MvIF EXPR = "{ ISNULL l.settings:order:id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_ID( g.Order_ID, l.settings:order ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order( l.settings:order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderitem_count GT 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_OrderItems_WithParts( l.settings:items, l.orderitem_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ len( g.OrderItem_IDs ) }">
+		<MvASSIGN NAME = "l.orderitem_pos"		VALUE = 1>
+		<MvASSIGN NAME = "l.orderitem_id"		VALUE = "{ gettoken( g.OrderItem_IDs, '|', l.orderitem_pos ) }">
+
+		<MvWHILE EXPR = "{ l.orderitem_id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Load_Line( l.settings:order:id, l.orderitem_id, l.settings:items[ l.orderitem_pos ] ) OR
+							NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_OrderItem_WithParts( l.settings:items[ l.orderitem_pos ] ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.orderitem_pos"	VALUE = "{ l.orderitem_pos + 1 }">
+			<MvASSIGN NAME = "l.orderitem_id"	VALUE = "{ gettoken( g.OrderItem_IDs, '|', l.orderitem_pos ) }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.settings:items">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_ImageTypes( l.item:product_id, l.item:variant_id, l.item, l.all_settings, l.settings:imagetypes, l.settings:constrain, l.settings:b_width, l.settings:b_height ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.ordergroup_count"		VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Merge_BasketOrOrderItem_Groups( l.settings:items, l.orderitem_count, l.settings:groups ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/component/cmp-include-imagetypes.mv">

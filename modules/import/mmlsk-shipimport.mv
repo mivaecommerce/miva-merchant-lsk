@@ -1,0 +1,230 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-SHP-
+| Next Error Code: 4    
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| API Functions for Feature "import"
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.module:code"        VALUE = "mmlsk-shipimport">
+    <MvASSIGN NAME = "l.module:name"        VALUE = "Shipping Import">
+    <MvASSIGN NAME = "l.module:provider"    VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0500">
+    <MvASSIGN NAME = "l.module:api_ver"     VALUE = "5.70">
+    <MvASSIGN NAME = "l.module:features"    VALUE = "import">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.capabilities:screen"                VALUE = 0>
+    <MvASSIGN NAME = "l.capabilities:persistent"            VALUE = 1>
+    <MvASSIGN NAME = "l.capabilities:format"                VALUE = "delimited">
+    <MvASSIGN NAME = "l.capabilities:persistent_provision"  VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Build_Column_Info( l.import, l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.fields"    VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed', 'Records Processed:', 0 ) }">	
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped', 'Records Skipped:', 0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+	
+	<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present, l.error_code, l.error_msg ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, l.error_msg ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.list_pos"   VALUE = 0>
+	
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ Build_Column_Info( l.import, l.run_data:columns_all ) }">
+		<MvIF EXPR = "{ miva_variable_value( 'l.run_data:columns_present:' $ l.column:field ) }">
+			<MvASSIGN NAME = "l.column:present"										VALUE = 1>
+			<MvASSIGN NAME = "l.list_pos"											VALUE = "{ l.list_pos + 1 }">
+			<MvREFERENCE NAME = "l.run_data:columns_list" INDEX = "{ l.list_pos }"	VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">	
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Validate_Fields( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:ship_code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderShipment_Load_Code( l.record:ship_code, l.ordershipment ) }">
+			<MvEVAL EXPR = "{ Record_Skip( l.session, 'Shipment not found for code: "' $ l.record:ship_code $ '".' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_ordershipment"		VALUE = "{ l.ordershipment }" >
+		<MvASSIGN NAME = "l.ordershipment:status"		VALUE = 200>
+		<MvASSIGN NAME = "l.ordershipment:ship_date"	VALUE = "{ s.time_t }">
+		<MvASSIGN NAME = "l.ordershipment:tracknum" 	VALUE = "{ l.record:tracknum }" >
+		<MvASSIGN NAME = "l.ordershipment:tracktype" 	VALUE = "{ l.record:tracktype }" >
+
+		<MvIF EXPR = "{ l.run_data:columns_present:cost AND NOT ISNULL l.record:cost }">
+			<MvASSIGN NAME = "l.ordershipment:cost"		VALUE = "{ l.record:cost }" >
+		</MvIF>
+
+		<MvASSIGN NAME = "l.set_ship" 					VALUE = "{ [ g.Module_Library_DB ].OrderShipment_Update_Status( l.original_ordershipment, l.ordershipment ) }" >
+	<MvELSE>
+		<MvASSIGN NAME = "l.orderitems_count" VALUE = "{ [ g.Module_Library_DB ].OrderItemList_Load_Status( l.record:order, 0, l.orderitems ) }">
+
+		<MvIF EXPR = "{ ( NOT l.run_data:columns_present:cost ) OR ( ISNULL l.record:cost ) }">
+			<MvASSIGN NAME = "l.record:cost"			VALUE = 0.00>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.orderitems_count GT 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v58_OrderItemList_CreateShipment( l.record:order, l.orderitems_count, l.orderitems, l.ordershipment ) }">
+				<MvEVAL EXPR = "{ Record_Skip( l.session, g.Error_Code $ ': ' $ g.Error_Message ) }">
+                <MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.original_ordershipment" 	VALUE = "{ l.ordershipment }" >
+			<MvASSIGN NAME = "l.ordershipment:status"		VALUE = 200>
+			<MvASSIGN NAME = "l.ordershipment:ship_date"	VALUE = "{ s.time_t }">
+			<MvASSIGN NAME = "l.ordershipment:tracknum" 	VALUE = "{ l.record:tracknum }" >
+			<MvASSIGN NAME = "l.ordershipment:tracktype" 	VALUE = "{ l.record:tracktype }" >
+			<MvASSIGN NAME = "l.ordershipment:cost" 		VALUE = "{ l.record:cost }" >
+			<MvASSIGN NAME = "l.set_ship" 					VALUE = "{ [ g.Module_Library_DB ].OrderShipment_Update_Status( l.original_ordershipment, l.ordershipment ) }" >
+		<MvELSE>
+			<MvFOREACH ITERATOR = "l.ordershipment" ARRAY = "l.ordershipments" COUNT = "{ [ g.Module_Library_DB ].OrderShipmentList_Load_Status( l.record:order, 100, l.ordershipments ) }">
+				<MvASSIGN NAME = "l.original_ordershipment" 	VALUE = "{ l.ordershipment }" >
+				<MvASSIGN NAME = "l.ordershipment:status"		VALUE = 200>
+				<MvASSIGN NAME = "l.ordershipment:ship_date"	VALUE = "{ s.time_t }">
+				<MvASSIGN NAME = "l.ordershipment:tracknum" 	VALUE = "{ l.record:tracknum }" >
+				<MvASSIGN NAME = "l.ordershipment:tracktype" 	VALUE = "{ l.record:tracktype }" >
+				<MvASSIGN NAME = "l.ordershipment:cost" 		VALUE = "{ l.record:cost }" >
+				<MvASSIGN NAME = "l.set_ship" 					VALUE = "{ [ g.Module_Library_DB ].OrderShipment_Update_Status( l.original_ordershipment, l.ordershipment ) }" >			
+			</MvFOREACH>
+		</MvIF>
+	</MvIF>
+	
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">	
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">    
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+    <MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">	
+    <MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">		
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">	
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Validation Functions
+| 
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var, error_code var, error_msg var" STANDARDOUTPUTLEVEL = "">	
+    <MvIF EXPR = "{ NOT l.columns_present:order }">
+        <MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-SHP-00001">
+        <MvASSIGN NAME = "l.error_msg"  VALUE = "The Order field must be assigned to an import file column">
+	
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvIF EXPR = "{ NOT l.columns_present:tracktype }">	
+		<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-SHP-00002">
+		<MvASSIGN NAME = "l.error_msg"  VALUE = "The Track Type field must be assigned to an import file column">
+		
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+		
+	<MvIF EXPR = "{ NOT l.columns_present:tracknum }">		
+		<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-SHP-00003">
+		<MvASSIGN NAME = "l.error_msg"  VALUE = "The Track Number field must be assigned to an import file column">
+		
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">		
+        <MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, l.column:required ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Miscellaneous Utility Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Build_Column_Info" PARAMETERS = "import var, columns var" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.columns"      VALUE = "">
+
+    <MvCOMMENT>                                       field          name                        header                     required    default     validation       </MvCOMMENT>
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'order',      'Order',             		'ORDER',            		1,          '',         'integer' ) }">
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_code',  'Shipment Code',            'SHIPMENT_CODE',            0,          '',         'string' ) }">
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'tracktype',	'Track Type',  				'TRACKTYPE',  				1,          '',         'string' ) }">
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'tracknum',	'Track Number',  			'TRACKNUM', 				1,          '',         'string' ) }">
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'cost',       'Cost',             		'COST',             		0,          '',         'currency' ) }">
+	
+    <MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

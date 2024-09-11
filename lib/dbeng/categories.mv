@@ -1,0 +1,1213 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-CTG-
+| Next Error Code: 45   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Category_Insert" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Category_Calculate_Depth( l.category, l.category:depth ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Category_Insert_LowLevel( l.category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.null"	VALUE = "{ Module_Notify_Category_Insert( l.module, l.category ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Update" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Category_Calculate_Depth( l.category, l.category:depth ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Category_Update_LowLevel( l.category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvIF EXPR = "{ l.category:parent_id NE l.category:original_parent_id }">
+		<MvIF EXPR = "{ NOT Category_Calculate_Children_Depth( l.category ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>	
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Category_Update( l.module, l.category ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Update_LastUpdated_CategoryXProduct_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dt_updated" VALUE = "{ s.dyn_time_t }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories
+						  SET
+							dt_updated = ?
+						  WHERE
+							id IN ( SELECT DISTINCT cat_id FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE product_id = ? )' }"
+			 FIELDS	= "l.dt_updated, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-CTG-00039', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Delete" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Category_Delete( l.module, l.category ) }">
+	</MvFOREACH>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ l.category:agrpcount }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].AvailGroupXCategory_Delete_All_Category( l.category:id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>	
+
+	<MvIF EXPR = "{ NOT Category_Calculate_Children_Depth_Recursive( l.category:id, ( l.category:depth - 1 ) ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Category_Update_Parent_All( l.category:id, l.category:parent_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Product_Decrement_CategoryCount_All( l.category:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CategoryXProduct_Delete_All_Category( l.category:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvIF EXPR = "{ NOT Product_Update_CanonicalCategory_All( l.category:id, 0 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Category_Delete( l.category ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_FCT_DB ].CategoryFacetRules_Delete_All_Category( l.category:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroupXCategory_Delete_All_Category( l.category:id ) OR
+					NOT [ g.Module_Feature_PGR_DB ].PriceGroupXExcludedCategory_Delete_All_Category( l.category:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedProperty_Delete_All_Category( l.category:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Category_Delete_ID( l.category:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Decrement_AvailabilityGroupCount_All" PARAMETERS = "agrp_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories
+					      SET
+							agrpcount	= agrpcount - 1
+					      WHERE
+						    id IN ( SELECT cat_id FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXCategory WHERE agrp_id = ? )' }"
+			 FIELDS	= "l.agrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Product" PARAMETERS = "product_id, categories var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Categories"
+				QUERY	= "{ 'SELECT
+								cat.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Categories cat,
+								' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp
+							  WHERE
+								cxp.product_id	= ? AND
+								cat.id			= cxp.cat_id
+							  ORDER BY
+								cat.disp_order ASC' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00041', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count"	VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Categories.d.EOF }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ ++l.category_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00042', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Categories' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'Categories', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00021', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset_AvailabilityGroup_All" PARAMETERS = "agrp_id, offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryList_Load_Offset_AvailabilityGroup_All_Agrp_ID"	VALUE = "{ l.agrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.CategoryList_Load_Offset_AvailabilityGroup_All_Agrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													cat.*,
+													agxc.agrp_id AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Categories cat
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCategory agxc ON ( agxc.agrp_id = ? AND cat.id = agxc.cat_id )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'cat', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY cat.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+		<MvASSIGN NAME = "l.categories" INDEX = "{ l.category_count }" MEMBER = "assigned" VALUE = "{ Categories.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00022', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset_AvailabilityGroup_Unassigned" PARAMETERS = "agrp_id, offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryList_Load_Offset_AvailabilityGroup_Unassigned_Agrp_ID"	VALUE = "{ l.agrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.CategoryList_Load_Offset_AvailabilityGroup_Unassigned_Agrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													cat.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Categories cat
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCategory agxc ON agxc.agrp_id = ? AND agxc.cat_id = cat.id
+												WHERE
+													agxc.agrp_id IS NULL' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'cat', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY cat.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00023', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset_AvailabilityGroup_Assigned" PARAMETERS = "agrp_id, offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryList_Load_Offset_AvailabilityGroup_Assigned_Agrp_ID"	VALUE = "{ l.agrp_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.CategoryList_Load_Offset_AvailabilityGroup_Assigned_Agrp_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Categories cat, ' $
+													g.Store_Table_Prefix $ 'AvailGroupXCategory agxc
+												WHERE
+													cat.id			= agxc.cat_id AND
+													agxc.agrp_id	= ?' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'cat', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00024', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Load_First" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPr = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Categories ORDER BY disp_order ASC',
+																			   '',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00006', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-CTG-00025' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Category_Read( l.category ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Load_Next" PARAMETERS = "category var, next_category var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Category_Load_Next_Display_Order"		VALUE = "{ l.category:disp_order }">
+	
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Categories WHERE disp_order > ? ORDER BY disp_order ASC',
+																			   'g.Category_Load_Next_Display_Order',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-CTG-00026' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Category_Read( l.next_category ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Load_Previous" PARAMETERS = "category var, prev_category var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Category_Load_Previous_Display_Order"	VALUE = "{ l.category:disp_order }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Categories WHERE disp_order < ? ORDER BY disp_order DESC',
+																			   'g.Category_Load_Previous_Display_Order',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-CTG-00027' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Category_Read( l.prev_category ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Load_Last" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Categories ORDER BY disp_order DESC',
+																			   '',
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-CTG-00028' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Category_Read( l.category ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryXProduct_Insert" PARAMETERS = "cat_id, product_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.categoryxproduct"				VALUE = "">
+	<MvASSIGN NAME = "l.categoryxproduct:cat_id"		VALUE = "{ l.cat_id }">
+	<MvASSIGN NAME = "l.categoryxproduct:product_id"	VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "l.categoryxproduct:automatic"		VALUE = 0>
+	<MvASSIGN NAME = "l.categoryxproduct:colcount"		VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ v10_CategoryXProduct_Insert( l.categoryxproduct ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_CategoryXProduct_Insert" PARAMETERS = "categoryxproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CategoryXProduct_Insert_LowLevel( l.categoryxproduct ) OR
+				    NOT Product_Increment_CategoryCount( l.categoryxproduct:product_id ) OR
+				    NOT Category_Update_LastUpdated( l.categoryxproduct:cat_id ) OR
+				    NOT CategoryXProductCollectionExclusion_Delete( l.categoryxproduct:cat_id, l.categoryxproduct:product_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 10.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_CategoryXProduct_Insert( l.module, l.categoryxproduct:cat_id, l.categoryxproduct:product_id ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryXProduct_Delete" PARAMETERS = "cat_id, product_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ CategoryXProduct_Load( l.cat_id, l.product_id, l.categoryxproduct ) }">
+		<MvIF EXPR = "{ NOT v10_CategoryXProduct_Delete( l.categoryxproduct ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_CategoryXProduct_Delete" PARAMETERS = "categoryxproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT CategoryXProduct_Delete_LowLevel( l.categoryxproduct:cat_id, l.categoryxproduct:product_id ) OR
+				    NOT Product_Decrement_CategoryCount( l.categoryxproduct:product_id ) OR
+				    NOT Category_Update_LastUpdated( l.categoryxproduct:cat_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.categoryxproduct:colcount GT 0 }">
+		<MvASSIGN NAME = "l.categoryxproductcollectionexclusion"			VALUE = "">
+		<MvASSIGN NAME = "l.categoryxproductcollectionexclusion:cat_id"		VALUE = "{ l.categoryxproduct:cat_id }">
+		<MvASSIGN NAME = "l.categoryxproductcollectionexclusion:product_id"	VALUE = "{ l.categoryxproduct:product_id }">
+		<MvASSIGN NAME = "l.categoryxproductcollectionexclusion:colcount"	VALUE = "{ l.categoryxproduct:colcount }">
+
+		<MvIF EXPR = "{ NOT CategoryXProductCollectionExclusion_Insert( l.categoryxproductcollectionexclusion ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 10.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_CategoryXProduct_Delete( l.module, l.categoryxproduct:cat_id, l.categoryxproduct:product_id ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryXProduct_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT Category_Update_LastUpdated_CategoryXProduct_Product( l.product_id ) OR
+					NOT CategoryXProduct_Delete_All_Product_LowLevel( l.product_id ) OR
+				    NOT Product_Update_CategoryCount( l.product_id, 0 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sorting:  Items to be sorted are processed in three groups.  The input array to the sort function just contains the
+|		    items to be sorted, their desired offsets, and their current offsets.  We initially sort this data into
+|			two groups: items moving up and items moving down.  During processing, items moving down are segregated
+|			into two groups: items moving past the highest current offset, and items moving within the current
+|			data set.
+|
+|			Ties are broken using the items original offset.
+|
+|			The end result is that we process items in the following order:
+|
+|				+-----------------------+  offset  original_offset
+|				|                       |    |            ^
+|				|    Items moving up    |    |            |
+|				|                       |    v            |
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    |            |
+|				| Items moving past end |    |            |
+|				|                       |    v            v
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    ^            |
+|				|   Items moving down   |    |            |
+|				|                       |    |            v
+|				+-----------------------+
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CategoryList_Update_Offsets_PastEnd" PARAMETERS = "pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.Category_Order_ID"	VALUE = "{ l.pastend[ l.pastend_pos ]:id }">
+		<MvASSIGN NAME = "l.disp_order"			VALUE = "{ StoreKey_Generate( 'CategoryDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories SET disp_order = ? WHERE id = ?' }" FIELDS = "l.disp_order, g.Category_Order_ID">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00019', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Update_Offsets" PARAMETERS = "categories var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"		VALUE = 0>
+
+	<MvASSIGN NAME = "l.category_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.category_count"		VALUE = "{ miva_array_elements( l.categories ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.categories, l.category_count ) }">
+
+	<MvWHILE EXPR = "{ l.category_pos LE l.category_count }">
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current category at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "g.Category_Order_ID" VALUE = "{ l.categories[ l.category_pos ]:id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				 'Categories',
+																				 'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'Categories WHERE id <> ? ORDER BY disp_order',
+																				 'g.Category_Order_ID',
+																				 l.categories[ l.category_pos ]:offset - 1,
+																				 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00010', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Categories.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.categories[ l.category_pos ] }">
+
+			<MvASSIGN NAME = "l.category_pos"	VALUE = "{ l.category_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+			<MvIF EXPR = "{ NOT CategoryList_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ Categories.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting categories after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories SET disp_order = disp_order + 1 WHERE disp_order >= ?' }" FIELDS = "l.disp_order">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00011', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'CategoryDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the category in the newly created hole
+			|
+			</MvCOMMENT>
+		
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories SET disp_order = ? WHERE id = ?' }" FIELDS = "l.disp_order, g.Category_Order_ID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00012', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.category_pos"	VALUE = "{ l.category_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT CategoryList_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ChildCategoryList_Update_Offsets" PARAMETERS = "parentcategory_id, categories var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"				VALUE = 0>
+
+	<MvASSIGN NAME = "l.category_pos"				VALUE = 1>
+	<MvASSIGN NAME = "l.category_count"				VALUE = "{ miva_array_elements( l.categories ) }">
+
+	<MvASSIGN NAME = "g.ParentCategory_Order_ID" 	VALUE = "{ l.parentcategory_id }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.categories, l.category_count ) }">
+
+	<MvWHILE EXPR = "{ l.category_pos LE l.category_count }">
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current category at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "g.Category_Order_ID" VALUE = "{ l.categories[ l.category_pos ]:id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				   'Categories',
+																				   'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'Categories WHERE parent_id = ? AND id <> ? ORDER BY disp_order',
+																				   'g.ParentCategory_Order_ID, g.Category_Order_ID',
+																				   l.categories[ l.category_pos ]:offset - 1,
+																				   1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00036', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Categories.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.categories[ l.category_pos ] }">
+
+			<MvASSIGN NAME = "l.category_pos"	VALUE = "{ l.category_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+			<MvIF EXPR = "{ NOT CategoryList_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ Categories.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting categories after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories SET disp_order = disp_order + 1 WHERE disp_order >= ?' }" FIELDS = "l.disp_order">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00037', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'CategoryDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the category in the newly created hole
+			|
+			</MvCOMMENT>
+		
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories SET disp_order = ? WHERE id = ?' }" FIELDS = "l.disp_order, g.Category_Order_ID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00038', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.category_pos"	VALUE = "{ l.category_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT CategoryList_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sorting:  Items to be sorted are processed in three groups.  The input array to the sort function just contains the
+|		    items to be sorted, their desired offsets, and their current offsets.  We initially sort this data into
+|			two groups: items moving up and items moving down.  During processing, items moving down are segregated
+|			into two groups: items moving past the highest current offset, and items moving within the current
+|			data set.
+|
+|			Ties are broken using the items original offset.
+|
+|			The end result is that we process items in the following order:
+|
+|				+-----------------------+  offset  original_offset
+|				|                       |    |            ^
+|				|    Items moving up    |    |            |
+|				|                       |    v            |
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    |            |
+|				| Items moving past end |    |            |
+|				|                       |    v            v
+|				+-----------------------+
+|				+-----------------------+
+|				|                       |    ^            |
+|				|   Items moving down   |    |            |
+|				|                       |    |            v
+|				+-----------------------+
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CategoryXProduct_Update_Offsets_PastEnd" PARAMETERS = "cat_id, pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryXProduct_Order_CategoryID" 	VALUE = "{ l.cat_id }">
+
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.CategoryXProduct_Order_ProductID" 	VALUE = "{ l.pastend[ l.pastend_pos ]:product_id }">
+		<MvASSIGN NAME = "l.disp_order"							VALUE = "{ StoreKey_Generate( 'CategoryXProductDisplayOrder' ) }">
+
+		<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+													$ g.Store_Table_Prefix $ 'CategoryXProduct 
+												SET 
+													disp_order = ? 
+												WHERE 
+													product_id = ? AND cat_id = ?' }" 
+												FIELDS = "l.disp_order, g.CategoryXProduct_Order_ProductID, l.cat_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00020', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryXProduct_Update_Offsets" PARAMETERS = "cat_id, catxprods var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"						VALUE = 0>
+
+	<MvASSIGN NAME = "l.catxprod_pos"						VALUE = 1>
+	<MvASSIGN NAME = "l.catxprod_count"						VALUE = "{ miva_array_elements( l.catxprods ) }">
+	<MvASSIGN NAME = "g.CategoryXProduct_Order_CategoryID" 	VALUE = "{ l.cat_id }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.catxprods, l.catxprod_count ) }">
+
+	<MvWHILE EXPR = "{ l.catxprod_pos LE l.catxprod_count }">
+		<MvASSIGN NAME = "g.CategoryXProduct_Order_ProductID" 	VALUE = "{ l.catxprods[ l.catxprod_pos ]:product_id }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current catxprod at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				 'CategoryXProduct',
+																				 'SELECT product_id, disp_order FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE product_id <> ? AND cat_id = ? ORDER BY disp_order',
+																				 'g.CategoryXProduct_Order_ProductID, g.CategoryXProduct_Order_CategoryID',
+																				 l.catxprods[ l.catxprod_pos ]:offset - 1,
+																				 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00013', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ CategoryXProduct.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.catxprods[ l.catxprod_pos ] }">
+
+			<MvASSIGN NAME = "l.catxprod_pos"	VALUE = "{ l.catxprod_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+
+			<MvIF EXPR = "{ NOT CategoryXProduct_Update_Offsets_PastEnd( l.cat_id, l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ CategoryXProduct.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting catxprods after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'CategoryXProduct 
+													SET 
+														disp_order = disp_order + 1 
+													WHERE 
+														disp_order >= ? AND cat_id = ?' }" 
+													FIELDS = "l.disp_order, l.cat_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00014', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'CategoryXProductDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the catxprod in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME = "Merchant" QUERY = "{ 'UPDATE ' 
+														$ g.Store_Table_Prefix $ 'CategoryXProduct 
+													SET 
+														disp_order = ? 
+													WHERE 
+														product_id = ? AND cat_id = ?' }" 
+													FIELDS = "l.disp_order, g.CategoryXProduct_Order_ProductID, l.cat_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00015', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.catxprod_pos"	VALUE = "{ l.catxprod_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT CategoryXProduct_Update_Offsets_PastEnd( l.cat_id, l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Category_Update_LastUpdated( l.cat_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset_Product_Unassigned" PARAMETERS = "prod_id, offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryList_Load_Offset_Product_Unassigned_Prod_ID"	VALUE = "{ l.prod_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.CategoryList_Load_Offset_Product_Unassigned_Prod_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													cat.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Categories cat
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON cxp.product_id = ? AND cxp.cat_id = cat.id
+												WHERE
+													cxp.product_id IS NULL' }">
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'cat', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY cat.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00029', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset_Product_All" PARAMETERS = "prod_id, offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryList_Load_Offset_Product_All_Prod_ID"	VALUE = "{ l.prod_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.CategoryList_Load_Offset_Product_All_Prod_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													ctgy.*,
+													cxp.cat_id AS assigned
+												FROM ' $
+													g.Store_Table_Prefix $ 'Categories ctgy
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp ON ( ctgy.id = cxp.cat_id and cxp.product_id = ? )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, 'ctgy', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY ctgy.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+		<MvASSIGN NAME = "l.categories" INDEX = "{ l.category_count }" MEMBER = "assigned" VALUE = "{ Categories.d.assigned NE 0 }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00030', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryList_Load_Offset_Product_Assigned" PARAMETERS = "prod_id, offset, search, searchable_fields, max, nextoffset var, categories var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.CategoryList_Load_Offset_Product_Assigned_Prod_ID"	VALUE = "{ l.prod_id }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "g.CategoryList_Load_Offset_Product_Assigned_Prod_ID">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													ctgy.*
+												FROM ' $
+													g.Store_Table_Prefix $ 'Categories ctgy, ' $
+													g.Store_Table_Prefix $ 'CategoryXProduct cxp
+												WHERE
+													ctgy.id			= cxp.cat_id AND
+													cxp.product_id	= ?' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'ctgy', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY ctgy.disp_order' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00018', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.category_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.category_count" VALUE = "{ l.category_count + 1 }">
+		<MvEVAL EXPR = "{ Category_Read( l.categories[ l.category_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Categories.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.category_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-CTG-00031', l.category_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Validate_Parent" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.category:parent_id EQ l.category:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00032', 'A category may not be its own parent' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.category:parent_id }">
+		<MvIF EXPR = "{ NOT Category_Load_ID( l.category:parent_id, l.parent_category ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00033', 'Parent category does not exist' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_parent" VALUE = "{ l.parent_category }">
+
+		<MvWHILE EXPR = "{ l.parent_category:parent_id }">
+			<MvIF EXPR = "{ l.parent_category:parent_id EQ l.category:id }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00034', 'Circular hierarchy specified: Category \'' $ l.original_parent:code $ '\' is a child of \'' $ l.category:code $ '\'' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT Category_Load_ID( l.parent_category:parent_id, l.parent_category ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00035', 'Parent category hierarchy is corrupt' ) }">
+			</MvIF>
+		</MvWHILE>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.category:validated_parent_id"	VALUE = "{ l.category:parent_id }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Calculate_Depth" PARAMETERS = "category var, depth var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.category:parent_id }">
+		<MvASSIGN NAME = "l.depth" VALUE = 0>
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Category_Load_ID( l.category:parent_id, l.parent_category ) }">
+		<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+			<MvASSIGN NAME = "l.depth" VALUE = 0>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00043', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.depth" VALUE = 0>
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT l.parent_category:id }">
+		<MvASSIGN NAME = "l.depth" VALUE = 0>
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.depth" VALUE = "{ l.parent_category:depth + 1 }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Calculate_Children_Depth" PARAMETERS = "parent_category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.parent_category:depth OR l.parent_category:depth LT 0 }">
+		<MvIF EXPR = "{ NOT Category_Calculate_Depth( l.parent_category, l.parent_category:depth ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ Category_Calculate_Children_Depth_Recursive( l.parent_category:id, ( l.parent_category:depth + 1 ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Calculate_Children_Depth_Recursive" PARAMETERS = "parent_id, child_depth" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.parent_id" 		VALUE = "{ int( l.parent_id ) }">
+	<MvASSIGN NAME = "l.child_depth" 	VALUE = "{ int( l.child_depth ) }">
+	
+	<MvIF EXPR = "{ l.child_depth LT 0 }">
+		<MvASSIGN NAME = "l.child_depth" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Category_Update_Depth_Parent_All( l.parent_id, l.child_depth ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load all children categories which have children into an array and recursively update
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Categories"
+				QUERY	= "{ 'SELECT DISTINCT
+								cat.id,
+								cat.parent_id,
+								cat.depth 
+							  FROM 	' $ g.Store_Table_Prefix $ 'Categories cat,
+							  		' $ g.Store_Table_Prefix $ 'Categories children
+							  WHERE 
+								cat.parent_id		= ? AND
+								children.parent_id	= cat.id' }"
+				FIELDS	= "l.parent_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00040', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.child_categories" 			VALUE = "">
+	<MvASSIGN NAME = "l.child_category_count" 		VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Categories.d.EOF }">
+		<MvEVAL EXPR = "{ Category_Read( l.child_categories[ ++l.child_category_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+	<MvFOREACH ITERATOR = "l.child" ARRAY = "l.child_categories" COUNT = "{ l.child_category_count }">
+		<MvIF EXPR = "{ NOT Category_Calculate_Children_Depth_Recursive(  l.child:id, ( l.child:depth + 1 ) )  }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Update_Depth_Parent_All" PARAMETERS = "parent_id, depth" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories
+					      SET
+							depth		= ?
+					      WHERE
+							parent_id	= ?' }"
+			 FIELDS	= "l.depth, l.parent_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CTG-00044', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

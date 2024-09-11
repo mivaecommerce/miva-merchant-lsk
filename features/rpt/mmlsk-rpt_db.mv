@@ -1,0 +1,488 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-RPT-DTB-
+| Next Error Code: 31   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "RPT_CreateDataFiles" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].DomainPrivilege_Insert( 'REPT', 'Reports' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RPT_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'Reports', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'Reports
+							(
+								id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+								module_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+								descrip		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+								date_start	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )	$ ',
+								date_end	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )	$ ',
+								date_group	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )		$ ',
+								display		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+								rinterval	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+								lastrun		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+								last_start	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+								last_end	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+								last_state	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+								config		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ '
+							)' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'Reports_1 ON ' $ g.Store_Table_Prefix $ 'Reports ( id ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'ReportData
+							(
+								report_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+								set_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+								dt_start	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+								dt_end		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+								data		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 16, 2 )	$ '
+							)' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'ReportData_1 ON ' $ g.Store_Table_Prefix $ 'ReportData ( report_id, set_id, dt_start )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "RPT_Store_Delete" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant"	QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'Reports' }"> 
+	<MvQUERY NAME = "Merchant"	QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'ReportData' }"> 
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_Reports
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Report_Read" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:id"			VALUE = "{ Reports.d.id }">
+	<MvASSIGN NAME = "l.report:module_id"	VALUE = "{ Reports.d.module_id }">
+	<MvASSIGN NAME = "l.report:descrip"		VALUE = "{ Reports.d.descrip }">
+	<MvASSIGN NAME = "l.report:date_start"	VALUE = "{ Reports.d.date_start }">
+	<MvASSIGN NAME = "l.report:date_end"	VALUE = "{ Reports.d.date_end }">
+	<MvASSIGN NAME = "l.report:date_group"	VALUE = "{ Reports.d.date_group }">
+	<MvASSIGN NAME = "l.report:display"		VALUE = "{ Reports.d.display }">
+	<MvASSIGN NAME = "l.report:rinterval"	VALUE = "{ Reports.d.rinterval }">
+	<MvASSIGN NAME = "l.report:lastrun"		VALUE = "{ Reports.d.lastrun }">
+	<MvASSIGN NAME = "l.report:last_start"	VALUE = "{ Reports.d.last_start }">
+	<MvASSIGN NAME = "l.report:last_end"	VALUE = "{ Reports.d.last_end }">
+	<MvASSIGN NAME = "l.report:last_state"	VALUE = "{ miva_array_deserialize( Reports.d.last_state ) }">
+	<MvASSIGN NAME = "l.report:config"		VALUE = "{ miva_array_deserialize( Reports.d.config ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Insert" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Reports' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ Report_Insert_LowLevel( l.report ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Insert_LowLevel" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.report:lastrun }">		<MvASSIGN NAME = "l.report:lastrun"		VALUE = 0>	</MvIF>
+	<MvIF EXPR = "{ ISNULL l.report:last_start }">	<MvASSIGN NAME = "l.report:last_start"	VALUE = 0>	</MvIF>
+	<MvIF EXPR = "{ ISNULL l.report:last_end }">	<MvASSIGN NAME = "l.report:last_end"	VALUE = 0>	</MvIF>
+
+	<MvASSIGN NAME = "l.config"		VALUE = "{ miva_array_serialize( l.report:config ) }">
+	<MvASSIGN NAME = "l.last_state"	VALUE = "{ miva_array_serialize( l.report:last_state ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'Reports
+					      ( id, module_id, descrip, date_start, date_end, date_group, display, rinterval,
+						    lastrun, last_start, last_end, last_state, config )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.report:id, l.report:module_id, l.report:descrip, l.report:date_start,
+					   l.report:date_end, l.report:date_group, l.report:display, l.report:rinterval,
+					   l.report:lastrun, l.report:last_start, l.report:last_end, l.last_state, l.config">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Update" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Reports
+						  SET
+							module_id	= ?,
+							descrip		= ?,
+							date_start	= ?,
+							date_end	= ?,
+							date_group	= ?,
+							display		= ?,
+							rinterval	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.report:module_id, l.report:descrip, l.report:date_start, l.report:date_end,
+					   l.report:date_group, l.report:display, l.report:rinterval,
+					   l.report:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Update_Config" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.config"	VALUE = "{ miva_array_serialize( l.report:config ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Reports
+						  SET
+							config		= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.config,
+					   l.report:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Update_LastRun" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:lastrun"	VALUE = "{ s.dyn_time_t }">
+
+	<MvFUNCTIONRETURN VALUE = "{ Report_Update_LastRun_LowLevel( l.report ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Update_LastRun_LowLevel" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.last_state"		VALUE = "{ miva_array_serialize( l.report:last_state ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Reports
+						  SET
+							lastrun		= ?,
+							last_start	= ?,
+							last_end	= ?,
+							last_state	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.report:lastrun, l.report:last_start, l.report:last_end, l.last_state,
+					   l.report:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Report_Load_ID( l.id, l.report ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+			<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+				<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Delete( l.module, l.report ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Report_Delete_LowLevel( l.id ) AND ReportData_Delete_Report( l.id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Delete_LowLevel" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'Reports WHERE id = ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportList_Load_All" PARAMETERS = "reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Reports"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Reports ORDER BY id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Reports.d.EOF }">
+		<MvASSIGN NAME = "l.report_count" VALUE = "{ l.report_count + 1 }">
+		<MvEVAL EXPR = "{ Report_Read( l.reports[ l.report_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Reports" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00012', l.report_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportList_Load_Display" PARAMETERS = "reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Reports"
+				QUERY	= "{ 'SELECT
+								r.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Reports r,
+								Modules m
+							  WHERE
+								r.display	= 1				AND
+								m.id		= r.module_id	AND
+								m.active	= 1
+							  ORDER BY
+								id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Reports.d.EOF }">
+		<MvASSIGN NAME = "l.report_count" VALUE = "{ l.report_count + 1 }">
+		<MvEVAL EXPR = "{ Report_Read( l.reports[ l.report_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Reports" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00014', l.report_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Count_Module" PARAMETERS = "module_id, count var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Reports"
+				QUERY	= "{ 'SELECT COUNT( * ) AS report_count FROM ' $ g.Store_Table_Prefix $ 'Reports
+							  WHERE
+								module_id	= ?' }"
+				FIELDS	= "l.module_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00030', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Reports.d.EOF }">
+		<MvASSIGN NAME = "l.count"	VALUE = 0>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count"		VALUE = "{ Reports.d.report_count }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Report_Load_ID" PARAMETERS = "id, report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Reports"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Reports WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Reports.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-RPT-DTB-00016' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Report_Read( l.report ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_ReportData
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ReportData_Read" PARAMETERS = "reportdata var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.reportdata:report_id"	VALUE = "{ ReportData.d.report_id }">
+	<MvASSIGN NAME = "l.reportdata:set_id"		VALUE = "{ ReportData.d.set_id }">
+	<MvASSIGN NAME = "l.reportdata:dt_start"	VALUE = "{ ReportData.d.dt_start }">
+	<MvASSIGN NAME = "l.reportdata:dt_end"		VALUE = "{ ReportData.d.dt_end }">
+	<MvASSIGN NAME = "l.reportdata:data"		VALUE = "{ ReportData.d.data }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Insert" PARAMETERS = "reportdata var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'ReportData
+					      ( report_id, set_id, dt_start, dt_end, data )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.reportdata:report_id, l.reportdata:set_id,
+					   l.reportdata:dt_start, l.reportdata:dt_end,
+					   l.reportdata:data">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Load_Interval" PARAMETERS = "report_id, set_id, dt_start, dt_end, reportdata var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ReportData"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ReportData WHERE report_id = ? AND set_id = ? AND dt_start = ? and dt_end = ?' }"
+				FIELDS	= "l.report_id, l.set_id, l.dt_start, l.dt_end">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00018', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ReportData.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-RPT-DTB-00019' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ReportData_Read( l.reportdata ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Load_Last" PARAMETERS = "report_id, set_id, reportdata var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Session:cache:reportdata_load_last:report_id"	VALUE = "{ l.report_id }">
+	<MvASSIGN NAME = "g.Session:cache:reportdata_load_last:set_id"		VALUE = "{ l.set_id }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ReportData',
+																			 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ReportData WHERE report_id = ? AND set_id = ? ORDER BY dt_end DESC',
+																			 'g.Session:cache:reportdata_load_last:report_id, g.Session:cache:reportdata_load_last:set_id',
+																			 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00026', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ReportData.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-RPT-DTB-00027' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ReportData_Read( l.reportdata ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Sum_Set" PARAMETERS = "report_id, set_id, data_sum var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ReportData"
+				QUERY	= "{ 'SELECT SUM( data ) AS data_sum FROM ' $ g.Store_Table_Prefix $ 'ReportData WHERE report_id = ? AND set_id = ?' }"
+				FIELDS	= "l.report_id, l.set_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ReportData.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-RPT-DTB-00021' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data_sum" VALUE = "{ ReportData.d.data_sum }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Average_Set" PARAMETERS = "report_id, set_id, data_avg var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ReportData"
+				QUERY	= "{ 'SELECT AVG( data ) AS data_avg FROM ' $ g.Store_Table_Prefix $ 'ReportData WHERE report_id = ? AND set_id = ?' }"
+				FIELDS	= "l.report_id, l.set_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00028', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ReportData.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-RPT-DTB-00029' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data_avg" VALUE = "{ ReportData.d.data_avg }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportDataList_Load_Set" PARAMETERS = "report_id, set_id, reportdata var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ReportData"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ReportData WHERE report_id = ? AND set_id = ? ORDER BY dt_start' }"
+				FIELDS	= "l.report_id, l.set_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.reportdata_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT ReportData.d.EOF }">
+		<MvASSIGN NAME = "l.reportdata_count" VALUE = "{ l.reportdata_count + 1 }">
+		<MvEVAL EXPR = "{ ReportData_Read( l.reportdata[ l.reportdata_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "ReportData" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ReportData">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00023', l.reportdata_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Delete_Report" PARAMETERS = "report_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'ReportData
+						  WHERE
+							report_id	= ?' }"
+			 FIELDS	= "l.report_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportData_Delete_Set" PARAMETERS = "report_id, set_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'ReportData
+						  WHERE
+							report_id	= ? AND
+							set_id		= ?' }"
+			 FIELDS	= "l.report_id, l.set_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00025', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

@@ -1,0 +1,938 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-O55-
+| Next Error Code: 36   
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| These functions emulate similar behavior for payment information as in previous
+| versions (5.5 PR6, post-PR7), accepting and returning the following removed fields:
+| 	processed
+| 	pay_id
+| 	pay_data
+| 	pay_secid
+| 	pay_seckey
+| 	pay_secdat
+|
+| processed has been replaced with status.
+| The pay_xxx fields have been moved into the sNN_OrderPayments table.
+|
+| Read operations return the latest transaction.  This ensures that report and data
+| extraction modules (like Synchro) get the most up to date transaction information.
+|
+| Order_Update_Payment always updates the latest transaction with the specified pay_id.
+| The primary users of this function are payment modules that record their payment
+| information in a subsequent call, such as Amazon Simple Pay or PayPal.
+|
+| There must be symmetry between the read and write functionality to ensure that
+| legacy modules can get their previously written data back.
+|
+| Order_Update_Processed can only transition an order in the "Pending" state into the
+| "Processing" state.  It does this by creating a shipment for all items in the order.
+| It returns an error if the caller attempts to set "processed" to 0.
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Order_Read" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ v56_Order_Read( l.order ) }">
+
+	<MvIF EXPR = "{ Orders.d.status EQ 0 }">
+		<MvASSIGN NAME = "l.order:processed"		VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.order:processed"		VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL Orders.d.payment_id }">
+		<MvASSIGN NAME = "l.order:orderpayment_id"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.order:orderpayment_id"	VALUE = "{ Orders.d.payment_id }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order:pay_data"				VALUE = "{ Orders.d.payment_pay_data }">
+
+	<MvIF EXPR = "{ ISNULL Orders.d.payment_pay_secid }">
+		<MvASSIGN NAME = "l.order:pay_secid"		VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.order:pay_secid"		VALUE = "{ Orders.d.payment_pay_secid }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order:pay_seckey"			VALUE = "{ Orders.d.payment_pay_seckey }">
+	<MvASSIGN NAME = "l.order:pay_secdat"			VALUE = "{ Orders.d.payment_pay_secdat }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Create" PARAMETERS = "basket var, total, pay_id, pay_data, payment_secure var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ l.pay_id }">
+		<MvASSIGN NAME = "l.payment:order_id"	VALUE = "{ l.basket:order_id }">
+		<MvASSIGN NAME = "l.payment:parent_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.payment:type"		VALUE = 1>
+		<MvASSIGN NAME = "l.payment:refnum"		VALUE = "{ l.basket:order_id }">
+		<MvASSIGN NAME = "l.payment:amount"		VALUE = "{ l.total }">
+		<MvASSIGN NAME = "l.payment:available"	VALUE = "{ l.total }">
+		<MvASSIGN NAME = "l.payment:dtstamp"	VALUE = "{ s.time_t }">
+		<MvASSIGN NAME = "l.payment:expires"	VALUE = 0>
+		<MvASSIGN NAME = "l.payment:ip"			VALUE = "{ s.remote_addr }">
+		<MvASSIGN NAME = "l.payment:pay_id"		VALUE = "{ l.pay_id }">
+		<MvASSIGN NAME = "l.payment:pay_data"	VALUE = "{ l.pay_data }">
+		<MvASSIGN NAME = "l.payment:pay_secid"	VALUE = "{ l.payment_secure:id }">
+		<MvASSIGN NAME = "l.payment:pay_seckey"	VALUE = "{ l.payment_secure:key }">
+		<MvASSIGN NAME = "l.payment:pay_secdat"	VALUE = "{ l.payment_secure:data }">
+
+		<MvIF EXPR = "{ NOT OrderPayment_Insert( l.payment ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Order_Create_LowLevel( l.basket, l.total, l.order ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_ID" PARAMETERS = "id, order var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Orders"
+				QUERY	= "{ 'SELECT
+								o.*,
+								op.id AS payment_id,
+								op.pay_id AS payment_pay_id,
+								op.pay_data AS payment_pay_data,
+								op.pay_secid AS payment_pay_secid,
+								op.pay_seckey AS payment_pay_seckey,
+								op.pay_secdat AS payment_pay_secdat
+							  FROM ' $
+								g.Store_Table_Prefix $ 'Orders o
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+							  WHERE
+								o.id	= ?	AND
+								( op.id IS NULL OR
+								  op.id	= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00002' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Order_Read( l.order ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_First" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range(	'Merchant',
+																				'Orders',
+																				'SELECT
+																					o.*,
+																					op.id AS payment_id,
+																					op.pay_id AS payment_pay_id,
+																					op.pay_data AS payment_pay_data,
+																					op.pay_secid AS payment_pay_secid,
+																					op.pay_seckey AS payment_pay_seckey,
+																					op.pay_secdat AS payment_pay_secdat
+																				  FROM ' $
+																					g.Store_Table_Prefix $ 'Orders o 
+																					LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+																				  WHERE
+																					op.id IS NULL OR
+																					op.id = ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id )
+																				  ORDER BY
+																					o.id ASC',
+																				'', 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00004' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Order_Read( l.order ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_Next" PARAMETERS = "order var, next_order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Order_Load_Next_ID"	VALUE = "{ l.order:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range(	'Merchant',
+																				'Orders',
+																				'SELECT
+																					o.*,
+																					op.id AS payment_id,
+																					op.pay_id AS payment_pay_id,
+																					op.pay_data AS payment_pay_data,
+																					op.pay_secid AS payment_pay_secid,
+																					op.pay_seckey AS payment_pay_seckey,
+																					op.pay_secdat AS payment_pay_secdat
+																				  FROM ' $
+																					g.Store_Table_Prefix $ 'Orders o
+																					LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+																				  WHERE
+																					o.id	> ? AND
+																					( op.id IS NULL OR
+																					  op.id	= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )
+																				  ORDER BY
+																					o.id ASC',
+																				'g.Order_Load_Next_ID', 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00006' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Order_Read( l.order ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_Previous" PARAMETERS = "order var, prev_order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Order_Load_Previous_ID"	VALUE = "{ l.order:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range(	'Merchant',
+																				'Orders',
+																				'SELECT
+																					o.*,
+																					op.id AS payment_id,
+																					op.pay_id AS payment_pay_id,
+																					op.pay_data AS payment_pay_data,
+																					op.pay_secid AS payment_pay_secid,
+																					op.pay_seckey AS payment_pay_seckey,
+																					op.pay_secdat AS payment_pay_secdat
+																				  FROM ' $
+																					g.Store_Table_Prefix $ 'Orders o
+																					LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+																				  WHERE
+																					o.id	< ? AND
+																					( op.id IS NULL OR
+																					  op.id	= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )
+																				  ORDER BY
+																					o.id DESC',
+																				'g.Order_Load_Previous_ID', 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00008' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Order_Read( l.order ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_Last" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range(	'Merchant',
+																				'Orders',
+																				'SELECT
+																					o.*,
+																					op.id AS payment_id,
+																					op.pay_id AS payment_pay_id,
+																					op.pay_data AS payment_pay_data,
+																					op.pay_secid AS payment_pay_secid,
+																					op.pay_seckey AS payment_pay_seckey,
+																					op.pay_secdat AS payment_pay_secdat
+																				  FROM ' $
+																					g.Store_Table_Prefix $ 'Orders o
+																					LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+																				  WHERE
+																					op.id IS NULL OR
+																					op.id	= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id )
+																				  ORDER BY
+																					o.id DESC',
+																				'', 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00010' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Order_Read( l.order ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Update_Payment" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.order:pay_id EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.order:orderpayment_id }">
+		<MvIF EXPR = "{ OrderPayment_Load_ID( l.order:orderpayment_id, l.payment ) }">
+			<MvIF EXPR = "{ l.payment:pay_secid AND ( l.payment:pay_secid NE l.order:pay_secid ) }">
+				<MvIF EXPR = "{ NOT Encryption_Decrement_ReferenceCount( l.payment:pay_secid ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.original_secid"		VALUE = "{ l.payment:pay_secid }">
+
+			<MvASSIGN NAME = "l.payment:pay_data"	VALUE = "{ l.order:pay_data }">
+			<MvASSIGN NAME = "l.payment:pay_secid"	VALUE = "{ l.order:pay_secid }">
+			<MvASSIGN NAME = "l.payment:pay_seckey"	VALUE = "{ l.order:pay_seckey }">
+			<MvASSIGN NAME = "l.payment:pay_secdat"	VALUE = "{ l.order:pay_secdat }">
+
+			<MvIF EXPR = "{ NOT OrderPayment_Update_LowLevel( l.payment ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.order:pay_secid NE l.original_secid }">
+				<MvIF EXPR = "{ NOT Encryption_Increment_ReferenceCount( l.order:pay_secid ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Fall through and create a new transaction
+		|
+		</MvCOMMENT>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.payment:order_id"			VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.payment:parent_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.payment:type"				VALUE = 1>
+	<MvASSIGN NAME = "l.payment:refnum"				VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.payment:amount"				VALUE = "{ l.order:total }">
+	<MvASSIGN NAME = "l.payment:available"			VALUE = "{ l.order:total }">
+	<MvASSIGN NAME = "l.payment:dtstamp"			VALUE = "{ s.time_t }">
+	<MvASSIGN NAME = "l.payment:expires"			VALUE = 0>
+	<MvASSIGN NAME = "l.payment:pay_id"				VALUE = "{ l.order:pay_id }">
+	<MvASSIGN NAME = "l.payment:pay_data"			VALUE = "{ l.order:pay_data }">
+	<MvASSIGN NAME = "l.payment:pay_secid"			VALUE = "{ l.order:pay_secid }">
+	<MvASSIGN NAME = "l.payment:pay_seckey"			VALUE = "{ l.order:pay_seckey }">
+	<MvASSIGN NAME = "l.payment:pay_secdat"			VALUE = "{ l.order:pay_secdat }">
+
+	<MvFUNCTIONRETURN VALUE = "{ OrderPayment_Insert( l.payment ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Update_Processed" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.order:processed EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00012', 'Order_Update_Processed may no longer be used to mark an order as unprocessed' ) }">
+	</MvIF>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvCOMMENT>
+	|
+	| Create a shipment containing all of the items in the order
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.orderitem_count" VALUE = "{ OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+	<MvIF EXPR = "{ l.orderitem_count EQ 0 }">
+		<MvCOMMENT>
+		|
+		| Explicitly set the status to Processing since Order_Update_Status() requires items
+		|
+		</MvCOMMENT>
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Orders SET status = 100 WHERE id = ?' }"
+				 FIELDS	= "l.order:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00022', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT OrderItemList_CreateShipment( l.order:id, l.orderitem_count, l.orderitems ) OR
+						NOT Order_Update_Status( l.order ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there is an existing legacy authorization, create a legacy capture for it
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "g.Order_Update_Processed_Order_ID"	VALUE = "{ l.order:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range(	'Merchant',
+																				'OrderPayments',
+																				'SELECT * from ' $ g.Store_Table_Prefix $ 'OrderPayments WHERE order_id = ? AND type = 1 AND available > 0 ORDER BY id DESC',
+																				'g.Order_Update_Processed_Order_ID',
+																				0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ OrderPayments.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderPayments">
+	<MvELSE>
+		<MvEVAL EXPR = "{ OrderPayment_Read( l.existing_payment ) }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderPayments">
+
+		<MvASSIGN NAME = "l.new_payment:order_id"		VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.new_payment:parent_id"		VALUE = "{ l.existing_payment:id }">
+		<MvASSIGN NAME = "l.new_payment:type"			VALUE = 2>
+		<MvASSIGN NAME = "l.new_payment:refnum"			VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.new_payment:amount"			VALUE = "{ l.existing_payment:available }">
+		<MvASSIGN NAME = "l.new_payment:available"		VALUE = 0>
+		<MvASSIGN NAME = "l.new_payment:dtstamp"		VALUE = "{ s.time_t }">
+		<MvASSIGN NAME = "l.new_payment:expires"		VALUE = 0>
+		<MvASSIGN NAME = "l.new_payment:pay_id"			VALUE = "{ l.existing_payment:pay_id }">
+		<MvASSIGN NAME = "l.new_payment:pay_data"		VALUE = "{ l.existing_payment:pay_data }">
+		<MvASSIGN NAME = "l.new_payment:pay_secid"		VALUE = "{ l.existing_payment:pay_secid }">
+		<MvASSIGN NAME = "l.new_payment:pay_seckey"		VALUE = "{ l.existing_payment:pay_seckey }">
+		<MvASSIGN NAME = "l.new_payment:pay_secdat"		VALUE = "{ l.existing_payment:pay_secdat }">
+
+		<MvASSIGN NAME = "l.existing_payment:available"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT OrderPayment_Update_Amounts( l.existing_payment ) OR
+						NOT OrderPayment_Insert( l.new_payment ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Order_Update_PaymentTotals( l.order ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Delete" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_order', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Order_Delete( l.module, l.order ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvASSIGN NAME = "l.orderitem_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+
+	<MvWHILE EXPR = "{ l.orderitem_pos LE l.orderitem_count }">
+		<MvIF EXPR = "{ NOT OrderItem_Delete( l.orderitems[ l.orderitem_pos ]:order_id, l.orderitems[ l.orderitem_pos ]:line_id )	OR
+						NOT OrderItemDiscount_Delete_All_Line( l.orderitems[ l.orderitem_pos ]:line_id )							OR
+						NOT OrderOption_Delete_All_Line( l.orderitems[ l.orderitem_pos ]:line_id )									OR
+						NOT OrderOptionDiscount_Delete_All_Line( l.orderitems[ l.orderitem_pos ]:line_id ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.orderitem_pos"	VALUE = "{ l.orderitem_pos + 1 }">
+	</MvWHILE>
+
+	<MvIF EXPR = "{ NOT StoreModule_Decrement_ReferenceCount( l.order:ship_id, 'shipping' )				OR
+					NOT OrderShipment_Delete_All_Order( l.order:id )									OR
+					NOT OrderShipmentLabel_Delete_All_Order( l.order:id )								OR
+					NOT OrderReturn_Delete_All_Order( l.order:id )										OR
+					NOT OrderCharge_Delete_All_Order( l.order:id )										OR
+					NOT OrderPayment_Delete_All_Order( l.order:id )										OR
+					NOT OrderSource_Delete_All_Order( l.order:id )										OR
+					NOT [ g.Module_Feature_PGR_DB ].OrderCoupon_Delete_All_Order( l.order:id )			OR
+					NOT [ g.Module_Feature_PGR_DB ].OrderDiscountTotal_Delete_All_Order( l.order:id ) 	OR
+					NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCard_Detach_All_Order( l.order ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Order_Delete_ID( l.order:id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderList_Load_Batch" PARAMETERS = "batch_id, orders var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Orders"
+				QUERY	= "{ 'SELECT
+								o.*,
+								op.id AS payment_id,
+								op.pay_id AS payment_pay_id,
+								op.pay_data AS payment_pay_data,
+								op.pay_secid AS payment_pay_secid,
+								op.pay_seckey AS payment_pay_seckey,
+								op.pay_secdat AS payment_pay_secdat
+							  FROM ' $
+								g.Store_Table_Prefix $ 'Orders o
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+							  WHERE
+								o.batch_id	= ? AND
+								( op.id IS NULL OR
+								  op.id		= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )
+							  ORDER BY
+								o.id' }"
+				FIELDS	= "l.batch_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Orders.d.EOF }">
+		<MvASSIGN NAME = "l.order_count" VALUE = "{ l.order_count + 1 }">
+		<MvEVAL EXPR = "{ Order_Read( l.orders[ l.order_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00015', l.order_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderList_Load_Batch_Unprocessed" PARAMETERS = "batch_id, orders var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Orders"
+				QUERY	= "{ 'SELECT
+								o.*,
+								op.id AS payment_id,
+								op.pay_id AS payment_pay_id,
+								op.pay_data AS payment_pay_data,
+								op.pay_secid AS payment_pay_secid,
+								op.pay_seckey AS payment_pay_seckey,
+								op.pay_secdat AS payment_pay_secdat
+							  FROM ' $
+								g.Store_Table_Prefix $ 'Orders o
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+							  WHERE
+								o.batch_id	= ? AND
+								o.status	= 0 AND
+								( op.id IS NULL OR
+								  op.id		= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )
+							  ORDER BY
+								o.id' }"
+				FIELDS	= "l.batch_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Orders.d.EOF }">
+		<MvASSIGN NAME = "l.order_count" VALUE = "{ l.order_count + 1 }">
+		<MvEVAL EXPR = "{ Order_Read( l.orders[ l.order_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00017', l.order_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderList_Load_Offset" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, orders var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													o.*,
+													op.id AS payment_id,
+													op.pay_id AS payment_pay_id,
+													op.pay_data AS payment_pay_data,
+													op.pay_secid AS payment_pay_secid,
+													op.pay_seckey AS payment_pay_seckey,
+													op.pay_secdat AS payment_pay_secdat
+												FROM ' $
+													g.Store_Table_Prefix $ 'Orders o
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+												WHERE
+													( op.id IS NULL OR
+													  op.id	= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'o', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY o.id DESC' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Orders',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00018', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Orders.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.order_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.order_count" VALUE = "{ l.order_count + 1 }">
+		<MvEVAL EXPR = "{ Order_Read( l.orders[ l.order_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.order_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00019', l.order_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderList_Load_Offset_Uncategorized" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, orders var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT
+													o.*,
+													op.id AS payment_id,
+													op.pay_id AS payment_pay_id,
+													op.pay_data AS payment_pay_data,
+													op.pay_secid AS payment_pay_secid,
+													op.pay_seckey AS payment_pay_seckey,
+													op.pay_secdat AS payment_pay_secdat
+												FROM ' $
+													g.Store_Table_Prefix $ 'Orders o
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderPayments op ON op.order_id = o.id
+												WHERE
+													o.batch_id	= 0 AND
+													( op.id IS NULL OR
+													  op.id		= ( SELECT MAX( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderPayments op2 WHERE op2.order_id = o.id ) )' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'o', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY o.id DESC' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Orders',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-O55-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Orders.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.order_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.order_count" VALUE = "{ l.order_count + 1 }">
+		<MvEVAL EXPR = "{ Order_Read( l.orders[ l.order_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.order_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00021', l.order_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderList_Load_Customer_Offset" PARAMETERS = "cust_id, sort_by, offset, max, nextoffset var, orders var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.OrderList_Load_Customer_Offset_Cust_ID"	VALUE = "{ l.cust_id }">
+
+	<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY id asc">
+
+	<MvIF EXPR = "{ l.sort_by EQ 'InvAsc' }">
+		<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY id asc">
+	<MvELSEIF EXPR = "{ l.sort_by EQ 'OrdDtAsc' }">
+		<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY orderdate asc">
+	<MvELSEIF EXPR = "{ l.sort_by EQ 'OrdTotAsc' }">
+		<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY total asc">
+	<MvELSEIF EXPR = "{ l.sort_by EQ 'InvDesc' }">
+		<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY id desc">
+	<MvELSEIF EXPR = "{ l.sort_by EQ 'OrdDtDesc' }">
+		<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY orderdate desc">
+	<MvELSEIF EXPR = "{ l.sort_by EQ 'OrdTotDesc' }">
+		<MvASSIGN NAME = "l.sort" VALUE = "ORDER BY total desc">
+	</MvIF>
+	
+	<MvASSIGN NAME	= "l.fields"
+			  VALUE	= "g.OrderList_Load_Customer_Offset_Cust_ID">
+	<MvASSIGN NAME	= "l.query"
+			  VALUE	= "{ 'SELECT 
+							*
+						  FROM ' $ 
+							g.Store_Table_Prefix $ 'Orders 
+						  WHERE 
+							cust_id = ? ' $ l.sort }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Orders',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00023', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Orders.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.order_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.order_count" VALUE = "{ l.order_count + 1 }">
+		<MvEVAL EXPR = "{ Order_Read( l.orders[ l.order_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.order_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00024', l.order_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItemList_CreateShipment" PARAMETERS = "order_id, orderitem_count, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ v58_OrderItemList_CreateShipment( l.order_id, l.orderitem_count, l.orderitems, l.ordershipment ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItemList_CreateReturn" PARAMETERS = "order_id, orderitem_count, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ v58_OrderItemList_CreateReturn( l.order_id, l.orderitem_count, l.orderitems, l.orderreturn ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItemList_Delete" PARAMETERS = "orderitem_count, orderitems var, products var, variant_ids var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ OrderItemList_Delete_WithVariants( l.orderitem_count, l.orderitems, l.products, l.variant_ids ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItemList_Cancel" PARAMETERS = "orderitem_count, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ OrderItemList_Cancel_LookupVariants( l.orderitem_count, l.orderitems ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItemList_Received" PARAMETERS = "orderitem_count, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00025', 'OrderItemList_Received is deprecated and should not be called' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_OrderShipment compatibility
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "OrderShipment_Read" PARAMETERS = "ordershipment var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ v57_OrderShipment_Read( l.ordershipment ) }">
+
+	<MvASSIGN NAME = "l.ordershipment:label_id"			VALUE = "{ OrderShipments.d.label_id }">
+	<MvASSIGN NAME = "l.ordershipment:label_type"		VALUE = "{ OrderShipments.d.label_type }">
+	<MvASSIGN NAME = "l.ordershipment:label_data"		VALUE = "{ OrderShipments.d.label_data }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderShipment_Update_Label" PARAMETERS = "ordershipment var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.ordershipment:label_id AND ( ISNULL l.ordershipment:label_type ) AND ( ISNULL l.ordershipment:label_data ) }">
+		<MvIF EXPR = "{ NOT OrderShipmentLabel_Delete_LowLevel( l.ordershipment:label_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordershipment:labelcount"	VALUE = "{ l.ordershipment:labelcount - 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ OrderShipment_Decrement_LabelCount( l.ordershipment:id ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ordershipmentlabel:order_id"	VALUE = "{ l.ordershipment:order_id }">
+	<MvASSIGN NAME = "l.ordershipmentlabel:shpmnt_id"	VALUE = "{ l.ordershipment:id }">
+	<MvASSIGN NAME = "l.ordershipmentlabel:module_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.ordershipmentlabel:tracknum"	VALUE = "{ l.ordershipment:tracknum }">
+	<MvASSIGN NAME = "l.ordershipmentlabel:tracktype"	VALUE = "{ l.ordershipment:tracktype }">
+	<MvASSIGN NAME = "l.ordershipmentlabel:label_data"	VALUE = "{ l.ordershipment:label_data }">
+	<MvASSIGN NAME = "l.ordershipmentlabel:label_type"	VALUE = "{ l.ordershipment:label_type }">
+
+	<MvIF EXPR = "{ l.ordershipment:label_id }">
+		<MvASSIGN NAME = "l.ordershipmentlabel:id"		VALUE = "{ l.ordershipment:label_id }">
+		<MvFUNCTIONRETURN VALUE = "{ OrderShipmentLabel_Update( l.ordershipmentlabel ) }">
+	<MvELSEIF EXPR = "{ NOT OrderShipmentLabel_Insert( l.ordershipmentlabel ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ordershipment:label_id"			VALUE = "{ l.ordershipment:id }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderShipment_Load_ID" PARAMETERS = "shpmnt_id, ordershipment var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderShipments"
+				QUERY	= "{ 'SELECT
+								os.*,
+								osl.id			AS label_id,
+								osl.label_type	AS label_type,
+								osl.label_data	AS label_data
+							  FROM
+								' $ g.Store_Table_Prefix $ 'OrderShipments os
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl ON osl.shpmnt_id = os.id
+							  WHERE
+								os.id = ? AND
+								( osl.id IS NULL OR
+								  osl.id = ( SELECT MIN( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl2 WHERE osl2.shpmnt_id = os.id ) )' }"
+				FIELDS	= "l.shpmnt_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00026', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ OrderShipments.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00027' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ OrderShipment_Read( l.ordershipment ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderShipment_Load_Code" PARAMETERS = "shpmnt_code, ordershipment var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderShipments"
+				QUERY	= "{ 'SELECT
+								os.*,
+								osl.id			AS label_id,
+								osl.label_type	AS label_type,
+								osl.label_data	AS label_data
+							  FROM
+								' $ g.Store_Table_Prefix $ 'OrderShipments os
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl ON osl.shpmnt_id = os.id
+							  WHERE
+								os.code = ? AND
+								( osl.id IS NULL OR
+								  osl.id = ( SELECT MIN( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl2 WHERE osl2.shpmnt_id = os.id ) )' }"
+				FIELDS	= "l.shpmnt_code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00028', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ OrderShipments.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-O55-00029' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ OrderShipment_Read( l.ordershipment ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderShipmentList_Load_Order" PARAMETERS = "order_id, ordershipments var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderShipments"
+				QUERY	= "{ 'SELECT
+								os.*,
+								osl.id			AS label_id,
+								osl.label_type	AS label_type,
+								osl.label_data	AS label_data
+							  FROM
+								' $ g.Store_Table_Prefix $ 'OrderShipments os
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl ON osl.shpmnt_id = os.id
+							  WHERE
+								os.order_id = ? AND
+								( osl.id IS NULL OR
+								  osl.id = ( SELECT MIN( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl2 WHERE osl2.shpmnt_id = os.id ) )
+							  ORDER BY
+							  	os.id' }"
+				FIELDS	= "l.order_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00030', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ordershipment_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT OrderShipments.d.EOF }">
+		<MvASSIGN NAME = "l.ordershipment_count"	VALUE = "{ l.ordershipment_count + 1 }">
+		<MvEVAL EXPR = "{ OrderShipment_Read( l.ordershipments[ l.ordershipment_count ] ) }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "OrderShipments" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00031', l.ordershipment_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderShipmentList_Load_Status" PARAMETERS = "order_id, status, ordershipments var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderShipments"
+				QUERY	= "{ 'SELECT
+								os.*,
+								osl.id			AS label_id,
+								osl.label_type	AS label_type,
+								osl.label_data	AS label_data
+							  FROM
+								' $ g.Store_Table_Prefix $ 'OrderShipments os
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl ON osl.shpmnt_id = os.id
+							  WHERE
+								os.order_id	= ? AND
+								os.status	= ? AND
+								( osl.id IS NULL OR
+								  osl.id = ( SELECT MIN( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl2 WHERE osl2.shpmnt_id = os.id ) )' }"
+				FIELDS	= "l.order_id, l.status">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00032', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ordershipment_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT OrderShipments.d.EOF }">
+		<MvASSIGN NAME = "l.ordershipment_count"	VALUE = "{ l.ordershipment_count + 1 }">
+		<MvEVAL EXPR = "{ OrderShipment_Read( l.ordershipments[ l.ordershipment_count ] ) }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "OrderShipments" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00033', l.ordershipment_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderShipmentList_Load_ShipmentBatch" PARAMETERS = "shipmentbatch_id, ordershipments var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "OrderShipments"
+				QUERY	= "{ 'SELECT
+								os.*,
+								osl.id			AS label_id,
+								osl.label_type	AS label_type,
+								osl.label_data	AS label_data
+							  FROM
+								' $ g.Store_Table_Prefix $ 'OrderShipments os
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl ON osl.shpmnt_id = os.id
+							  WHERE
+								os.batch_id	= ? AND
+								( osl.id IS NULL OR
+								  osl.id = ( SELECT MIN( id ) FROM ' $ g.Store_Table_Prefix $ 'OrderShipmentLabels osl2 WHERE osl2.shpmnt_id = os.id ) )' }"
+				FIELDS	= "l.shipmentbatch_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-O55-00034', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ordershipment_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT OrderShipments.d.EOF }">
+		<MvASSIGN NAME = "l.ordershipment_count"	VALUE = "{ l.ordershipment_count + 1 }">
+		<MvEVAL EXPR = "{ OrderShipment_Read( l.ordershipments[ l.ordershipment_count ] ) }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "OrderShipments" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderShipments">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-O55-00035', l.ordershipment_count ) }">
+</MvFUNCTION>

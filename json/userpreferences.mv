@@ -1,0 +1,337 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2019 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-USP-
+| Next Error Code: 14   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_UserPreferenceList_Load_Heirarchy" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Is_Store_Open() }">	<MvASSIGN NAME = "l.store_id" VALUE = 0>
+	<MvELSE>										<MvASSIGN NAME = "l.store_id" VALUE = "{ g.Store:id }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.UserPreference_Key_Prefix"	VALUE = "{ JSON_Decode( g.UserPreference_Key_Prefix ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_UserPreferenceList_Load_Heirarchy_Output( l.store_id, g.User:id, g.UserPreference_Key_Prefix, 0 ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreferenceList_Load_Heirarchy_Output" PARAMETERS = "store_id, user_id, key_prefix, exclude_prefix" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.exclude_prefix }">	<MvASSIGN NAME = "l.original_currentpath" VALUE = "">
+	<MvELSE>								<MvASSIGN NAME = "l.original_currentpath" VALUE = "{ l.key_prefix }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count"						VALUE = 0>
+	<MvASSIGN NAME = "l.currentpath"				VALUE = "{ l.original_currentpath }">
+
+	<MvFOREACH ITERATOR = "l.userpreference" ARRAY = "l.userpreferencelist" COUNT = "{ [ g.Library_DB ].UserPreferenceList_Load_Heirarchy( l.store_id, l.user_id, l.key_prefix, l.userpreferencelist ) }">
+		<MvWHILE EXPR = "{ ( l.currentpath $ '.' ) IN l.userpreference:key NE 1 AND NOT ISNULL l.currentpath }">
+			}
+			<MvASSIGN NAME = "l.last_index"			VALUE = "{ [ g.Library_Utilities ].LastIndexOf( '.', l.currentpath, len_var( l.currentpath ) ) }">
+			<MvASSIGN NAME = "l.currentpath"		VALUE = "{ substring_var( l.currentpath, 1, l.last_index - 1 ) }">
+		</MvWHILE>
+
+		<MvASSIGN NAME = "l.count"					VALUE = "{ l.count + 1 }">
+		<MvIF EXPR = "{ l.count GT 1 }">
+			,
+		</MvIF>
+
+		<MvASSIGN NAME = "l.index"					VALUE = "{ l.currentpath EIN l.userpreference:key }">
+		<MvASSIGN NAME = "l.next_index"				VALUE = "{ indexof( '.', l.userpreference:key, l.index + 1 ) }">
+
+		<MvWHILE EXPR = "{ l.next_index }">
+			<MvASSIGN NAME = "l.output"				VALUE = "{ substring_var( l.userpreference:key, l.index + 1, l.next_index - l.index - 1 ) }">
+			<MvASSIGN NAME = "l.newpath"			VALUE = "{ substring_var( l.userpreference:key, 1, l.next_index - 1 ) }">
+
+			<MvIF EXPR = "{ l.newpath CIN l.currentpath EQ 0 }">
+				<MvASSIGN NAME = "l.currentpath"	VALUE = "{ l.newpath }">
+				"<MvEVAL EXPR = "{ JSON_Encode( l.output ) }">":
+				{
+			</MvIF>
+			<MvASSIGN NAME = "l.index"				VALUE = "{ l.next_index }">
+			<MvASSIGN NAME = "l.next_index"			VALUE = "{ indexof( '.', l.userpreference:key, l.index + 1 ) }">
+		</MvWHILE>
+
+		"<MvEVAL EXPR = "{ JSON_Encode( substring_var( l.userpreference:key, l.index + 1, len_var( l.userpreference:key ) - l.index ) ) }">": "<MvEVAL EXPR = "{ JSON_Encode( l.userpreference:value ) }">"
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.currentpath"				VALUE = "{ glosub( l.currentpath, l.original_currentpath, '' ) }">
+	<MvWHILE EXPR = "{ l.currentpath }">
+		}
+		<MvASSIGN NAME = "l.last_index"				VALUE = "{ [ g.Library_Utilities ].LastIndexOf( '.', l.currentpath, len_var( l.currentpath ) ) }">
+		<MvASSIGN NAME = "l.currentpath"			VALUE = "{ substring_var( l.currentpath, 1, l.last_index - 1 ) }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreferenceList_Save" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Is_Store_Open() }">	<MvASSIGN NAME = "l.store_id" VALUE = 0>
+	<MvELSE>										<MvASSIGN NAME = "l.store_id" VALUE = "{ g.Store:id }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.preference_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.preferences"					VALUE = "">
+
+	<MvIF EXPR = "{ JSON_Input_Exists( 'UserPreferences' ) }">
+		<MvFOREACH ITERATOR = "l.input_preference" ARRAY = "l.input_preferences" COUNT = "{ JSON_Input_Array( 'UserPreferences', l.input_preferences ) }">
+			<MvASSIGN NAME = "l.preference"				VALUE = "">
+			<MvASSIGN NAME = "l.preference:key"			VALUE = "">
+			<MvASSIGN NAME = "l.preference:value"		VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_preference, 'R', 'key',	l.preference:key )	OR
+							NOT JSON_Input_Element_Text( l.input_preference, 'o', 'value',	l.preference:value ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.preference_count"		VALUE = "{ miva_array_insert_var( l.preferences, l.preference, -1 ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve_Raw( 'UserPreference_Keys',		l.userpreference_keys ) OR
+						JSON_Input_Retrieve_Raw( 'UserPreference_Values',	l.userpreference_values ) }">
+		<MvASSIGN NAME = "l.preference_count"			VALUE = "{ JSON_Array_Coalesce_String( l.userpreference_keys,	l.preferences, 'key' ) }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ JSON_Array_Coalesce_String( l.userpreference_values, l.preferences, 'value' ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.preference" ARRAY = "l.preferences" COUNT = "{ l.preference_count }">
+		<MvASSIGN NAME = "l.userpreference:store_id"	VALUE = "{ l.store_id }">
+		<MvASSIGN NAME = "l.userpreference:user_id"		VALUE = "{ g.User:id }">
+		<MvASSIGN NAME = "l.userpreference:key"			VALUE = "{ l.preference:key }">
+		<MvASSIGN NAME = "l.userpreference:value"		VALUE = "{ l.preference:value }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].UserPreference_Insert( l.userpreference ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].UserPreference_Update( l.userpreference ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreferenceList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_User_Load( l.user ) }">											<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].User_Edit_Privileges( l.user, l.privileges ) }">	<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT l.privileges:can_update_preferences }">									<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"		VALUE = "">
+	<MvASSIGN NAME = "l.filter"					VALUE = "">
+	<MvASSIGN NAME = "l.sort"					VALUE = "">
+	<MvASSIGN NAME = "l.offset"					VALUE = 0>
+	<MvASSIGN NAME = "l.count"					VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER( l.available_filters, 'up.store_id', 'store_id' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'up.mm_key',	'key' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'up.mm_value', 'value' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 's.name',		'store_name' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.search_query"			VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'up.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_QUery_SELECT_NULL_CHAR( l.search_query, 's.name', 'store_name' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, 'UserPreferences', 'up' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'up', 'Stores', 's', 'up.store_id = s.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'up.user_id = ?', [ g.Library_DB ].SQL_Query_Field( l.user:id ) ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, l.sort, 'store_name:s.name:null_char,key:up.mm_key,value:up.mm_value', 'up.mm_key' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"				VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'UserPreferences', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.userpreference_count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT UserPreferences.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.userpreference_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].UserPreference_Read( l.user_preference ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.userpreference_count ) }">
+				<MvIF EXPR = "{ NOT ISNULL UserPreferences.d.store_name }">	<MvASSIGN NAME = "l.store_name" VALUE = "{ UserPreferences.d.store_name }">
+				<MvELSE>													<MvASSIGN NAME = "l.store_name" VALUE = "<Domain>">
+				</MvIF>
+
+				"store_id":		<MvEVAL EXPR = "{ l.user_preference:store_id }">,
+				"store_name":	"<MvEVAL EXPR = "{ JSON_Encode( l.store_name ) }">",
+				"key":			"<MvEVAL EXPR = "{ JSON_Encode( l.user_preference:key ) }">",
+				"value":		"<MvEVAL EXPR = "{ JSON_Encode( l.user_preference:value ) }">"
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "UserPreferences" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "UserPreferences">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreference_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.UserPreference_StoreID" 	VALUE = "{ int( g.UserPreference_StoreID ) }">
+	<MvASSIGN NAME = "g.UserPreference_UserID"		VALUE = "{ int( g.UserPreference_UserID ) }">
+	<MvASSIGN NAME = "g.UserPreference_Key" 		VALUE = "{ JSON_Decode( g.UserPreference_Key ) }">
+	<MvASSIGN NAME = "g.UserPreference_Value"		VALUE = "{ JSON_Decode( g.UserPreference_Value ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].User_Load_ID( g.UserPreference_UserID, l.user ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00007', 'Access Denied' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT [ g.Module_Admin ].User_Edit_Privileges( l.user, l.privileges ) ) OR
+					( NOT l.privileges:can_update_preferences ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00006', 'Access Denied' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.UserPreference_StoreID GT 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Store_Load_ID( g.UserPreference_StoreID, l.store ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00008', 'Failed to load store' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.UserPreference_Key }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'UserPreference_Key', 'Preference Name cannot be blank' ) }">
+	<MvELSEIF EXPR = "{ [ g.Module_Library_DB ].UserPreference_Load_Key( g.UserPreference_StoreID, l.user:id, g.UserPreference_Key, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'UserPreference_Key', 'Preference Name \'' $ g.UserPreference_Key $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.userpreference:store_id" 	VALUE = "{ g.UserPreference_StoreID }">
+	<MvASSIGN NAME = "l.userpreference:user_id" 	VALUE = "{ l.user:id }">
+	<MvASSIGN NAME = "l.userpreference:key" 		VALUE = "{ g.UserPreference_Key }">
+	<MvASSIGN NAME = "l.userpreference:value" 		VALUE = "{ g.UserPreference_Value }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].UserPreference_Insert( l.userpreference ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreference_Update" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.UserPreference_StoreID" 	VALUE = "{ int( g.UserPreference_StoreID ) }">
+	<MvASSIGN NAME = "g.UserPreference_UserID"		VALUE = "{ int( g.UserPreference_UserID ) }">
+	<MvASSIGN NAME = "g.UserPreference_Key" 		VALUE = "{ JSON_Decode( g.UserPreference_Key ) }">
+	<MvASSIGN NAME = "g.UserPreference_Value"		VALUE = "{ JSON_Decode( g.UserPreference_Value ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].User_Load_ID( g.UserPreference_UserID, l.user ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00009', 'Access Denied' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT [ g.Module_Admin ].User_Edit_Privileges( l.user, l.privileges ) ) OR
+					( NOT l.privileges:can_update_preferences ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00010', 'Access Denied' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].UserPreference_Load_Key( g.UserPreference_StoreID, g.UserPreference_UserID, g.UserPreference_Key, l.userpreference ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00013', 'Preference not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.UserPreference_Key }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'UserPreference_Key', 'Preference Name cannot be blank' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.userpreference:store_id" 	VALUE = "{ g.UserPreference_StoreID }">
+	<MvASSIGN NAME = "l.userpreference:user_id" 	VALUE = "{ l.user:id }">
+	<MvASSIGN NAME = "l.userpreference:key" 		VALUE = "{ g.UserPreference_Key }">
+	<MvASSIGN NAME = "l.userpreference:value" 		VALUE = "{ g.UserPreference_Value }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].UserPreference_Update( l.userpreference ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreference_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.UserPreference_StoreID" 	VALUE = "{ int( g.UserPreference_StoreID ) }">
+	<MvASSIGN NAME = "g.UserPreference_UserID"		VALUE = "{ int( g.UserPreference_UserID ) }">
+	<MvASSIGN NAME = "g.UserPreference_Key" 		VALUE = "{ JSON_Decode( g.UserPreference_Key ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].User_Load_ID( g.UserPreference_UserID, l.user ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00011', 'Access Denied' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT [ g.Module_Admin ].User_Edit_Privileges( l.user, l.privileges ) ) OR
+					( NOT l.privileges:can_update_preferences ) }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-USP-00012', 'Access Denied' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].UserPreference_Delete( g.UserPreference_StoreID, l.user:id, g.UserPreference_Key ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UserPreference_Delete_CurrentUser_Key" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Is_Store_Open() }">	<MvASSIGN NAME = "l.store_id" VALUE = 0>
+	<MvELSE>										<MvASSIGN NAME = "l.store_id" VALUE = "{ g.Store:id }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.UserPreference_Key" VALUE = "{ JSON_Decode( g.UserPreference_Key ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].UserPreference_Delete( l.store_id, g.User:id, g.UserPreference_Key ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>

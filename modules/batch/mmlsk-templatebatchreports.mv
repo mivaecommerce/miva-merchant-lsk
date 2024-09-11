@@ -1,0 +1,1183 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-BCH-TBR-
+| Next Error Code: 27   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-templatebatchreports">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Template Based Batch Reports">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to enable the batch reports in Order Processing > Orders and Order Processing > Shipments.  By default, Miva Merchant has two template based batch reports: Printable Invoice and Shipment Picklist.  You can also create your own batch reports for managing orders and shipments.  After installing the module, select the Template Based Batch Reports tab on the Store Utility Settings screen to create, delete and edit batch reports.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "batchreport, util, vis_util, data_store, json, clientside, clientside_sri, provision_store, component, component_prov, skins">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'TemplateBatchReports
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							type		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )	$ ',
+							code		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							name		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )	$ ',
+							page_code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ '
+						  ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'TemplateBatchReports_1 ON ' $ g.Store_Table_Prefix $ 'TemplateBatchReports ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'TemplateBatchReports_2 ON ' $ g.Store_Table_Prefix $ 'TemplateBatchReports ( type, code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'TemplateBatchReports', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Invoice
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.report:code"	VALUE = "INVOICE">
+	<MvASSIGN NAME = "l.report:name"	VALUE = "Printable Invoice">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ TemplateBatchReports_Create_OrderBatchReport( l.module, l.report ) }">
+
+	<MvCOMMENT>
+	|
+	| Shipment Picklist
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.report:code"	VALUE = "PICKLIST">
+	<MvASSIGN NAME = "l.report:name"	VALUE = "Shipment Picklist">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ TemplateBatchReports_Create_ShipmentBatchReport( l.module, l.report ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'TemplateBatchReports' ) }">
+
+	<MvCOMMENT>
+	|
+	| Delete all referenced pages
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.report" ARRAY = "l.reports" COUNT = "{ TemplateBatchReportList_Load_All( l.reports ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ TemplateBatchReport_GlobalDelete( l.module, l.report ) }">
+	</MvFOREACH>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'TemplateBatchReports' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Batch Report Feature (batchreport)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "BatchReportModule_Report" PARAMETERS = "module var, batch_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT ISNULL g.Report_Code }">
+		<MvASSIGN NAME = "l.order_count"	VALUE = "{ [ g.Module_Library_DB ].OrderList_Load_Batch( l.batch_id, l.orders ) }">
+		<MvFUNCTIONRETURN VALUE = "{ BatchReportModule_Run_OrderList( l.module, g.Report_Code, l.orders, l.order_count ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Legacy Order Processing compatibility code
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Batch_Load_ID( l.batch_id, l.batch ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].v58_BeginScreen_Start( 'Run Batch Report: ' $ encodeentities( l.batch:name ), 'BRPT', '', 'disable_popup' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].JavaScript_SetVariables( 'g', 'json_nosessionurl,adminurl,Batch_ID,Store_Code' ) }">
+
+	<script language="JavaScript">
+	function SubmitToJSON( button )
+	{
+		var report_window;
+
+		if ( document.forms[ Screen ].elements.Report_Code.value.length == 0 )
+		{
+			return SubmitForm( Screen, 'BRPT', button );
+		}
+
+		DisableButtons( button );
+
+		report_window 						= window.open( adminurl + 'Screen=BLNK', 'BatchReport', 'width=800,height=600,menubar=yes,toolbar=no,location=no,personalbar=no,directories=no,status=no,resizable=yes,scrollbars=yes' );
+		document.forms[ Screen ].action		= json_nosessionurl + 'Store_Code=' + encodeURIComponent( Store_Code ) + '&Function=BatchReport_Run';
+		document.forms[ Screen ].target 	= 'BatchReport';
+
+		report_window.focus();
+
+		if ( document.forms[ Screen ].v56_submit )	document.forms[ Screen ].v56_submit();
+		else										document.forms[ Screen ].submit();
+
+		window.location.href = adminurl + 'Screen=BRPT&Store_Code=' + encodeURIComponent( Store_Code ) + '&Batch_ID=' + encodeURIComponent( Batch_ID );
+	}
+	</script>
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].v58_BeginScreen_End( 'Run Batch Report: ' $ encodeentities( l.batch:name ), 'BRPT', '', 'disable_popup' ) }">
+	<MvHIDE FIELDS = "g.Module_Code, g.Batch_ID, g.passphrase">
+
+	<MvFOREACH INDEX = "l.key_id" ITERATOR = "l.passphrase" ARRAY = "g.passphrase">
+		<MvIF EXPR = "{ NOT ISNULL l.key_ids }">		<MvASSIGN NAME = "l.key_ids"		VALUE = "{ l.key_ids $ '|' }">		</MvIF>
+		<MvIF EXPR = "{ NOT ISNULL l.passphrases }">	<MvASSIGN NAME = "l.passphrases"	VALUE = "{ l.passphrases $ '|' }">	</MvIF>
+
+		<MvASSIGN NAME = "l.key_ids"		VALUE = "{ l.key_ids $ encodeattribute( l.key_id ) }">
+		<MvASSIGN NAME = "l.passphrases"	VALUE = "{ l.passphrases $ encodeattribute( l.passphrase ) }">
+	</MvFOREACH>
+
+	<input type="hidden" name="Key_IDs" value="{ encodeentities( l.key_ids ) }">
+	<input type="hidden" name="Passphrases" value="{ encodeentities( l.passphrases ) }">
+	<input type="hidden" name="Session_Type" value="admin">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginContent() }">
+
+	<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+	<tr><td nowrap>
+		<b>Order Batch Report:</b>
+	</td><td width="100%">
+		<select name="Report_Code">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption_SelectOne() }">
+
+		<MvASSIGN NAME = "l.report_pos"		VALUE = 1>
+		<MvASSIGN NAME = "l.report_count"	VALUE = "{ TemplateBatchReportList_Load_Type( 'order', l.reports ) }">
+
+		<MvWHILE EXPR = "{ l.report_pos LE l.report_count }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( l.reports[ l.report_pos ]:code, g.Report_Code, encodeentities( l.reports[ l.report_pos ]:name ) ) }">
+			<MvASSIGN NAME = "l.report_pos"	VALUE = "{ l.report_pos + 1 }">
+		</MvWHILE>
+		</select>
+	</td></tr>
+	</table>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons( 'BRPT:Run Report;SubmitToJSON( this )' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BatchReportModule_Order_Reports" PARAMETERS = "module var, reports var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Load( l.module:id, 'util', l.storemodule ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ TemplateBatchReportList_Load_Type( 'order', l.reports ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BatchReportModule_Run_OrderList" PARAMETERS = "module var, report_code, orders var, order_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Load_Code( 'order', l.report_code, l.report ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.report:page_code, l.page ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvREFERENCE NAME = "l.page:settings:admin_order:orders" VARIABLE = "l.orders">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Render_Page_LowLevel( l.report:page_code, l.page ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BatchReportModule_Shipment_Reports" PARAMETERS = "module var, reports var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Load( l.module:id, 'util', l.storemodule ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ TemplateBatchReportList_Load_Type( 'shipment', l.reports ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BatchReportModule_Run_ShipmentList" PARAMETERS = "module var, report_code, shipments var, shipment_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Load_Code( 'shipment', l.report_code, l.report ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.report:page_code, l.page ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvREFERENCE NAME = "l.page:settings:shipment:shipments" VARIABLE = "l.shipments">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Render_Page_LowLevel( l.report:page_code, l.page ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store Utilities Feature (util)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation"  PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Utility Screen Feature (vis_util)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Utility_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab NE 'TBRP' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Element_TemplateBatchReport_List_CSS( l.module ) }">
+
+	<MvIF EXPR = "{ Element_TemplateBatchReport_JavaScript_Combined_Begin( l.module ) }">
+		<MvEVAL EXPR = "{ Element_TemplateBatchReport_List_JavaScript( l.module ) }">
+		<MvEVAL EXPR = "{ Element_TemplateBatchReport_JavaScript_Combined_End( l.module ) }">
+	</MvIF>
+
+	<script language="JavaScript">
+		MMScreen_LoadFinished( function() { new TemplateBatchReportList(); } );
+	</script>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "TBRP:Template Based Batch Reports">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.tab NE 'TBRP' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+    <MvEVAL EXPR = "{ Element_TemplateBatchReport_List_HTML( l.module ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/batch/templatebatchreports/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_TemplateBatchReport_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/batch/templatebatchreports/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/batch/templatebatchreports/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/batch/templatebatchreports/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'TemplateBatchReportList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_TemplateBatchReportList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'TemplateBatchReport_Insert' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_TemplateBatchReport_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'TemplateBatchReport_Update' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_TemplateBatchReport_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'TemplateBatchReport_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_TemplateBatchReport_Delete( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_TemplateBatchReport" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ l.report:id }">,
+	"type":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:type ) }">",
+	"code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:code ) }">",
+	"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:name ) }">",
+	"page_code":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:page_code ) }">"
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_TemplateBatchReportList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Filter"			VALUE = "{ trim( g.Filter ) }">
+	<MvASSIGN NAME = "g.Sort"			VALUE = "{ trim( g.Sort ) }">
+	<MvASSIGN NAME = "g.Offset"			VALUE = "{ int( g.Offset ) }">
+	<MvASSIGN NAME = "g.Count"			VALUE = "{ int( g.Count ) }">
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'TemplateBatchReports', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, g.Filter, 'name,type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, g.Sort, 'name,type', 'name' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'TemplateBatchReports', l.search_sql, l.search_fields, g.Offset, g.Count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00026', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( g.Offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( ( g.Count EQ 0 ) OR ( l.report_count LT g.Count ) ) AND ( NOT TemplateBatchReports.d.EOF ) }">
+			<MvEVAL EXPR = "{ TemplateBatchReport_Read( l.report ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.report_count ) }">
+			<MvEVAL EXPR = "{ JSON_TemplateBatchReport( l.report ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			
+			<MvSKIP NAME = "Merchant" VIEW = "TemplateBatchReports" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "TemplateBatchReports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_TemplateBatchReport_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Type"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Type ) }">
+	<MvASSIGN NAME = "g.Code"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Code ) }">
+	<MvASSIGN NAME = "g.Name"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Name ) }">
+
+    <MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code( g.Code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_code', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:code"	VALUE = "{ g.Code }">
+	<MvASSIGN NAME = "l.report:name"	VALUE = "{ g.Name }">
+
+	<MvIF EXPR = "{ g.Type EQ 'order' }">
+		<MvIF EXPR = "{ TemplateBatchReport_Load_Code( 'order', g.Code, l.existing_report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00017', 'An order batch report with the code \'' $ g.Code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code( 'ORDER_' $ g.Code, l.existing_page ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00018', 'A page with the code \'ORDER_' $ g.Code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT TemplateBatchReports_Create_OrderBatchReport( l.module, l.report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Type EQ 'shipment' }">
+		<MvIF EXPR = "{ TemplateBatchReport_Load_Code( 'shipment', g.Code, l.existing_report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00019', 'A shipment batch report with the code \'' $ g.Code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code( 'SHIPMENT_' $ g.Code, l.existing_page ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00020', 'A page with the code \'SHIPMENT_' $ g.Code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT TemplateBatchReports_Create_ShipmentBatchReport( l.module, l.report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00021', 'Invalid batch report type' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_TemplateBatchReport( l.report ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_TemplateBatchReport_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Report_Type"	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Report_Type ) }">
+	<MvASSIGN NAME = "g.Report_Code"	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Report_Code ) }">
+	<MvASSIGN NAME = "g.Name"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Name ) }">
+
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Load_Code( g.Report_Type, g.Report_Code, l.report ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvIF EXPR = "{ g.Report_Type EQ 'order' }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00022', 'Order batch report \'' $ g.Report_Code $ '\' not found' ) }">
+			<MvELSEIF EXPR = "{ g.Report_Type EQ 'shipment' }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00023', 'Shipment batch report \'' $ g.Report_Code $ '\' not found' ) }">
+			<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00024', g.Report_Type $ ' batch report \'' $ g.Report_Code $ '\' not found' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.report:page_code, l.page ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-BCH-TBR-00025', 'Page \'' $ l.report:page_code $ '\' not found' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:name"	VALUE = "{ g.Name }">
+	<MvASSIGN NAME = "l.page:name"		VALUE = "{ g.Name }">
+	
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Update( l.report ) OR
+					NOT [ g.Module_Feature_TUI_DB ].Page_Update_LowLevel( l.page ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_TemplateBatchReport( l.report ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_TemplateBatchReport_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Report_Type"	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Report_Type ) }">
+	<MvASSIGN NAME = "g.Report_Code"	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Report_Code ) }">
+
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Load_Code( g.Report_Type, g.Report_Code, l.report ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Delete( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'batchreport_add' }">			<MvEVAL EXPR = "{ Module_Provision_Store_BatchReport_Add( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'batchreport_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_BatchReport_Delete( l.module, l.child_xml ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_BatchReport_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Type',	l.report:type,	'shipment,order',	'shipment,order' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code(	'R', l.provide_xml, 'Code',	l.report:code )											OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'R', l.provide_xml, 'Name', l.report:name ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:type EQ 'order' }">
+		<MvIF EXPR = "{ TemplateBatchReport_Load_Code( 'order', l.report:code, l.existing_report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'An order batch report with the code \'' $ l.report:code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.report:page_code"			VALUE = "{ 'ORDER_' $ l.report:code }">
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.report:page_code, l.existing_page ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A page with the code \'' $ l.report:page_code $ '\' already exists' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.report:type EQ 'shipment' }">
+		<MvIF EXPR = "{ TemplateBatchReport_Load_Code( 'shipment', l.report:code, l.existing_report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A shipment batch report with the code \'' $ l.report:code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.report:page_code"			VALUE = "{ 'SHIPMENT_' $ l.report:code }">
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.report:page_code, l.existing_page ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A page with the code \'' $ l.report:page_code $ '\' already exists' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'Template' ) }">
+		<MvASSIGN NAME = "l.template_source"			VALUE = "{ trim( l.provide_xml:tags:Template[ 1 ]:value ) }">
+		<MvASSIGN NAME = "l.have_template"				VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.have_template"				VALUE = 0> 
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.have_template }">
+		<MvIF EXPR = "{ l.report:type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ TemplateBatchReports_Create_OrderBatchReport( l.module, l.report ) }">
+		<MvELSEIF EXPR = "{ l.report:type EQ 'shipment' }">	<MvASSIGN NAME = "l.result" VALUE = "{ TemplateBatchReports_Create_ShipmentBatchReport( l.module, l.report ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.result }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.page:admin"					VALUE = 1>
+		<MvASSIGN NAME = "l.page:code"					VALUE = "{ l.report:page_code }">
+		<MvASSIGN NAME = "l.page:name"					VALUE = "{ l.report:name }">
+		<MvASSIGN NAME = "l.page:ui_id"					VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.page:settings"				VALUE = "">
+	
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Page_LowLevel( l.page, l.template_source ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.report:type EQ 'order' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'admin_order' ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.report:type EQ 'shipment' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'shipment' ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	
+		<MvIF EXPR = "{ NOT TemplateBatchReport_Insert( l.report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_BatchReport_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_List(	l.provide_xml, 'report_type',	l.report_type,	'shipment,order',	'shipment,order' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text(	l.provide_xml, 'report_code',	l.report_code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Load_Code( l.report_type, l.report_code, l.report ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvIF EXPR = "{ l.report_type EQ 'shipment' }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Shipment batch report \'' $ l.report_code $ '\' does not exist' ) }">
+			<MvELSEIF EXPR = "{ l.report_type EQ 'order' }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Order batch report \'' $ l.report_code $ '\' does not exist' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT TemplateBatchReport_Delete( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "TemplateBatchReports_Create_Item" PARAMETERS = "item_code, module_code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( l.item_code, l.item ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Item( l.item_code, l.module_code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReports_Provision_InlineCSS" PARAMETERS = "page_code, css_file" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ file_read( g.Module_Root $ 'templates/' $ l.css_file, 'script', l.css_data ) LT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00004', 'Unable to read \'' $ g.Module_Root $ 'templates/' $ l.css_file $ '\'' ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.provide_xml"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<Provision>
+			<Store code="{ encodeentities( g.Store:code ) }">
+				<Page_Update code="{ encodeentities( l.page_code ) }">
+					<Item code="inline_css">
+						<Template><MvEVAL EXPR = "{ miva_cdata_encode( l.css_data ) }"></Template>
+						<Notes>Initial CSS Styles</Notes>
+					</Item>
+				</Page_Update>
+			</Store>
+		</Provision>
+	<MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Action_ProvisionStringData( l.provide_xml ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReports_Create_OrderBatchReport" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:type"		VALUE = "order">
+	<MvASSIGN NAME = "l.report:page_code"	VALUE = "{ 'ORDER_' $ l.report:code }">
+
+	<MvIF EXPR = "{ NOT TemplateBatchReports_Create_Item( 'admin_order',		'cmp-mv-adminorderfields' )	OR
+					NOT TemplateBatchReports_Create_Item( 'tbr_order_contents',	l.module:code )				OR
+					NOT TemplateBatchReports_Create_Item( 'inline_css',			'cmp-mv-content' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Page_AdminUI( l.report:page_code,
+																						  l.report:name,
+																						  l.module:id,
+																						  'batchreport-order-invoice.mvt',
+																						  l.settings,
+																						  l.page ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'admin_order' )			OR
+					NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'tbr_order_contents' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT TemplateBatchReports_Provision_InlineCSS( l.page:code, 'batchreport-order-invoice.css' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ TemplateBatchReport_Insert( l.report ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReports_Create_ShipmentBatchReport" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:type"		VALUE = "shipment">
+	<MvASSIGN NAME = "l.report:page_code"	VALUE = "{ 'SHIPMENT_' $ l.report:code }">
+
+	<MvIF EXPR = "{ NOT TemplateBatchReports_Create_Item( 'shipment',	'cmp-mv-stdshipmentfields' ) OR
+					NOT TemplateBatchReports_Create_Item( 'inline_css',	'cmp-mv-content' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Page_AdminUI( l.report:page_code,
+																						  l.report:name,
+																						  l.module:id,
+																						  'batchreport-shipment-picklist.mvt',
+																						  l.settings,
+																						  l.page ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Assign_Item( l.page, 'shipment' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT TemplateBatchReports_Provision_InlineCSS( l.page:code, 'batchreport-shipment-picklist.css' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ TemplateBatchReport_Insert( l.report ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Database Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "TemplateBatchReport_Read" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:id"			VALUE = "{ TemplateBatchReports.d.id }">
+	<MvASSIGN NAME = "l.report:type"		VALUE = "{ TemplateBatchReports.d.type }">
+	<MvASSIGN NAME = "l.report:code"		VALUE = "{ TemplateBatchReports.d.code }">
+	<MvASSIGN NAME = "l.report:name"		VALUE = "{ TemplateBatchReports.d.name }">
+	<MvASSIGN NAME = "l.report:page_code"	VALUE = "{ TemplateBatchReports.d.page_code }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReport_Load_Code" PARAMETERS = "type, code, report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "TemplateBatchReports"
+				QUERY	= "{ 'SELECT
+								*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'TemplateBatchReports
+							  WHERE
+								type	= ? AND
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.type, l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ TemplateBatchReports.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "TemplateBatchReports">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-BCH-TBR-00008' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ TemplateBatchReport_Read( l.report ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "TemplateBatchReports">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReportList_Load_All" PARAMETERS = "reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "TemplateBatchReports"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'TemplateBatchReports ORDER BY id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT TemplateBatchReports.d.EOF }">
+		<MvASSIGN NAME = "l.report_count"	VALUE = "{ l.report_count + 1 }">
+
+		<MvEVAL EXPR = "{ TemplateBatchReport_Read( l.reports[ l.report_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "TemplateBatchReports" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "TemplateBatchReports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-BCH-TBR-00010', l.report_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReportList_Load_Type" PARAMETERS = "type, reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "TemplateBatchReports"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'TemplateBatchReports WHERE type = ? ORDER BY id' }"
+				FIELDS	= "l.type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT TemplateBatchReports.d.EOF }">
+		<MvASSIGN NAME = "l.report_count"	VALUE = "{ l.report_count + 1 }">
+
+		<MvEVAL EXPR = "{ TemplateBatchReport_Read( l.reports[ l.report_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "TemplateBatchReports" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "TemplateBatchReports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-BCH-TBR-00012', l.report_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReport_Insert" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.report:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'TemplateBatchReports' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'TemplateBatchReports
+						  ( id, type, code, name, page_code )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.report:id, l.report:type, l.report:code,
+					   l.report:name, l.report:page_code">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReport_Update" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'TemplateBatchReports
+						  SET
+							code		= ?,
+							name		= ?,
+							page_code	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.report:code, l.report:name, l.report:page_code,
+					   l.report:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReport_Delete" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.report:page_code, l.page ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Delete_Page( l.page ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ TemplateBatchReport_Delete_LowLevel( l.report:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReport_GlobalDelete" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_GlobalDelete_Page_Code_Admin_UI( l.report:page_code, l.module:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ TemplateBatchReport_Delete_LowLevel( l.report:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateBatchReport_Delete_LowLevel" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'TemplateBatchReports WHERE id = ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BCH-TBR-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Component Module code
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ComponentModule_Defaults" PARAMETERS = "module var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings:advanced"			VALUE = 0>
+	<MvASSIGN NAME = "l.settings:fields_custom"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:imagetypes"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:constrain"			VALUE = "B">
+	<MvASSIGN NAME = "l.settings:b_width"			VALUE = "75">
+	<MvASSIGN NAME = "l.settings:b_height"			VALUE = "75">
+	<MvASSIGN NAME = "l.settings:groups"			VALUE = 1>
+	<MvASSIGN NAME = "l.settings:lineitemprice"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:lineitemdiscounts"	VALUE = 0>
+	<MvASSIGN NAME = "l.settings:lineitemcoupons"	VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Allow cmp-mv-adminorderfields to populate and initialize orders for backwards compatibility
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Initialize_Item( l.all_settings, 'admin_order' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Pull in coupons, configured custom fields and image types, then create merged groups
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_CustomField_Lookup( l.all_settings, l.settings:fields_custom ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order_CustomField_Lookup( l.all_settings, l.settings:fields_custom_order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.order" ARRAY = "l.all_settings:admin_order:orders">
+		<MvASSIGN NAME = "l.coupon_count"		VALUE = "{ [ g.Module_Feature_PGR_DB ].OrderCouponList_Load_Order( l.order:id, l.order:coupons ) }">
+		<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ miva_array_elements( l.order:items ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order_CustomFields( l.order:id, l.order, l.all_settings, l.settings:fields_custom_order ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.order:have_custom_order_field_values" VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.settings:fields_custom_order">
+			<MvASSIGN NAME = "l.safe_module_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:module ) }">
+			<MvASSIGN NAME = "l.safe_field_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:code ) }">
+
+			<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.order:customfield_order_values">
+				<MvMEMBER NAME = "{ l.safe_module_code }">
+				<MvMEMBER NAME = "{ l.safe_field_code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT ISNULL trim( l.value ) }">
+				<MvASSIGN NAME = "l.order:have_custom_order_field_values" VALUE = 1>
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.order:items" COUNT = "{ l.orderitem_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_CustomFields( l.orderitem:product_id, l.orderitem, l.all_settings, l.settings:fields_custom ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_ImageTypes( l.orderitem:product_id, l.orderitem:variant_id, l.orderitem, l.all_settings, l.settings:imagetypes, l.settings:constrain, l.settings:b_width, l.settings:b_height ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.ordergroup_count"	VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Merge_BasketOrOrderItem_Groups( l.order:items, l.orderitem_count, l.order:groups ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderComponentModule_Generate_Code" PARAMETERS = "settings var, code var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:groups }">					<MvASSIGN NAME = "l.array"		VALUE = "order:groups">
+	<MvELSE>												<MvASSIGN NAME = "l.array"		VALUE = "order:items">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.settings:imagetypes[ 1 ] }">	<MvASSIGN NAME = "l.code_class"	VALUE = "code">
+	<MvELSE>												<MvASSIGN NAME = "l.code_class"	VALUE = "code_with_image">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.code"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+<table class="product-info">
+	<tr><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }">
+		<MIVA STANDARDOUTPUTLEVEL = "text, html"><th class="image">&nbsp;</th><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<th class="{ l.code_class }">Code</th>
+		<th class="product">Product</th>
+		<th class="quantity">Quantity</th>
+		<th class="total">Total</th>
+	</tr>
+
+	<mvt:foreach iterator="item" array="{ l.array }">
+		<tr><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:option_count">
+				<mvt:assign name="l.settings:rowspan" value="l.settings:item:option_count + 1" />
+			<mvt:else>
+				<mvt:assign name="l.settings:rowspan" value="1" />
+			</mvt:if>
+
+			<td class="image" rowspan="&mvt:rowspan;"><MIVA STANDARDOUTPUTLEVEL = "">
+				<MvASSIGN NAME = "l.imagetype"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.settings:imagetypes[ 1 ] ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<mvt:if expr="{ 'ISNULL l.settings:item:imagetypes:' $ l.imagetype }">
+					&nbsp;
+				<mvt:else>
+					<img src="{ '&mvte:item:imagetypes:' $ l.imagetype $ ';' }" alt="&mvte:item:name;" />
+				</mvt:if>
+			</td>
+			<MIVA STANDARDOUTPUTLEVEL = ""></MvIF>
+			<MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<td class="{ l.code_class $ ' highlighted' }">&mvte:item:code;</td>
+
+			<td class="product highlighted">
+				&mvte:item:name;<MIVA STANDARDOUTPUTLEVEL = "">
+				<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.settings:fields_custom">
+					<MvASSIGN NAME = "l.safe_module_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:module ) }">
+					<MvASSIGN NAME = "l.safe_field_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:code ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<mvt:if expr="{ 'NOT ISNULL l.settings:item:customfield_values:' $ l.safe_module_code $ ':' $ l.safe_field_code }">
+					<div class="custom-field">&mvte:customfield_names:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;: &mvte:item:customfield_values:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;</div>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+				</MvFOREACH>
+				<MvIF EXPR = "{ l.settings:lineitemdiscounts }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<mvt:foreach iterator="discount" array="item:discounts">
+					<mvt:if expr="l.settings:discount:display">
+						<div class="discount">&mvte:discount:descrip;: &mvt:discount:formatted_discount;</div>
+					</mvt:if>
+				</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+				</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			</td>
+
+			<td class="quantity highlighted">&mvte:item:quantity;</td>
+
+			<td class="total highlighted"><MIVA STANDARDOUTPUTLEVEL = "">
+				<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<mvt:if expr="l.settings:item:subtotal_retail AND l.settings:item:subtotal_retail NE l.settings:item:subtotal">
+					<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_retail;</span>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+				<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				<mvt:if expr="l.settings:item:subtotal_base_price NE l.settings:item:subtotal">
+					<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_base_price;</span>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+				</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				&mvt:item:formatted_subtotal;
+			</td>
+		</tr>
+
+		<mvt:foreach iterator="option" array="item:options">
+			<tr>
+				<td class="{ l.code_class }">&nbsp;</td>
+				<td class="product">
+					<mvt:if expr="l.settings:option:option_id">
+						&mvte:option:attr_code;: &mvte:option:opt_code;
+					<mvt:elseif expr="NOT ISNULL l.settings:option:data">
+						&mvte:option:attr_code;: &mvt:option:data;
+					<mvt:elseif expr="NOT ISNULL l.settings:option:data_long">
+						&mvte:option:attr_code;: &mvt:option:data_long;
+					<mvt:else>
+						&mvte:option:attr_code;
+					</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvIF EXPR = "{ l.settings:lineitemdiscounts }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:foreach iterator="discount" array="option:discounts">
+						<mvt:if expr="l.settings:discount:display">
+							<div class="discount">&mvte:discount:descrip;: &mvt:discount:formatted_discount;</div>
+						</mvt:if>
+					</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				</td>
+				<td class="quantity">&nbsp;</td>
+				<td class="total"><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:option:subtotal_retail OR l.settings:option:subtotal_base_price OR l.settings:option:subtotal">
+						<mvt:if expr="l.settings:option:subtotal_retail AND l.settings:option:subtotal_retail NE l.settings:option:subtotal">
+							<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_retail;</span>
+						<mvt:elseif expr="l.settings:option:subtotal_base_price NE l.settings:option:subtotal">
+							<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_base_price;</span>
+						</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:option:subtotal_base_price OR l.settings:option:subtotal">
+						<mvt:if expr="l.settings:option:subtotal_base_price NE l.settings:option:subtotal">
+							<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_base_price;</span>
+						</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:option:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+						&mvt:option:formatted_subtotal;
+					<mvt:else>
+						&nbsp;
+					</mvt:if>
+				</td>
+			</tr>
+		</mvt:foreach>
+	</mvt:foreach>
+<MIVA STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:lineitemcoupons }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	<mvt:foreach iterator="coupon" array="order:coupons">
+		<tr class="highlighted">
+			<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }">
+			<MIVA STANDARDOUTPUTLEVEL = "text, html"><td class="image">&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<td class="{ l.code_class }">COUPON</td>
+			<td class="product">
+				&mvte:coupon:code;
+				<mvt:if expr="NOT ISNULL l.settings:coupon:descrip">
+					<div class="discount">&mvte:coupon:descrip;</div>
+				</mvt:if>
+			</td>
+			<td class="quantity">&nbsp;</td>
+			<td class="total">&nbsp;</td>
+		</tr>
+	</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+
+	<tr class="highlighted"><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }">
+		<MIVA STANDARDOUTPUTLEVEL = "text, html"><td>&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td colspan="3" class="shippingTax">
+			<mvt:foreach iterator="charge" array="order:charges">
+				&mvte:charge:descrip;:<br />
+			</mvt:foreach>
+
+			<h2>Total:</h2>
+		</td>
+		<td class="totalFinal">
+			<mvt:foreach iterator="charge" array="order:charges">
+				&mvt:charge:formatted_disp_amt;<br />
+			</mvt:foreach>
+
+			<h2>&mvt:order:formatted_total;</h2>
+		</td>
+	</tr>
+</table>
+
+<mvt:if expr="l.settings:order:have_custom_order_field_values">
+	<br />
+	<table class="product-info">
+		<tr class="heading">
+			<td colspan="2"><h2>Additional Order Information</h2></td>
+		</tr><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.settings:fields_custom_order">
+			<MvASSIGN NAME = "l.safe_module_code"   VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:module ) }">
+			<MvASSIGN NAME = "l.safe_field_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:code ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<mvt:if expr="{ 'NOT ISNULL l.settings:order:customfield_order_values:' $ l.safe_module_code $ ':' $ l.safe_field_code }">
+			<tr class="highlighted">
+				<td nowrap>
+					&mvte:customfield_order_names:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;:
+				</td>
+				<td width="100%">
+					&mvte:order:customfield_order_values:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;
+				</td>
+			</tr>
+		</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvFOREACH><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	</table>
+</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/component/cmp-include-order.mv">
+<MvINCLUDE FILE = "modules/batch/templatebatchreports/functions.mv">
+<MvINCLUDE FILE = "modules/batch/templatebatchreports/list.mv">
+<MvINCLUDE FILE = "modules/batch/templatebatchreports/addeditdialog.mv">

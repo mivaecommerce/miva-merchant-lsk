@@ -1,0 +1,165 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-PIM-
+| Next Error Code: 23   
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ProductImage_Read" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productimage:id"			VALUE = "{ ProductImages.d.id }">
+	<MvASSIGN NAME = "l.productimage:product_id"	VALUE = "{ ProductImages.d.product_id }">
+	<MvASSIGN NAME = "l.productimage:image_id"		VALUE = "{ ProductImages.d.image_id }">
+	<MvASSIGN NAME = "l.productimage:type_id"		VALUE = "{ ProductImages.d.type_id }">
+	<MvASSIGN NAME = "l.productimage:disp_order"	VALUE = "{ ProductImages.d.disp_order }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Load_ID" PARAMETERS = "id, productimage var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductImages"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProductImages WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductImages.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-PIM-00016' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ProductImage_Read( l.productimage ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Load_Type" PARAMETERS = "product_id, type_id, productimage var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductImages"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProductImages  
+							  WHERE 
+								product_id	= ? AND 
+								type_id		= ?' }"
+				FIELDS	= "l.product_id, l.type_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductImages.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-PIM-00006' ) }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ ProductImage_Read( l.productimage ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImageList_Load_Product" PARAMETERS = "product_id, productimages var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductImages"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProductImages WHERE product_id = ? ORDER BY disp_order' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00019', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productimage_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT ProductImages.d.EOF }">
+		<MvASSIGN NAME = "l.productimage_count" VALUE = "{ l.productimage_count + 1 }">
+
+		<MvEVAL EXPR = "{ ProductImage_Read( l.productimages[ l.productimage_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductImages" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-PIM-00020', l.productimage_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Insert_LowLevel" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productimage:id"			VALUE = "{ StoreKey_Generate( 'ProductImages' ) }">
+	<MvASSIGN NAME = "l.productimage:disp_order"	VALUE = "{ StoreKey_Generate( 'ProductImageDisplayOrder' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'ProductImages
+					      ( id, product_id, image_id, type_id, disp_order )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+				FIELDS	= "l.productimage:id, l.productimage:product_id, l.productimage:image_id, l.productimage:type_id, l.productimage:disp_order">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Update_DisplayOrder" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET disp_order = ? WHERE id = ?' }"
+			 FIELDS	= "l.productimage:disp_order, l.productimage:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Clear_Type" PARAMETERS = "product_id, type_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET type_id = 0 WHERE product_id = ? AND type_id = ?' }"
+			 FIELDS	= "l.product_id, l.type_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Clear_Type_All" PARAMETERS = "type_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProductImages SET type_id = 0 WHERE type_id = ?' }"
+			 FIELDS	= "l.type_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00022', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Delete_LowLevel" PARAMETERS = "productimage_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'ProductImages WHERE id = ?' }"
+			 FIELDS	= "l.productimage_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductImage_Delete_All_Image" PARAMETERS = "image_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'ProductImages WHERE image_id = ?' }"
+			 FIELDS	= "l.image_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-PIM-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

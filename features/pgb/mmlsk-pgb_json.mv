@@ -1,0 +1,1661 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-PGB-JSN-
+| Next Error Code: 27
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PAGE', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_JSON ].JSON_Page_Load( l.page ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Template_Current( l.page:templ_id, l.managedtemplateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PGB-JSN-00001', 'Failed to load current template' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pagebuilder_seq_modules"				VALUE = "">
+	<MvASSIGN NAME = "l.pagebuilder_seq_module_count"			VALUE = 0>
+
+	<MvASSIGN NAME = "l.pagebuilder_cmp_modules"				VALUE = "">
+	<MvASSIGN NAME = "l.pagebuilder_cmp_module_count"			VALUE = 0>
+
+	<MvASSIGN NAME = "l.component_item_lookup"					VALUE = "">
+	<MvASSIGN NAME = "l.component_module_processed_lookup"		VALUE = "">
+
+	<MvASSIGN NAME = "l.can_view_product"						VALUE = "{ [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">
+	<MvASSIGN NAME = "l.can_view_category"						VALUE = "{ [ g.Module_Admin ].CanI( 'CTGY', 1, 0, 0, 0 ) }">
+	<MvASSIGN NAME = "l.can_view_order"							VALUE = "{ [ g.Module_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">
+	<MvASSIGN NAME = "l.can_view_payment"						VALUE = "{ [ g.Module_Admin ].CanI( 'PMNT', 1, 0, 0, 0 ) }">
+
+	<MvASSIGN NAME = "l.item_product_exists"					VALUE = 0>
+	<MvASSIGN NAME = "l.item_product_code"						VALUE = "">
+
+	<MvASSIGN NAME = "l.item_category_exists"					VALUE = 0>
+	<MvASSIGN NAME = "l.item_category_code"						VALUE = "">
+
+	<MvASSIGN NAME = "l.item_order_exists"						VALUE = 0>
+	<MvASSIGN NAME = "l.item_order_id"							VALUE = "">
+
+	<MvASSIGN NAME = "l.item_payment_exists"					VALUE = 0>
+	<MvASSIGN NAME = "l.item_payment_method"					VALUE = "">
+
+	<MvASSIGN NAME = "l.item_search_exists"						VALUE = 0>
+	<MvASSIGN NAME = "l.item_search_value"						VALUE = "">
+
+	<MvCOMMENT>
+	|
+	| Sample Data Loading: Product
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.product"								VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].UserPreference_Load_Key( g.Store:id, g.User:id, 'PageBuilderUI.default_product_code', l.loaded_preference ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.loaded_preference:value, l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.product }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilder_Preview_Product_Load_First( l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.item_product_code"						VALUE = "{ l.product:code }">
+
+	<MvCOMMENT>
+	|
+	| Sample Data Loading: Category
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.category"								VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].UserPreference_Load_Key( g.Store:id, g.User:id, 'PageBuilderUI.default_category_code', l.loaded_preference ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( l.loaded_preference:value, l.category ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.category }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilder_Preview_Category_Load_First( l.category ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.item_category_code"						VALUE = "{ l.category:code }">
+
+	<MvCOMMENT>
+	|
+	| Sample Data Loading: Order
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.order"									VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].UserPreference_Load_Key( g.Store:id, g.User:id, 'PageBuilderUI.default_order_id', l.loaded_preference ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_ID( l.loaded_preference:value, l.order ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.order }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_First( l.order ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.item_order_id"							VALUE = "{ l.order:id }">
+
+	<MvCOMMENT>
+	|
+	| Sample Data Loading: Payment Method
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.paymentmethods"							VALUE = "">
+	<MvASSIGN NAME = "l.paymentmethod_count"					VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Feature_PAY_UT ].PaymentMethodList_Load_Basket( l.methods ) }">
+		<MvASSIGN NAME = "l.paymentmethod"						VALUE = "">
+
+		<MvIF EXPR = "{ l.method:paymentcard:id }">
+			<MvASSIGN NAME = "l.paymentmethod:value"			VALUE = "{ 'paymentcard:' $ l.method:paymentcard:id }">
+			<MvASSIGN NAME = "l.paymentmethod:name"				VALUE = "{ l.method:name }">
+		<MvELSEIF EXPR = "{ l.method:paymentcardtype:id }">
+			<MvASSIGN NAME = "l.paymentmethod:value"			VALUE = "{ 'paymentcardtype:' $ l.method:paymentcardtype:id }">
+			<MvASSIGN NAME = "l.paymentmethod:name"				VALUE = "{ l.method:name }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.paymentmethod:value"			VALUE = "{ l.method:module:code $ ':' $ l.method:code }">
+			<MvASSIGN NAME = "l.paymentmethod:name"				VALUE = "{ l.method:name }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.paymentmethod_count" 				VALUE = "{ miva_array_insert_var( l.paymentmethods, l.paymentmethod, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].UserPreference_Load_Key( g.Store:id, g.User:id, 'PageBuilderUI.default_payment_method', l.loaded_preference ) }">
+		<MvIF EXPR = "{ miva_array_search( l.paymentmethods, 1, l.paymentmethod, 'l.paymentmethod:value EQ l.loaded_preference:value' ) }">
+			<MvASSIGN NAME = "l.item_payment_method"			VALUE = "{ l.paymentmethod:value }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.item_payment_method }">
+		<MvIF EXPR = "{ l.paymentmethod_count }">
+			<MvASSIGN NAME = "l.item_payment_method"			VALUE = "{ l.paymentmethods[ 1 ]:value }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Sample Data Loading: Search
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].UserPreference_Load_Key( g.Store:id, g.User:id, 'PageBuilderUI.default_search', l.loaded_preference ) }">
+		<MvASSIGN NAME = "l.item_search_value" VALUE = "{ l.loaded_preference:value }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Iterate items to find sequence, component, and sample data items
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Feature_TUI_DB ].ItemModuleList_Load_Page_Active( l.page:id, l.modules ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGNARRAY NAME = "l.component_item_lookup"			VALUE = 1>
+			<MvMEMBER NAME = "{ l.module:item_code }">
+		</MvASSIGNARRAY>
+
+		<MvIF EXPR = "{ l.module:feature_hash:pagebuilder_seq }">	<MvASSIGN NAME = "l.pagebuilder_seq_module_count" VALUE = "{ miva_array_insert_var( l.pagebuilder_seq_modules, l.module, -1 ) }"> </MvIF>
+		<MvIF EXPR = "{ l.module:feature_hash:pagebuilder_cmp }">	<MvASSIGN NAME = "l.pagebuilder_cmp_module_count" VALUE = "{ miva_array_insert_var( l.pagebuilder_cmp_modules, l.module, -1 ) }"> </MvIF>
+
+		<MvIF EXPR = "{ l.can_view_product AND ( l.module:code EQ 'cmp-mv-stdprodfields' ) }">													<MvASSIGN NAME = "l.item_product_exists"	VALUE = 1>
+		<MvELSEIF EXPR = "{ l.can_view_category AND ( l.module:code EQ 'cmp-mv-stdcatfields' ) }">												<MvASSIGN NAME = "l.item_category_exists"	VALUE = 1>
+		<MvELSEIF EXPR = "{ l.can_view_order AND ( l.module:code EQ 'cmp-mv-stdorderfields' ) }">												<MvASSIGN NAME = "l.item_order_exists"		VALUE = 1>
+		<MvELSEIF EXPR = "{ l.can_view_payment AND ( l.module:code EQ 'cmp-mv-paymentfields' OR l.module:code EQ 'cmp-mv-paymentmethod' ) }">	<MvASSIGN NAME = "l.item_payment_exists"	VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ g.Secure }">	<MvASSIGN NAME = "l.flags"	VALUE = "{ [ g.Module_Feature_URI_UT ].URL_Build_Flags( 'secure,nosession' ) }">
+	<MvELSE> 						<MvASSIGN NAME = "l.flags"	VALUE = "{ [ g.Module_Feature_URI_UT ].URL_Build_Flags( 'nosession' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.page_url" VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Page_URL( l.page, l.flags ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"components":
+		[
+			<MvCOMMENT>
+			|
+			| Output only components that already have their item_code (which
+			| correlates to a page item) assigned to the page.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.component_count" VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.module" ARRAY = "l.pagebuilder_cmp_modules" COUNT = "{ l.pagebuilder_cmp_module_count }">
+				<MvREFERENCEARRAY NAME = "l.component_module_processed" VARIABLE = "l.component_module_processed_lookup">
+					<MvMEMBER NAME = "{ l.module:code }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.component_module_processed }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.component_module_processed" VALUE = 1>
+
+				<MvFOREACH ITERATOR = "l.component" ARRAY = "l.components" COUNT = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Components( l.module, l.components ) }">
+					<MvREFERENCEARRAY NAME = "l.component_item_on_page" VARIABLE = "l.component_item_lookup">
+						<MvMEMBER NAME = "{ l.component:item_code }">
+					</MvREFERENCEARRAY>
+
+					<MvIF EXPR = "{ NOT l.component_item_on_page }">
+						<MvFOREACHCONTINUE>
+					</MvIF>
+
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.component_count ) }">
+						"code":							"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.component:code ) }">",
+						"name":							"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.component:name ) }">",
+						"version":						"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.component:version ) }">",
+						"category":						"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.component:category ) }">",
+						"preview_component_selector":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.component:preview_component_selector ) }">",
+						"item_code":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.component:item_code ) }">",
+						"module_code":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.module:code ) }">",
+
+						<MvIF EXPR = "{ NOT ISNULL l.component:preview }">	"preview": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( 'data:image/svg+xml;base64,' $ crypto_base64_encode( l.component:preview ) ) }">",
+						<MvELSE>											"preview": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( 'data:image/svg+xml;base64,' $ crypto_base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" width="1604" height="580" viewBox="0 0 1604 580"><rect x="40" y="40" width="1524" height="500" fill="#cfd2d6" /></svg>' ) ) }">",
+						</MvIF>
+
+						<MvIF EXPR = "{ miva_variable_type( l.component:properties ) NE 'ARRAY' }">
+							"properties":				[],
+						<MvELSE>
+							"properties":				<MvEVAL EXPR = "{ miva_json_encode( l.component:properties, 'pretty' ) }">,
+						</MvIF>
+
+						<MvIF EXPR = "{ miva_variable_type( l.component:advanced_properties ) NE 'ARRAY' }">
+							"advanced_properties":		[],
+						<MvELSE>
+							"advanced_properties":		<MvEVAL EXPR = "{ miva_json_encode( l.component:advanced_properties, 'pretty' ) }">,
+						</MvIF>
+
+						<MvIF EXPR = "{ miva_variable_type( l.component:defaults ) NE 'STRUCTURE' }">
+							"defaults":					{},
+						<MvELSE>
+							"defaults":					<MvEVAL EXPR = "{ miva_json_encode( l.component:defaults, 'pretty' ) }">,
+						</MvIF>
+
+						<MvIF EXPR = "{ miva_variable_type( l.component:sample_data_types ) NE 'ARRAY' }">
+							"sample_data_types":		[]
+						<MvELSE>
+							"sample_data_types":		<MvEVAL EXPR = "{ miva_json_encode( l.component:sample_data_types, 'pretty' ) }">
+						</MvIF>
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvFOREACH>
+			</MvFOREACH>
+		],
+		"sequences":
+		[
+			<MvASSIGN NAME = "l.sequence_count" VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.module" ARRAY = "l.pagebuilder_seq_modules" COUNT = "{ l.pagebuilder_seq_module_count }">
+				<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+					<MvMEMBER NAME = "settings">
+					<MvMEMBER NAME = "{ l.module:item_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGN NAME = "l.sequences" VALUE = "">
+
+				<MvFOREACH ITERATOR = "l.sequence" ARRAY = "l.sequences" COUNT = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Sequences( l.module, l.module:item_code, l.item_settings, l.sequences ) }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.sequence_count ) }">
+						"item_code":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.module:item_code ) }">",
+						"code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.sequence:code ) }">",
+						"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.sequence:name ) }">",
+						"elements":
+						[
+							<MvASSIGN NAME = "l.sequence_element_count" VALUE = 0>
+
+							<MvFOREACH ITERATOR = "l.sequence_element" ARRAY = "l.sequence:elements">
+								<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.sequence_element_count ) }">
+									"item_code":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.sequence_element:item_code ) }">",
+									"code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.sequence_element:code ) }">",
+									"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.sequence_element:name ) }">",
+									"enabled":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.sequence_element:enabled ) }">,
+									"dt_start":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_DateTime( l.sequence_element:dt_start ) }">,
+									"dt_end":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_DateTime( l.sequence_element:dt_end ) }">
+								<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+							</MvFOREACH>
+						]
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvFOREACH>
+			</MvFOREACH>
+		],
+		"elements":
+		[
+			<MvASSIGN NAME = "l.element_count" VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.module" ARRAY = "l.pagebuilder_cmp_modules" COUNT = "{ l.pagebuilder_cmp_module_count }">
+				<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+					<MvMEMBER NAME = "settings">
+					<MvMEMBER NAME = "{ l.module:item_code }">
+				</MvREFERENCEARRAY>
+
+				<MvFOREACH ITERATOR = "l.element" ARRAY = "l.elements" COUNT = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Elements( l.module, l.module:item_code, l.item_settings, l.elements ) }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.element_count ) }">
+						"item_code":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.module:item_code ) }">",
+						"component_code":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.element:component_code ) }">",
+						"code":				"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.element:code ) }">",
+
+						<MvIF EXPR = "{ ISNULL l.element:settings OR miva_variable_type( l.element:settings ) NE 'STRUCTURE' }">
+							"settings":		{}
+						<MvELSE>
+							"settings":		<MvEVAL EXPR = "{ miva_json_encode( l.element:settings, 'pretty' ) }">
+						</MvIF>
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvFOREACH>
+			</MvFOREACH>
+		],
+		"sample_data":
+		{
+			"product":
+			{
+				"available":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.item_product_exists ) }">,
+				"code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.item_product_code ) }">"
+			},
+			"category":
+			{
+				"available":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.item_category_exists ) }">,
+				"code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.item_category_code ) }">"
+			},
+			"order":
+			{
+				"available":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.item_order_exists ) }">,
+				"id":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.item_order_id ) }">"
+			},
+			"payment":
+			{
+				"available":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.item_payment_exists ) }">,
+				"method":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.item_payment_method ) }">",
+				"methods":
+				[
+					<MvASSIGN NAME = "l.paymentmethod_output_count" VALUE = 0>
+
+					<MvFOREACH ITERATOR = "l.paymentmethod" ARRAY = "l.paymentmethods" COUNT = "{ l.paymentmethod_count }">
+						<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.paymentmethod_output_count ) }">
+							"value":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.paymentmethod:value ) }">",
+							"name":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.paymentmethod:name ) }">"
+						<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+					</MvFOREACH>
+		 		]
+			},
+			"search":
+			{
+				"available":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.item_search_exists ) }">,
+				"value":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.item_search_value ) }">"
+			}
+		}
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPageComponentPreviewImageList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PAGE', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_JSON ].JSON_Page_Load( l.page ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pagebuilder_seq_modules"		VALUE = "">
+	<MvASSIGN NAME = "l.pagebuilder_seq_module_count"	VALUE = 0>
+
+	<MvASSIGN NAME = "l.pagebuilder_cmp_modules"		VALUE = "">
+	<MvASSIGN NAME = "l.pagebuilder_cmp_module_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Feature_TUI_DB ].ItemModuleList_Load_Page_Active( l.page:id, l.modules ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:feature_hash:pagebuilder_seq }">	<MvASSIGN NAME = "l.pagebuilder_seq_module_count" VALUE = "{ miva_array_insert_var( l.pagebuilder_seq_modules, l.module, -1 ) }"> </MvIF>
+		<MvIF EXPR = "{ l.module:feature_hash:pagebuilder_cmp }">	<MvASSIGN NAME = "l.pagebuilder_cmp_module_count" VALUE = "{ miva_array_insert_var( l.pagebuilder_cmp_modules, l.module, -1 ) }"> </MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Build Component Lookup
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.component_lookup" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'pagebuilder_cmp', l.modules ) }">
+		<MvASSIGN NAME = "l.components"					VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.component" ARRAY = "l.components" COUNT = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Components( l.module, l.components ) }">
+			<MvASSIGNARRAY NAME = "l.component_lookup" VALUE = "{ l.component }">
+				<MvMEMBER NAME = "{ l.component:item_code }">
+				<MvMEMBER NAME = "{ l.component:code }">
+			</MvASSIGNARRAY>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Build Element Lookup
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.element_lookup" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.pagebuilder_cmp_modules" COUNT = "{ l.pagebuilder_cmp_module_count }">
+		<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+			<MvMEMBER NAME = "settings">
+			<MvMEMBER NAME = "{ l.module:item_code }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.elements" VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.element" ARRAY = "l.elements" COUNT = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Elements( l.module, l.module:item_code, l.item_settings, l.elements ) }">
+			<MvASSIGN NAME = "l.element:item_code"		VALUE = "{ l.module:item_code }">
+			<MvASSIGNARRAY NAME = "l.element_lookup"	VALUE = "{ l.element }">
+				<MvMEMBER NAME = "{ l.element:item_code }">
+				<MvMEMBER NAME = "{ l.element:code }">
+			</MvASSIGNARRAY>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Output Sequence Element Component Previews
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.output_pos" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	[
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.pagebuilder_seq_modules" COUNT = "{ l.pagebuilder_seq_module_count }">
+			<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+				<MvMEMBER NAME = "settings">
+				<MvMEMBER NAME = "{ l.module:item_code }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.sequences" VALUE = "">
+
+			<MvFOREACH ITERATOR = "l.sequence" ARRAY = "l.sequences" COUNT = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Sequences( l.module, l.module:item_code, l.item_settings, l.sequences ) }">
+				<MvFOREACH ITERATOR = "l.sequence_element" ARRAY = "l.sequence:elements">
+					<MvREFERENCEARRAY NAME = "l.element" VARIABLE = "l.element_lookup">
+						<MvMEMBER NAME = "{ l.sequence_element:item_code }">
+						<MvMEMBER NAME = "{ l.sequence_element:code }">
+					</MvREFERENCEARRAY>
+
+					<MvIF EXPR = "{ ISNULL l.element }">
+						<MvFOREACHCONTINUE>
+					</MvIF>
+
+					<MvREFERENCEARRAY NAME = "l.component" VARIABLE = "l.component_lookup">
+						<MvMEMBER NAME = "{ l.element:item_code }">
+						<MvMEMBER NAME = "{ l.element:component_code }">
+					</MvREFERENCEARRAY>
+
+					<MvIF EXPR = "{ ISNULL l.component }">
+						<MvFOREACHCONTINUE>
+					</MvIF>
+
+					<MvIF EXPR = "{ ++l.output_pos GT 1 }">
+						,
+					</MvIF>
+
+					<MvIF EXPR = "{ NOT ISNULL l.component:preview }">	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( 'data:image/svg+xml;base64,' $ crypto_base64_encode( l.component:preview ) ) }">"
+					<MvELSE>											"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( 'data:image/svg+xml;base64,' $ crypto_base64_encode( '<svg xmlns="http://www.w3.org/2000/svg" width="1604" height="580" viewBox="0 0 1604 580"><rect x="40" y="40" width="1524" height="500" fill="#cfd2d6" /></svg>' ) ) }">"
+					</MvIF>
+				</MvFOREACH>
+			</MvFOREACH>
+		</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PAGE', 0, 0, 1, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_JSON ].JSON_Page_Load( l.page ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvLOCKFILE FILE = "{ [ g.Module_Feature_PGB_UT ].PageBuilder_Lockfile_Path( l.page:id ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_PageBuilderPage_Update_LowLevel( l.page:id ) }">
+	</MvLOCKFILE>
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Update_LowLevel" PARAMETERS = "page_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"							VALUE = "">
+	<MvASSIGN NAME = "l.data:page_id"					VALUE = "{ l.page_id }">
+	<MvASSIGN NAME = "l.data:deleted_element_count"		VALUE = "{ [ g.Module_JSON ].JSON_Input_Array( 'Deleted_Elements',	l.data:deleted_elements ) }">
+	<MvASSIGN NAME = "l.data:added_element_count"		VALUE = "{ [ g.Module_JSON ].JSON_Input_Array( 'Added_Elements',	l.data:added_elements ) }">
+	<MvASSIGN NAME = "l.data:updated_element_count"		VALUE = "{ [ g.Module_JSON ].JSON_Input_Array( 'Updated_Elements',	l.data:updated_elements ) }">
+	<MvASSIGN NAME = "l.data:sequence_count"			VALUE = "{ [ g.Module_JSON ].JSON_Input_Array( 'Updated_Sequences',	l.data:sequences ) }">
+	<MvASSIGN NAME = "l.data:global_component_count"	VALUE = "{ [ g.Module_JSON ].JSON_Input_Array( 'Global_Components',	l.data:global_components ) }">
+
+	<MvIF EXPR = "{ NOT JSON_PageBuilderPage_GeneratePageSettings( l.data, l.page, l.managedtemplate, l.managedtemplateversion, l.global_components, l.global_component_count ) }">
+		<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Have_Input_Errors() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Update Page Settings
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.page_type" VALUE = "{ ternary( l.page:layout, 'Layout', 'Page' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Changeset_Begin( l.page_type $ ' \'' $ l.page:code $ '\' updated' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Update_Settings( l.page, l.page_type $ ' Update' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PGB-JSN-00002', l.page_type $ ' \'' $ l.page:code $ '\' settings updated' ) }">
+
+	<MvIF EXPR = "{ NOT l.page:layout }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Generate_Page_Update( l.page ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.global_component" ARRAY = "l.global_components" COUNT = "{ l.global_component_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Page_Update_Settings( l.global_component:page, 'Global Component Update' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PGB-JSN-00025', 'Global Component \'' $ l.global_component:page:code $ '\' settings updated' ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Changeset_End() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPreviewSessionFragmentKey_Generate" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PAGE', 0, 0, 1, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'PageBuilderPreviewSession_ID', l.session_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSession_Load_Session( l.session_id, l.pagebuilderpreviewsession ) }">	<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ g.Admin_User_ID NE l.pagebuilderpreviewsession:user_id }">																<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ g.Store:id NE l.pagebuilderpreviewsession:store_id }">																	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_UT ].PageBuilderPreviewSessionFragmentKey_Generate( l.pagebuilderpreviewsession, l.pagebuilderpreviewsessionfragmentkey ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"preview_session_fragment_key": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.pagebuilderpreviewsessionfragmentkey:fragkey ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPreviewSessionFragmentKey_KeepAlive" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PAGE', 0, 0, 1, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'PageBuilderPreviewSession_ID',				l.session_id ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'PageBuilderPreviewSession_FragmentKey',	l.fragment_key ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSession_Load_Session( l.session_id, l.pagebuilderpreviewsession ) }">	<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ g.Admin_User_ID NE l.pagebuilderpreviewsession:user_id }">																<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ g.Store:id NE l.pagebuilderpreviewsession:store_id }">																	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSessionFragmentKey_Load( l.pagebuilderpreviewsession:session_id, l.fragment_key, l.pagebuilderpreviewsessionfragmentkey ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PGB-JSN-00026', 'Preview session fragment key not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSessionFragmentKey_Update_LastUsed( l.pagebuilderpreviewsessionfragmentkey ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPreviewSessionFragmentKey_Cleanup" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PAGE', 0, 0, 1, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'PageBuilderPreviewSession_ID',				l.session_id ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'PageBuilderPreviewSession_FragmentKey',	l.fragment_key ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSession_Load_Session( l.session_id, l.pagebuilderpreviewsession ) }">	<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ g.Admin_User_ID NE l.pagebuilderpreviewsession:user_id }">																<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ g.Store:id NE l.pagebuilderpreviewsession:store_id }">																	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSessionFragmentKey_Load( l.pagebuilderpreviewsession:session_id, l.fragment_key, l.pagebuilderpreviewsessionfragmentkey ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSessionFragmentKey_Delete( l.pagebuilderpreviewsessionfragmentkey ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MaintenanceMode_Bypass_PageBuilderPage_Preview" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilderPage_Preview_ValidatePreviewSession( l.pagebuilderpreviewsession, l.pagebuilderpreviewsessionfragmentkey ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Preview" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_PageBuilderPage_Preview_ValidatePreviewSession( l.pagebuilderpreviewsession, l.pagebuilderpreviewsessionfragmentkey ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_JSON ].JSON_Page_Load( l.page ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilderPage_Preview_Response_Error() }">
+	</MvIF>
+
+	<MvLOCKFILE FILE = "{ [ g.Module_Feature_PGB_UT ].PageBuilder_Lockfile_Path( l.page:id ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_PageBuilderPage_Preview_LowLevel( l.page:id, l.pagebuilderpreviewsession, l.pagebuilderpreviewsessionfragmentkey ) }">
+	</MvLOCKFILE>
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvIF EXPR = "{ g.TemplateManager_Exception }">
+			<MvIF EXPR = "{ g.TemplateManager_Exception_Code EQ 'product_not_found' }">				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00021', 'The selected product either does not exist, is inactive, or otherwise unavailable and cannot be displayed in the preview. Please select another product.' ) }">
+			<MvELSEIF EXPR = "{ g.TemplateManager_Exception_Code EQ 'category_not_found' }">		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00022', 'The selected category either does not exist, is inactive, or otherwise unavailable and cannot be displayed in the preview. Please select another category.' ) }">
+			<MvELSEIF EXPR = "{ g.TemplateManager_Exception_Code EQ 'invalid_payment_method' }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00023', 'The selected payment method is unavailable and cannot be displayed in the preview. Please select another payment method.' ) }">
+			<MvELSE>																				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00024', 'UI Exception \'' $ g.TemplateManager_Exception_Code $ '\' has prevented the preview from displayed the requested page' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilderPage_Preview_Response_Error() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Preview_ValidatePreviewSession" PARAMETERS = "pagebuilderpreviewsession var, pagebuilderpreviewsessionfragmentkey var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.PageBuilderPreviewSession_ID"			VALUE = "{ trim( g.PageBuilderPreviewSession_ID ) }">
+	<MvASSIGN NAME = "g.PageBuilderPreviewSession_FragmentKey"	VALUE = "{ trim( g.PageBuilderPreviewSession_FragmentKey ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Is_Store_Open() }">																																								<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSession_Load_Session( g.PageBuilderPreviewSession_ID, l.pagebuilderpreviewsession ) }">																	<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ l.pagebuilderpreviewsession:store_id NE g.Store:id }">																																						<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].AdminSession_Load_Session( l.pagebuilderpreviewsession:admsess_id, l.adminsession ) }">																							<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ l.pagebuilderpreviewsession:user_id NE l.adminsession:user_id }">																																			<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].User_Load_ID( l.adminsession:user_id, l.user ) }">																																<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_DB ].PageBuilderPreviewSessionFragmentKey_Load( l.pagebuilderpreviewsession:session_id, g.PageBuilderPreviewSession_FragmentKey, l.pagebuilderpreviewsessionfragmentkey ) }">	<MvFUNCTIONRETURN VALUE = 0> </MvIF>
+
+	<MvASSIGN NAME = "l.session_valid"		VALUE = 0>
+
+	<MvIF EXPR = "{ g.Domain:verify_ip AND ( l.adminsession:remoteaddr NE s.remote_addr ) }">
+		<MvASSIGN NAME = "l.session_valid"	VALUE = 0>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_PageBuilder_Session_Hijack( l.adminsession:session_id, l.adminsession:remoteaddr, l.user ) }">
+	<MvELSEIF EXPR = "{ l.user:exp_date AND ( l.user:exp_date LT s.dyn_time_t ) }">
+		<MvASSIGN NAME = "l.session_valid"	VALUE = 0>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_PageBuilder_User_Expired( l.adminsession:session_id, l.user ) }">
+	<MvELSEIF EXPR = "{ l.adminsession:lastupdate GT s.time_t }">
+		<MvASSIGN NAME = "l.session_valid"	VALUE = 1>
+	<MvELSEIF EXPR = "{ ( s.time_t - l.adminsession:lastupdate ) LE ( g.Domain:admexp * 60 ) }">
+		<MvASSIGN NAME = "l.session_valid"	VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.session_valid"	VALUE = 0>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_PageBuilder_Session_Timeout( l.adminsession:session_id, l.user ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.session_valid }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].CanI( l.user:admin, l.user:id, 'PAGE', 0, 0, 1, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Preview_LowLevel" PARAMETERS = "page_id, pagebuilderpreviewsession var, pagebuilderpreviewsessionfragmentkey var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Deleted_Elements"				VALUE = "{ trim( g.Deleted_Elements ) }">
+	<MvASSIGN NAME = "g.Added_Elements"					VALUE = "{ trim( g.Added_Elements ) }">
+	<MvASSIGN NAME = "g.Updated_Elements"				VALUE = "{ trim( g.Updated_Elements ) }">
+	<MvASSIGN NAME = "g.Updated_Sequences"				VALUE = "{ trim( g.Updated_Sequences ) }">
+	<MvASSIGN NAME = "g.Global_Component"				VALUE = "{ trim( g.Global_Component ) }">
+
+	<MvASSIGN NAME = "l.data"							VALUE = "">
+	<MvASSIGN NAME = "l.data:page_id"					VALUE = "{ l.page_id }">
+
+	<MvIF EXPR = "{ NOT JSON_PageBuilderPage_Preview_Build_Input_Array( 'Deleted_Elements',		l.data:deleted_elements,	l.data:deleted_element_count )	OR
+					NOT JSON_PageBuilderPage_Preview_Build_Input_Array( 'Added_Elements',		l.data:added_elements,		l.data:added_element_count )	OR
+					NOT JSON_PageBuilderPage_Preview_Build_Input_Array( 'Updated_Elements',		l.data:updated_elements,	l.data:updated_element_count )	OR
+					NOT JSON_PageBuilderPage_Preview_Build_Input_Array( 'Updated_Sequences',	l.data:sequences,			l.data:sequence_count )			OR
+					NOT JSON_PageBuilderPage_Preview_Build_Input_Array( 'Global_Components',	l.data:global_components,	l.data:global_component_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Exists( 'Order_ID' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer( 'R', 'Order_ID', l.order_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Load_ID( l.order_id, g.Order ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_PageBuilderPage_GeneratePageSettings( l.data, l.page, l.managedtemplate, l.managedtemplateversion, l.global_components, l.global_component_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_UT ].PageBuilderPreview_Start( l.pagebuilderpreviewsession, l.pagebuilderpreviewsessionfragmentkey ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.global_component" ARRAY = "l.global_components" COUNT = "{ l.global_component_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGB_UT ].PageBuilderPreview_StoreFragmentSettings( l.global_component:page:code, l.global_component:page:settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_PGB_UT ].PageBuilderPreview_RenderPage( l.page ) }">
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_PGB_UT ].PageBuilderPreview_End() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Preview_Build_Input_Array" PARAMETERS = "param, output var, output_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.output"				VALUE = "">
+	<MvASSIGN NAME = "l.output_count"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT miva_array_search( g.Session:parameters, 1, l.existing_param, 'strcasecmp( l.existing_param, l.param ) EQ 0' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvREFERENCE NAME = "l.encoded_json"	VARIABLE = "{ 'g.' $ l.param }">
+
+	<MvIF EXPR = "{ ISNULL l.encoded_json }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT miva_json_decode( l.encoded_json, l.array ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Error( l.param, miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvFOREACH INDEX = "l.pos" ITERATOR = "l.array_element" ARRAY = "l.array">
+		<MvREFERENCEARRAY NAME = "l.element" VARIABLE = "l.output">
+			<MvDIMENSION INDEX = "{ ++l.output_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.element:prefix"	VALUE = "{ l.param $ '[' $ l.pos $ ']' }">
+
+		<MvREFERENCEARRAY NAME = "l.element:var" VARIABLE = "l.array">
+			<MvDIMENSION INDEX = "{ l.pos }">
+		</MvREFERENCEARRAY>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_Preview_Response_Error" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Content-Type',		'text/html; charset=utf-8' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'X-XSS-Protection',	'1; mode=block' ) }">
+
+	<!DOCTYPE html>
+	<html xmlns="http://www.w3.org/1999/xhtml">
+		<head>
+			<title>Miva Merchant: Page Builder Preview Error</title>
+			<script type="text/javascript">
+				var post_data;
+
+				if ( window.parent )
+				{
+					post_data			= new Object();
+					post_data.command	= 'window_load_error';
+					post_data.data		= new Object();
+
+					<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Have_Input_Errors() }">	post_data.data = <MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">;
+					<MvELSE>														post_data.data = <MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">;
+					</MvIF>
+
+					window.parent.postMessage( JSON.stringify( post_data ), '*' );
+				}
+			</script>
+		</head>
+		<body></body>
+	</html>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilderPage_GeneratePageSettings" PARAMETERS = "data var, page var, managedtemplate var, managedtemplateversion var, global_components var, global_component_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_ID( l.data:page_id, l.page ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00005', 'Page not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplate_Load_ID( l.page:templ_id, l.managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00006', 'Failed to load template' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_ID( l.managedtemplate:current_id, l.managedtemplateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00007', 'Failed to load template' ) }">
+	</MvIF>
+
+	<MvREFERENCE NAME = "l.page:settings" VARIABLE = "l.managedtemplateversion:settings">
+
+	<MvFOREACH ITERATOR = "l.input_element" ARRAY = "l.data:deleted_elements" COUNT = "{ l.data:deleted_element_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element, 'R', 'item_code',	l.item_code ) OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element, 'R', 'code',		l.element_code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( l.item_code, l.item ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'item_code', 'Item not found' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.item:mod_code, l.module ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.module:id ) }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00008', 'Module is not installed in the store' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">																		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00009', 'Module not active' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:feature_hash:pagebuilder_cmp }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00010', 'Module does not implement the \'pagebuilder_cmp\' feature' ) }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+			<MvMEMBER NAME = "settings">
+			<MvMEMBER NAME = "{ l.item:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element( l.module, l.item:code, l.item_settings, l.element_code, l.element ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'code', g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element_Delete( l.module, l.item_settings, l.element:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.input_element" ARRAY = "l.data:added_elements" COUNT = "{ l.data:added_element_count }">
+		<MvASSIGN NAME = "l.element" VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element,			'R', 'item_code',		l.item_code )				OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element,			'R', 'component_code',	l.element:component_code )	OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element,			'R', 'code',			l.element:code )			OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Structure(	l.input_element,	'R', 'settings',		l.input_settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( l.item_code, l.item ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'item_code', 'Item not found' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.item:mod_code, l.module ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.module:id ) }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00011', 'Module is not installed in the store' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">																		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00012', 'Module not active' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:feature_hash:pagebuilder_cmp }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00013', 'Module does not implement the \'pagebuilder_cmp\' feature' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Component( l.module, l.element:component_code, l.component ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'component_code', g.Error_Message ) }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+			<MvMEMBER NAME = "settings">
+			<MvMEMBER NAME = "{ l.item:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element( l.module, l.item:code, l.item_settings, l.element:code, l.existing_element ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'code', 'Element \'' $ l.existing_element:code $ '\' already exists' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Properties( l.input_settings, l.component:properties, l.element:settings ) }">
+			<MvCOMMENT>
+			|
+			| JSON response errors handled in validation function
+			|
+			</MvCOMMENT>
+
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Element_Exists( l.input_settings, 'advanced' ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings, 'R', 'advanced', l.input_advanced_settings ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Properties( l.input_advanced_settings, l.component:advanced_properties, l.element:settings:advanced ) }">
+				<MvCOMMENT>
+				|
+				| JSON response errors handled in validation function
+				|
+				</MvCOMMENT>
+
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:api_ver GE 10.10 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element_Insert( l.module, l.item_settings, l.component, l.element ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element_Insert( l.module, l.item_settings, l.element ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.input_element" ARRAY = "l.data:updated_elements" COUNT = "{ l.data:updated_element_count }">
+		<MvASSIGN NAME = "l.element" VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element, 'R', 'item_code',		l.item_code ) OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element, 'R', 'original_code',	l.element_code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( l.item_code, l.item ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'item_code', 'Item not found' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.item:mod_code, l.module ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.module:id ) }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00014', 'Module is not installed in the store' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">																		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00015', 'Module not active' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:feature_hash:pagebuilder_cmp }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00016', 'Module does not implement the \'pagebuilder_cmp\' feature' ) }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+			<MvMEMBER NAME = "settings">
+			<MvMEMBER NAME = "{ l.item:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element( l.module, l.item:code, l.item_settings, l.element_code, l.element ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'original_code', g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_element" VALUE = "{ l.element }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Component( l.module, l.original_element:component_code, l.original_component ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'component_code', g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element, 'O', 'code',			l.element:code ) OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_element, 'O', 'component_code',	l.element:component_code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ strcasecmp( l.element:code, l.original_element:code ) NE 0 }">
+			<MvIF EXPR = "{ [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element( l.module, l.item:code, l.item_settings, l.element:code, l.existing_element ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'code', 'Element \'' $ l.existing_element:code $ '\' already exists' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ strcasecmp( l.element:component_code, l.original_element:component_code ) EQ 0 }">
+			<MvASSIGN NAME = "l.component" VALUE = "{ l.original_component }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Component( l.module, l.element:component_code, l.component ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'component_code', g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Exists( l.input_element, 'settings' ) }">
+			<MvIF EXPR = "{ l.original_element:component_code NE l.element:component_code }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_element, 'settings', 'Settings must be specified when changing component' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure(	l.input_element, 'R', 'settings', l.input_settings ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Properties( l.input_settings, l.component:properties, l.element:settings ) }">
+				<MvCOMMENT>
+				|
+				| JSON response errors handled in validation function
+				|
+				</MvCOMMENT>
+
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Element_Exists( l.input_settings, 'advanced' ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings, 'R', 'advanced', l.input_advanced_settings ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Properties( l.input_advanced_settings, l.component:advanced_properties, l.element:settings:advanced ) }">
+					<MvCOMMENT>
+					|
+					| JSON response errors handled in validation function
+					|
+					</MvCOMMENT>
+
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:api_ver GE 10.10 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element_Update( l.module, l.item_settings, l.original_component, l.original_element, l.component, l.element ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Element_Update( l.module, l.item_settings, l.original_element, l.element ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.input_sequence" ARRAY = "l.data:sequences" COUNT = "{ l.data:sequence_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_sequence, 'R', 'item_code',	l.item_code ) OR
+						NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_sequence, 'R', 'code',		l.sequence_code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( l.item_code, l.item ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_sequence, 'item_code', 'Item not found' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.item:mod_code, l.module ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.module:id ) }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00017', 'Module is not installed in the store' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">																		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00018', 'Module not active' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:feature_hash:pagebuilder_seq }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-JSN-00019', 'Module does not implement the \'pagebuilder_seq\' feature' ) }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.item_settings" VARIABLE = "l.page">
+			<MvMEMBER NAME = "settings">
+			<MvMEMBER NAME = "{ l.item:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Sequence( l.module, l.item:code, l.item_settings, l.sequence_code, l.sequence ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_sequence, 'code', g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_sequence"	VALUE = "{ l.sequence }">
+		<MvASSIGN NAME = "l.sequence:elements"	VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.input_sequence_element" ARRAY = "l.input_sequence_elements" COUNT = "{ [ g.Module_JSON ].JSON_Input_Element_Array( l.input_sequence, 'elements', l.input_sequence_elements ) }">
+			<MvASSIGN NAME = "l.sequence_element"			VALUE = "">
+			<MvASSIGN NAME = "l.sequence_element:enabled"	VALUE = 1>
+			<MvASSIGN NAME = "l.sequence_element:dt_start"	VALUE = 0>
+			<MvASSIGN NAME = "l.sequence_element:dt_end"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code(		l.input_sequence_element, 'R', 'item_code',		l.sequence_element:item_code )	OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_Text(		l.input_sequence_element, 'R', 'name',			l.sequence_element:name )		OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_Text(		l.input_sequence_element, 'o', 'code',			l.sequence_element:code )		OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_Boolean(	l.input_sequence_element, 'O', 'enabled',		l.sequence_element:enabled )	OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_DateTime(	l.input_sequence_element, 'O', 'dt_start',		l.sequence_element:dt_start )	OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_DateTime(	l.input_sequence_element, 'O', 'dt_end',		l.sequence_element:dt_end ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.sequence:elements, l.sequence_element, -1 ) }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ComponentModule_PageBuilder_Sequence_Update( l.module, l.item_settings, l.original_sequence, l.sequence ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.input_global_component" ARRAY = "l.data:global_components" COUNT = "{ l.data:global_component_count }">
+		<MvASSIGN NAME = "l.global_component" VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Code( l.input_global_component, 'R', 'code', l.fragment_code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.fragment_code, l.global_component:page ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Error( l.input_global_component, 'code', 'Global Component not found' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.global_component_data"							VALUE = "">
+		<MvASSIGN NAME = "l.global_component_data:page_id"					VALUE = "{ l.global_component:page:id }">
+		<MvASSIGN NAME = "l.global_component_data:deleted_element_count"	VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Array( l.input_global_component, 'deleted_elements',	l.global_component_data:deleted_elements ) }">
+		<MvASSIGN NAME = "l.global_component_data:added_element_count"		VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Array( l.input_global_component, 'added_elements',		l.global_component_data:added_elements ) }">
+		<MvASSIGN NAME = "l.global_component_data:updated_element_count"	VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Array( l.input_global_component, 'updated_elements',	l.global_component_data:updated_elements ) }">
+		<MvASSIGN NAME = "l.global_component_data:sequence_count"			VALUE = "{ [ g.Module_JSON ].JSON_Input_Element_Array( l.input_global_component, 'updated_sequences',	l.global_component_data:sequences ) }">
+		<MvASSIGN NAME = "l.global_component_data:global_component_count"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT JSON_PageBuilderPage_GeneratePageSettings( l.global_component_data, l.global_component:page, l.global_component:managedtemplate, l.global_component:managedtemplateversion, l.null, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.global_component_count" VALUE = "{ miva_array_insert_var( l.global_components, l.global_component, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| JSON Page Builder Element Validation
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Properties" PARAMETERS = "input_settings var, properties var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.output_settings" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Properties_LowLevel( l.input_settings, l.properties, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Properties_LowLevel" PARAMETERS = "input_settings var, properties var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.processed_properties" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.property" ARRAY = "l.properties">
+		<MvIF EXPR = "{ ISNULL l.property:code }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Property_WithVisibilityConditions( l.input_settings, l.properties, l.property, l.processed_properties, l.output_settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_WithVisibilityConditions" PARAMETERS = "input_settings var, properties var, property var, processed_properties var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.property_processed" VARIABLE = "l.processed_properties">
+		<MvMEMBER NAME = "{ l.property:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.property_processed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.property_processed" VALUE = 1>
+
+	<MvREFERENCEARRAY NAME = "l.output_property_settings" VARIABLE = "l.output_settings">
+		<MvMEMBER NAME = "{ l.property:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT ISNULL l.property:visibility_conditions }">
+		<MvFOREACH ITERATOR = "l.property_code" ARRAY = "l.property_codes" COUNT = "{ miva_struct_members( l.property:visibility_conditions, l.property_codes ) }">
+			<MvIF EXPR = "{ strcasecmp( l.property_code, l.property:code ) EQ 0 }">
+				<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.visibility_condition_property" VARIABLE = "l.property:visibility_conditions">
+				<MvMEMBER NAME = "{ l.property_code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT miva_array_search( l.properties, 1, l.search_property, 'strcasecmp( l.search_property:code, l.property_code ) EQ 0' ) }">
+				<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Property_WithVisibilityConditions( l.input_settings, l.properties, l.search_property, l.processed_properties, l.output_settings ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.search_output_property_settings" VARIABLE = "l.output_settings">
+				<MvMEMBER NAME = "{ l.search_property:code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT ISNULL l.search_property:visibility_conditions AND NOT l.search_output_property_settings:visible }">
+				<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.value_member_name" ARRAY = "l.value_member_names" COUNT = "{ miva_struct_members( l.visibility_condition_property, l.value_member_names ) }">
+				<MvREFERENCEARRAY NAME = "l.values" VARIABLE = "l.visibility_condition_property">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.property_value" VARIABLE = "l.search_output_property_settings">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT miva_array_search( l.values, 1, l.search_value, 'l.search_value EQ l.property_value' ) }">
+					<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+					<MvFUNCTIONRETURN VALUE = 1>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings, ternary( l.property:required, 'R', 'O' ), l.property:code, l.input_property_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Property( l.input_property_settings, l.property, l.output_property_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property" PARAMETERS = "input_property_settings var, property var, output_property_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.property:type EQ 'radio' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Radio( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'select' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Select( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'selector' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Selector( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'slider' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Slider( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'distributedslider' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_DistributedSlider( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'checkbox' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Checkbox( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'text' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Text( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'textarea' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_TextArea( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'texteditor' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_TextEditor( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'image' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Image( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'product' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Product( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'productcustomfieldlookup' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_ProductCustomFieldLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'category' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Category( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'customlookup' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_CustomLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'fragment' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Fragment( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'imagetype' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_ImageType( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'link' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Link( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'color' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Color( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'date' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Date( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'datetime' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_DateTime( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'group' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Group( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'list' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_List( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Radio" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Select" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Selector" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Slider" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_DistributedSlider" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Checkbox" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Boolean( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Text" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Text_LowLevel( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Text_LowLevel" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings, 'o', 'textsettings', l.input_settings_textsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings_textsettings, 'o', 'fields', l.input_settings_fields ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.property:textsettings:fields">
+		<MvFOREACH ITERATOR = "l.pseudoclass" ARRAY = "l.field:pseudoclasses">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings_fields, 'o', l.pseudoclass, l.input_settings_pseudoclass ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings_pseudoclass, 'o', l.field:code, l.input_settings_field ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.output_settings_pseudoclass" VARIABLE = "l.output_settings:textsettings:fields">
+				<MvMEMBER NAME = "{ l.pseudoclass }">
+				<MvMEMBER NAME = "{ l.field:code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_field, 'o', 'value', l.output_settings_pseudoclass:value ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_TextArea" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ),	'value',	l.output_settings:value ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, 'o',										'source',	l.output_settings:source ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Property_Text_LowLevel( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_TextEditor" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, 'o', 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Image" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'image',	l.output_settings:image ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, 'o',										'alt',	l.output_settings:alt ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings, 'o', 'responsive_images', l.input_settings_responsive_images ) }">
+		<MvFOREACH ITERATOR = "l.responsive_image" ARRAY = "l.property:responsive_images">
+			<MvREFERENCEARRAY NAME = "l.output_settings_responsive_image" VARIABLE = "l.output_settings:responsive_images">
+				<MvMEMBER NAME = "{ l.responsive_image:code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_responsive_images, 'o', l.responsive_image:code, l.output_settings_responsive_image ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Product" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'product_code', l.output_settings:product_code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_ProductCustomFieldLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Category" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'category_code', l.output_settings:category_code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_CustomLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Fragment" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_ImageType" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Link" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_List( l.input_settings, 'R',										'type',		l.output_settings:type, 'url,product,category,page,screen', 'url,product,category,page,screen' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ),	'value',	l.output_settings:value )																			OR
+					NOT [ g.Module_JSON ].JSON_Input_Element_Boolean( l.input_settings, 'o',									'new_tab',	l.output_settings:new_tab ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Color" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Date" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_DateTime( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.value OR l.value EQ 0 OR NOT l.property:serverdate }">
+		<MvASSIGN NAME = "l.output_settings:value"			VALUE = "{ l.value }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.output_settings:value"			VALUE = "">
+		<MvASSIGN NAME = "l.output_settings:value:time_t"	VALUE = "{ int( l.value ) }">
+		<MvASSIGN NAME = "l.output_settings:value:year"		VALUE = "{ time_t_year( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:month"	VALUE = "{ time_t_month( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:day"		VALUE = "{ time_t_dayofmonth( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:hour"		VALUE = "{ time_t_hour( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:minute"	VALUE = "{ time_t_min( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:second"	VALUE = "{ time_t_sec( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:timezone"	VALUE = "{ timezone() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_DateTime" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_DateTime( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.value OR l.value EQ 0 OR NOT l.property:serverdate }">
+		<MvASSIGN NAME = "l.output_settings:value"			VALUE = "{ l.value }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.output_settings:value"			VALUE = "">
+		<MvASSIGN NAME = "l.output_settings:value:time_t"	VALUE = "{ int( l.value ) }">
+		<MvASSIGN NAME = "l.output_settings:value:year"		VALUE = "{ time_t_year( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:month"	VALUE = "{ time_t_month( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:day"		VALUE = "{ time_t_dayofmonth( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:hour"		VALUE = "{ time_t_hour( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:minute"	VALUE = "{ time_t_min( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:second"	VALUE = "{ time_t_sec( l.value, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.output_settings:value:timezone"	VALUE = "{ timezone() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_Group" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.property:can_disable }">
+		<MvASSIGN NAME = "l.output_settings:settings:enabled" VALUE = 1>
+
+		<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings, 'o', 'settings', l.input_settings_settings ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Boolean( l.input_settings_settings, 'o', 'enabled', l.output_settings:settings:enabled ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.output_settings:settings:enabled }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_PageBuilder_Element_Validate_Properties_LowLevel( l.input_settings, l.property:properties, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PageBuilder_Element_Validate_Property_List" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH INDEX = "l.pos" ITERATOR = "l.input_settings_item" ARRAY = "l.input_settings_items" COUNT = "{ [ g.Module_JSON ].JSON_Input_Element_Array( l.input_settings, 'children', l.input_settings_items ) }">
+		<MvREFERENCEARRAY NAME = "l.output_settings_item" VARIABLE = "l.output_settings:children">
+			<MvDIMENSION INDEX = "{ l.pos }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ l.property:list_type EQ 'text' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings_item:value ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'product' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'product_code', l.output_settings_item:product_code ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'productcustomfieldlookup' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings_item:value ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'category' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'category_code', l.output_settings_item:category_code ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'color' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings_item:value ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'date' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_DateTime( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'value', l.value ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.value OR l.value EQ 0 OR NOT l.property:serverdate }">
+				<MvASSIGN NAME = "l.output_settings_item:value"				VALUE = "{ l.value }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.output_settings_item:value"				VALUE = "">
+				<MvASSIGN NAME = "l.output_settings_item:value:time_t"		VALUE = "{ int( l.value ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:year"		VALUE = "{ time_t_year( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:month"		VALUE = "{ time_t_month( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:day"			VALUE = "{ time_t_dayofmonth( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:hour"		VALUE = "{ time_t_hour( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:minute"		VALUE = "{ time_t_min( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:second"		VALUE = "{ time_t_sec( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:timezone"	VALUE = "{ timezone() }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'datetime' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_DateTime( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'value', l.value ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.value OR l.value EQ 0 OR NOT l.property:serverdate }">
+				<MvASSIGN NAME = "l.output_settings_item:value"				VALUE = "{ l.value }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.output_settings_item:value"				VALUE = "">
+				<MvASSIGN NAME = "l.output_settings_item:value:time_t"		VALUE = "{ int( l.value ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:year"		VALUE = "{ time_t_year( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:month"		VALUE = "{ time_t_month( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:day"			VALUE = "{ time_t_dayofmonth( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:hour"		VALUE = "{ time_t_hour( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:minute"		VALUE = "{ time_t_min( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:second"		VALUE = "{ time_t_sec( l.value, g.Merchant_Local_Timezone ) }">
+				<MvASSIGN NAME = "l.output_settings_item:value:timezone"	VALUE = "{ timezone() }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'link' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_List( l.input_settings_item, 'R',										'type',				l.output_settings_item:type, 'url,product,category,page,screen', 'url,product,category,page,screen' )	OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ),	'value',			l.output_settings_item:value )																			OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_Boolean( l.input_settings_item, 'o',									'new_tab',			l.output_settings_item:new_tab ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'image' }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, ternary( l.property:required, 'R', 'o' ), 'image',	l.output_settings_item:image ) OR
+							NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_item, 'o',										'alt',		l.output_settings_item:alt ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Element_Structure( l.input_settings_item, 'o', 'responsive_images', l.input_settings_responsive_images ) }">
+				<MvFOREACH ITERATOR = "l.responsive_image" ARRAY = "l.property:responsive_images">
+					<MvREFERENCEARRAY NAME = "l.output_settings_responsive_image" VARIABLE = "l.output_settings_item:responsive_images">
+						<MvMEMBER NAME = "{ l.responsive_image:code }">
+					</MvREFERENCEARRAY>
+
+					<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_settings_responsive_images, 'o', l.responsive_image:code, l.output_settings_responsive_image ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvFOREACH>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:list_type EQ 'group' }">
+			<MvIF EXPR = "{ NOT JSON_PageBuilder_Element_Validate_Properties_LowLevel( l.input_settings_item, l.property:properties, l.output_settings_item ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

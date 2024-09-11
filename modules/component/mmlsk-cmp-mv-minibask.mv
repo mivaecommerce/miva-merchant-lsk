@@ -1,0 +1,1241 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CMP-MV-MNB-
+| Next Error Code: 14   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-mv-minibask">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Mini-Basket">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0900">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.72">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "The Mini-Basket feature allows customers to view the contents of their basket in a popup window without leaving the current page.  You can add the mini-basket to any or all of your store pages.  After installing the module, go to User Interface > Items and search for the Mini-Basket module to implement it.  Click the EDIT button and select the Pages tab.  From the Edit Item: global_minibasket screen you can select the pages on which you want the mini-basket to appear.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "component, data_store, vis_store, provision_store, skins, util">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature data_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ MiniBasketSettings_Defaults( l.settings ) }">
+	<MvEVAL EXPR = "{ Generate_Template( l.settings, l.settings:imagetypes, l.template_code ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplate_Load_Filename( 'global-minibasket.mvc', l.null ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_ManagedTemplate( l.template_code, l.settings, 'global-minibasket.mvc' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+	
+	<MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }">			<MvEVAL EXPR = "{ Generate_CSS_CSSUI( l.css_code ) }">
+	<MvELSEIF EXPR = "{ g.Store:ui_mod:code EQ 'mmui' AND 
+						g.Store_Framework_Inuse EQ 'css_fw' }">	<MvEVAL EXPR = "{ Generate_CSS_MMUI_CSS( l.css_code ) }">
+	<MvELSE>													<MvEVAL EXPR = "{ Generate_CSS_MMUI( l.css_code ) }">
+	</MvIF>
+	
+	<MvIF EXPR = "{ g.Store:ui_mod:code NE 'mmui' }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Register_Global_CSSResource_LocalFile_WithContent( 'modules', 'minibasket.css', l.css_code, l.cssresource ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.file_path"		VALUE = "{ g.imageroot $ 'minibasket.css' }">
+		<MvASSIGN NAME = "l.css:css_file"	VALUE = "{ 'minibasket.css' }">
+		<MvASSIGN NAME = "l.css:params"		VALUE = "all">
+	
+		<MvIF EXPR = "{ NOT sexists( l.file_path ) }">
+			<MvIF EXPR = "{ file_create( l.file_path, 'script', l.css_code ) EQ -1 }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CMP-MV-MNB-00011', 'Failed to write css file: ' $ file_last_error() ) }">
+			</MvIF>
+		
+			<MvASSIGN NAME = "l.null" VALUE = "{ schmod( l.file_path, '0644' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Item_Load_Code( 'head', l.item ) AND
+						[ g.Module_Library_DB ].Module_Load_ID( l.item:module_id, l.head_module ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.head_module:module ].MMUI_CSS_Insert( l.css ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ g.Store_Framework_Inuse EQ 'default_fw' }">
+				<MvIF EXPR = "{ NOT [ g.Module_Root $ l.head_module:module ].GlobalHEAD_Load( l.head_template ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplate_Load_ID( l.head_template:templ_id, l.head_managedtemplate ) OR 
+								NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_ID( l.head_managedtemplate:current_id, l.head_managedtemplateversion ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+				
+				<MvASSIGN NAME = "l.source" VALUE = "{ l.head_managedtemplateversion:source $ asciichar( 10 ) $ '<link type="text/css" rel="stylesheet" href="' $ encodeentities( l.css:css_file ) $ '" media="' $ encodeentities( l.css:params ) $ '" />' }">
+				<MvASSIGN NAME = "l.notes"	VALUE = "Updated by Mini-Basket">
+				
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_ManagedTemplateVersion( l.head_managedtemplate, l.notes, l.source, l.head_managedtemplateversion:settings, l.compile_error ) }">
+					<MvIF EXPR = "{ len( l.compile_error ) }">
+						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CMP-MV-MNB-00010', l.compile_error ) }">
+					</MvIF>
+
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].Item_Load_Code( 'global_minibasket', l.item ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Create_Item( 'global_minibasket', l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CMP-MV-MNB-00013', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_GlobalDelete_ManagedTemplate_Filename( 'global-minibasket.mvc' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature util
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation"  PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature vis_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Store_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current_Cached( 'global-minibasket.mvc', l.managedtemplateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Global_MiniBasket:maxprodlen"		VALUE = "{ trim( g.Global_MiniBasket:maxprodlen ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:image"			VALUE = "{ trim( g.Global_MiniBasket:image ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:advanced"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:advanced ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:lineprice"		VALUE = "{ trim( g.Global_MiniBasket:lineprice ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:shipping"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:shipping ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:handling"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:handling ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:salestax"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:salestax ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:discounts"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:discounts ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:groups"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:groups ) }">
+	<MvASSIGN NAME = "g.Global_MiniBasket:ldiscount"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Global_MiniBasket:ldiscount ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.Global_MiniBasket:maxprodlen ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'CMP-MV-MINIBASK', 'Global_MiniBasket:maxprodlen', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ miva_array_elements( l.managedtemplateversion:settings:imagetypes ) }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:constrain"	VALUE = "{ trim( g.Global_MiniBasket:constrain ) }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:b_width"		VALUE = "{ trim( g.Global_MiniBasket:b_width ) }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:b_height"		VALUE = "{ trim( g.Global_MiniBasket:b_height ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.Global_MiniBasket:b_width ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'CMP-MV-MINIBASK-DIMENSIONS', 'Global_MiniBasket:b_width', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.Global_MiniBasket:b_height ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'CMP-MV-MINIBASK-DIMENSIONS', 'Global_MiniBasket:b_height', g.Validation_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Global_MiniBasket:advanced }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( g.Global_MiniBasket:template_code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'CMP-MV-MINIBASK', 'Global_MiniBasket:template_code', g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateAndVersion_Load_Filename( 'global-minibasket.mvc', l.managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings"						VALUE = "{ l.managedtemplate:version:settings }">
+	<MvASSIGN NAME = "l.imagetypes_list"				VALUE = "">
+
+	<MvIF EXPR = "{ NOT g.Global_MiniBasket:advanced }">
+		<MvASSIGN NAME = "l.imagetypes_list" INDEX = 1	VALUE = "{ g.Global_MiniBasket:image }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.imagetype_count"			VALUE = "{ [ g.Module_Library_Utilities ].ImageTypeSelect_Selected( g.Global_MiniBasket:imagetypes, l.imagetypes_list ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Global_MiniBasket:advanced }">
+		<MvEVAL EXPR = "{ Generate_Template( g.Global_MiniBasket, l.imagetypes_list, g.Global_MiniBasket:template_code ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:maxprodlen"			VALUE = "{ g.Global_MiniBasket:maxprodlen }">
+	<MvASSIGN NAME = "l.settings:imagetypes"			VALUE = "{ l.imagetypes_list }">
+	<MvASSIGN NAME = "l.settings:advanced"				VALUE = "{ g.Global_MiniBasket:advanced }">
+	<MvASSIGN NAME = "l.settings:lineprice"				VALUE = "{ g.Global_MiniBasket:lineprice }">
+	<MvASSIGN NAME = "l.settings:shipping"				VALUE = "{ g.Global_MiniBasket:shipping }">
+	<MvASSIGN NAME = "l.settings:handling"				VALUE = "{ g.Global_MiniBasket:handling }">
+	<MvASSIGN NAME = "l.settings:salestax"				VALUE = "{ g.Global_MiniBasket:salestax }">
+	<MvASSIGN NAME = "l.settings:discounts"				VALUE = "{ g.Global_MiniBasket:discounts }">
+	<MvASSIGN NAME = "l.settings:groups"				VALUE = "{ g.Global_MiniBasket:groups }">
+	<MvASSIGN NAME = "l.settings:ldiscount"				VALUE = "{ g.Global_MiniBasket:ldiscount }">
+
+	<MvIF EXPR = "{ miva_array_elements( l.settings:imagetypes ) }">
+		<MvASSIGN NAME = "l.settings:constrain"			VALUE = "{ g.Global_MiniBasket:constrain }">
+		<MvASSIGN NAME = "l.settings:b_width"			VALUE = "{ g.Global_MiniBasket:b_width }">
+		<MvASSIGN NAME = "l.settings:b_height"			VALUE = "{ g.Global_MiniBasket:b_height }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_CreateIfModified_ManagedTemplateVersion( l.managedtemplate, '', g.Global_MiniBasket:template_code, l.settings ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Admin ].FieldError( 'CMP-MV-MINIBASK', 'Global_MiniBasket:template_code', g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current_Cached( 'global-minibasket.mvc', l.managedtemplateversion ) }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.tabs"		VALUE = "GT_UISETTINGS/CMP-MV-MINIBASK:Mini-Basket">
+
+	<MvIF EXPR = "{ miva_array_elements( l.managedtemplateversion:settings:imagetypes ) }">
+		<MvASSIGN NAME = "l.tabs"	VALUE = "{ l.tabs $ ',GT_UISETTINGS/CMP-MV-MINIBASK-DIMENSIONS:Mini-Basket Image Dimensions' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.tabs }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current_Cached( 'global-minibasket.mvc', l.managedtemplateversion ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.settings"                           VALUE = "{ l.managedtemplateversion:settings }">
+
+		<MvASSIGN NAME = "g.Global_MiniBasket:constrain"		VALUE = "{ l.settings:constrain }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:b_width"			VALUE = "{ l.settings:b_width }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:b_height"			VALUE = "{ l.settings:b_height }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:maxprodlen"		VALUE = "{ l.settings:maxprodlen }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:image"			VALUE = "{ l.settings:imagetypes[ 1 ] }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:advanced"			VALUE = "{ l.settings:advanced }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:lineprice"		VALUE = "{ l.settings:lineprice }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:shipping"			VALUE = "{ l.settings:shipping }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:handling"			VALUE = "{ l.settings:handling }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:salestax"			VALUE = "{ l.settings:salestax }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:discounts"		VALUE = "{ l.settings:discounts }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:groups"			VALUE = "{ l.settings:groups }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:ldiscount"		VALUE = "{ l.settings:ldiscount }">
+
+		<MvASSIGN NAME = "g.Global_MiniBasket:template_id"		VALUE = "{ l.managedtemplateversion:templ_id }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:template_code"	VALUE = "{ l.managedtemplateversion:source }">
+		<MvASSIGN NAME = "g.Global_MiniBasket:imagetypes"		VALUE = "{ l.settings:imagetypes }">
+
+		<MvASSIGN NAME = "g.Global_MiniBasket:advanced"			VALUE = "{ l.settings:advanced }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Tab_Visible( g.Tab, 'CMP-MV-MINIBASK' ) }">
+		<MvHIDE FIELDS = "g.Global_MiniBasket:template_id, g.Global_MiniBasket:template_code, g.Global_MiniBasket:maxprodlen, g.Global_MiniBasket:image, g.Global_MiniBasket:imagetypes,
+						  g.Global_MiniBasket:advanced, g.Global_MiniBasket:lineprice, g.Global_MiniBasket:shipping, g.Global_MiniBasket:handling,
+						  g.Global_MiniBasket:salestax, g.Global_MiniBasket:discounts, g.Global_MiniBasket:groups, g.Global_MiniBasket:ldiscount">
+	<MvELSE>
+		<MvHIDE FIELDS = "g.Global_MiniBasket:template_id">
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_UISETTINGS', 'CMP-MV-MINIBASK' ) }">
+
+		<MvASSIGN NAME = "l.imagetype_count"					VALUE = "{ [ g.Module_Library_DB ].ImageTypeList_Load_All( l.imagetypes ) }">
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+		
+		<MvIF EXPR = "{ g.Global_MiniBasket:advanced }">
+			<tr><td valign="top" nowrap>
+				Mini-Basket Template:
+			</td><td width="100%">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawTemplateTextArea_WithRecall( 'Global_MiniBasket:template_code', g.Global_MiniBasket:template_code, 20, 58, g.Global_MiniBasket:template_id ) }">
+			</td></tr>
+			
+			<MvHIDE FIELDS = "g.Global_MiniBasket:image, g.Global_MiniBasket:groups, g.Global_MiniBaset:lineprice, g.Global_MiniBasket:ldiscount">
+		<MvELSE>
+			<MvHIDE FIELDS = "g.Global_MiniBasket:template_code, g.Global_MiniBasket:imagetypes">
+
+			<tr><td align="left" valign="top" nowrap>
+				<b>Line Item Discounts:</b>
+			</td><td align="left" width="100%">
+				<select name="Global_MiniBasket:groups">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '0', g.Global_MiniBasket:groups, 'Display Discounted Line Items Separately' ) }">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '1', g.Global_MiniBasket:groups, 'Group Discounted Line Items by Product/Attributes' ) }">
+				</select>
+
+				<br /><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Global_MiniBasket:ldiscount, 'Global_MiniBasket:ldiscount',	1, 'Display Line Item Discount Details' ) }">
+			</td></tr>
+
+			<tr><td align="left" valign="top" nowrap>
+				<b>Additional Price Display:</b>
+			</td><td align="left" width="100%">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'Global_MiniBasket:lineprice', '',			g.Global_MiniBasket:lineprice, 'None' ) }"><br />
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'Global_MiniBasket:lineprice', 'retail',	g.Global_MiniBasket:lineprice, 'Retail Price' ) }"><br />
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'Global_MiniBasket:lineprice', 'base',		g.Global_MiniBasket:lineprice, 'Base Price (includes any legacy price group discounts but does not reflect sales, coupons or discounts applied in the basket)' ) }"><br />
+			</td></tr>
+		</MvIF>
+		
+		<tr><td nowrap>
+			Maximum Product Name Length:
+		</td><td width="100%">
+			<input type="text" size="3" name="Global_MiniBasket:maxprodlen" value="{ encodeentities( g.Global_MiniBasket:maxprodlen ) }"> (0 for unlimited)
+		</td></tr>
+
+		<MvIF EXPR = "{ l.imagetype_count }">
+			<MvIF EXPR = "{ g.Global_MiniBasket:advanced }">
+				<tr><td align="left" valign="top" nowrap>
+					<b>Product Images:</b>
+				</td><td align="left" width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawImageTypeSelect( 'Global_MiniBasket:imagetypes', g.Global_MiniBasket:imagetypes, l.imagetypes, l.imagetype_count ) }">
+				</td></tr>
+			<MvELSE>
+				<tr><td align="left" nowrap>
+					<b>Image:</b>
+				</td><td align="left" width="100%">
+					<select name="Global_MiniBasket:image">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '', g.Global_MiniBasket:image, 'None' ) }">
+						
+						<MvFOREACH ITERATOR = "l.imagetype" ARRAY = "l.imagetypes" COUNT = "{ l.imagetype_count }">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( l.imagetype:code, g.Global_MiniBasket:image, encodeentities( l.imagetype:descrip ) ) }">
+						</MvFOREACH>
+					</select>
+				</td></tr>
+			</MvIF>
+		</MvIF>
+
+		<tr><td align="left" valign="top" nowrap>
+			<b>Basket Charges/Discounts:</b>
+		</td><td align="left" width="100%">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Global_MiniBasket:shipping,	'Global_MiniBasket:shipping',	1, 'Display Shipping Charges' ) }"><br />
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Global_MiniBasket:handling,	'Global_MiniBasket:handling',	1, 'Display Handling Charge' ) }"><br />
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Global_MiniBasket:salestax,	'Global_MiniBasket:salestax',	1, 'Display Sales Tax' ) }"><br />
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Global_MiniBasket:discounts,	'Global_MiniBasket:discounts',	1, 'Display Other Basket Level Discounts' ) }">
+		</td></tr>
+
+		<tr>
+			<td nowrap>&nbsp;</td>
+			<td width="100%">
+				<input type="hidden" name="Global_MiniBasket:advanced" value="{ encodeentities( g.Global_MiniBasket:advanced ) }">
+				
+				<MvIF EXPR = "{ g.Global_MiniBasket:advanced }">
+					<a href="#" onclick="Toggle( 'Global_MiniBasket:advanced', 0 ); return false;">Point + Click Mode</a>
+				<MvELSE>
+					<a href="#" onclick="Toggle( 'Global_MiniBasket:advanced', 1 ); return false;">Advanced Mode</a>
+				</MvIF>
+			</td>
+		</tr>
+		</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Tab_Visible( g.Tab, 'CMP-MV-MINIBASK-DIMENSIONS' ) }">
+		<MvHIDE FIELDS = "g.Global_MiniBasket:constrain, g.Global_MiniBasket:b_width, g.Global_MiniBasket:b_height">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_UISETTINGS', 'CMP-MV-MINIBASK-DIMENSIONS' ) }">
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+			<tr>
+				<td align="left" valign="top" nowrap><b>Product Image:</b></td>
+				<td align="left" width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'Global_MiniBasket:constrain', 'N', g.Global_MiniBasket:constrain, 'No constraints' ) }"><br>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'Global_MiniBasket:constrain', 'B', g.Global_MiniBasket:constrain, 'Resize to fit within bounding box:' ) }"> 
+					<input type="text" name="Global_MiniBasket:b_width" value="{ encodeentities( g.Global_MiniBasket:b_width ) }" style="text-align: right;" size="5" /> x 
+					<input type="text" name="Global_MiniBasket:b_height" value="{ encodeentities( g.Global_MiniBasket:b_height ) }" style="text-align: right;" size="5" /> pixels
+				</td>
+			</tr>
+		</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature component
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ComponentModule_Tabs" PARAMETERS = "module var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Validate" PARAMETERS = "module var, item, field_prefix, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Update" PARAMETERS = "module var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Content" PARAMETERS = "module var, item, tab, load_fields, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Defaults" PARAMETERS = "module var, settings var" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Assign" PARAMETERS = "module var, page var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Unassign" PARAMETERS = "module var, page var, item, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current_Cached( 'global-minibasket.mvc', l.managedtemplateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings"	VALUE = "{ l.managedtemplateversion:settings }">
+
+	<MvIF EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Initialize_Item( l.all_settings, 'basket' ) }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ MiniBasket_BasketData_LoadExisting( l.module, l.item, l.all_settings, l.settings ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.null"	VALUE = "{ MiniBasket_BasketData_LoadInitial( l.module, l.item, l.all_settings, l.settings ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ MiniBasket_BasketData_Extras( l.module, l.item, l.all_settings, l.settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Prerender" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_Start" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Render_Template( 'global-minibasket.mvc', l.all_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Render_End" PARAMETERS = "module var, item, all_settings var, settings var, param" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature provision_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateAndVersion_Load_Filename( 'global-minibasket.mvc', l.managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Unable to load template' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings" VALUE = "{ l.managedtemplate:version:settings }">
+	
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'ImageTypes' ) }">
+		<MvASSIGN NAME = "l.settings:imagetypes"	VALUE = "">
+		<MvASSIGN NAME = "l.imagetypes"				VALUE = "{ l.provide_xml:tags:imagetypes[ 1 ] }">
+		<MvASSIGN NAME = "l.imagetype_pos"			VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.imagetype_tag" ARRAY = "l.imagetypes:tags:imagetype">
+			<MvASSIGN NAME = "l.imagetype" VALUE = "{ trim( l.imagetype_tag:value ) }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ImageType_Load_Code( l.imagetype, l.null ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Image type \'' $ l.imagetype $ '\' does not exist.' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.imagetype_pos"										VALUE = "{ l.imagetype_pos + 1 }">
+			<MvASSIGN NAME = "l.settings:imagetypes" INDEX = "{ l.imagetype_pos }"	VALUE = "{ l.imagetype }">
+		</MvFOREACH>
+	</MvIF>
+	
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'ImageDimensions' ) }">
+		<MvASSIGN NAME = "l.dimensions" VALUE = "{ l.provide_xml:tags:ImageDimensions[ 1 ] }">
+		
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Boolean( l.dimensions, 'constrain', l.constrain ) }">	
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.constrain }">
+			<MvASSIGN NAME = "l.settings:constrain" VALUE = "N">
+		<MvELSE>
+			<MvASSIGN NAME = "l.settings:constrain" VALUE = "B">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer( 'R', l.dimensions, 'Width',	l.settings:b_width ) OR
+							NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer( 'R', l.dimensions, 'Height',	l.settings:b_height ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer( 	'O', l.provide_xml, 'MaxProdNameLength', 				l.settings:maxprodlen )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'O', l.provide_xml, 'AdditionalPriceDisplay', 			l.settings:lineprice, 	'None,Retail,Base', 'none,retail,base' ) 	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 		'O', l.provide_xml, 'LineItemDiscounts', 				l.settings:groups,		'grouped,separate', '1,0' )					OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'DisplayLineItemDiscountDetails', 	l.settings:ldiscount )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'DisplayShipping', 					l.settings:shipping )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'DisplayHandling', 					l.settings:handling )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'DisplaySalesTax', 					l.settings:salestax )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'DisplayDiscounts', 				l.settings:discounts )												OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'O', l.provide_xml, 'Template',							l.template )														OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'O', l.provide_xml, 'Notes',							l.notes ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'Template' ) }">
+		<MvASSIGN NAME = "l.settings:advanced"	VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.template"			VALUE = "{ l.managedtemplate:version:source }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_CreateIfModified_ManagedTemplateVersion( l.managedtemplate, l.notes, l.template, l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Feature skins
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Description" PARAMETERS = "module var, item var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "Exports Global Mini-Basket">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export" PARAMETERS = "module var, output var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.output">
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ [ g.Module_Feature_TUI_DB ].ItemList_Load_Module( l.module:id, l.items ) }">
+		<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item( l.module, l.item, l.item_output ) }">
+		<MvEVAL EXPR = "{ l.item_output }">
+	</MvFOREACH>
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item" PARAMETERS = "module var, item, output var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Current( 'global-minibasket.mvc', l.managedtemplateversion ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings" VALUE = "{ l.managedtemplateversion:settings }">
+	
+	<MvCAPTURE VARIABLE = "l.output" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+		<Module code="{ encodeentities( l.module:code ) }" feature="component">
+			<MaxProdNameLength><MvEVAL EXPR = "{ int( l.settings:maxprodlen ) }"></MaxProdNameLength>
+			
+			<MvIF EXPR = "{ l.settings:constrain EQ 'B' }">
+				<ImageDimensions constrain="Yes">
+					<Width><MvEVAL EXPR = "{ int( l.settings:b_width ) }"></Width>
+					<Height><MvEVAL EXPR = "{ int( l.settings:b_height ) }"></Height>
+				</ImageDimensions>
+			<MvELSE>
+				<ImageDimensions constrain="No" />
+			</MvIF>
+
+			<ImageTypes>
+				<MvFOREACH ITERATOR = "l.imagetype" ARRAY = "l.settings:imagetypes">
+					<ImageType><MvEVAL EXPR = "{ miva_cdata_encode( l.imagetype ) }"></ImageType>
+				</MvFOREACH>
+			</ImageTypes>
+
+			<MvIF EXPR = "{ l.settings:lineprice EQ 'retail' }">	<AdditionalPriceDisplay>Retail</AdditionalPriceDisplay>
+			<MvELSEIF EXPR = "{ l.settings:lineprice EQ 'base' }">	<AdditionalPriceDisplay>Base</AdditionalPriceDisplay>
+			<MvELSE>												<AdditionalPriceDisplay>None</AdditionalPriceDisplay>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.settings:groups }">	<LineItemDiscounts>Grouped</LineItemDiscounts>
+			<MvELSE>								<LineItemDiscounts>Separate</LineItemDiscounts>
+			</MvIF>
+
+			<DisplayLineItemDiscountDetails><MvIF EXPR = "{ l.settings:ldiscount }">Yes<MvELSE>No</MvIF></DisplayLineItemDiscountDetails>
+
+			<DisplayShipping><MvIF EXPR = "{ l.settings:shipping }">Yes<MvELSE>No</MvIF></DisplayShipping>
+			<DisplayHandling><MvIF EXPR = "{ l.settings:handling }">Yes<MvELSE>No</MvIF></DisplayHandling>
+			<DisplaySalesTax><MvIF EXPR = "{ l.settings:salestax }">Yes<MvELSE>No</MvIF></DisplaySalesTax>
+			<DisplayDiscounts><MvIF EXPR = "{ l.settings:discounts }">Yes<MvELSE>No</MvIF></DisplayDiscounts>
+
+			<MvIF EXPR = "{ l.settings:advanced }">
+				<Template><MvEVAL EXPR = "{ miva_cdata_encode( l.managedtemplateversion:source ) }"></Template>
+			</MvIF>
+
+			<Notes>#Set_Current_Time#</Notes>
+		</Module>
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	MiniBasket Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "MiniBasketSettings_Defaults" PARAMETERS = "settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings:advanced"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:maxprodlen"			VALUE = 0>
+	<MvASSIGN NAME = "l.settings:constrain"				VALUE = "B">
+	<MvASSIGN NAME = "l.settings:b_width"				VALUE = 75>
+	<MvASSIGN NAME = "l.settings:b_height"				VALUE = 75>
+	<MvASSIGN NAME = "l.settings:imagetypes"			VALUE = "">
+	<MvASSIGN NAME = "l.settings:lineprice"				VALUE = "">
+	<MvASSIGN NAME = "l.settings:shipping"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:handling"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:salestax"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:discounts"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:groups"				VALUE = 1>
+	<MvASSIGN NAME = "l.settings:ldiscount"				VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_CSS_CSSUI" PARAMETERS = "code var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.code">
+	<MIVA STANDARDOUTPUTLEVEL = "text, html">
+#global-mini-basket-container
+{
+	display: block;
+	float: right;
+	line-height: 22px;
+	padding: 4px 3px 0px 0px;
+}
+
+#global-mini-basket-hover-content
+{
+	display: none;
+	float: left;
+	z-index:10;
+	position: absolute;
+	min-width: 250px;
+	max-width: 410px;
+	background: #FFF;
+}
+
+#global-mini-basket-hover-content table
+{
+	display: table;
+	border-collapse: collapse;
+	border-spacing: 0px;
+	border: 1px solid #666;
+	background: #FFF;
+}
+
+#global-mini-basket-hover-content table thead th, #global-mini-basket-hover-content table tfoot td
+{
+	color: #FFF;
+	padding: 5px;
+	font-weight: bold;
+	font-size: 13px;
+	background: #666;
+}
+
+#global-mini-basket-hover-content table tbody td
+{
+	padding: 3px 5px;
+	line-height: 14px;
+}
+
+#global-mini-basket-hover-content table tbody tr.on td
+{
+	background: #EEE;
+}
+
+#global-mini-basket-hover-content table thead th a
+{
+	color: #FFF;
+}
+
+.minibasket_backing
+{
+	display: none;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+}
+	<MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_CSS_MMUI_CSS" PARAMETERS = "code var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.code">
+	<MIVA STANDARDOUTPUTLEVEL = "text, html">
+#global-mini-basket-container
+{
+	display: block;
+	position: relative;
+	top: 20px;
+	width: 800px;
+	margin: 0 auto;
+	color: #FFF;
+	font-weight: bold;
+}
+
+#global-mini-basket-hover-content a
+{
+	color: #730000;
+	font-weight: bold;
+}
+
+#global-mini-basket-hover-content
+{
+	display: none;
+	float: left;
+	z-index:10;
+	position: absolute;
+	width: 380px;
+	color: #000000;
+	font-weight: normal;
+	background: #FFF;
+}
+
+#global-mini-basket-hover-content table
+{
+	display: table;
+	border-collapse: collapse;
+	border-spacing: 0px;
+	border: 1px solid #000;
+	background: #FFF;
+}
+
+#global-mini-basket-hover-content table thead th, #global-mini-basket-hover-content table tfoot td
+{
+	padding: 5px;
+	color: #FFF;
+	font-weight: bold;
+	font-size: 13px;
+	background: #730000;
+}
+
+#global-mini-basket-hover-content table tbody td
+{
+	padding: 3px 5px;
+	line-height: 14px;
+}
+
+#global-mini-basket-hover-content table tbody tr.on td
+{
+	background: #EEE;
+}
+
+#global-mini-basket-hover-content table thead th a
+{
+	color: #FFF;
+}
+
+.minibasket_backing
+{
+	display: none;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+}
+	<MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_CSS_MMUI" PARAMETERS = "code var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.code">
+	<MIVA STANDARDOUTPUTLEVEL = "text, html">
+#global-mini-basket-container
+{
+	display: block;
+	line-height: 22px;
+}
+
+#global-mini-basket-hover-content
+{
+	display: none;
+	float: left;
+	position: absolute;
+	z-index:10;
+	min-width: 250px;
+	max-width: 410px;
+	background: #FFF;
+}
+
+#global-mini-basket-hover-content table
+{
+	display: table;
+	border-collapse: collapse;
+	border-spacing: 0px;
+	border: 1px solid #000;
+	background: #FFF;
+}
+
+#global-mini-basket-hover-content table thead th, #global-mini-basket-hover-content table tfoot td
+{
+	padding: 5px;
+	color: #FFFF00;
+	font-weight: bold;
+	font-size: 13px;
+	background: #000;
+}
+
+#global-mini-basket-hover-content table tbody td
+{
+	padding: 3px 5px;
+	line-height: 14px;
+}
+
+#global-mini-basket-hover-content table tbody tr.on td
+{
+	background: #EEE;
+}
+
+#global-mini-basket-hover-content table thead th a
+{
+	color: #FFFF00;
+}
+
+.minibasket_backing
+{
+	display: none;
+	position: absolute;
+	left: 0px;
+	top: 0px;
+	width: 100%;
+}
+	<MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Generate_Template" PARAMETERS = "settings var, imagetypes var, code var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Store:ui_mod:code EQ 'cssui' }">
+		<MvASSIGN NAME = "l.type" VALUE = "cssui">
+	<MvELSEIF EXPR = "{ g.Store:ui_mod:code EQ 'mmui' AND g.Store_Framework_Inuse EQ 'css_fw' }">
+		<MvASSIGN NAME = "l.type" VALUE = "mmui_css">
+	<MvELSE>
+		<MvASSIGN NAME = "l.type" VALUE = "mmui">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:groups }">	<MvASSIGN NAME = "l.array"	VALUE = "global_minibasket:groups">
+	<MvELSE>								<MvASSIGN NAME = "l.array"	VALUE = "global_minibasket:items">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.code">
+	<MvIF EXPR = "{ l.type EQ 'mmui_css' }"><MIVA STANDARDOUTPUTLEVEL = "text, html"><div style="clear: both;"></div><MIVA STANDARDOUTPUTLEVEL = ""></MvIF>
+	<MIVA STANDARDOUTPUTLEVEL = "text, html"><span id="global-mini-basket-container">
+	<a href="&mvte:global:secure_sessionurl;Screen=BASK&amp;Store_Code=&mvta:store:code;" id="global-mini-basket-link">Basket<mvt:if expr="NOT l.settings:global_minibasket:empty"> Contents (&mvte:global_minibasket:basket_count;)</mvt:if></a><MvIF EXPR = "{ l.type EQ 'cssui' }"> <span class="grey">|</span></MvIF>
+	<mvt:if expr="NOT l.settings:global_minibasket:empty">
+	<div style="clear: both;"></div>
+	<div id="global-mini-basket-hover-content">
+	<table width="100%">
+		<thead>
+			<tr>
+				<th align="left" nowrap>Basket Summary</th>
+				<th colspan="2" align="right" nowrap><a href="&mvte:global:secure_sessionurl;Screen=BASK&amp;Store_Code=&mvta:store:code;">Basket</a><mvt:if expr="l.settings:global_minibasket:orderminimum_met"> / <a href="&mvte:global:secure_sessionurl;Screen=OINF&amp;Store_Code=&mvta:store:code;">Checkout</a></mvt:if></th>
+			</tr>
+		</thead>
+		<tbody>
+			<mvt:foreach iterator="item" array="{ l.array }">
+			<mvt:if expr="( l.pos1 - 1 ) MOD 2 EQ 0 OR l.pos1 EQ 1"><tr class="on"><mvt:else><tr></mvt:if>
+				<td nowrap align="center" valign="middle"><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvIF EXPR = "{ NOT ISNULL l.imagetypes[ 1 ] }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="{ 'NOT ISNULL l.settings:item:imagetypes:' $ encodeentities( [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.imagetypes[ 1 ] ) ) }">
+						<img src="{ '&mvte:item:imagetypes:' $ encodeentities( [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.imagetypes[ 1 ] ) ) $ ';' }" />
+					<mvt:else>
+						&nbsp;
+					</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<form method="post" action="&mvte:global:sessionurl;Screen=BASK">
+						<input type="hidden" name="Action" value="RPRD" />
+						<input type="hidden" name="Store_Code" value="&mvte:store:code;" />
+						<input type="hidden" name="Basket_Line" value="&mvte:item:group_id;" />
+						<input type="hidden" name="Offset" value="&mvte:global:Offset;" />
+						<input type="hidden" name="AllOffset" value="&mvte:global:AllOffset;" />
+						<input type="hidden" name="CatListingOffset" value="&mvte:global:CatListingOffset;" />
+						<input type="hidden" name="RelatedOffset" value="&mvte:global:RelatedOffset;" />
+						<input type="hidden" name="SearchOffset" value="&mvte:global:SearchOffset;" />
+						<mvt:item name="buttons" param="Remove" />
+					</form><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				</td>
+				<td width="100%" align="left">
+					<b><a href="&mvte:item:link;">&mvt:item:name;</a></b><br />
+					Code: &mvt:item:code;<br />
+					Quantity: &mvte:item:quantity;
+					<MvIF EXPR = "{ l.settings:ldiscount }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+						<mvt:foreach iterator="discount" array="item:discounts">
+							<mvt:if expr="l.settings:discount:display">
+								<div class="item-discount">&mvt:discount:descrip;: &mvt:discount:formatted_discount;</div>
+							</mvt:if>
+						</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				</td>
+				<td nowrap align="right" valign="middle"><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvIF EXPR = "{ l.settings:lineprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:item:subtotal_retail OR l.settings:item:subtotal_base_price OR l.settings:item:subtotal">
+						<mvt:if expr="l.settings:item:subtotal_retail AND l.settings:item:subtotal_retail NE l.settings:item:subtotal">
+							<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_retail;</span>
+						<mvt:elseif expr="l.settings:item:subtotal_base_price NE l.settings:item:subtotal">
+							<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_base_price;</span>
+						</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSEIF EXPR = "{ l.settings:lineprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:item:subtotal_base_price OR l.settings:item:subtotal">
+						<mvt:if expr="l.settings:item:subtotal_base_price NE l.settings:item:subtotal">
+							<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_base_price;</span>
+						</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:item:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+						&mvt:item:formatted_subtotal;
+					<mvt:else>
+						&nbsp;
+					</mvt:if>
+				</td>
+			</tr>
+			<mvt:foreach iterator="option" array="item:options">
+			<mvt:if expr="( l.pos1 - 1 ) MOD 2 EQ 0 OR l.pos1 EQ 1"><tr class="on"><mvt:else><tr></mvt:if>
+				<td>&nbsp;</td>
+				<td>
+					<mvt:if expr="l.settings:option:option_id">
+						&mvt:option:attr_code;: &mvt:option:opt_code;
+						<mvt:elseif expr="NOT ISNULL l.settings:option:data">
+						&mvt:option:attr_code;: &mvt:option:data;
+						<mvt:elseif expr="NOT ISNULL l.settings:option:data_long">
+						&mvt:option:attr_code;: &mvt:option:data_long;
+						<mvt:else>
+						&mvt:option:attr_code;
+					</mvt:if>
+					<MvIF EXPR = "{ l.settings:ldiscount }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:foreach iterator="discount" array="option:discounts">
+						<mvt:if expr="l.settings:discount:display">
+							<div class="item-discount">&mvt:discount:descrip;: &mvt:discount:formatted_discount;</div>
+						</mvt:if>
+					</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				</td>
+				<td align="right"><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvIF EXPR = "{ l.settings:lineprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:option:subtotal_retail OR l.settings:option:subtotal_base_price OR l.settings:option:subtotal">
+						<mvt:if expr="l.settings:option:subtotal_retail AND l.settings:option:subtotal_retail NE l.settings:option:subtotal">
+							<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_retail;</span>
+						<mvt:elseif expr="l.settings:option:subtotal_base_price NE l.settings:option:subtotal">
+							<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_base_price;</span>
+						</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSEIF EXPR = "{ l.settings:lineprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:option:subtotal_base_price OR l.settings:option:subtotal">
+						<mvt:if expr="l.settings:option:subtotal_base_price NE l.settings:option:subtotal">
+							<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_base_price;</span>
+						</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+					<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+					<mvt:if expr="l.settings:option:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+					</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+						&mvt:option:formatted_subtotal;
+					<mvt:else>
+						&nbsp;
+					</mvt:if>
+				</td>
+			</tr>
+			</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+
+			<MvIF EXPR = "{ l.type EQ 'cssui' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:subterm_id">
+				<mvt:if expr="( l.pos1 - 1 ) MOD 2 EQ 0 OR l.pos1 EQ 1"><tr class="on"><mvt:else><tr></mvt:if>
+					<td>&nbsp;</td>
+					<td>Subscription: &mvte:item:productsubscriptionterm:descrip;</td>
+					<td>&nbsp;</td>
+				</tr>
+			</mvt:if>
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			</mvt:foreach>
+			<mvt:foreach iterator="charge" array="global_minibasket:charges">
+			<tr class="basket-charges">
+				<td>&nbsp;</td>
+				<td class="charge-description">&mvt:charge:descrip;:</td>
+				<td class="formatted-charge" align="right">&mvt:charge:formatted_disp_amt;</td>
+			</tr>
+			</mvt:foreach>
+		</tbody>
+		<tfoot>
+			<tr>
+				<td colspan="3" align="right">Basket Total: &mvt:global_minibasket:formatted_total;</td>
+			</tr>
+		</tfoot>
+	</table>
+	</div>
+	</mvt:if>
+</span>
+
+<script type="text/javascript">
+	function MiniBasket()
+	{
+		var self = this;
+
+		this.content_container      = document.getElementById( 'global-mini-basket-hover-content' );
+		this.display_link           = document.getElementById( 'global-mini-basket-link' );
+		this.minibasket_backing     = document.createElement( 'div' );
+		
+		if ( this.content_container )
+		{
+			this.minibasket_backing.className = 'minibasket_backing';
+
+			document.getElementsByTagName( 'body' )[ 0 ].insertBefore( this.minibasket_backing, document.getElementsByTagName( 'body' )[ 0 ].firstChild );
+
+			if ( this.display_link )        this.display_link.onclick       = function() { ( ( self.content_container.style.display == 'none' ) ? self.Show() : self.Hide() ); return false; }
+			if ( this.minibasket_backing )  this.minibasket_backing.onclick = function() { self.Hide(); return false; }
+
+			this.content_container.style.display = 'none';
+		}
+	}
+
+	MiniBasket.prototype.Show = function()
+	{
+		var self = this;
+		
+		window.onresize = function() { self.Resize(); }
+		
+		this.content_container.style.display  = 'block';
+		this.minibasket_backing.style.display = 'inline';
+		
+		if ( document.documentElement.clientHeight > document.body.scrollHeight )
+		{
+			this.minibasket_backing.style.height = document.documentElement.clientHeight + 'px';
+		}
+		else
+		{
+			this.minibasket_backing.style.height = ( document.body.scrollHeight > document.documentElement.scrollHeight ) ? document.body.scrollHeight + 'px' : document.documentElement.scrollHeight + 'px';
+		}
+	}
+
+	MiniBasket.prototype.Hide = function()
+	{
+		this.content_container.style.display  = 'none';
+		this.minibasket_backing.style.display = 'none';
+
+		window.onresize = null;
+	}
+
+	MiniBasket.prototype.Resize = function()
+	{
+		if ( document.documentElement.clientHeight > document.body.scrollHeight )
+		{
+			this.minibasket_backing.style.height = document.documentElement.clientHeight + 'px';
+		}
+		else
+		{
+			this.minibasket_backing.style.height = ( document.body.scrollHeight > document.documentElement.scrollHeight ) ? document.body.scrollHeight + 'px' : document.documentElement.scrollHeight + 'px';
+		}
+	}
+
+	var minibasket = new MiniBasket();
+</script><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MiniBasket_BasketData_LoadExisting" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.minibasket_settings"			VALUE = "{ l.settings }">
+	<MvASSIGN NAME = "l.settings"						VALUE = "{ l.all_settings:basket }">
+	<MvASSIGN NAME = "l.settings:constrain"				VALUE = "{ l.minibasket_settings:constrain }">
+	<MvASSIGN NAME = "l.settings:imagetypes"			VALUE = "{ l.minibasket_settings:imagetypes }">
+	<MvASSIGN NAME = "l.settings:b_width"				VALUE = "{ l.minibasket_settings:b_width }">
+	<MvASSIGN NAME = "l.settings:b_height"				VALUE = "{ l.minibasket_settings:b_height }">
+	<MvASSIGN NAME = "l.settings:maxprodlen"			VALUE = "{ l.minibasket_settings:maxprodlen }">
+	<MvASSIGN NAME = "l.settings:lineprice"				VALUE = "{ l.minibasket_settings:lineprice }">
+	<MvASSIGN NAME = "l.settings:shipping"				VALUE = "{ l.minibasket_settings:shipping }">
+	<MvASSIGN NAME = "l.settings:handling"				VALUE = "{ l.minibasket_settings:handling }">
+	<MvASSIGN NAME = "l.settings:salestax"				VALUE = "{ l.minibasket_settings:salestax }">
+	<MvASSIGN NAME = "l.settings:discounts"				VALUE = "{ l.minibasket_settings:discounts }">
+
+	<MvIF EXPR = "{ miva_array_elements( l.minibasket_settings:imagetypes ) }">
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.settings:items">
+			<MvASSIGN NAME = "l.null" 					VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_ImageTypes( l.basketitem:product_id, l.basketitem:variant_id, l.basketitem, l.all_settings, l.settings:imagetypes, l.settings:constrain, l.settings:b_width, l.settings:b_height ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total"							VALUE = 0.00>
+	
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.settings:items">
+		<MvASSIGN NAME = "l.total"						VALUE = "{ l.total + l.basketitem:subtotal }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketitem:options">
+			<MvASSIGN NAME = "l.total"					VALUE = "{ l.total + l.basketoption:subtotal }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.settings:shipping EQ l.all_settings:basket:shipping AND
+					l.settings:handling EQ l.all_settings:basket:handling AND 
+					l.settings:salestax EQ l.all_settings:basket:salestax AND 
+					l.settings:discounts EQ l.all_settings:basket:discounts }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:charges" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+		<MvIF EXPR = "{ ( l.basketcharge:type EQ 'SHIPPING' ) 		AND ( NOT l.settings:shipping ) }">												<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'HANDLING' ) 	AND ( NOT l.settings:handling ) }">												<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'TAX' ) 		AND ( NOT l.settings:salestax ) }">												<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'DISCOUNT' ) 	AND ( NOT ISNULL l.settings:discounts ) AND ( NOT l.settings:discounts ) }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.output_charge_count"									VALUE = "{ l.output_charge_count + 1 }">
+		<MvASSIGN NAME = "l.settings:charges" INDEX = "{ l.output_charge_count }"	VALUE = "{ l.basketcharge }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_BasketCharge( l.settings:charges[ l.output_charge_count ] ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| This version of the function rounds of each basket charge to 2 decimal places, before adding it to the total in order to 
+		| avoid discrpeancies between the invoice line items and the invoice total.  
+		| See GEM#M5-756.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.total"						VALUE = "{ l.total + ( l.basketcharge:amount ROUND 2 ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.settings:total"					VALUE = "{ [ g.Module_Library_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
+	<MvASSIGN NAME = "l.settings:formatted_total"		VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.settings:total ) }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MiniBasket_BasketData_LoadInitial" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.total"					VARIABLE = "l.settings:total">
+
+	<MvASSIGN NAME = "l.total"						VALUE = 0.00>
+	<MvASSIGN NAME = "l.basketitem_count"			VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.settings:items ) }">
+
+	<MvIF EXPR = "{ l.basketitem_count EQ 0 }">
+		<MvASSIGN NAME = "l.settings:empty" VALUE = 1>
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.settings:items" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_BasketItem_WithParts( l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null"	VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_ImageTypes( l.basketitem:product_id, l.basketitem:variant_id, l.basketitem, l.all_settings, l.settings:imagetypes, l.settings:constrain, l.settings:b_width, l.settings:b_height ) }">
+		<MvASSIGN NAME = "l.total"	VALUE = "{ l.total + l.basketitem:subtotal }">
+
+		<MvIF EXPR = "{ l.basketitem:product:id }">	<MvASSIGN NAME = "l.basketitem:link" VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Product_URL( l.basketitem:product, l.null ) }">
+		<MvELSE>									<MvASSIGN NAME = "l.basketitem:link" VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Product_Code_URL( l.basketitem:code, l.null ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketitem:options">
+			<MvASSIGN NAME = "l.total" VALUE = "{ l.total + l.basketoption:subtotal }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.basketgroup_count" VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Merge_BasketOrOrderItem_Groups( l.settings:items, l.basketitem_count, l.settings:groups ) }">
+
+	<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+		<MvIF EXPR = "{ ( l.basketcharge:type EQ 'SHIPPING' ) AND ( NOT l.settings:shipping ) }">												<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'HANDLING' ) AND ( NOT l.settings:handling ) }">											<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'TAX' ) AND ( NOT l.settings:salestax ) }">												<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'DISCOUNT' ) AND ( NOT ISNULL l.settings:discounts ) AND ( NOT l.settings:discounts ) }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.output_charge_count"									VALUE = "{ l.output_charge_count + 1 }">
+		<MvASSIGN NAME = "l.settings:charges" INDEX = "{ l.output_charge_count }"	VALUE = "{ l.basketcharge }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_BasketCharge( l.settings:charges[ l.output_charge_count ] ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| This version of the function rounds of each basket charge to 2 decimal places, before adding it to the total in order to 
+		| avoid discrpeancies between the invoice line items and the invoice total.  
+		| See GEM#M5-756.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.total"					VALUE = "{ l.total + ( l.basketcharge:amount ROUND 2 ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.settings:total"				VALUE = "{ [ g.Module_Library_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
+	<MvASSIGN NAME = "l.settings:formatted_total"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.settings:total ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MiniBasket_BasketData_Extras" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings:orderminimum_met"			VALUE = 0>
+	<MvASSIGN NAME = "l.settings:basket_weight"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:basket_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.settings:basketitemsonly_count"		VALUE = 0>
+	
+	<MvIF EXPR = "{ [ g.Module_Library_Utilities ].OrderMinimumsMet() }">
+		<MvASSIGN NAME = "l.settings:orderminimum_met"		VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.settings:items">
+		<MvASSIGN NAME = "l.settings:basket_weight"			VALUE = "{ l.settings:basket_weight + l.basketitem:weight }">
+		<MvASSIGN NAME = "l.settings:basketitemsonly_count"	VALUE = "{ l.settings:basketitemsonly_count + 1 }">
+		<MvASSIGN NAME = "l.settings:basket_count"			VALUE = "{ l.settings:basket_count + l.basketitem:quantity }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketitem:options">
+			<MvASSIGN NAME = "l.settings:basket_weight"		VALUE = "{ l.settings:basket_weight + l.basketoption:weight }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.settings:maxprodlen GT 0 }">
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.settings:items">
+			<MvASSIGN NAME = "l.basketitem:name"			VALUE = "{ substring_var( l.basketitem:name, 1, l.settings:maxprodlen ) }">
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.settings:groups">
+			<MvASSIGN NAME = "l.basketitem:name"			VALUE = "{ substring_var( l.basketitem:name, 1, l.settings:maxprodlen ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

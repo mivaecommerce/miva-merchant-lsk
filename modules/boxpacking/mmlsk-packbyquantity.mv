@@ -1,0 +1,738 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-BPK-PBQ-
+| Next Error Code: 22   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-packbyquantity">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Pack by Quantity">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.07">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "boxpacking, data_store, vis_pkgrules, fields_box, provision_store">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: data_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes
+						  (
+							box_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+							max_quan	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes_1 ON ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes ( box_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings
+						  (
+							exboxltd	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:exboxltd"	VALUE = 1>
+
+	<MvIF EXPR = "{ NOT PackByQuantitySettings_Insert( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.version LT 5.8001 }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings
+							  (
+								exboxltd	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()	$ '
+							  )' }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00011', g.MvQUERY_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.settings:exboxltd"	VALUE = 0>
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings
+							  ( exboxltd )
+							  VALUES
+							  ( ? )' }"
+				 FIELDS	= "l.settings:exboxltd">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00018', g.MvQUERY_Error ) }">
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes' }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: provision_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'settings' }">	
+			<MvEVAL EXPR = "{ Module_Provision_Store_Settings( l.module, l.child_xml ) }">
+		<MvELSE>												
+			<MVEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child_xml, 'Unknown tag' ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PackByQuantitySettings_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'O', l.provide_xml,		'ExcludeBoxesByDimension',		l.settings:exboxltd,
+																							'ON,OFF,1,0',	'1,0,1,0' ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.settings:exboxltd" VALUE = "{ [ g.Module_Admin ].Trim_Boolean( l.settings:exboxltd ) }">
+
+	<MvIF EXPR = "{ NOT PackByQuantitySettings_Update( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: boxpacking
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Fields" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.box:id }">									<MvASSIGN NAME = "g.PackByQuantity_MaxQuantity" VALUE = 0>
+	<MvELSEIF EXPR = "{ PackByQuantityBox_Load( l.box:id, l.pbq ) }">	<MvASSIGN NAME = "g.PackByQuantity_MaxQuantity" VALUE = "{ l.pbq:max_quan }">
+	<MvELSE>															<MvASSIGN NAME = "g.PackByQuantity_MaxQuantity" VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "max_quan">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.invalid" VARIABLE = "g.PackByQuantity_Invalid_Fields">
+		<MvMEMBER NAME = "{ l.field_id }">
+	</MvREFERENCEARRAY>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.invalid NE 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'max_quan' }">	<MvFUNCTIONRETURN VALUE = "<b>Max. # of Items:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'max_quan' }">
+		<input type="text" size="5" name="PackByQuantity_MaxQuantity" value="{ encodeentities( g.PackByQuantity_MaxQuantity ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Validate" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"										VALUE = 1>
+	<MvASSIGN NAME = "g.PackByQuantity_Invalid_Fields"				VALUE = "">
+
+	<MvASSIGN NAME = "g.PackByQuantity_MaxQuantity"					VALUE = "{ trim( g.PackByQuantity_MaxQuantity ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.PackByQuantity_MaxQuantity ) }">
+		<MvIF EXPR = "{ l.valid }">
+			<MvASSIGN NAME = "l.valid"								VALUE = "{ [ g.Module_Admin ].FieldError( '', 'PackByQuantity_MaxQuantity', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.valid"									VALUE = 0>
+		<MvASSIGN NAME = "g.PackByQuantity_Invalid_Fields:max_quan"	VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Insert" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.PackByQuantity_MaxQuantity EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pbq:box_id"		VALUE = "{ l.box:id }">
+	<MvASSIGN NAME = "l.pbq:max_quan"	VALUE = "{ g.PackByQuantity_MaxQuantity }">
+
+	<MvFUNCTIONRETURN VALUE = "{ PackByQuantityBox_Insert( l.pbq ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Update" PARAMETERS = "module var, box var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.PackByQuantity_MaxQuantity EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ PackByQuantityBox_Delete( l.box:id ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pbq:box_id"		VALUE = "{ l.box:id }">
+	<MvASSIGN NAME = "l.pbq:max_quan"	VALUE = "{ g.PackByQuantity_MaxQuantity }">
+
+	<MvIF EXPR = "{ PackByQuantityBox_Insert( l.pbq ) }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = "{ PackByQuantityBox_Update( l.pbq ) }">
+	<MvELSE>																								<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Delete" PARAMETERS = "module var, box_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ PackByQuantityBox_Delete( l.box_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Box_Provision" PARAMETERS = "module var, box var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PackByQuantityBox_Load( l.box:id, l.pbq ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.pbq:box_id"		VALUE = "{ l.box:id }">
+		<MvASSIGN NAME = "l.pbq:max_quan"	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer( 'O', l.provide_xml, 'MaxQuantity', l.pbq:max_quan ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PackByQuantityBox_Insert( l.pbq ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvIF EXPR = "{ NOT PackByQuantityBox_Update( l.pbq ) }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+			</MvIF>
+		<MvELSE>																							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantity_SetMaxDimensions" PARAMETERS = "items var, dimensions var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dimensions:max_length"	VALUE = 0>
+	<MvASSIGN NAME = "l.dimensions:max_width"	VALUE = 0>
+	<MvASSIGN NAME = "l.dimensions:max_height"	VALUE = 0>
+	
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items">
+		<MvIF EXPR = "{ l.item:length GT l.dimensions:max_length }">
+			<MvASSIGN NAME = "l.dimensions:max_length"	VALUE = "{ l.item:length }">
+		</MvIF>
+		
+		<MvIF EXPR = "{ l.item:width GT l.dimensions:max_width }">
+			<MvASSIGN NAME = "l.dimensions:max_width"	VALUE = "{ l.item:width }">
+		</MvIF>
+		
+		<MvIF EXPR = "{ l.item:height GT l.dimensions:max_height }">
+			<MvASSIGN NAME = "l.dimensions:max_height"	VALUE = "{ l.item:height }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxPackingModule_Pack_Items" PARAMETERS = "module var, items var, item_count, packages var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PackByQuantitySettings_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.settings:exboxltd }">
+		<MvASSIGN NAME = "l.box_count"						VALUE = "{ BoxList_Load_EnabledWithQuantity( l.boxes ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ PackByQuantity_SetMaxDimensions( l.items, l.dimensions ) }">
+		<MvASSIGN NAME = "l.box_count"						VALUE = "{ BoxList_Load_EnabledWithQuantity_DimensionRestricted( l.dimensions, l.boxes ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.box_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_sort( l.boxes, 'PackByQuantity_BoxSort_MaxQuantity_Volume', l.null ) }">
+
+	<MvASSIGN NAME = "l.first_unpacked"			VALUE = 1>
+	<MvASSIGN NAME = "l.remaining"				VALUE = "{ l.item_count }">
+	<MvASSIGN NAME = "l.package_count"			VALUE = 0>
+
+	<MvWHILE EXPR = "{ l.remaining }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_search( l.boxes, 1, l.box, '( l.box:max_quan GE l.remaining ) OR ( l.box:max_quan GE l.boxes[ l.box_count ]:max_quan )' ) }">
+
+		<MvASSIGN NAME = "l.package_count"		VALUE = "{ l.package_count + 1 }">
+		<MvREFERENCEARRAY NAME = "l.package" VARIABLE = "l.packages">
+			<MvDIMENSION INDEX = "{ l.package_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.package:box"		VALUE = "{ l.box }">
+		<MvASSIGN NAME = "l.package:width"		VALUE = "{ l.box:width }">
+		<MvASSIGN NAME = "l.package:length"		VALUE = "{ l.box:length }">
+		<MvASSIGN NAME = "l.package:height"		VALUE = "{ l.box:height }">
+		
+		<MvASSIGN NAME = "l.package:item_count"	VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" FIRST = "{ l.first_unpacked }" LAST = "{ l.first_unpacked + l.box:max_quan - 1 }">
+			<MvASSIGN NAME = "l.package:item_count"									VALUE = "{ l.package:item_count + 1 }">
+			<MvASSIGN NAME = "l.package:items" INDEX = "{ l.package:item_count }"	VALUE = "{ l.item }">
+			<MvASSIGN NAME = "l.package:weight"										VALUE = "{ l.package:weight + l.item:weight }">
+
+			<MvASSIGN NAME = "l.first_unpacked"	VALUE = "{ l.first_unpacked + 1 }">
+			<MvASSIGN NAME = "l.remaining"		VALUE = "{ l.remaining - 1 }">
+
+			<MvIF EXPR = "{ l.remaining LE 0 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.settings:exboxltd AND l.remaining }">
+			<MvASSIGN NAME = "l.remaining_items" 	VALUE = "">
+			<MvASSIGN NAME = "l.remaining_count" 	VALUE = "{ miva_array_copy_ref( l.items, l.first_unpacked, l.item_count - l.first_unpacked + 1, l.remaining_items, -1 ) }">	
+			
+			<MvASSIGN NAME = "l.dimensions" 		VALUE = "">
+			<MvEVAL EXPR = "{ PackByQuantity_SetMaxDimensions( l.remaining_items, l.dimensions ) }">
+
+			<MvASSIGN NAME = "l.boxes" 				VALUE = "">
+			<MvASSIGN NAME = "l.box_count"			VALUE = "{ BoxList_Load_EnabledWithQuantity_DimensionRestricted( l.dimensions, l.boxes ) }">
+
+			<MvIF EXPR = "{ l.box_count EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+			
+			<MvASSIGN NAME = "l.null"				VALUE = "{ miva_array_sort( l.boxes, 'PackByQuantity_BoxSort_MaxQuantity_Volume', l.null ) }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| Add the associated box weight to each package weight
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.package" ARRAY = "l.packages" COUNT = "{ l.package_count }">
+		<MvASSIGN NAME = "l.package:weight" VALUE = "{ l.package:weight + l.package:box:weight }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.package_count }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: vis_pkgrules
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.PackByQuantity_Settings:exboxltd"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.PackByQuantity_Settings:exboxltd ) }">
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ PackByQuantitySettings_Update( g.PackByQuantity_Settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.module:code $ ':' $ l.module:name }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_PackagingRules_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT PackByQuantitySettings_Load( g.PackByQuantity_Settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ l.module:code }">
+		<table border="0" cellpadding="2" cellspacing="0" width="100%">
+		<tr><td nowrap>
+			<b>&nbsp;</b>
+		</td><td width="100%">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.PackByQuantity_Settings:exboxltd, 'PackByQuantity_Settings:exboxltd', 1, 'Exclude Boxes Smaller than Product Dimensions' ) }"><br>
+		</td></tr>
+		</table>
+	<MvELSE>
+		<MvHIDE FIELDS = "g.PackByQuantity_Settings">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: fields_box
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Box_Fields" PARAMETERS = "module var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.fields" INDEX = 1 MEMBER = "code"	VALUE = "max_quan">
+	<MvASSIGN NAME = "l.fields" INDEX = 1 MEMBER = "name"	VALUE = "Max. # of Items">
+	<MvASSIGN NAME = "l.fields" INDEX = 1 MEMBER = "type"	VALUE = "numeric">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Name" PARAMETERS = "module var, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code EQ 'max_quan' }">
+		<MvFUNCTIONRETURN VALUE = "Max. # of Items">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Value" PARAMETERS = "module var, box_id, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code NE 'max_quan' }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ PackByQuantityBox_Load( l.box_id, l.pbq ) }">
+		<MvFUNCTIONRETURN VALUE = "{ l.pbq:max_quan }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0.00>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Set_Field" PARAMETERS = "module var, box_id, code, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code NE 'max_quan' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pbq:box_id"		VALUE = "{ l.box_id }">
+	<MvASSIGN NAME = "l.pbq:max_quan"	VALUE = "{ l.value ROUND 0 }">
+
+	<MvIF EXPR = "{ PackByQuantityBox_Insert( l.pbq ) }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = "{ PackByQuantityBox_Update( l.pbq ) }">
+	<MvELSE>																								<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Capabilities" PARAMETERS = "module var, code, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities"				VALUE = "">
+
+	<MvIF EXPR = "{ l.code EQ 'max_quan' }">
+		<MvASSIGN NAME = "l.capabilities:query"		VALUE = 1>
+		<MvASSIGN NAME = "l.capabilities:search"	VALUE = 1>
+		<MvASSIGN NAME = "l.capabilities:orderby"	VALUE = 1>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Query" PARAMETERS = "module var, query var, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code NE 'max_quan' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00019', 'Unsupported field code' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Data_Reference( l.query, 'packbyweight', l.ref ) }">
+
+	<MvREFERENCEARRAY NAME = "l.queried" VARIABLE = "l.ref:data:queried_codes">
+		<MvMEMBER NAME = "{ l.code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.queried }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER( l.query, 'pbq.max_quan', 'pbq_max_quan' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'box', g.Store_Table_Prefix $ 'PackByQuantityBoxes', 'pbq', 'pbq.box_id = box.id', '' ) }">
+
+	<MvASSIGN NAME = "l.queried"	VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Query_Search" PARAMETERS = "module var, query var, code, operator, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code EQ 'max_quan' }">	<MvASSIGN NAME = "l.column" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'pbq.max_quan', 0 ) }">
+	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00020', 'Unsupported field code' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Module_Box_Field_Query( l.module, l.query, l.code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.operator EQ 'IN' OR
+					l.operator EQ 'NOT_IN' }">			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_CommaSeparatedList_With_Type( l.query, 'INTEGER', l.column, l.operator, l.value ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ l.operator EQ 'EQ' }">			<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'GT' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_GT(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'GE' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_GE(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'LT' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LT(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'LE' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LE(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'CO' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_CO(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'NC' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NC(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'LIKE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LIKE(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NOTLIKE(	'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'NE' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'TRUE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_TRUE(		'INTEGER', l.column, l.value ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'FALSE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_FALSE(	'INTEGER', l.column, l.value ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.operator EQ 'TRUE' OR l.operator EQ 'FALSE' }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.where_sql, '' ) }">
+		<MvELSE>															<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.where_sql, [ g.Module_Library_DB ].SQL_Query_Field( l.value ) ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Query_OrderBy" PARAMETERS = "module var, query var, code, direction" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code NE 'max_quan' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00021', 'Unsupported field code' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Module_Box_Field_Query( l.module, l.query, l.code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY_Flag_With_Alias_And_Member( l.query, 'pbq.max_quan', 'pbq_max_quan', 'pbq:max_quan', l.direction, 'null_integer' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Query_OrderBy_LoadIndexRecord" PARAMETERS = "module var, loaded_record var, box_id, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PackByQuantityBox_Load( l.box_id, l.loaded_record:pbq ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Box_Field_Query_Value" PARAMETERS = "module var, view_name, code" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_variable_value( l.view_name $ '.d.pbq_max_quan' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Database Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PackByQuantityBox_Read" PARAMETERS = "pbq var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pbq:box_id"		VALUE = "{ PackByQuantityBoxes.d.box_id }">
+	<MvASSIGN NAME = "l.pbq:max_quan"	VALUE = "{ PackByQuantityBoxes.d.max_quan }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantityBox_Load" PARAMETERS = "box_id, pbq var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PackByQuantityBoxes"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes WHERE box_id = ?' }"
+				FIELDS	= "l.box_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PackByQuantityBoxes.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PackByQuantityBoxes">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-BPK-PBQ-00004' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PackByQuantityBox_Read( l.pbq ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PackByQuantityBoxes">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantityBox_Insert" PARAMETERS = "pbq var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes
+						  ( box_id, max_quan )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.pbq:box_id, l.pbq:max_quan">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantityBox_Update" PARAMETERS = "pbq var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes
+						  SET
+							max_quan	= ?
+						  WHERE
+							box_id		= ?' }"
+			 FIELDS	= "l.pbq:max_quan,
+					   l.pbq:box_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantityBox_Delete" PARAMETERS = "box_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes WHERE box_id = ?' }"
+			 FIELDS	= "l.box_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxList_Load_EnabledWithQuantity_DimensionRestricted" PARAMETERS = "dimensions var, boxes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Boxes"
+				QUERY	= "{ 'SELECT
+								b.*,
+								pqb.max_quan
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Boxes b,
+								' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes pqb
+							  WHERE
+								b.length		>= ?	AND
+								b.width			>= ?	AND
+								b.height		>= ?	AND
+								b.enabled		= 1		AND
+								pqb.box_id		= b.id	AND
+								pqb.max_quan	> 0' }"
+				FIELDS = "l.dimensions:max_length, l.dimensions:max_width, l.dimensions:max_height">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.box_count"													VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Boxes.d.EOF }">
+		<MvASSIGN NAME = "l.box_count"												VALUE = "{ l.box_count + 1 }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_SHP_DB ].Box_Read( l.boxes[ l.box_count ] ) }">
+		<MvASSIGN NAME = "l.boxes" INDEX = "{ l.box_count }" MEMBER = "max_quan"	VALUE = "{ Boxes.d.max_quan }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "Boxes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Boxes">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-BPK-PBQ-00013', l.box_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BoxList_Load_EnabledWithQuantity" PARAMETERS = "boxes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Boxes"
+				QUERY	= "{ 'SELECT
+								b.*,
+								pqb.max_quan
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Boxes b,
+								' $ g.Store_Table_Prefix $ 'PackByQuantityBoxes pqb
+							  WHERE
+								b.enabled		= 1		AND
+								pqb.box_id		= b.id	AND
+								pqb.max_quan	> 0' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.box_count"													VALUE = 0>
+	<MvWHILE EXPR = "{ NOT Boxes.d.EOF }">
+		<MvASSIGN NAME = "l.box_count"												VALUE = "{ l.box_count + 1 }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_SHP_DB ].Box_Read( l.boxes[ l.box_count ] ) }">
+		<MvASSIGN NAME = "l.boxes" INDEX = "{ l.box_count }" MEMBER = "max_quan"	VALUE = "{ Boxes.d.max_quan }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "Boxes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Boxes">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-BPK-PBQ-00009', l.box_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantitySettings_Insert" PARAMETERS = "settings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings
+						  ( exboxltd )
+						  VALUES
+						  ( ? )' }"
+			 FIELDS	= "l.settings:exboxltd">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantitySettings_Update" PARAMETERS = "settings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings
+						  SET
+							exboxltd = ?' }"
+			 FIELDS	= "l.settings:exboxltd">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PackByQuantitySettings_Load" PARAMETERS = "settings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PackByQuantitySettings"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PackByQuantitySettings' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-BPK-PBQ-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PackByQuantitySettings.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PackByQuantitySettings">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-BPK-PBQ-00017' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.settings:exboxltd"	VALUE = "{ PackByQuantitySettings.d.exboxltd }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PackByQuantitySettings">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PackByQuantity_BoxSort_MaxQuantity_Volume" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:max_quan LT l.right:max_quan }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:max_quan GT l.right:max_quan }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.left_volume" 	VALUE = "{ l.left:height * l.left:width * l.left:length }">
+	<MvASSIGN NAME = "l.right_volume" 	VALUE = "{ l.right:height * l.right:width * l.right:length }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.left_volume - l.right_volume }">
+</MvFUNCTION>

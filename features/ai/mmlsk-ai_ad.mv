@@ -1,0 +1,116 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-AI-AD-
+| Next Error Code: 2   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AI_StoreSettings_Validate" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.AISettings:enabled"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.AISettings:enabled ) }">
+	<MvASSIGN NAME = "g.AISettings:engine"			VALUE = "{ trim( g.AISettings:engine ) }">
+	<MvASSIGN NAME = "g.AISettings:token"			VALUE = "{ trim( g.AISettings:token ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_AI_DB ].AISettings_Load( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ len_var( g.AISettings:engine ) GT 50 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'AIST', 'AISettings:engine', 'AI Engine must be 50 characters or less' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.AISettings:enabled AND ( ( ISNULL l.aisettings:token ) AND ( ISNULL g.AISettings:token ) ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'AIST', 'AISettings:token', 'Please specify your AI Token' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AI_StoreSettings_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_AI_DB ].AISettings_Load( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.aisettings:enabled"		VALUE = "{ g.AISettings:enabled }">
+	<MvASSIGN NAME = "l.aisettings:engine"		VALUE = "{ g.AISettings:engine }">
+	
+	<MvIF EXPR = "{ NOT ISNULL g.AISettings:token }">
+		<MvASSIGN NAME = "l.aisettings:token"	VALUE = "{ [ g.Module_Library_Crypto ].Encrypt_Payment_Password( g.AISettings:token ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_AI_DB ].AISettings_Update( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-AI-AD-00001', 'AI Settings updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AI_StoreSettings_Tabs" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "AIST:AI Settings (Experimental)">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AI_StoreSettings_Head" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AI_StoreSettings_Content" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_AI_DB ].AISettings_Load( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Load_Fields }">
+		<MvASSIGN NAME = "g.AISettings"			VALUE = "">
+		<MvASSIGN NAME = "g.AISettings:enabled"	VALUE = "{ l.aisettings:enabled }">
+		<MvASSIGN NAME = "g.AISettings:engine"	VALUE = "{ l.aisettings:engine }">
+		<MvASSIGN NAME = "g.AISettings:token"	VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Tab EQ 'AIST' }">
+		<table width="100%">
+			<tr><td nowrap>
+				&nbsp;
+			</td><td width="100%">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox_With_Label( g.AISettings:enabled, 'AISettings:enabled', 'Yes', 'Enabled' ) }">
+			</td></tr>
+			<tr><td nowrap>
+				<b>OpenAI Engine:</b>
+			</td><td width="100%">
+				<input type="text" size="40" name="AISettings:engine" value="{ encodeentities( g.AISettings:engine ) }" />
+			</td></tr>
+			<tr><td nowrap>
+				<MvIF EXPR = "{ ISNULL l.aisettings:token }">
+					<b>OpenAI Token:</b>
+				<MvELSE>
+					OpenAI Token:
+				</MvIF>
+			</td><td width="100%">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCredentialInput( 'AISettings:token', 'password', g.AISettings:token, '', '', '', 80 ) }">
+			</td></tr>
+		</table>
+	<MvELSE>
+		<MvHIDE FIELDS = "g.AISettings">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "features/ai/functions.mv">
+<MvINCLUDE FILE = "features/ai/aidialog.mv">
+<MvINCLUDE FILE = "features/ai/aisavefavoritedialog.mv">
+
+<MvINCLUDE FILE = "features/ai/combined.mv">

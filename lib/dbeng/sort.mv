@@ -1,0 +1,279 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-SRT-
+| Next Error Code: 10   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Category_Sort_Swap" PARAMETERS = "category_1 var, category_2 var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvASSIGN NAME = "l.temp"					VALUE = "{ l.category_1:disp_order }">
+	<MvASSIGN NAME = "l.category_1:disp_order"	VALUE = "{ l.category_2:disp_order }">
+	<MvASSIGN NAME = "l.category_2:disp_order"	VALUE = "{ l.temp }">
+
+	<MvIF EXPR = "{ NOT Category_Update_DisplayOrder( l.category_1 ) OR
+					NOT Category_Update_DisplayOrder( l.category_2 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Sort_All" PARAMETERS = "field, ascending" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.ascending }">				<MvASSIGN NAME = "l.field_order" VALUE = "ASC">
+	<MvELSE>									<MvASSIGN NAME = "l.field_order" VALUE = "DESC">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field EQ 'code' }">		<MvASSIGN NAME = "l.field_name"	VALUE = "code">
+	<MvELSEIF EXPR = "{ l.field EQ 'name' }">	<MvASSIGN NAME = "l.field_name"	VALUE = "name">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00001', 'Invalid sort field' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.offset"		VALUE = 0>
+	<MvASSIGN NAME = "l.limit"		VALUE = 1000>
+	<MvASSIGN NAME = "l.disp_order"	VALUE = 1>
+
+	<MvWHILE EXPR = "{ 1 }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories',
+																				   'SELECT id FROM ' $ g.Store_Table_Prefix $ 'Categories ORDER BY ' $ l.field_name $ ' ' $ l.field_order,
+																				   '', l.offset, l.limit ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00002', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.count"	VALUE = 0>
+		<MvWHILE EXPR = "{ NOT Categories.d.EOF }">
+			<MvASSIGN NAME = "l.ids" INDEX = "{ ++l.count }" VALUE = "{ Categories.d.id }">
+			<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+		<MvFOREACH ITERATOR = "l.id" ARRAY = "l.ids" COUNT = "{ l.count }">
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Categories SET disp_order = ? WHERE id = ?' }"
+					 FIELDS	= "l.disp_order, l.id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00003', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.disp_order"	VALUE = "{ l.disp_order + 1 }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.count LT l.limit }">
+			<MvWHILESTOP>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.offset"			VALUE = "{ l.offset + l.count }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryXProduct_Sort_Swap" PARAMETERS = "cat_id, product_1 var, product_2 var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT CategoryXProduct_Load( l.cat_id, l.product_1:id, l.catxprod_1 ) OR
+					NOT CategoryXProduct_Load( l.cat_id, l.product_2:id, l.catxprod_2 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.temp"					VALUE = "{ l.catxprod_1:disp_order }">
+	<MvASSIGN NAME = "l.catxprod_1:disp_order"	VALUE = "{ l.catxprod_2:disp_order }">
+	<MvASSIGN NAME = "l.catxprod_2:disp_order"	VALUE = "{ l.temp }">
+
+	<MvIF EXPR = "{ NOT CategoryXProduct_Update_DisplayOrder( l.catxprod_1 ) OR
+					NOT CategoryXProduct_Update_DisplayOrder( l.catxprod_2 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = "{ Category_Update_LastUpdated( l.cat_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryXProduct_Sort_All" PARAMETERS = "cat_id, field, ascending" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.ascending }">				<MvASSIGN NAME = "l.field_order" VALUE = "ASC">
+	<MvELSE>									<MvASSIGN NAME = "l.field_order" VALUE = "DESC">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field EQ 'code' }">		<MvASSIGN NAME = "l.field_name"	VALUE = "code">
+	<MvELSEIF EXPR = "{ l.field EQ 'name' }">	<MvASSIGN NAME = "l.field_name"	VALUE = "name">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00004', 'Invalid sort field' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.offset"		VALUE = 0>
+	<MvASSIGN NAME = "l.limit"		VALUE = 1000>
+	<MvASSIGN NAME = "l.disp_order"	VALUE = 1>
+
+	<MvASSIGNARRAY NAME = "g.Session" VALUE = "{ l.cat_id }">
+		<MvMEMBER NAME = "cache">
+		<MvMEMBER NAME = "categoryxproduct_sort_all">
+		<MvMEMBER NAME = "cat_id">
+	</MvASSIGNARRAY>
+
+	<MvWHILE EXPR = "{ 1 }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																				   'SELECT
+																						prod.id
+																					FROM ' $
+																						g.Store_Table_Prefix $ 'Products prod, ' $
+																						g.Store_Table_Prefix $ 'CategoryXProduct cxp
+																					WHERE
+																						cxp.cat_id	= ? AND
+																						prod.id		= cxp.product_id
+																					ORDER BY
+																						prod.' $ l.field_name $ ' ' $ l.field_order,
+																				   'g.Session:cache:categoryxproduct_sort_all:cat_id', l.offset, l.limit ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00005', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.count"	VALUE = 0>
+		<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+			<MvASSIGN NAME = "l.ids" INDEX = "{ ++l.count }" VALUE = "{ Products.d.id }">
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+		<MvFOREACH ITERATOR = "l.id" ARRAY = "l.ids" COUNT = "{ l.count }">
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CategoryXProduct SET disp_order = ? WHERE cat_id = ? AND product_id = ?' }"
+					 FIELDS	= "l.disp_order, l.cat_id, l.id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00006', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.disp_order"	VALUE = "{ l.disp_order + 1 }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.count LT l.limit }">
+			<MvWHILESTOP>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.offset"			VALUE = "{ l.offset + l.count }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ Category_Update_LastUpdated( l.cat_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Sort_Swap" PARAMETERS = "product_1 var, product_2 var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvASSIGN NAME = "l.temp"					VALUE = "{ l.product_1:disp_order }">
+	<MvASSIGN NAME = "l.product_1:disp_order"	VALUE = "{ l.product_2:disp_order }">
+	<MvASSIGN NAME = "l.product_2:disp_order"	VALUE = "{ l.temp }">
+
+	<MvIF EXPR = "{ NOT Product_Update_DisplayOrder( l.product_1 ) OR
+					NOT Product_Update_DisplayOrder( l.product_2 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = "{ Store_Update_CacheVersion( g.Store ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Sort_All" PARAMETERS = "field, ascending" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.ascending }">				<MvASSIGN NAME = "l.field_order" VALUE = "ASC">
+	<MvELSE>									<MvASSIGN NAME = "l.field_order" VALUE = "DESC">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field EQ 'code' }">		<MvASSIGN NAME = "l.field_name"	VALUE = "code">
+	<MvELSEIF EXPR = "{ l.field EQ 'name' }">	<MvASSIGN NAME = "l.field_name"	VALUE = "name">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00007', 'Invalid sort field' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.offset"		VALUE = 0>
+	<MvASSIGN NAME = "l.limit"		VALUE = 1000>
+	<MvASSIGN NAME = "l.disp_order"	VALUE = 1>
+
+	<MvWHILE EXPR = "{ 1 }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																				   'SELECT id FROM ' $ g.Store_Table_Prefix $ 'Products ORDER BY ' $ l.field_name $ ' ' $ l.field_order,
+																				   '', l.offset, l.limit ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00008', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.count"	VALUE = 0>
+		<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+			<MvASSIGN NAME = "l.ids" INDEX = "{ ++l.count }" VALUE = "{ Products.d.id }">
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+		<MvFOREACH ITERATOR = "l.id" ARRAY = "l.ids" COUNT = "{ l.count }">
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products SET disp_order = ? WHERE id = ?' }"
+					 FIELDS	= "l.disp_order, l.id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SRT-00009', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.disp_order"	VALUE = "{ l.disp_order + 1 }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.count LT l.limit }">
+			<MvWHILESTOP>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.offset"			VALUE = "{ l.offset + l.count }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ Store_Update_CacheVersion( g.Store ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Attribute_Sort_Swap" PARAMETERS = "attribute_1 var, attribute_2 var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvASSIGN NAME = "l.temp"					VALUE = "{ l.attribute_1:disp_order }">
+	<MvASSIGN NAME = "l.attribute_1:disp_order"	VALUE = "{ l.attribute_2:disp_order }">
+	<MvASSIGN NAME = "l.attribute_2:disp_order"	VALUE = "{ l.temp }">
+
+	<MvIF EXPR = "{ NOT Attribute_Update_DisplayOrder( l.attribute_1 ) OR
+					NOT Attribute_Update_DisplayOrder( l.attribute_2 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Option_Sort_Swap" PARAMETERS = "option_1 var, option_2 var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvASSIGN NAME = "l.temp"					VALUE = "{ l.option_1:disp_order }">
+	<MvASSIGN NAME = "l.option_1:disp_order"	VALUE = "{ l.option_2:disp_order }">
+	<MvASSIGN NAME = "l.option_2:disp_order"	VALUE = "{ l.temp }">
+
+	<MvIF EXPR = "{ NOT Option_Update_DisplayOrder( l.option_1 ) OR
+					NOT Option_Update_DisplayOrder( l.option_2 ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

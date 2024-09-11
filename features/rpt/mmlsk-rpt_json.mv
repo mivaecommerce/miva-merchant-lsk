@@ -1,0 +1,1132 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-RPT-JSN-
+| Next Error Code: 77   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_ReportModule_Capabilities" PARAMETERS = "capabilities var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"date_range":			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:date_range ) }">,
+	"date_interval":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:date_interval ) }">,
+	"display":				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:display ) }">,
+	"output_chart":			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:output_chart ) }">,
+	"output_tabular":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:output_tabular ) }">,
+	"output_custom":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:output_custom ) }">,
+	"output_custom_name":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.capabilities:output_custom_name ) }">",
+	"provision_settings":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.capabilities:provision_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Load" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Report_ID', l.report_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( l.report_id, l.report ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-JSN-00073', 'Report not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-JSN-00074', 'Unable to load report: Report_ID must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id": <MvEVAL EXPR = "{ int( l.report:id ) }">,
+	"module":
+	{
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Module( l.report:module ) }">
+	},
+	"capabilities":
+	{
+		<MvEVAL EXPR = "{ [ g.Module_Root $ l.report:module:module ].ReportModule_Capabilities( l.report:module, l.capabilities ) }">
+		<MvEVAL EXPR = "{ JSON_ReportModule_Capabilities( l.capabilities ) }">
+	},
+	"descrip":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:descrip ) }">",
+
+	<MvIF EXPR = "{ l.report:date_start EQ 'ALL' AND l.report:date_end EQ 'ALL' }">
+		"date_range":	"all",
+	<MvELSEIF EXPR = "{ l.report:date_start LE 0 AND l.report:date_end EQ 'NOW' }">
+		"date_range":	"last",
+
+		<MvIF EXPR = "{ l.report:date_start EQ -2 }">		"date_days": 3,
+		<MvELSEIF EXPR = "{ l.report:date_start EQ -6 }">	"date_days": 7,
+		<MvELSEIF EXPR = "{ l.report:date_start EQ -13 }">	"date_days": 14,
+		<MvELSEIF EXPR = "{ l.report:date_start EQ -29 }">	"date_days": 30,
+		<MvELSEIF EXPR = "{ l.report:date_start EQ -89 }">	"date_days": 90,
+		<MvELSEIF EXPR = "{ l.report:date_start EQ -179 }">	"date_days": 180,
+		<MvELSEIF EXPR = "{ l.report:date_start EQ -364 }">	"date_days": 365,
+		<MvELSE>											"date_days": 1,
+		</MvIF>
+	<MvELSE>
+		"date_range":	"specific",
+		"date_start":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_DateTime( int( l.report:date_start ) ) }">,
+		"date_end":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_DateTime( int( l.report:date_end ) ) }">,
+	</MvIF>
+
+	"date_group":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:date_group ) }">",
+	"display":		<MvEVAL EXPR = "{ int( l.report:display ) }">,
+	"rinterval":	<MvEVAL EXPR = "{ int( l.report:rinterval ) }">,
+	"lastrun":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:lastrun ) }">"
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ReportList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'r.id',		'id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'r.descrip',	'descrip' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'r.display',	'display' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'm.name',		'module_name' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'r.*,
+																				 m.id		AS module_id,
+																				 m.code		AS module_code,
+																				 m.name		AS module_name,
+																				 m.provider	AS module_provider,
+																				 m.api_ver	AS module_api_ver,
+																				 m.version	AS module_version,
+																				 m.module	AS module_module,
+																				 m.refcount	AS module_refcount,
+																				 m.active	AS module_active,
+																				 m.priority	AS module_priority' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Reports', 'r' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, 'Modules', 'm' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'm.id = r.module_id AND m.active = 1', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'id,descrip,display,module_name', 'id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Reports', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00065', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Reports.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.report_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_DB ].Report_Read( l.report ) }">
+
+			<MvASSIGN NAME = "l.report:module:id"		VALUE = "{ Reports.d.module_id }">
+			<MvASSIGN NAME = "l.report:module:code"		VALUE = "{ Reports.d.module_code }">
+			<MvASSIGN NAME = "l.report:module:name"		VALUE = "{ Reports.d.module_name }">
+			<MvASSIGN NAME = "l.report:module:provider"	VALUE = "{ Reports.d.module_provider }">
+			<MvASSIGN NAME = "l.report:module:api_ver"	VALUE = "{ Reports.d.module_api_ver }">
+			<MvASSIGN NAME = "l.report:module:version"	VALUE = "{ Reports.d.module_version }">
+			<MvASSIGN NAME = "l.report:module:module"	VALUE = "{ Reports.d.module_module }">
+			<MvASSIGN NAME = "l.report:module:refcount"	VALUE = "{ Reports.d.module_refcount }">
+			<MvASSIGN NAME = "l.report:module:active"	VALUE = "{ Reports.d.module_active }">
+			<MvASSIGN NAME = "l.report:module:priority"	VALUE = "{ Reports.d.module_priority }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.report_count ) }">
+				<MvEVAL EXPR = "{ JSON_Report( l.report ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Reports" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ReportModuleFieldList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Module_ID"		VALUE = "{ int( g.Module_ID ) }">
+	<MvASSIGN NAME = "g.Report_ID"		VALUE = "{ int( g.Report_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_ID( g.Module_ID, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00025', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00026', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00059', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Report_ID EQ 0 }">
+		<MvASSIGN NAME = "l.report"		VALUE = "">
+		<MvASSIGN NAME = "l.report:id"	VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00027', 'Report not found' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Capabilities( l.module, l.capabilities ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"capabilities":
+		{
+			<MvEVAL EXPR = "{ JSON_ReportModule_Capabilities( l.capabilities ) }">
+		},
+		"fields":
+		[
+		<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.fields" VALUE = "{ ReportModule_Fields( l.module, l.report ) }">
+
+		<MvASSIGN NAME = "l.field_pos"		VALUE = 1>
+		<MvASSIGN NAME = "l.field_code"		VALUE = "{ trim( gettoken( l.fields, ',', l.field_pos ) ) }">
+
+		<MvWHILE EXPR = "{ len( l.field_code ) }">
+			<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.prompt" VALUE = "{ ReportModule_Prompt( l.module, l.field_code ) }">
+			<MvCAPTURE VARIABLE = "l.field"><MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.ok" VALUE = "{ ReportModule_Field( l.module, l.field_code ) }"></MvCAPTURE>
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.field_count ) }">
+			"code":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.field_code ) }">",
+			"prompt":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.prompt ) }">",
+			"field":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.field ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvASSIGN NAME = "l.field_pos"	VALUE = "{ l.field_pos + 1 }">
+			<MvASSIGN NAME = "l.field_code"	VALUE = "{ trim( gettoken( l.fields, ',', l.field_pos ) ) }">
+		</MvWHILE>
+		]
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Validate_Module" PARAMETERS = "report var, module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].FieldError_Clear() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Validate( l.module, l.report ) }">
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_FieldErrorWithList_Start( g.Error_Field, g.Error_Field_Message ) }">
+
+		<MvASSIGN NAME = "l.invalid_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.fields"			VALUE = "{ [ g.Module_Root $ l.module:module ].ReportModule_Fields( l.module, l.fields ) }">
+
+		<MvFOREACH ITERATOR = "l.field_id" ARRAY = "l.field_ids" COUNT = "{ miva_splitstring( l.fields, ',', l.field_ids, 'trim' ) }">
+			<MvIF EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Invalid( l.module, l.field_id ) }">
+				<MvIF EXPR = "{ l.invalid_count++ }">
+					,
+				</MvIF>
+
+				"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.field_id ) }">"
+			</MvIF>
+		</MvFOREACH>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldErrorWithList_End() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.report"				VALUE = "">
+	<MvASSIGN NAME = "l.report:rinterval"	VALUE = 60>
+	<MvASSIGN NAME = "l.report:display"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer(	'R',		'Module_ID',	l.module_id )														OR
+					NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Date_Group',	l.report:date_group,	'H,D,W,M,Y', 'H,D,W,M,Y' )					OR
+					NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Date_Range',	l.date_range,			'all,last,specific', 'all,last,specific' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:254',	'Description',	l.report:descrip )													OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Display',		l.report:display )													OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O',		'Interval',		l.report:rinterval ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.date_range EQ 'all' }">
+		<MvASSIGN NAME = "l.report:date_start"	VALUE = "ALL">
+		<MvASSIGN NAME = "l.report:date_end"	VALUE = "ALL">
+	<MvELSEIF EXPR = "{ l.date_range EQ 'last' }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List( 'R', 'Date_Days', l.report:date_start, '1,3,7,14,30,90,180,365', '0,-2,-6,-13,-29,-89,-179,-364' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.report:date_end"	VALUE = "NOW">
+	<MvELSEIF EXPR = "{ l.date_range EQ 'specific' }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_DateTime( 'R', 'Date_Start',	l.report:date_start ) OR
+						NOT [ g.Module_JSON ].JSON_Input_DateTime( 'R', 'Date_End',		l.report:date_end ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00032', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00075', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00076', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:module_id"	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.report:last"		VALUE = 0>
+	<MvASSIGN NAME = "l.report:data"		VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].StoreModule_Load( l.module:id, 'report', l.storemodule ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Increment_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Insert_Feature_ReferenceCount( l.module, 'report', 1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Report_Validate_Module( l.report, l.module ) }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:id"			VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Reports' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Update( l.module, l.report ) }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Insert_LowLevel( l.report ) }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:display }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:module" VALUE = "{ l.module }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_Report( l.report ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Update" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Report_Load( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_report" VALUE = "{ l.report }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00034', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00035', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00060', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(		'O',		'Date_Group',	l.report:date_group,	'H,D,W,M,Y', 'H,D,W,M,Y' )					OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:254',	'Description',	l.report:descrip )													OR
+					NOT [ g.Module_JSON ].JSON_Input_List(		'O',		'Date_Range',	l.date_range,			'all,last,specific', 'all,last,specific' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O',		'Interval',		l.report:rinterval )												OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Display',		l.report:display ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_report:date_start EQ 'ALL' AND l.original_report:date_end EQ 'ALL' }">	<MvASSIGN NAME = "l.original_report_date_range" VALUE = "all">
+	<MvELSEIF EXPR = "{ l.original_report:date_start LE 0 AND l.original_report:date_end EQ 'NOW' }">	<MvASSIGN NAME = "l.original_report_date_range" VALUE = "last">
+	<MvELSE>																							<MvASSIGN NAME = "l.original_report_date_range" VALUE = "specific">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_report_date_range NE l.date_range }">	<MvASSIGN NAME = "l.date_range_options_required" VALUE = "R">
+	<MvELSE>															<MvASSIGN NAME = "l.date_range_options_required" VALUE = "O">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.date_range EQ 'all' }">
+		<MvASSIGN NAME = "l.report:date_start"	VALUE = "ALL">
+		<MvASSIGN NAME = "l.report:date_end"	VALUE = "ALL">
+	<MvELSEIF EXPR = "{ l.date_range EQ 'last' }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List( l.date_range_options_required, 'Date_Days', l.report:date_start, '1,3,7,14,30,90,180,365', '0,-2,-6,-13,-29,-89,-179,-364' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.report:date_end"	VALUE = "NOW">
+	<MvELSEIF EXPR = "{ l.date_range EQ 'specific' }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_DateTime( l.date_range_options_required, 'Date_Start',	l.report:date_start ) OR
+						NOT [ g.Module_JSON ].JSON_Input_DateTime( l.date_range_options_required, 'Date_End',	l.report:date_end ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:lastrun"	VALUE = 0>
+	<MvASSIGN NAME = "l.report:data"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Report_Validate_Module( l.report, l.module ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Update( l.module, l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Update( l.report ) OR
+					NOT [ g.Module_Feature_RPT_DB ].Report_Update_Config( l.report ) OR
+					NOT [ g.Module_Feature_RPT_DB ].Report_Update_LastRun_LowLevel( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:display }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:module" VALUE = "{ l.module }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_Report( l.report ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Update_DisplayOnDashboard" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Report_ID"			VALUE = "{ int( g.Report_ID ) }">
+	<MvASSIGN NAME = "g.Report_Display"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Report_Display ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00066', 'Report not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:display"		VALUE = "{ g.Report_Display }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Update( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:display }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Report_ID"		VALUE = "{ int( g.Report_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.report:module_id, 'report' ) OR
+					NOT [ g.Module_Feature_RPT_DB ].Report_Delete( l.report:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ReportData_Graph_Line" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Report_ID"				VALUE = "{ int( g.Report_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00036', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00037', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.set_count"				VALUE = "{ [ g.Module_JSON ].JSON_Array_Integer( g.Set_IDs, l.sets ) }">
+	<MvASSIGN NAME = "l.color_count"			VALUE = "{ [ g.Module_JSON ].JSON_Array_String( g.Colors, l.colors ) }">
+	<MvASSIGN NAME = "g.Width"					VALUE = "{ int( g.Width ) }">
+	<MvASSIGN NAME = "g.Height"					VALUE = "{ int( g.Height ) }">
+	<MvASSIGN NAME = "l.bg_red"					VALUE = "{ int( gettoken( g.Background, ',', 1 ) ) }">
+	<MvASSIGN NAME = "l.bg_green"				VALUE = "{ int( gettoken( g.Background, ',', 2 ) ) }">
+	<MvASSIGN NAME = "l.bg_blue"				VALUE = "{ int( gettoken( g.Background, ',', 3 ) ) }">
+	<MvASSIGN NAME = "g.Smoothing"				VALUE = "{ int( g.Smoothing ) }">
+
+	<MvIF EXPR = "{ ( g.Width GT 1990 ) OR ( g.Height GT 1990 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00038', 'Image exceeds maximum dimensions' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.set_count EQ 0 }">
+		<MvASSIGN NAME = "l.graph"				VALUE = "{ gdImageCreateTrueColor( g.Width, g.Height ) }">
+		<MvASSIGN NAME = "l.bg_color"			VALUE = "{ gdImageColorResolve( l.graph, l.bg_red, l.bg_green, l.bg_blue ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImageFilledRectangle( l.graph, 0, 0, g.Width, g.Height, l.bg_color ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ miva_output_header( 'Content-Type', 'image/png' ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImagePNGOutput( l.graph ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImageDestroy( l.graph ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| gd prior to 2.0.34 has a bug that causes it to draw antialiased pixels outside the image boundary,
+	| leading to a segmentation fault.  To work around this, create a 5 pixel buffer zone around the 
+	| graph
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.graph_oversized"		VALUE = "{ gdImageCreateTrueColor( g.Width + 10, g.Height + 10 ) }">
+	<MvASSIGN NAME = "l.bg_color"				VALUE = "{ gdImageColorResolve( l.graph_oversized, l.bg_red, l.bg_green, l.bg_blue ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageFilledRectangle( l.graph_oversized, 5, 5, g.Width + 5, g.Height + 5, l.bg_color ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageSetClip( l.graph_oversized, 5, 5, g.Width + 5, g.Height + 5 ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ [ g.Module_Feature_RPT_UT ].Report_Calculate_Intervals_LastRun( l.report, l.module, l.intervals, l.interval_count ) }">
+
+	<MvASSIGN NAME = "l.set_pos"				VALUE = 1>
+	<MvWHILE EXPR = "{ l.set_pos LE l.set_count }">
+		<MvASSIGN NAME = "l.red"				VALUE = "{ int( gettoken( l.colors[ l.set_pos ], ',', 1 ) ) }">
+		<MvASSIGN NAME = "l.green"				VALUE = "{ int( gettoken( l.colors[ l.set_pos ], ',', 2 ) ) }">
+		<MvASSIGN NAME = "l.blue"				VALUE = "{ int( gettoken( l.colors[ l.set_pos ], ',', 3 ) ) }">
+		<MvASSIGN NAME = "l.color"				VALUE = "{ gdImageColorResolve( l.graph_oversized, l.red, l.green, l.blue ) }">
+
+		<MvASSIGN NAME = "l.set_data"			VALUE = "">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportDataList_Load_Set( l.report:id, l.sets[ l.set_pos ], l.set_data ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Module_Feature_RPT_UT ].ReportDataSet_Expand( l.intervals, l.interval_count, l.set_data ) }">
+
+		<MvIF EXPR = "{ g.Smoothing }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].ReportDataSet_Smooth( l.set_data, g.Smoothing ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].ReportDataSet_MinMax( l.set_data, l.minmax[ l.set_pos ]:min, l.minmax[ l.set_pos ]:max ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_UT ].ReportDataSet_Graph_Line( l.graph_oversized, l.set_data, l.color ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.set_pos"			VALUE = "{ l.set_pos + 1 }">
+	</MvWHILE>
+
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageSetClip( l.graph_oversized, 0, 0, g.Width + 10, g.Height + 10 ) }">
+	<MvASSIGN NAME = "l.graph"					VALUE = "{ gdImageCreateTrueColor( g.Width, g.Height ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageCopy( l.graph, l.graph_oversized, 0, 0, 5, 5, g.Width, g.Height ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageDestroy( l.graph_oversized ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ miva_output_header( 'Content-Type', 'image/png' ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImagePNGOutput( l.graph ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageDestroy( l.graph ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ReportData_Graph_Pie" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Report_ID"				VALUE = "{ int( g.Report_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00039', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00040', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pct_count"				VALUE = "{ [ g.Module_JSON ].JSON_Array_String( g.Percentages, l.percents ) }">
+	<MvASSIGN NAME = "l.color_count"			VALUE = "{ [ g.Module_JSON ].JSON_Array_String( g.Colors, l.colors ) }">
+	<MvASSIGN NAME = "g.Diameter"				VALUE = "{ int( g.Diameter ) }">
+	<MvASSIGN NAME = "l.bg_red"					VALUE = "{ int( gettoken( g.Background, ',', 1 ) ) }">
+	<MvASSIGN NAME = "l.bg_green"				VALUE = "{ int( gettoken( g.Background, ',', 2 ) ) }">
+	<MvASSIGN NAME = "l.bg_blue"				VALUE = "{ int( gettoken( g.Background, ',', 3 ) ) }">
+
+	<MvIF EXPR = "{ g.Diameter GT 495 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00041', 'Image exceeds maximum dimensions' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.graph"					VALUE = "{ gdImageCreateTrueColor( g.Diameter, g.Diameter ) }">
+	<MvASSIGN NAME = "l.bg_color"				VALUE = "{ gdImageColorResolve( l.graph, l.bg_red, l.bg_green, l.bg_blue ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageColorTransparent( l.graph, l.bg_color ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageFilledRectangle( l.graph, 0, 0, g.Diameter, g.Diameter, l.bg_color ) }">
+
+	<MvIF EXPR = "{ l.pct_count EQ 0 }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ miva_output_header( 'Content-Type', 'image/png' ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImagePNGOutput( l.graph ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImageDestroy( l.graph ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Allocate colors
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.pct_pos"								VALUE = 1>
+	<MvWHILE EXPR = "{ l.pct_pos LE l.pct_count }">
+		<MvASSIGN NAME = "l.red"								VALUE = "{ int( gettoken( l.colors[ l.pct_pos ], ',', 1 ) ) }">
+		<MvASSIGN NAME = "l.green"								VALUE = "{ int( gettoken( l.colors[ l.pct_pos ], ',', 2 ) ) }">
+		<MvASSIGN NAME = "l.blue"								VALUE = "{ int( gettoken( l.colors[ l.pct_pos ], ',', 3 ) ) }">
+		<MvASSIGN NAME = "l.pct_colors" INDEX = "{ l.pct_pos }"	VALUE = "{ gdImageColorResolve( l.graph, l.red, l.green, l.blue ) }">
+
+		<MvASSIGN NAME = "l.pct_pos"							VALUE = "{ l.pct_pos + 1 }">
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| Draw the graph
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_UT ].ReportDataSet_Graph_Pie( l.graph, l.percents, l.pct_colors ) }">
+		<MvASSIGN NAME = "l.null"		VALUE = "{ gdImageDestroy( l.graph ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_output_header( 'Content-Type', 'image/png' ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ gdImageSetClip( l.graph, 0, 0, g.Diameter, g.Diameter ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ gdImagePNGOutput( l.graph ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ gdImageDestroy( l.graph ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ReportData_Graph_Donut" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer(		'R', 'Report_ID',	l.report_id )					OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(		'R', 'Diameter',	l.diameter )					OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'R', 'Background',	l.background )					OR
+					NOT [ g.Module_JSON ].JSON_Input_Text_Array(	'R', 'Percentages',	l.percents, l.percent_count )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text_Array(	'R', 'Colors',		l.colors, l.color_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00070', 'Invalid request parameters' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( l.report_id, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00067', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00068', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.bg_red"					VALUE = "{ int( gettoken( l.background, ',', 1 ) ) }">
+	<MvASSIGN NAME = "l.bg_green"				VALUE = "{ int( gettoken( l.background, ',', 2 ) ) }">
+	<MvASSIGN NAME = "l.bg_blue"				VALUE = "{ int( gettoken( l.background, ',', 3 ) ) }">
+
+	<MvIF EXPR = "{ l.diameter GT 495 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00069', 'Image exceeds maximum dimensions' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.graph"					VALUE = "{ gdImageCreateTrueColor( l.diameter, l.diameter ) }">
+	<MvASSIGN NAME = "l.bg_color"				VALUE = "{ gdImageColorResolve( l.graph, l.bg_red, l.bg_green, l.bg_blue ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageColorTransparent( l.graph, l.bg_color ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageFilledRectangle( l.graph, 0, 0, l.diameter, l.diameter, l.bg_color ) }">
+
+	<MvIF EXPR = "{ l.percent_count EQ 0 }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ miva_output_header( 'Content-Type', 'image/png' ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImagePNGOutput( l.graph ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImageDestroy( l.graph ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Allocate colors
+	|
+	</MvCOMMENT>
+
+	<MvFOR INDEX = "l.pct_pos" COUNT = "{ l.percent_count }">
+		<MvASSIGN NAME = "l.red"				VALUE = "{ int( gettoken( l.colors[ l.pct_pos ], ',', 1 ) ) }">
+		<MvASSIGN NAME = "l.green"				VALUE = "{ int( gettoken( l.colors[ l.pct_pos ], ',', 2 ) ) }">
+		<MvASSIGN NAME = "l.blue"				VALUE = "{ int( gettoken( l.colors[ l.pct_pos ], ',', 3 ) ) }">
+
+		<MvASSIGN NAME = "l.pct_color_count"	VALUE = "{ miva_array_insert( l.pct_colors, gdImageColorResolve( l.graph, l.red, l.green, l.blue ), -1 ) }">
+	</MvFOR>
+
+	<MvCOMMENT>
+	|
+	| Draw the graph
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_UT ].ReportDataSet_Graph_Donut( l.graph, l.percents, l.pct_colors ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ gdImageDestroy( l.graph ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.null"					VALUE = "{ miva_output_header( 'Content-Type', 'image/png' ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageSetClip( l.graph, 0, 0, l.diameter, l.diameter ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImagePNGOutput( l.graph ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageDestroy( l.graph ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CSV_Format" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '!date:' IN l.value ) EQ 1 }">
+		<MvASSIGN NAME = "l.time_t"	VALUE = "{ substring( l.value, 7, len( l.value ) - 6 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( l.time_t, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( l.time_t, s.miva_language ) }">
+	<MvELSEIF EXPR = "{ isdigit( l.value ) }">						<MvFUNCTIONRETURN VALUE = "{ l.value }">
+	<MvELSEIF EXPR = "{ isdigit( glosub( l.value, '.', '' ) ) }">	<MvFUNCTIONRETURN VALUE = "{ l.value }">
+	<MvELSEIF EXPR = "{ '"' IN l.value }">							<MvFUNCTIONRETURN VALUE = "{ '"' $ glosub( l.value, '"', '""' ) $ '"' }">
+	<MvELSEIF EXPR = "{ ',' IN l.value }">							<MvFUNCTIONRETURN VALUE = "{ '"' $ l.value $ '"' }">
+	<MvELSEIF EXPR = "{ asciichar( 13 ) IN l.value }">				<MvFUNCTIONRETURN VALUE = "{ '"' $ l.value $ '"' }">
+	<MvELSEIF EXPR = "{ asciichar( 10 ) IN l.value }">				<MvFUNCTIONRETURN VALUE = "{ '"' $ l.value $ '"' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Export_CSV" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00042', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00043', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00050', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00061', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Capabilities( l.module, l.capabilities ) }">
+
+	<MvIF EXPR = "{ NOT l.capabilities:output_tabular }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00051', 'Module \'' $ l.module:name $ '\' does not support tabular output' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_UT ].Report_Run_Tabular( l.report, l.module, l.data ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Type',			'application/csv' ) }">
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Disposition',	'attachment; filename=report.csv' ) }">
+
+	<MvFOREACH ITERATOR = "l.row" ARRAY = "l.data" INDEX = "l.row_pos" NEXT = "{ l.row_pos + 1 }">
+		<MvEVAL EXPR = "{ CSV_Format( l.row[ 1 ] ) }">
+
+		<MvFOREACH ITERATOR = "l.col" ARRAY = "l.row" INDEX = "l.col_pos" FIRST = "{ 2 }" NEXT = "{ l.col_pos + 1 }">
+			<MvEVAL EXPR = ",">
+			<MvEVAL EXPR = "{ CSV_Format( l.col ) }">
+		</MvFOREACH>
+
+		<MvEVAL EXPR = "{ asciichar( 13 ) }">
+		<MvEVAL EXPR = "{ asciichar( 10 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "XLS_Cell" PARAMETERS = "index, value" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ ( '!date:' IN l.value ) EQ 1 }">
+		<MvASSIGN NAME = "l.time_t"	VALUE = "{ substring( l.value, 7, len( l.value ) - 6 ) }">
+		
+		<Cell ss:StyleID="MMDate" ss:Index="{ l.index }">
+			<Data ss:Type="DateTime"><MvEVAL EXPR = "{ time_t_year( l.time_t, g.Merchant_Local_TimeZone ) $ '-' $
+													   padl( time_t_month( l.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ '-' $
+													   padl( time_t_dayofmonth( l.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ 'T' $
+													   padl( time_t_hour( l.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ ':' $
+													   padl( time_t_min( l.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ ':' $
+													   padl( time_t_sec( l.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ '.000' }"></Data>
+		</Cell>
+	<MvELSE>
+		<Cell ss:Index="{ l.index }">
+		<MvIF EXPR = "{ isdigit( l.value ) }">							<Data ss:Type="Number"><MvEVAL EXPR = "{ l.value }"></Data>
+		<MvELSEIF EXPR = "{ isdigit( glosub( l.value, '.', '' ) ) }">	<Data ss:Type="Number"><MvEVAL EXPR = "{ l.value }"></Data>
+		<MvELSE>														<Data ss:Type="String"><MvEVAL EXPR = "{ encodeentities( l.value ) }"></Data>
+		</MvIF>
+		</Cell>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Export_XLS" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00044', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00045', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00052', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00062', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Capabilities( l.module, l.capabilities ) }">
+
+	<MvIF EXPR = "{ NOT l.capabilities:output_tabular }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00053', 'Module \'' $ l.module:name $ '\' does not support tabular output' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_UT ].Report_Run_Tabular( l.report, l.module, l.data ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ 'Macintosh' IN s.http_user_agent }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Type',			'application/vnd.ms-excel' ) }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Disposition',	'attachment; filename=report.xls' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Type',			'application/vnd.ms-excel' ) }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Disposition',	'attachment; filename=report.xml' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Microsoft Office XML format information from:
+	|	http://en.wikipedia.org/wiki/Microsoft_Office_XML_formats
+	|	http://msdn.microsoft.com/en-us/library/aa140066(v=office.10).aspx
+	|
+	</MvCOMMENT>
+
+	<?xml version="1.0"?>
+	<?mso-application progid="Excel.Sheet"?>
+	<Workbook xmlns="urn:schemas-microsoft-com:office:spreadsheet"
+			  xmlns:o="urn:schemas-microsoft-com:office:office"
+			  xmlns:x="urn:schemas-microsoft-com:office:excel"
+			  xmlns:ss="urn:schemas-microsoft-com:office:spreadsheet"
+			  xmlns:html="http://www.w3.org/TR/REC-html40">
+		<Styles>
+			<Style ss:ID="MMDate">
+				<NumberFormat ss:Format="General Date" />
+			</Style>
+		</Styles>
+		<Worksheet ss:Name="Report">
+			<Table>
+				<MvFOREACH ITERATOR = "l.row" ARRAY = "l.data" INDEX = "l.row_pos">
+					<Row ss:Index="{ l.row_pos }">
+						<MvFOREACH ITERATOR = "l.cell" ARRAY = "l.row" INDEX = "l.col_pos">
+							<MvIF EXPR = "{ NOT ISNULL l.cell }">
+								<MvEVAL EXPR = "{ XLS_Cell( l.col_pos, l.cell ) }">
+							</MvIF>
+						</MvFOREACH>
+					</Row>
+				</MvFOREACH>
+			</Table>
+		</Worksheet>
+	</Workbook>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Export_Custom" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00046', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00047', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00054', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00063', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Capabilities( l.module, l.capabilities ) }">
+
+	<MvIF EXPR = "{ NOT l.capabilities:output_custom }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00055', 'Module \'' $ l.module:name $ '\' does not support this output format' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_UT ].Report_Run( l.report, l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Export( l.module, l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_SVG_Line_Chart" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00048', 'Report not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00049', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00056', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00064', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Capabilities( l.module, l.capabilities ) }">
+
+	<MvIF EXPR = "{ NOT l.capabilities:output_chart }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00057', 'Module \'' $ l.module:name $ '\' does not support charting' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ tolower( [ g.Module_Root $ l.module:module ].ReportModule_Chart_Type( l.module, l.report ) ) NE 'svg_line' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_HTML_Error( 'MER-RPT-JSN-00058', 'Incorrect chart format for report \'' $ l.report:descrip $ '\'' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_SVG_Line_Chart_Definition( l.module, l.report, l.chart ) }">
+
+	<MvIF EXPR = "{ ISNULL g.Store:charset }">	<MvASSIGN NAME = "l.charset" VALUE = "iso-8859-1">
+	<MvELSE>									<MvASSIGN NAME = "l.charset" VALUE = "{ g.Store:charset }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Content-Type', 'image/svg+xml' ) }">
+
+	<?xml version="1.0" encoding="<MvEVAL EXPR = "{ l.charset }">" standalone="no" ?>
+	<!DOCTYPE svg PUBLIC "-//W3C//DTD SVG 1.1//EN" "http://www.w3.org/Graphics/SVG/1.1/DTD/svg11.dtd">
+	<?xml-stylesheet href="<MvEVAL EXPR = "{ encodeentities( g.clientside_url ) $ 'Filename=features/rpt/chart.css' }">" type="text/css" ?>
+	<svg onload="Chart_Initialize( chart )" width="100%" height="100%" version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+		<script xlink:href="{ encodeentities( g.clientside_url ) $ 'Filename=features/rpt/chart.js' }" />
+		<script>
+		<MvEVAL EXPR = "<![CDATA[">
+		var chart =
+		{
+			"type":				"line",
+			"report":
+			{
+				"descrip":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:descrip ) }">",
+				"date_start":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:date_start ) }">",
+				"date_end":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:date_end ) }">",
+				"date_group":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.report:date_group ) }">"
+			},
+
+			<MvASSIGN NAME = "l.null"							VALUE = "{ [ g.Module_Feature_RPT_UT ].Report_Calculate_Intervals_LastRun( l.report, l.module, l.intervals, l.interval_count ) }">
+			<MvASSIGN NAME = "l.output_set_count"				VALUE = 0>
+
+			"datasets":
+			[
+				<MvFOREACH INDEX = "l.set_pos" ITERATOR = "l.set" ARRAY = "l.chart:datasets">
+					<MvASSIGN NAME = "l.points"					VALUE = "">
+					<MvASSIGN NAME = "l.null"					VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportDataList_Load_Set( l.report:id, l.set:set_id, l.points ) }">
+					<MvASSIGN NAME = "l.point_count"			VALUE = "{ [ g.Module_Feature_RPT_UT ].ReportDataSet_Expand( l.intervals, l.interval_count, l.points ) }">
+
+					<MvASSIGN NAME = "l.output_point_count"		VALUE = 0>
+					<MvASSIGN NAME = "l.max_data"				VALUE = 0>
+
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_set_count ) }">
+					"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.set:name ) }">",
+					"color":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.set:color ) }">",
+					"visible":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.set:visible ) }">,
+					"points":
+					[
+						<MvFOREACH ITERATOR = "l.point" ARRAY = "l.points" COUNT = "{ l.point_count }">
+							<MvIF EXPR = "{ l.point:data GT l.max_data }">
+								<MvASSIGN NAME = "l.max_data"	VALUE = "{ l.point:data }">
+							</MvIF>
+
+							<MvASSIGN NAME = "l.label"			VALUE = "{ [ g.Module_Root $ l.module:module ].ReportModule_Format_Vertical_Label( l.module, l.report, l.set:set_id, l.point:data ) }">
+
+							<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_point_count ) }">
+							"data":		<MvEVAL EXPR = "{ l.point:data ROUND 2 }">,
+							"label":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.label ) }">"
+							<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+						</MvFOREACH>
+					],
+					"max_data":		<MvEVAL EXPR = "{ l.max_data }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvFOREACH>
+			],
+
+			<MvASSIGN NAME = "l.output_label_count"				VALUE = 0>
+
+			"labels":
+			[
+				<MvCOMMENT>
+				|
+				| If the module supports intervals, use the calculated intervals.  Otherwise, use the records from the last set,
+				| in which case all sets must have the same number of points.
+				|
+				</MvCOMMENT>
+
+				<MvIF EXPR = "{ l.interval_count }">
+					<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
+						<MvASSIGN NAME = "l.dt_start"	VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( l.interval:time_t_start, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( l.interval:time_t_start, s.miva_language ) }">
+						<MvASSIGN NAME = "l.dt_end"		VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( l.interval:time_t_end - 1, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( l.interval:time_t_end - 1, s.miva_language ) }">
+
+						<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_label_count ) }">
+						"dt_start":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.dt_start ) }">",
+						"dt_end":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.dt_end ) }">"
+						<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+					</MvFOREACH>
+				<MvELSE>
+					<MvFOREACH ITERATOR = "l.point" ARRAY = "l.points" COUNT = "{ l.point_count }">
+						<MvASSIGN NAME = "l.dt_start"	VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( l.point:dt_start, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( l.point:dt_start, s.miva_language ) }">
+						<MvASSIGN NAME = "l.dt_end"		VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( l.point:dt_end - 1, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( l.point:dt_end - 1, s.miva_language ) }">
+
+						<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_label_count ) }">
+						"dt_start":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.dt_start ) }">",
+						"dt_end":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.dt_end ) }">"
+						<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+					</MvFOREACH>
+				</MvIF>
+			]
+		};
+		<MvEVAL EXPR = "]]>">
+		</script>
+	</svg>
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

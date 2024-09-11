@@ -1,0 +1,2020 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CUS-RNT-
+| Next Error Code: 21    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Customer_Validate" PARAMETERS = "modules var, module_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Basket:cust_id }">
+		<MvFUNCTIONRETURN VALUE = "{ Customer_Validate_Update( l.modules, l.module_count ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Customer_Validate_Insert( l.modules, l.module_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_Validate_ShippingBilling" PARAMETERS = "ship_address var, bill_address var, ui_exception, validated_ship_addresses var, validated_bill_addresses var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( g.Store:addrval_id, l.address_module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT l.address_module:active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.address_module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.address_module:feature_hash:addrval }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_fields ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.validated_ship_address_count"		VALUE = "{ [ g.Module_Root $ l.address_module:module ].AddressValidationModule_Validate_Address( l.address_module, l.ship_address, l.validated_ship_addresses ) }">
+
+	<MvIF EXPR = "{ NOT l.validated_ship_address_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.validated_ship_addresses"		VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcasecmp( l.ship_address:addr1,	l.bill_address:addr1 )	EQ 0 AND
+					strcasecmp( l.ship_address:addr2,	l.bill_address:addr2 )	EQ 0 AND
+					strcasecmp( l.ship_address:city,	l.bill_address:city )	EQ 0 AND
+					strcasecmp( l.ship_address:state,	l.bill_address:state )	EQ 0 AND
+					strcasecmp( l.ship_address:zip,		l.bill_address:zip )	EQ 0 AND
+					strcasecmp( l.ship_address:cntry,	l.bill_address:cntry )	EQ 0 }">
+		<MvASSIGN NAME = "l.validated_bill_addresses"		VALUE = "{ l.validated_ship_addresses }">
+		<MvASSIGN NAME = "l.validated_bill_address_count"	VALUE = "{ l.validated_ship_address_count }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.validated_bill_address_count"	VALUE = "{ [ g.Module_Root $ l.address_module:module ].AddressValidationModule_Validate_Address( l.address_module, l.bill_address, l.validated_bill_addresses ) }">
+
+		<MvIF EXPR = "{ NOT l.validated_bill_address_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.validated_bill_addresses"	VALUE = "">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.validated_ship_address_count EQ 1 AND l.validated_bill_address_count EQ 1 }">
+		<MvIF EXPR = "{ ( l.std_fields:mode_comp	EQ 'H' OR ( strcasecmp( l.ship_address:comp,	l.validated_ship_addresses[ 1 ]:comp )		EQ 0 AND strcasecmp( l.bill_address:comp,	l.validated_bill_addresses[ 1 ]:comp )		EQ 0 ) ) AND
+						( l.std_fields:mode_addr	EQ 'H' OR ( strcasecmp( l.ship_address:addr1,	l.validated_ship_addresses[ 1 ]:addr1 )		EQ 0 AND strcasecmp( l.bill_address:addr1,	l.validated_bill_addresses[ 1 ]:addr1 )		EQ 0 ) ) AND
+						( l.std_fields:mode_addr2	EQ 'H' OR ( strcasecmp( l.ship_address:addr2,	l.validated_ship_addresses[ 1 ]:addr2 )		EQ 0 AND strcasecmp( l.bill_address:addr2,	l.validated_bill_addresses[ 1 ]:addr2 )		EQ 0 ) ) AND
+						( l.std_fields:mode_city	EQ 'H' OR ( strcasecmp( l.ship_address:city,	l.validated_ship_addresses[ 1 ]:city )		EQ 0 AND strcasecmp( l.bill_address:city,	l.validated_bill_addresses[ 1 ]:city )		EQ 0 ) ) AND
+						( l.std_fields:mode_state	EQ 'H' OR ( strcasecmp( l.ship_address:state,	l.validated_ship_addresses[ 1 ]:state )		EQ 0 AND strcasecmp( l.bill_address:state,	l.validated_bill_addresses[ 1 ]:state )		EQ 0 ) ) AND
+						( l.std_fields:mode_zip		EQ 'H' OR ( strcasecmp( l.ship_address:zip,		l.validated_ship_addresses[ 1 ]:zip )		EQ 0 AND strcasecmp( l.bill_address:zip,	l.validated_bill_addresses[ 1 ]:zip )		EQ 0 ) ) AND
+						( l.std_fields:mode_cntry	EQ 'H' OR ( strcasecmp( l.ship_address:cntry,	l.validated_ship_addresses[ 1 ]:country )	EQ 0 AND strcasecmp( l.bill_address:cntry,	l.validated_bill_addresses[ 1 ]:country )	EQ 0 ) ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( l.ui_exception ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_Validate_Address" PARAMETERS = "address var, ui_exception, validated_addresses var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( g.Store:addrval_id, l.address_module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT l.address_module:active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.address_module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.address_module:feature_hash:addrval }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_fields ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.validated_address_count"		VALUE = "{ [ g.Module_Root $ l.address_module:module ].AddressValidationModule_Validate_Address( l.address_module, l.address, l.validated_addresses ) }">
+
+	<MvIF EXPR = "{ NOT l.validated_address_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.validated_addresses"		VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.validated_address_count EQ 1 }">
+		<MvIF EXPR = "{ ( l.std_fields:mode_comp	EQ 'H' OR strcasecmp( l.address:comp,	l.validated_addresses[ 1 ]:comp )		EQ 0 ) AND
+						( l.std_fields:mode_addr	EQ 'H' OR strcasecmp( l.address:addr1,	l.validated_addresses[ 1 ]:addr1 )		EQ 0 ) AND
+						( l.std_fields:mode_addr2	EQ 'H' OR strcasecmp( l.address:addr2,	l.validated_addresses[ 1 ]:addr2 )		EQ 0 ) AND
+						( l.std_fields:mode_city	EQ 'H' OR strcasecmp( l.address:city,	l.validated_addresses[ 1 ]:city )		EQ 0 ) AND
+						( l.std_fields:mode_state	EQ 'H' OR strcasecmp( l.address:state,	l.validated_addresses[ 1 ]:state )		EQ 0 ) AND
+						( l.std_fields:mode_zip		EQ 'H' OR strcasecmp( l.address:zip,	l.validated_addresses[ 1 ]:zip )		EQ 0 ) AND
+						( l.std_fields:mode_cntry	EQ 'H' OR strcasecmp( l.address:cntry,	l.validated_addresses[ 1 ]:country )	EQ 0 ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( l.ui_exception ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Validate_Insert" PARAMETERS = "modules var, module_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"						VALUE = 1>
+
+	<MvASSIGN NAME = "g.Customer_LoginEmail"		VALUE = "{ trim( g.Customer_LoginEmail ) }">
+	<MvASSIGN NAME = "g.Customer_Login"				VALUE = "{ trim( g.Customer_Login ) }">
+	<MvASSIGN NAME = "g.Customer_PasswordEmail"		VALUE = "{ trim( g.Customer_PasswordEmail ) }">
+	<MvASSIGN NAME = "g.Customer_Password"			VALUE = "{ trim( g.Customer_Password ) }">
+	<MvASSIGN NAME = "g.Customer_VerifyPassword"	VALUE = "{ trim( g.Customer_VerifyPassword ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_LoginEmail }">
+		<MvASSIGN NAME = "g.Customer_PasswordEmail" VALUE = "{ g.Customer_LoginEmail }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].CustomerLogin_Generate_Email( g.Customer_LoginEmail, g.Customer_Login ) }">
+			<MvASSIGN NAME = "l.valid"								   VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid"		   VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"		   VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.Customer_PasswordEmail ) }">
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid"				VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid_Message"		VALUE = "{ g.Validation_Message }">
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"				VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid_Message"		VALUE = "{ g.Validation_Message }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Login( g.Customer_Login ) }">
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Login_Invalid"						VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_Login_Invalid_Code"				VALUE = "{ g.Validation_Code }">
+
+		<MvIF EXPR = "{ g.Validation_Code GT 1 }">
+			<MvASSIGN NAME = "g.Customer_Login_Invalid_Message"			VALUE = "{ g.Validation_Message }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ ( NOT ISNULL g.Customer_LoginEmail ) AND [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_PasswordEmail, l.customer ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid"				VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"				VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_InUse"					VALUE = 1>
+	<MvELSEIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_Login, l.customer ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Login_Invalid"						VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_Login_InUse"						VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( ISNULL g.Customer_Password ) OR ( ISNULL g.Customer_VerifyPassword ) }">
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Password_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"			VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_Password }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load( l.customersettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Password( l.customersettings, g.Customer_Password ) }">
+			<MvASSIGN NAME = "l.valid"									VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Password_Invalid"				VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ crypto_md5( g.Customer_VerifyPassword ) NE crypto_md5( g.Customer_Password ) }">
+			<MvASSIGN NAME = "l.valid"									VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"		VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CustomerShippingBilling_Validate() }">
+		<MvASSIGN NAME = "l.valid"	VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_Customer_Runtime_Validate( l.module ) }">
+			<MvASSIGN NAME = "l.valid"	VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Data_Entry_Error( '' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Validate_Quick_Insert" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"										VALUE = 1>
+
+	<MvASSIGN NAME = "g.Customer_LoginEmail"						VALUE = "{ trim( g.Customer_LoginEmail ) }">
+	<MvASSIGN NAME = "g.Customer_Login"								VALUE = "{ trim( g.Customer_Login ) }">
+	<MvASSIGN NAME = "g.Customer_Password"							VALUE = "{ trim( g.Customer_Password ) }">
+
+	<MvASSIGN NAME = "g.Customer_ShipFirstName"						VALUE = "{ trim( g.Customer_ShipFirstName ) }">
+	<MvASSIGN NAME = "g.Customer_ShipLastName"						VALUE = "{ trim( g.Customer_ShipLastName ) }">
+	<MvASSIGN NAME = "g.Customer_ShipEmail"							VALUE = "{ trim( g.Customer_ShipEmail ) }">
+	<MvASSIGN NAME = "g.Customer_ShipCompany"						VALUE = "{ trim( g.Customer_ShipCompany ) }">
+	<MvASSIGN NAME = "g.Customer_ShipPhone"							VALUE = "{ trim( g.Customer_ShipPhone ) }">
+	<MvASSIGN NAME = "g.Customer_ShipFax"							VALUE = "{ trim( g.Customer_ShipFax ) }">
+	<MvASSIGN NAME = "g.Customer_ShipAddress1"						VALUE = "{ trim( g.Customer_ShipAddress1 ) }">
+	<MvASSIGN NAME = "g.Customer_ShipAddress2"						VALUE = "{ trim( g.Customer_ShipAddress2 ) }">
+	<MvASSIGN NAME = "g.Customer_ShipCity"							VALUE = "{ trim( g.Customer_ShipCity ) }">
+	<MvASSIGN NAME = "g.Customer_ShipState"							VALUE = "{ trim( g.Customer_ShipState ) }">
+	<MvASSIGN NAME = "g.Customer_ShipZip"							VALUE = "{ trim( g.Customer_ShipZip ) }">
+	<MvASSIGN NAME = "g.Customer_ShipCountry"						VALUE = "{ trim( g.Customer_ShipCountry ) }">
+	<MvASSIGN NAME = "g.Customer_BillFirstName"						VALUE = "{ trim( g.Customer_BillFirstName ) }">
+	<MvASSIGN NAME = "g.Customer_BillLastName"						VALUE = "{ trim( g.Customer_BillLastName ) }">
+	<MvASSIGN NAME = "g.Customer_BillEmail"							VALUE = "{ trim( g.Customer_BillEmail ) }">
+	<MvASSIGN NAME = "g.Customer_BillCompany"						VALUE = "{ trim( g.Customer_BillCompany ) }">
+	<MvASSIGN NAME = "g.Customer_BillPhone"							VALUE = "{ trim( g.Customer_BillPhone ) }">
+	<MvASSIGN NAME = "g.Customer_BillFax"							VALUE = "{ trim( g.Customer_BillFax ) }">
+	<MvASSIGN NAME = "g.Customer_BillAddress1"						VALUE = "{ trim( g.Customer_BillAddress1 ) }">
+	<MvASSIGN NAME = "g.Customer_BillAddress2"						VALUE = "{ trim( g.Customer_BillAddress2 ) }">
+	<MvASSIGN NAME = "g.Customer_BillCity"							VALUE = "{ trim( g.Customer_BillCity ) }">
+	<MvASSIGN NAME = "g.Customer_BillState"							VALUE = "{ trim( g.Customer_BillState ) }">
+	<MvASSIGN NAME = "g.Customer_BillZip"							VALUE = "{ trim( g.Customer_BillZip ) }">
+	<MvASSIGN NAME = "g.Customer_BillCountry"						VALUE = "{ trim( g.Customer_BillCountry ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:ship_res EQ 'A' }">	<MvASSIGN NAME = "g.Customer_ShipResidential" VALUE = "{ ISNULL g.Customer_ShipCompany }">
+	<MvELSE>										<MvASSIGN NAME = "g.Customer_ShipResidential" VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Customer_ShipResidential ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.Customer_LoginEmail ) }">
+		<MvASSIGN NAME = "l.valid"									VALUE = 0>
+
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"			VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid_Message"	VALUE = "{ g.Validation_Message }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Customer_Login }">
+		<MvIF EXPR = "{ g.Customer_LoginEmail_Invalid }">
+			<MvASSIGN NAME = "l.valid"								VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Login_Invalid"				VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].CustomerLogin_Generate_Email( g.Customer_LoginEmail, g.Customer_Login ) }">
+			<MvASSIGN NAME = "l.valid"								VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Login_Invalid"				VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Customer_Login_Invalid }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Login( g.Customer_Login ) }">
+			<MvASSIGN NAME = "l.valid"								VALUE = 0>
+
+			<MvASSIGN NAME = "g.Customer_Login_Invalid"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Login_Invalid_Code"		VALUE = "{ g.Validation_Code }">
+			<MvASSIGN NAME = "g.Customer_Login_Invalid_Message"		VALUE = "{ g.Validation_Message }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Customer_LoginEmail_Invalid AND NOT g.Customer_Login_Invalid }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_LoginEmail, l.customer ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+			<MvASSIGN NAME = "l.valid"								VALUE = 0>
+
+			<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"		VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_LoginEmail_InUse"			VALUE = 1>
+		<MvELSEIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_Login, l.customer ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+			<MvASSIGN NAME = "l.valid"								VALUE = 0>
+
+			<MvASSIGN NAME = "g.Customer_Login_Invalid"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Login_InUse"				VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Customer_Password }">
+		<MvASSIGN NAME = "l.valid"									VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Password_Invalid"				VALUE = 1>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load( l.customersettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Password( l.customersettings, g.Customer_Password ) }">
+			<MvASSIGN NAME = "l.valid"								VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Password_Invalid"			VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Data_Entry_Error( '' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Validate_Update" PARAMETERS = "modules var, module_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Customer_Login"						VALUE = "{ trim( g.Customer_Login ) }">
+	<MvASSIGN NAME = "g.Customer_LoginEmail"				VALUE = "{ trim( g.Customer_LoginEmail ) }">
+	<MvASSIGN NAME = "g.Customer_PasswordEmail"				VALUE = "{ trim( g.Customer_PasswordEmail ) }">
+	<MvASSIGN NAME = "g.Customer_CurrentPassword"			VALUE = "{ trim( g.Customer_CurrentPassword ) }">
+	<MvASSIGN NAME = "g.Customer_Password"					VALUE = "{ trim( g.Customer_Password ) }">
+	<MvASSIGN NAME = "g.Customer_VerifyPassword"			VALUE = "{ trim( g.Customer_VerifyPassword ) }">
+	
+	<MvASSIGN NAME = "l.valid"								VALUE = 1>
+				
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_LoginEmail }">
+		<MvASSIGN NAME = "g.Customer_PasswordEmail"			VALUE = "{ g.Customer_LoginEmail }">
+	</MvIF>
+	
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load( l.customersettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+				
+	<MvIF EXPR = "{ l.customersettings:pwchgauth							AND
+					( ( g.Customer_Login NE g.Customer:login )				OR
+					  ( g.Customer_PasswordEmail NE g.Customer:pw_email )	OR
+					  ( NOT ISNULL g.Customer_Password ) ) }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Verify( g.Customer_CurrentPassword, g.Customer:password ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+			
+			<MvASSIGN NAME = "g.Customer_CurrentPassword_Invalid" VALUE = 1>
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.Customer_PasswordEmail ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid_Message"			VALUE = "{ g.Validation_Message }">
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid_Message"			VALUE = "{ g.Validation_Message }">
+	<MvELSEIF EXPR = "{ toupper( g.Customer:pw_email ) NE toupper( g.Customer_PasswordEmail ) }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_PasswordEmail, l.null ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+			<MvASSIGN NAME = "l.valid"										VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_PasswordEmail_Invalid"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_LoginEmail_InUse"					VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Login( g.Customer_Login ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Login_Invalid"							VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_Login_Invalid_Code"					VALUE = "{ g.Validation_Code }">
+		
+		<MvIF EXPR = "{ g.Validation_Code GT 1 }">
+			<MvASSIGN NAME = "g.Customer_Login_Invalid_Message"				VALUE = "{ g.Validation_Message }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ toupper( g.Customer:login ) NE toupper( g.Customer_Login ) }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_Login, l.null ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+			<MvASSIGN NAME = "l.valid"										VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Login_Invalid"						VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_Login_InUse"						VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_Password }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Password( l.customersettings, g.Customer_Password ) }">
+			<MvASSIGN NAME = "l.valid"										VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_Password_Invalid"					VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ crypto_md5( g.Customer_VerifyPassword ) NE crypto_md5( g.Customer_Password ) }">
+			<MvASSIGN NAME = "l.valid"										VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"			VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CustomerShippingBilling_Validate() }">
+		<MvASSIGN NAME = "l.valid" VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_Customer_Runtime_Validate( l.module ) }">
+			<MvASSIGN NAME = "l.valid"	VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Data_Entry_Error( '' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerShippingBilling_Validate" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"						VALUE = 1>
+
+	<MvASSIGN NAME = "g.Customer_ShipID"			VALUE = "{ int( g.Customer_ShipID ) }">
+	<MvASSIGN NAME = "g.Customer_ShipResidential" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Customer_ShipResidential ) }">
+	<MvASSIGN NAME = "g.Customer_ShipFirstName" 	VALUE = "{ trim( g.Customer_ShipFirstName ) }">
+	<MvASSIGN NAME = "g.Customer_ShipLastName" 		VALUE = "{ trim( g.Customer_ShipLastName ) }">
+	<MvASSIGN NAME = "g.Customer_ShipEmail" 		VALUE = "{ trim( g.Customer_ShipEmail ) }">
+	<MvASSIGN NAME = "g.Customer_ShipCompany" 		VALUE = "{ trim( g.Customer_ShipCompany ) }">
+	<MvASSIGN NAME = "g.Customer_ShipPhone" 		VALUE = "{ trim( g.Customer_ShipPhone ) }">
+	<MvASSIGN NAME = "g.Customer_ShipFax" 			VALUE = "{ trim( g.Customer_ShipFax ) }">
+	<MvASSIGN NAME = "g.Customer_ShipAddress" 		VALUE = "{ trim( g.Customer_ShipAddress ) }">
+	<MvASSIGN NAME = "g.Customer_ShipAddress1" 		VALUE = "{ trim( g.Customer_ShipAddress1 ) }">
+	<MvASSIGN NAME = "g.Customer_ShipAddress2" 		VALUE = "{ trim( g.Customer_ShipAddress2 ) }">
+	<MvASSIGN NAME = "g.Customer_ShipCity" 			VALUE = "{ trim( g.Customer_ShipCity ) }">
+	<MvASSIGN NAME = "g.Customer_ShipState" 		VALUE = "{ trim( g.Customer_ShipState ) }">
+	<MvASSIGN NAME = "g.Customer_ShipStateSelect" 	VALUE = "{ trim( g.Customer_ShipStateSelect ) }">
+	<MvASSIGN NAME = "g.Customer_ShipZip" 			VALUE = "{ trim( g.Customer_ShipZip ) }">
+	<MvASSIGN NAME = "g.Customer_ShipCountry" 		VALUE = "{ trim( g.Customer_ShipCountry ) }">
+
+	<MvASSIGN NAME = "g.Customer_BillID"			VALUE = "{ int( g.Customer_BillID ) }">
+	<MvASSIGN NAME = "g.Customer_BillFirstName" 	VALUE = "{ trim( g.Customer_BillFirstName ) }">
+	<MvASSIGN NAME = "g.Customer_BillLastName" 		VALUE = "{ trim( g.Customer_BillLastName ) }">
+	<MvASSIGN NAME = "g.Customer_BillEmail" 		VALUE = "{ trim( g.Customer_BillEmail ) }">
+	<MvASSIGN NAME = "g.Customer_BillCompany" 		VALUE = "{ trim( g.Customer_BillCompany ) }">
+	<MvASSIGN NAME = "g.Customer_BillPhone" 		VALUE = "{ trim( g.Customer_BillPhone ) }">
+	<MvASSIGN NAME = "g.Customer_BillFax" 			VALUE = "{ trim( g.Customer_BillFax ) }">
+	<MvASSIGN NAME = "g.Customer_BillAddress" 		VALUE = "{ trim( g.Customer_BillAddress ) }">
+	<MvASSIGN NAME = "g.Customer_BillAddress1" 		VALUE = "{ trim( g.Customer_BillAddress1 ) }">
+	<MvASSIGN NAME = "g.Customer_BillAddress2" 		VALUE = "{ trim( g.Customer_BillAddress2 ) }">
+	<MvASSIGN NAME = "g.Customer_BillCity" 			VALUE = "{ trim( g.Customer_BillCity ) }">
+	<MvASSIGN NAME = "g.Customer_BillState" 		VALUE = "{ trim( g.Customer_BillState ) }">
+	<MvASSIGN NAME = "g.Customer_BillStateSelect" 	VALUE = "{ trim( g.Customer_BillStateSelect ) }">
+	<MvASSIGN NAME = "g.Customer_BillZip" 			VALUE = "{ trim( g.Customer_BillZip ) }">
+	<MvASSIGN NAME = "g.Customer_BillCountry" 		VALUE = "{ trim( g.Customer_BillCountry ) }">
+
+	<MvIF EXPR = "{ len( g.Customer_ShipStateSelect ) }">
+		<MvASSIGN NAME = "g.Customer_ShipState"		VALUE = "{ g.Customer_ShipStateSelect }">
+	</MvIF>
+
+	<MvIF EXPR = "{ len( g.Customer_BillStateSelect ) }">
+		<MvASSIGN NAME = "g.Customer_BillState"		VALUE = "{ g.Customer_BillStateSelect }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ship_address:fname"			VALUE = "{ g.Customer_ShipFirstName }">
+	<MvASSIGN NAME = "l.ship_address:lname"			VALUE = "{ g.Customer_ShipLastName }">
+	<MvASSIGN NAME = "l.ship_address:email"			VALUE = "{ g.Customer_ShipEmail }">
+	<MvASSIGN NAME = "l.ship_address:comp"			VALUE = "{ g.Customer_ShipCompany }">
+	<MvASSIGN NAME = "l.ship_address:phone"			VALUE = "{ g.Customer_ShipPhone }">
+	<MvASSIGN NAME = "l.ship_address:fax"			VALUE = "{ g.Customer_ShipFax }">
+
+	<MvIF EXPR = "{ len( g.Customer_ShipAddress ) AND ( NOT len( g.Customer_ShipAddress1 ) ) AND ( NOT len( g.Customer_ShipAddress2 ) ) }">
+		<MvASSIGN NAME = "l.ship_address:addr1"		VALUE = "{ g.Customer_ShipAddress }">
+		<MvASSIGN NAME = "l.ship_address:addr2"		VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.ship_address:addr1"		VALUE = "{ g.Customer_ShipAddress1 }">
+		<MvASSIGN NAME = "l.ship_address:addr2"		VALUE = "{ g.Customer_ShipAddress2 }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ship_address:city"			VALUE = "{ g.Customer_ShipCity }">
+	<MvASSIGN NAME = "l.ship_address:state"			VALUE = "{ g.Customer_ShipState }">
+	<MvASSIGN NAME = "l.ship_address:zip"			VALUE = "{ g.Customer_ShipZip }">
+	<MvASSIGN NAME = "l.ship_address:cntry"			VALUE = "{ g.Customer_ShipCountry }">
+
+	<MvASSIGN NAME = "l.bill_address:fname"			VALUE = "{ g.Customer_BillFirstName }">
+	<MvASSIGN NAME = "l.bill_address:lname"			VALUE = "{ g.Customer_BillLastName }">
+	<MvASSIGN NAME = "l.bill_address:email"			VALUE = "{ g.Customer_BillEmail }">
+	<MvASSIGN NAME = "l.bill_address:comp"			VALUE = "{ g.Customer_BillCompany }">
+	<MvASSIGN NAME = "l.bill_address:phone"			VALUE = "{ g.Customer_BillPhone }">
+	<MvASSIGN NAME = "l.bill_address:fax"			VALUE = "{ g.Customer_BillFax }">
+
+	<MvIF EXPR = "{ len( g.Customer_BillAddress ) AND ( NOT len( g.Customer_BillAddress1 ) ) AND ( NOT len( g.Customer_BillAddress2 ) ) }">
+		<MvASSIGN NAME = "l.bill_address:addr1"		VALUE = "{ g.Customer_BillAddress }">
+		<MvASSIGN NAME = "l.bill_address:addr2"		VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.bill_address:addr1"		VALUE = "{ g.Customer_BillAddress1 }">
+		<MvASSIGN NAME = "l.bill_address:addr2"		VALUE = "{ g.Customer_BillAddress2 }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.bill_address:city"			VALUE = "{ g.Customer_BillCity }">
+	<MvASSIGN NAME = "l.bill_address:state"			VALUE = "{ g.Customer_BillState }">
+	<MvASSIGN NAME = "l.bill_address:zip"			VALUE = "{ g.Customer_BillZip }">
+	<MvASSIGN NAME = "l.bill_address:cntry"			VALUE = "{ g.Customer_BillCountry }">
+
+	<MvIF EXPR = "{ l.std_flds:primaddr EQ 'shipping' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].StandardFields_Validate( l.std_flds, l.std_flds:shipping, l.std_flds:billing, l.ship_address, 'g.Customer_Ship', l.bill_address, 'g.Customer_Bill' ) }">
+			<MvASSIGN NAME = "l.valid" VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.std_flds:primaddr EQ 'billing' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].StandardFields_Validate( l.std_flds, l.std_flds:billing, l.std_flds:shipping, l.bill_address, 'g.Customer_Bill', l.ship_address, 'g.Customer_Ship' ) }">
+			<MvASSIGN NAME = "l.valid" VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvASSIGN NAME = "g.Customer_ShipAddress_Invalid"	VALUE = "{ g.Customer_ShipAddress1_Invalid OR g.Customer_ShipAddress2_Invalid }">
+		<MvASSIGN NAME = "g.Customer_BillAddress_Invalid"	VALUE = "{ g.Customer_BillAddress1_Invalid OR g.Customer_BillAddress2_Invalid }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Customer_ShipFirstName"		VALUE = "{ l.ship_address:fname }">
+		<MvASSIGN NAME = "g.Customer_ShipLastName"		VALUE = "{ l.ship_address:lname }">
+		<MvASSIGN NAME = "g.Customer_ShipEmail"			VALUE = "{ l.ship_address:email }">
+		<MvASSIGN NAME = "g.Customer_ShipCompany"		VALUE = "{ l.ship_address:comp }">
+		<MvASSIGN NAME = "g.Customer_ShipPhone"			VALUE = "{ l.ship_address:phone }">
+		<MvASSIGN NAME = "g.Customer_ShipFax"			VALUE = "{ l.ship_address:fax }">
+	
+		<MvIF EXPR = "{ len( l.ship_address:addr2 ) EQ 0 }">
+			<MvASSIGN NAME = "g.Customer_ShipAddress"	VALUE = "{ l.ship_address:addr1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Customer_ShipAddress"	VALUE = "{ l.ship_address:addr1 $ ' ' $ l.ship_address:addr2 }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Customer_ShipAddress1"		VALUE = "{ l.ship_address:addr1 }">
+		<MvASSIGN NAME = "g.Customer_ShipAddress2"		VALUE = "{ l.ship_address:addr2 }">
+		<MvASSIGN NAME = "g.Customer_ShipCity"			VALUE = "{ l.ship_address:city }">
+		<MvASSIGN NAME = "g.Customer_ShipState"			VALUE = "{ l.ship_address:state }">
+		<MvASSIGN NAME = "g.Customer_ShipZip"			VALUE = "{ l.ship_address:zip }">
+		<MvASSIGN NAME = "g.Customer_ShipCountry"		VALUE = "{ l.ship_address:cntry }">
+
+		<MvASSIGN NAME = "g.Customer_BillFirstName"		VALUE = "{ l.bill_address:fname }">
+		<MvASSIGN NAME = "g.Customer_BillLastName"		VALUE = "{ l.bill_address:lname }">
+		<MvASSIGN NAME = "g.Customer_BillEmail"			VALUE = "{ l.bill_address:email }">
+		<MvASSIGN NAME = "g.Customer_BillCompany"		VALUE = "{ l.bill_address:comp }">
+		<MvASSIGN NAME = "g.Customer_BillPhone"			VALUE = "{ l.bill_address:phone }">
+		<MvASSIGN NAME = "g.Customer_BillFax"			VALUE = "{ l.bill_address:fax }">
+	
+		<MvIF EXPR = "{ len( l.bill_address:addr2 ) EQ 0 }">
+			<MvASSIGN NAME = "g.Customer_BillAddress"	VALUE = "{ l.bill_address:addr1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Customer_BillAddress"	VALUE = "{ l.bill_address:addr1 $ ' ' $ l.bill_address:addr2 }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Customer_BillAddress1"		VALUE = "{ l.bill_address:addr1 }">
+		<MvASSIGN NAME = "g.Customer_BillAddress2"		VALUE = "{ l.bill_address:addr2 }">
+		<MvASSIGN NAME = "g.Customer_BillCity"			VALUE = "{ l.bill_address:city }">
+		<MvASSIGN NAME = "g.Customer_BillState"			VALUE = "{ l.bill_address:state }">
+		<MvASSIGN NAME = "g.Customer_BillZip"			VALUE = "{ l.bill_address:zip }">
+		<MvASSIGN NAME = "g.Customer_BillCountry"		VALUE = "{ l.bill_address:cntry }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_Login" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Customer_Password"				VALUE = "{ trim( g.Customer_Password ) }">
+
+	<MvASSIGN NAME = "g.Customer_Login_Invalid"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_Password_Invalid"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_LoginEmail }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_LoginEmail, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_LoginEmail, l.customer ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+				<MvASSIGN NAME = "g.Customer_Login_Invalid"	VALUE = 1>
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_login' ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_Login, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_Login, l.customer ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+				<MvASSIGN NAME = "g.Customer_Login_Invalid"	VALUE = 1>
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_login' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Verify( g.Customer_Password, l.customer:password ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Login_Failure( l.customer:login, 'Invalid password' ) }">
+
+		<MvASSIGN NAME = "g.Customer_Password_Invalid"	VALUE = 1>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_login' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer_Session_Verified"	VALUE = 1>
+	<MvASSIGN NAME = "g.Customer_Session_ID"		VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "g.Basket:cussess_id"			VALUE = "{ g.Customer_Session_ID }">
+	<MvASSIGN NAME = "g.Basket:cust_id"				VALUE = "{ l.customer:id }">
+	<MvASSIGN NAME = "g.Customer" 					VALUE = "{ l.customer }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].TaxExempt_Load_Customer( l.customer, g.Basket:tax_exempt ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Customer_ID( g.Basket ) OR
+					NOT [ g.Feature_Filename_CUS_DB ].Customer_Update_LastLogin( g.Customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].UpdateSessionID() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Customer_Login( l.customer:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Login( g.Session_ID, l.customer:login ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_Logout" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer_Session_Verified"	VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_Session_ID"		VALUE = "">
+	<MvASSIGN NAME = "g.Basket:tax_exempt" 			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Clear_Customer_ID( g.Basket ) OR
+					NOT [ g.Module_Library_DB ].Basket_Clear_Customer_Information( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].UpdateSessionID() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_EmailPassword" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load_Cached( l.customersettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer_LoginEmail"	VALUE = "{ trim( g.Customer_LoginEmail ) }">
+	<MvASSIGN NAME = "g.Customer_Login"			VALUE = "{ trim( g.Customer_Login ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_LoginEmail }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_LoginEmail, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_LoginEmail, l.customer ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_email_sent' ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_Login }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Login( g.Customer_Login, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_Login, l.customer ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_email_sent' ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"	VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_Login_Invalid"			VALUE = 1>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_login_email_password' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerEmail_Load( l.cust_email ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerPasswordReset_Generate( l.customer:id, l.reset_token ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customersettings:resettype EQ 'temporary' }">
+		<MvIF EXPR = "{ NOT ISNULL g.Domain:mm_surl }"> <MvASSIGN NAME = "l.link" VALUE = "{ g.Domain:mm_surl	$ 'Store_Code=' $ encodeattribute( g.Store:code ) $ '&Action=CSTR&Customer_PasswordResetToken=' $ encodeattribute( l.reset_token ) }">
+		<MvELSE>										<MvASSIGN NAME = "l.link" VALUE = "{ g.Domain:mm_url	$ 'Store_Code=' $ encodeattribute( g.Store:code ) $ '&Action=CSTR&Customer_PasswordResetToken=' $ encodeattribute( l.reset_token ) }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.flags"				VALUE = "">
+		<MvASSIGN NAME = "l.flags:nosession"	VALUE = 1>
+		<MvASSIGN NAME = "l.flags:sep"			VALUE = 1>
+
+		<MvASSIGN NAME = "l.link"				VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Page_Code_URL( 'CSTR', l.flags ) $ 'Customer_PasswordResetToken=' $ encodeattribute( l.reset_token ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.from"		VALUE = "{ l.cust_email:email_from }">
+	<MvASSIGN NAME = "l.to"			VALUE = "{ l.customer:pw_email }">
+	<MvASSIGN NAME = "l.cc"			VALUE = "{ l.cust_email:email_cc }">
+	<MvASSIGN NAME = "l.subject"	VALUE = "{ l.cust_email:subject }">
+
+	<MvCAPTURE VARIABLE = "l.message">
+		<MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+		<html>
+		<body>
+		<MvEVAL EXPR = "{ l.cust_email:header }">
+
+		<p><a href="{ encodeentities( l.link ) }" target="_blank"><MvEVAL EXPR = "{ encodeentities( l.link ) }"></a></p>
+		</body>
+		</html>
+		<MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Module_Library_Utilities ].StartMimeEmail( l.mime_email ) }">
+	<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Module_Library_Utilities ].GenerateBodyMIME( l.mime_email, 'text/html', '', '', l.message ) }">
+
+	<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Module_Library_Utilities ].SendMimeEmail( l.mime_email, l.to, l.from, l.cc, l.subject ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00001', 'Customer password reset email sent', l.customer ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_email_sent' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_count"				VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'custrt', l.modules ) }">
+	<MvIF EXPR = "{ NOT Customer_Validate_Update( l.modules, l.module_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_editinfo' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, l.customer ) OR
+					NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_customer"			VALUE = "{ l.customer }">
+
+	<MvIF EXPR = "{ g.Customer_ShipID NE 0 }">
+		<MvIF EXPR = "{ g.Customer_ShipID EQ -1 }">
+			<MvASSIGN NAME = "l.customer:ship_id" 		VALUE = 0>
+			<MvASSIGN NAME = "l.customer:ship_descrip" 	VALUE = "">
+		<MvELSEIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].CustomerAddress_Load( l.customer:id, g.Customer_ShipID, l.address_ship ) }">
+			<MvASSIGN NAME = "l.customer:ship_id" 		VALUE = "{ l.address_ship:id }">
+			<MvASSIGN NAME = "l.customer:ship_descrip" 	VALUE = "{ l.address_ship:descrip }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Customer_BillID NE 0 }">
+		<MvIF EXPR = "{ g.Customer_BillID EQ -1 }">
+			<MvASSIGN NAME = "l.customer:bill_id" 		VALUE = 0>
+			<MvASSIGN NAME = "l.customer:bill_descrip" 	VALUE = "">
+		<MvELSEIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].CustomerAddress_Load( l.customer:id, g.Customer_BillID, l.address_bill ) }">
+			<MvASSIGN NAME = "l.customer:bill_id" 		VALUE = "{ l.address_bill:id }">
+			<MvASSIGN NAME = "l.customer:bill_descrip" 	VALUE = "{ l.address_bill:descrip }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_fname NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_fname"	VALUE = "{ g.Customer_ShipFirstName }">
+		<MvASSIGN NAME = "l.customer:bill_fname"	VALUE = "{ g.Customer_BillFirstName }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_lname NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_lname"	VALUE = "{ g.Customer_ShipLastName }">
+		<MvASSIGN NAME = "l.customer:bill_lname"	VALUE = "{ g.Customer_BillLastName }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_email NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_email"	VALUE = "{ g.Customer_ShipEmail }">
+		<MvASSIGN NAME = "l.customer:bill_email"	VALUE = "{ g.Customer_BillEmail }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_comp NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_comp"		VALUE = "{ g.Customer_ShipCompany }">
+		<MvASSIGN NAME = "l.customer:bill_comp"		VALUE = "{ g.Customer_BillCompany }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_phone NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_phone"	VALUE = "{ g.Customer_ShipPhone }">
+		<MvASSIGN NAME = "l.customer:bill_phone"	VALUE = "{ g.Customer_BillPhone }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_fax NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_fax"		VALUE = "{ g.Customer_ShipFax }">
+		<MvASSIGN NAME = "l.customer:bill_fax"		VALUE = "{ g.Customer_BillFax }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_addr NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_addr1"	VALUE = "{ g.Customer_ShipAddress1 }">
+		<MvASSIGN NAME = "l.customer:bill_addr1"	VALUE = "{ g.Customer_BillAddress1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_addr2 NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_addr2"	VALUE = "{ g.Customer_ShipAddress2 }">
+		<MvASSIGN NAME = "l.customer:bill_addr2"	VALUE = "{ g.Customer_BillAddress2 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_city NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_city"		VALUE = "{ g.Customer_ShipCity }">
+		<MvASSIGN NAME = "l.customer:bill_city"		VALUE = "{ g.Customer_BillCity }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_state NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_state"	VALUE = "{ g.Customer_ShipState }">
+		<MvASSIGN NAME = "l.customer:bill_state"	VALUE = "{ g.Customer_BillState }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_zip NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_zip"		VALUE = "{ g.Customer_ShipZip }">
+		<MvASSIGN NAME = "l.customer:bill_zip"		VALUE = "{ g.Customer_BillZip }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:mode_cntry NE 'H' }">
+		<MvASSIGN NAME = "l.customer:ship_cntry"	VALUE = "{ g.Customer_ShipCountry }">
+		<MvASSIGN NAME = "l.customer:bill_cntry"	VALUE = "{ g.Customer_BillCountry }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:ship_res EQ 'A' }">	<MvASSIGN NAME = "l.customer:ship_res" VALUE = "{ ISNULL l.customer:ship_comp }">
+	<MvELSE>										<MvASSIGN NAME = "l.customer:ship_res" VALUE = "{ g.Customer_ShipResidential }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Customer_ShipValidated OR NOT g.Customer_BillValidated }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingRules_Load( l.shippingrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.Store:addrval_id AND l.shippingrules:aval_cust }">
+			<MvASSIGN NAME = "l.ship_address:addr1"		VALUE = "{ l.customer:ship_addr1 }">
+			<MvASSIGN NAME = "l.ship_address:addr2"		VALUE = "{ l.customer:ship_addr2 }">
+			<MvASSIGN NAME = "l.ship_address:city"		VALUE = "{ l.customer:ship_city }">
+			<MvASSIGN NAME = "l.ship_address:state"		VALUE = "{ l.customer:ship_state }">
+			<MvASSIGN NAME = "l.ship_address:zip"		VALUE = "{ l.customer:ship_zip }">
+			<MvASSIGN NAME = "l.ship_address:cntry"		VALUE = "{ l.customer:ship_cntry }">
+			<MvASSIGN NAME = "l.ship_address:comp"		VALUE = "{ l.customer:ship_comp }">
+			<MvASSIGN NAME = "l.ship_address:resdntl"	VALUE = "{ l.customer:ship_res }">
+
+			<MvASSIGN NAME = "l.bill_address:addr1"		VALUE = "{ l.customer:bill_addr1 }">
+			<MvASSIGN NAME = "l.bill_address:addr2"		VALUE = "{ l.customer:bill_addr2 }">
+			<MvASSIGN NAME = "l.bill_address:city"		VALUE = "{ l.customer:bill_city }">
+			<MvASSIGN NAME = "l.bill_address:state"		VALUE = "{ l.customer:bill_state }">
+			<MvASSIGN NAME = "l.bill_address:zip"		VALUE = "{ l.customer:bill_zip }">
+			<MvASSIGN NAME = "l.bill_address:cntry"		VALUE = "{ l.customer:bill_cntry }">
+			<MvASSIGN NAME = "l.bill_address:comp"		VALUE = "{ l.customer:bill_comp }">
+			<MvASSIGN NAME = "l.bill_address:resdntl"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT Runtime_Validate_ShippingBilling( l.ship_address, l.bill_address, 'customer_validate_editinfo', g.Customer_ValidatedShipAddresses, g.Customer_ValidatedBillAddresses ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ g.UI_Exception }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.customer:login"				VALUE = "{ g.Customer_Login }">
+	<MvASSIGN NAME = "l.customer:pw_email"			VALUE = "{ g.Customer_PasswordEmail }">
+
+	<MvASSIGN NAME = "l.password_changed"			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_Password }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Encrypt( g.Customer_Password, l.customer:password ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.password_changed"		VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.customer:ship_addr"			VALUE = "">
+	<MvASSIGN NAME = "l.customer:bill_addr"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Change( 'MER-CUS-RNT-00002', 'Customer updated', l.original_customer, l.customer ) }">
+
+	<MvIF EXPR = "{ l.password_changed }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Expire_All_Customer_OtherBasket( l.customer:id, g.Basket:basket_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer"					VALUE = "{ l.customer }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_Customer_Runtime_Update( l.module, l.customer ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Account information updated successfully.' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module_count"				VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'custrt', l.modules ) }">
+	<MvASSIGN NAME = "l.have_valid_order"			VALUE = 0>
+
+	<MvIF EXPR = "{ g.Basket:order_id AND g.Basket:order_proc AND g.Checkout_Session_Verified }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Order_Load_ID( g.Basket:order_id, l.order ) }">
+			<MvASSIGN NAME = "l.have_valid_order"	VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Customer_Validate_Insert( l.modules, l.module_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_addinfo' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer"					VALUE = "">
+	<MvASSIGN NAME = "g.Customer:pgrpcount"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer:login"				VALUE = "{ g.Customer_Login }">
+	<MvASSIGN NAME = "g.Customer:pw_email"			VALUE = "{ g.Customer_PasswordEmail }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Encrypt( g.Customer_Password, g.Customer:password ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:ship_res EQ 'A' }">	<MvASSIGN NAME = "g.Customer:ship_res" VALUE = "{ ISNULL g.Customer_ShipCompany }">
+	<MvELSE>										<MvASSIGN NAME = "g.Customer:ship_res" VALUE = "{ g.Customer_ShipResidential }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer:ship_id"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer:ship_fname"		VALUE = "{ g.Customer_ShipFirstName }">
+	<MvASSIGN NAME = "g.Customer:ship_lname"		VALUE = "{ g.Customer_ShipLastName }">
+	<MvASSIGN NAME = "g.Customer:ship_email"		VALUE = "{ g.Customer_ShipEmail }">
+	<MvASSIGN NAME = "g.Customer:ship_comp"			VALUE = "{ g.Customer_ShipCompany }">
+	<MvASSIGN NAME = "g.Customer:ship_phone"		VALUE = "{ g.Customer_ShipPhone }">
+	<MvASSIGN NAME = "g.Customer:ship_fax"			VALUE = "{ g.Customer_ShipFax }">
+	<MvASSIGN NAME = "g.Customer:ship_addr1"		VALUE = "{ g.Customer_ShipAddress1 }">
+	<MvASSIGN NAME = "g.Customer:ship_addr2"		VALUE = "{ g.Customer_ShipAddress2 }">
+	<MvASSIGN NAME = "g.Customer:ship_city"			VALUE = "{ g.Customer_ShipCity }">
+	<MvASSIGN NAME = "g.Customer:ship_state"		VALUE = "{ g.Customer_ShipState }">
+	<MvASSIGN NAME = "g.Customer:ship_zip"			VALUE = "{ g.Customer_ShipZip }">
+	<MvASSIGN NAME = "g.Customer:ship_cntry"		VALUE = "{ g.Customer_ShipCountry }">
+	<MvASSIGN NAME = "g.Customer:bill_id"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer:bill_fname"		VALUE = "{ g.Customer_BillFirstName }">
+	<MvASSIGN NAME = "g.Customer:bill_lname"		VALUE = "{ g.Customer_BillLastName }">
+	<MvASSIGN NAME = "g.Customer:bill_email"		VALUE = "{ g.Customer_BillEmail }">
+	<MvASSIGN NAME = "g.Customer:bill_comp"			VALUE = "{ g.Customer_BillCompany }">
+	<MvASSIGN NAME = "g.Customer:bill_phone"		VALUE = "{ g.Customer_BillPhone }">
+	<MvASSIGN NAME = "g.Customer:bill_fax"			VALUE = "{ g.Customer_BillFax }">
+	<MvASSIGN NAME = "g.Customer:bill_addr1"		VALUE = "{ g.Customer_BillAddress1 }">
+	<MvASSIGN NAME = "g.Customer:bill_addr2"		VALUE = "{ g.Customer_BillAddress2 }">
+	<MvASSIGN NAME = "g.Customer:bill_city"			VALUE = "{ g.Customer_BillCity }">
+	<MvASSIGN NAME = "g.Customer:bill_state"		VALUE = "{ g.Customer_BillState }">
+	<MvASSIGN NAME = "g.Customer:bill_zip"			VALUE = "{ g.Customer_BillZip }">
+	<MvASSIGN NAME = "g.Customer:bill_cntry"		VALUE = "{ g.Customer_BillCountry }">
+
+	<MvIF EXPR = "{ NOT g.Customer_ShipValidated OR NOT g.Customer_BillValidated }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingRules_Load( l.shippingrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.Store:addrval_id AND l.shippingrules:aval_cust }">
+			<MvASSIGN NAME = "l.ship_address:addr1"		VALUE = "{ g.Customer:ship_addr1 }">
+			<MvASSIGN NAME = "l.ship_address:addr2"		VALUE = "{ g.Customer:ship_addr2 }">
+			<MvASSIGN NAME = "l.ship_address:city"		VALUE = "{ g.Customer:ship_city }">
+			<MvASSIGN NAME = "l.ship_address:state"		VALUE = "{ g.Customer:ship_state }">
+			<MvASSIGN NAME = "l.ship_address:zip"		VALUE = "{ g.Customer:ship_zip }">
+			<MvASSIGN NAME = "l.ship_address:cntry"		VALUE = "{ g.Customer:ship_cntry }">
+			<MvASSIGN NAME = "l.ship_address:comp"		VALUE = "{ g.Customer:ship_comp }">
+			<MvASSIGN NAME = "l.ship_address:resdntl"	VALUE = "{ g.Customer:ship_res }">
+
+			<MvASSIGN NAME = "l.bill_address:addr1"		VALUE = "{ g.Customer:bill_addr1 }">
+			<MvASSIGN NAME = "l.bill_address:addr2"		VALUE = "{ g.Customer:bill_addr2 }">
+			<MvASSIGN NAME = "l.bill_address:city"		VALUE = "{ g.Customer:bill_city }">
+			<MvASSIGN NAME = "l.bill_address:state"		VALUE = "{ g.Customer:bill_state }">
+			<MvASSIGN NAME = "l.bill_address:zip"		VALUE = "{ g.Customer:bill_zip }">
+			<MvASSIGN NAME = "l.bill_address:cntry"		VALUE = "{ g.Customer:bill_cntry }">
+			<MvASSIGN NAME = "l.bill_address:comp"		VALUE = "{ g.Customer:bill_comp }">
+			<MvASSIGN NAME = "l.bill_address:resdntl"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT Runtime_Validate_ShippingBilling( l.ship_address, l.bill_address, 'customer_validate_addinfo', g.Customer_ValidatedShipAddresses, g.Customer_ValidatedBillAddresses ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ g.UI_Exception }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer:order_cnt"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer:order_avg"			VALUE = 0.00>
+	<MvASSIGN NAME = "g.Customer:order_tot"			VALUE = 0.00>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Insert( g.Customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00003', 'Customer created', g.Customer ) }">
+
+	<MvIF EXPR = "{ l.have_valid_order AND l.order:cust_id EQ 0 }">
+		<MvASSIGN NAME = "l.order:cust_id"			VALUE = "{ g.Customer:id }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Update_Customer_Information( l.order ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Basket:order_id"		VALUE = 0>
+		<MvASSIGN NAME = "g.Basket:order_proc"		VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Order( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer_Session_Verified"	VALUE = 1>
+	<MvASSIGN NAME = "g.Customer_Session_ID"		VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "g.Basket:cussess_id"			VALUE = "{ g.Customer_Session_ID }">
+	<MvASSIGN NAME = "g.Basket:cust_id"				VALUE = "{ g.Customer:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Customer_ID( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].UpdateSessionID() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Customer_Login( g.Customer:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_Customer_Runtime_Insert( l.module, g.Customer ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_Quick_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.have_valid_order"			VALUE = 0>
+
+	<MvIF EXPR = "{ g.Basket:order_id AND g.Basket:order_proc AND g.Checkout_Session_Verified }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Order_Load_ID( g.Basket:order_id, l.order ) }">
+			<MvASSIGN NAME = "l.have_valid_order"	VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Screen EQ 'INVC' AND NOT l.have_valid_order }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'checkout_invalid_session' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Customer_Validate_Quick_Insert() }">
+		<MvIF EXPR = "{ miva_variable_value( 'g.Customer_LoginEmail_Invalid' ) }">
+			<MvASSIGN NAME = "g.LoginEmail_Row"		VALUE = "form_row invalid">
+		<MvELSE>
+			<MvASSIGN NAME = "g.LoginEmail_Row"		VALUE = "form_row">
+		</MvIF>
+
+		<MvIF EXPR = "{ miva_variable_value( 'g.Customer_Password_Invalid' ) }">
+			<MvASSIGN NAME = "g.Password_Row"		VALUE = "form_row invalid">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Password_Row"		VALUE = "form_row">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_addinfo' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer"					VALUE = "">
+	<MvASSIGN NAME = "g.Customer:pgrpcount"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer:login"				VALUE = "{ g.Customer_Login }">
+	<MvASSIGN NAME = "g.Customer:pw_email"			VALUE = "{ g.Customer_LoginEmail }">
+
+	<MvASSIGN NAME = "l.customer_fields_present"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Customer_ShipFirstName }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipLastName }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipCompany }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipPhone }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipFax }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipAddress1 }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipAddress2 }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipCity }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipState }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipZip }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_ShipCountry }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillFirstName }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillLastName }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillEmail }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillCompany }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillPhone }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillFax }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillAddress1 }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillAddress2 }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillCity }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillState }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillZip }">			<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT ISNULL g.Customer_BillCountry }">		<MvASSIGN NAME = "l.customer_fields_present" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customer_fields_present }">
+		<MvASSIGN NAME = "g.Customer:ship_fname"	VALUE = "{ g.Customer_ShipFirstName }">
+		<MvASSIGN NAME = "g.Customer:ship_lname"	VALUE = "{ g.Customer_ShipLastName }">
+		<MvASSIGN NAME = "g.Customer:ship_email"	VALUE = "{ g.Customer_ShipEmail }">
+		<MvASSIGN NAME = "g.Customer:ship_comp"		VALUE = "{ g.Customer_ShipCompany }">
+		<MvASSIGN NAME = "g.Customer:ship_phone"	VALUE = "{ g.Customer_ShipPhone }">
+		<MvASSIGN NAME = "g.Customer:ship_fax"		VALUE = "{ g.Customer_ShipFax }">
+		<MvASSIGN NAME = "g.Customer:ship_addr1"	VALUE = "{ g.Customer_ShipAddress1 }">
+		<MvASSIGN NAME = "g.Customer:ship_addr2"	VALUE = "{ g.Customer_ShipAddress2 }">
+		<MvASSIGN NAME = "g.Customer:ship_city"		VALUE = "{ g.Customer_ShipCity }">
+		<MvASSIGN NAME = "g.Customer:ship_state"	VALUE = "{ g.Customer_ShipState }">
+		<MvASSIGN NAME = "g.Customer:ship_zip"		VALUE = "{ g.Customer_ShipZip }">
+		<MvASSIGN NAME = "g.Customer:ship_cntry"	VALUE = "{ g.Customer_ShipCountry }">
+		<MvASSIGN NAME = "g.Customer:ship_res"		VALUE = "{ g.Customer_ShipResidential }">
+		<MvASSIGN NAME = "g.Customer:bill_fname"	VALUE = "{ g.Customer_BillFirstName }">
+		<MvASSIGN NAME = "g.Customer:bill_lname"	VALUE = "{ g.Customer_BillLastName }">
+		<MvASSIGN NAME = "g.Customer:bill_email"	VALUE = "{ g.Customer_BillEmail }">
+		<MvASSIGN NAME = "g.Customer:bill_comp"		VALUE = "{ g.Customer_BillCompany }">
+		<MvASSIGN NAME = "g.Customer:bill_phone"	VALUE = "{ g.Customer_BillPhone }">
+		<MvASSIGN NAME = "g.Customer:bill_fax"		VALUE = "{ g.Customer_BillFax }">
+		<MvASSIGN NAME = "g.Customer:bill_addr1"	VALUE = "{ g.Customer_BillAddress1 }">
+		<MvASSIGN NAME = "g.Customer:bill_addr2"	VALUE = "{ g.Customer_BillAddress2 }">
+		<MvASSIGN NAME = "g.Customer:bill_city"		VALUE = "{ g.Customer_BillCity }">
+		<MvASSIGN NAME = "g.Customer:bill_state"	VALUE = "{ g.Customer_BillState }">
+		<MvASSIGN NAME = "g.Customer:bill_zip"		VALUE = "{ g.Customer_BillZip }">
+		<MvASSIGN NAME = "g.Customer:bill_cntry"	VALUE = "{ g.Customer_BillCountry }">
+	<MvELSEIF EXPR = "{ l.have_valid_order AND g.Basket:cust_id EQ 0 }">
+		<MvASSIGN NAME = "g.Customer:ship_fname"	VALUE = "{ l.order:ship_fname }">
+		<MvASSIGN NAME = "g.Customer:ship_lname"	VALUE = "{ l.order:ship_lname }">
+		<MvASSIGN NAME = "g.Customer:ship_res"		VALUE = "{ l.order:ship_res }">
+		<MvASSIGN NAME = "g.Customer:ship_email"	VALUE = "{ l.order:ship_email }">
+		<MvASSIGN NAME = "g.Customer:ship_comp"		VALUE = "{ l.order:ship_comp }">
+		<MvASSIGN NAME = "g.Customer:ship_phone"	VALUE = "{ l.order:ship_phone }">
+		<MvASSIGN NAME = "g.Customer:ship_fax"		VALUE = "{ l.order:ship_fax }">
+		<MvASSIGN NAME = "g.Customer:ship_addr"		VALUE = "{ l.order:ship_addr }">
+		<MvASSIGN NAME = "g.Customer:ship_addr1"	VALUE = "{ l.order:ship_addr }">
+		<MvASSIGN NAME = "g.Customer:ship_addr2"	VALUE = "{ l.order:ship_addr2 }">
+		<MvASSIGN NAME = "g.Customer:ship_city"		VALUE = "{ l.order:ship_city }">
+		<MvASSIGN NAME = "g.Customer:ship_state"	VALUE = "{ l.order:ship_state }">
+		<MvASSIGN NAME = "g.Customer:ship_zip"		VALUE = "{ l.order:ship_zip }">
+		<MvASSIGN NAME = "g.Customer:ship_cntry"	VALUE = "{ l.order:ship_cntry }">
+		<MvASSIGN NAME = "g.Customer:bill_fname"	VALUE = "{ l.order:bill_fname }">
+		<MvASSIGN NAME = "g.Customer:bill_lname"	VALUE = "{ l.order:bill_lname }">
+		<MvASSIGN NAME = "g.Customer:bill_email"	VALUE = "{ l.order:bill_email }">
+		<MvASSIGN NAME = "g.Customer:bill_comp"		VALUE = "{ l.order:bill_comp }">
+		<MvASSIGN NAME = "g.Customer:bill_phone"	VALUE = "{ l.order:bill_phone }">
+		<MvASSIGN NAME = "g.Customer:bill_fax"		VALUE = "{ l.order:bill_fax }">
+		<MvASSIGN NAME = "g.Customer:bill_addr"		VALUE = "{ l.order:bill_addr }">
+		<MvASSIGN NAME = "g.Customer:bill_addr1"	VALUE = "{ l.order:bill_addr }">
+		<MvASSIGN NAME = "g.Customer:bill_addr2"	VALUE = "{ l.order:bill_addr2 }">
+		<MvASSIGN NAME = "g.Customer:bill_city"		VALUE = "{ l.order:bill_city }">
+		<MvASSIGN NAME = "g.Customer:bill_state"	VALUE = "{ l.order:bill_state }">
+		<MvASSIGN NAME = "g.Customer:bill_zip"		VALUE = "{ l.order:bill_zip }">
+		<MvASSIGN NAME = "g.Customer:bill_cntry"	VALUE = "{ l.order:bill_cntry }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Encrypt( g.Customer_Password, g.Customer:password ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer:order_cnt"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer:order_avg"			VALUE = 0.00>
+	<MvASSIGN NAME = "g.Customer:order_tot"			VALUE = 0.00>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Insert( g.Customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00020', 'Customer created', g.Customer ) }">
+
+	<MvIF EXPR = "{ l.have_valid_order AND l.order:cust_id EQ 0 }">
+		<MvASSIGN NAME = "l.order:cust_id"			VALUE = "{ g.Customer:id }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Update_Customer_Information( l.order ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Basket:order_id"		VALUE = 0>
+		<MvASSIGN NAME = "g.Basket:order_proc"		VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Order( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer_Session_Verified"	VALUE = 1>
+	<MvASSIGN NAME = "g.Customer_Session_ID"		VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "g.Basket:cussess_id"			VALUE = "{ g.Customer_Session_ID }">
+	<MvASSIGN NAME = "g.Basket:cust_id"				VALUE = "{ g.Customer:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Customer_ID( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Checkout_Session_Verified"	VALUE = 0>
+	<MvASSIGN NAME = "g.Checkout_Session_ID"		VALUE = "">
+	<MvASSIGN NAME = "g.Basket:chksess_id"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Customer_Information( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].UpdateSessionID() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Customer_Login( g.Customer:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Customer account created successfully.' ) }">
+
+	<MvIF EXPR = "{ g.Screen EQ 'INVC' }">
+		<MvCOMMENT>
+		|
+		| If the INVC page is being displayed, throw the order_invoice exception directly to avoid the specialized INVC
+		| page handling in merchant.mv
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "g.Order" VALUE = "{ l.order }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'order_invoice' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_ResetPassword" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Customer_PasswordResetToken"				VALUE = "{ trim( g.Customer_PasswordResetToken ) }">
+	<MvASSIGN NAME = "g.Customer_PasswordResetNewPassword"			VALUE = "{ trim( g.Customer_PasswordResetNewPassword ) }">
+	<MvASSIGN NAME = "g.Customer_PasswordResetVerifyNewPassword"	VALUE = "{ trim( g.Customer_PasswordResetVerifyNewPassword ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load_Cached( l.customersettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerPasswordReset_Load_Token( g.Customer_PasswordResetToken, l.reset ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_reset' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( l.reset:cust_id, l.customer ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_reset' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customersettings:resettype EQ 'temporary' }">
+		<MvASSIGN NAME = "g.Customer_Temporary_Password"			VALUE = "{ [ g.Module_Library_Utilities ].GeneratePassword( l.customersettings ) }">
+		<MvASSIGN NAME = "l.new_password"							VALUE = "{ g.Customer_Temporary_Password }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Password( l.customersettings, g.Customer_PasswordResetNewPassword ) }">
+			<MvASSIGN NAME = "g.Customer_Password_Invalid"			VALUE = 1>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_reset_password' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Customer_PasswordResetNewPassword NE g.Customer_PasswordResetVerifyNewPassword }">
+			<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"	VALUE = 1>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_reset_password' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.new_password"							VALUE = "{ g.Customer_PasswordResetNewPassword }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Encrypt( l.new_password, l.customer:password ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerPasswordReset_Delete_Customer( l.customer:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00004', 'Customer password reset', l.customer ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Expire_All_Customer_OtherBasket( l.customer:id, g.Basket:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_password_reset' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_ChangePassword" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"										VALUE = 1>
+	<MvASSIGN NAME = "g.Customer_CurrentPassword"					VALUE = "{ trim( g.Customer_CurrentPassword ) }">
+	<MvASSIGN NAME = "g.Customer_Password"							VALUE = "{ trim( g.Customer_Password ) }">
+	<MvASSIGN NAME = "g.Customer_VerifyPassword"					VALUE = "{ trim( g.Customer_VerifyPassword ) }">
+
+	<MvASSIGN NAME = "g.Validation_Message"							VALUE = "">
+	<MvASSIGN NAME = "g.Customer_CurrentPassword_Invalid"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_Password_Invalid"					VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_count"				VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'custrt', l.modules ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load( l.customersettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customersettings:pwchgauth }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Verify( g.Customer_CurrentPassword, g.Customer:password ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+			<MvASSIGN NAME = "l.valid"									VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_CurrentPassword_Invalid"		VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Password( l.customersettings, g.Customer_Password ) }">
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Password_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"			VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ crypto_md5( g.Customer_Password ) NE crypto_md5( g.Customer_VerifyPassword ) }">
+		<MvASSIGN NAME = "l.valid"										VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_Password_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_VerifyPassword_Invalid"			VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_changepassword' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer:password" VALUE = "{ g.Customer_Password }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( g.Customer ) OR 
+					NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, g.Customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00005', 'Customer password updated', g.Customer ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Expire_All_Customer_OtherBasket( g.Customer:id, g.Basket:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+		<MvIF EXPR = "{ l.module:api_ver GE 5.73 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_Customer_Runtime_ChangePassword( l.module, g.Customer ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Password Updated Successfully.' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_Customer_ChangeEmailAddress" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"											VALUE = 1>
+	<MvASSIGN NAME = "g.Customer_CurrentPassword"						VALUE = "{ trim( g.Customer_CurrentPassword ) }">
+	<MvASSIGN NAME = "g.Customer_LoginEmail"							VALUE = "{ trim( g.Customer_LoginEmail ) }">
+	<MvASSIGN NAME = "g.Customer_VerifyLoginEmail"						VALUE = "{ trim( g.Customer_VerifyLoginEmail ) }">
+
+	<MvASSIGN NAME = "g.Validation_Message"								VALUE = "">
+	<MvASSIGN NAME = "g.Customer_CurrentPassword_Invalid"				VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"					VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid_Message"			VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_LoginEmail_InUse"						VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_VerifyLoginEmail_Invalid"				VALUE = 0>
+	<MvASSIGN NAME = "g.Customer_LoginEmailVerifyLoginEmail_Mismatch"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_count"									VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'custrt', l.modules ) }">
+	
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerSettings_Load( l.customersettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customersettings:pwchgauth }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_UT ].Customer_Password_Verify( g.Customer_CurrentPassword, g.Customer:password ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+			
+			<MvASSIGN NAME = "l.valid"										VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_CurrentPassword_Invalid"			VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.Customer_LoginEmail ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_VerifyLoginEmail_Invalid"				VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid_Message"			VALUE = "{ g.Validation_Message }">
+	</MvIF>
+	
+	<MvIF EXPR = "{ g.Customer_LoginEmail NE g.Customer:pw_email }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_CUS_DB ].Customer_Load_Email( g.Customer_LoginEmail, l.null ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+
+			<MvASSIGN NAME = "l.valid"										VALUE = 0>
+			<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"				VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_VerifyLoginEmail_Invalid"			VALUE = 1>
+			<MvASSIGN NAME = "g.Customer_LoginEmail_InUse"					VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Customer_LoginEmail NE g.Customer_VerifyLoginEmail }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Customer_LoginEmail_Invalid"					VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_VerifyLoginEmail_Invalid"				VALUE = 1>
+		<MvASSIGN NAME = "g.Customer_LoginEmailVerifyLoginEmail_Mismatch"	VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_changeemailaddress' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_customer" VALUE = "{ g.Customer }">
+	<MvASSIGN NAME = "g.Customer:pw_email" VALUE = "{ g.Customer_LoginEmail }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( g.Customer ) OR 
+					NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, g.Customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Change( 'MER-CUS-RNT-00006', 'Customer email updated', l.original_customer, g.Customer ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+		<MvIF EXPR = "{ l.module:api_ver GE 5.73 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_Customer_Runtime_ChangeEmailAddress( l.module, g.Customer ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Email Address Updated Successfully.' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerAddress_Validate" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Address_ID" 						VALUE = "{ int( g.Address_ID ) }">
+	<MvASSIGN NAME = "g.Address_Description" 				VALUE = "{ trim( g.Address_Description ) }">
+	<MvASSIGN NAME = "g.Address_FirstName" 					VALUE = "{ trim( g.Address_FirstName ) }">
+	<MvASSIGN NAME = "g.Address_LastName" 					VALUE = "{ trim( g.Address_LastName ) }">
+	<MvASSIGN NAME = "g.Address_Email" 						VALUE = "{ trim( g.Address_Email ) }">
+	<MvASSIGN NAME = "g.Address_Company" 					VALUE = "{ trim( g.Address_Company ) }">
+	<MvASSIGN NAME = "g.Address_Phone" 						VALUE = "{ trim( g.Address_Phone ) }">
+	<MvASSIGN NAME = "g.Address_Fax" 						VALUE = "{ trim( g.Address_Fax ) }">
+	<MvASSIGN NAME = "g.Address_Address1" 					VALUE = "{ trim( g.Address_Address1 ) }">
+	<MvASSIGN NAME = "g.Address_Address2" 					VALUE = "{ trim( g.Address_Address2 ) }">
+	<MvASSIGN NAME = "g.Address_City" 						VALUE = "{ trim( g.Address_City ) }">
+	<MvASSIGN NAME = "g.Address_State" 						VALUE = "{ trim( g.Address_State ) }">
+	<MvASSIGN NAME = "g.Address_StateSelect" 				VALUE = "{ trim( g.Address_StateSelect ) }">
+	<MvASSIGN NAME = "g.Address_Zip" 						VALUE = "{ trim( g.Address_Zip ) }">
+	<MvASSIGN NAME = "g.Address_Country" 					VALUE = "{ trim( g.Address_Country ) }">
+	<MvASSIGN NAME = "g.Address_Residential" 				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Address_Residential ) }">
+	<MvASSIGN NAME = "g.Address_Default_Shipping" 			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Address_Default_Shipping ) }">
+	<MvASSIGN NAME = "g.Address_Default_Billing" 			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Address_Default_Billing ) }">
+
+	<MvASSIGN NAME = "l.valid" 								VALUE = 1>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Address_Description }">
+		<MvASSIGN NAME = "g.Address_Description_Invalid"	VALUE = 1>
+		<MvASSIGN NAME = "l.valid" 							VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Address_StateSelect }">
+		<MvASSIGN NAME = "g.Address_State"					VALUE = "{ g.Address_StateSelect }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.address:fname"						VALUE = "{ g.Address_FirstName }">
+	<MvASSIGN NAME = "l.address:lname"						VALUE = "{ g.Address_LastName }">
+	<MvASSIGN NAME = "l.address:email"						VALUE = "{ g.Address_Email }">
+	<MvASSIGN NAME = "l.address:comp"						VALUE = "{ g.Address_Company }">
+	<MvASSIGN NAME = "l.address:phone"						VALUE = "{ g.Address_Phone }">
+	<MvASSIGN NAME = "l.address:fax"						VALUE = "{ g.Address_Fax }">
+	<MvASSIGN NAME = "l.address:addr1"						VALUE = "{ g.Address_Address1 }">
+	<MvASSIGN NAME = "l.address:addr2"						VALUE = "{ g.Address_Address2 }">
+	<MvASSIGN NAME = "l.address:city"						VALUE = "{ g.Address_City }">
+	<MvASSIGN NAME = "l.address:state"						VALUE = "{ g.Address_State }">
+	<MvASSIGN NAME = "l.address:zip"						VALUE = "{ g.Address_Zip }">
+	<MvASSIGN NAME = "l.address:cntry"						VALUE = "{ g.Address_Country }">
+
+	<MvIF EXPR = "{ l.std_flds:primaddr EQ 'shipping' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].StandardFields_Validate( l.std_flds, l.std_flds:shipping, 'O', l.address, 'g.Address_', l.null, '' ) }">
+			<MvASSIGN NAME = "l.valid" 						VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.std_flds:primaddr EQ 'billing' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].StandardFields_Validate( l.std_flds, l.std_flds:billing, 'O', l.address, 'g.Address_', l.null, '' ) }">
+			<MvASSIGN NAME = "l.valid" 						VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvASSIGN NAME = "g.Address_Address_Invalid"		VALUE = "{ g.Address_Address1_Invalid OR g.Address_Address2_Invalid }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Address_FirstName"				VALUE = "{ l.address:fname }">
+		<MvASSIGN NAME = "g.Address_LastName"				VALUE = "{ l.address:lname }">
+		<MvASSIGN NAME = "g.Address_Email"					VALUE = "{ l.address:email }">
+		<MvASSIGN NAME = "g.Address_Company"				VALUE = "{ l.address:comp }">
+		<MvASSIGN NAME = "g.Address_Phone"					VALUE = "{ l.address:phone }">
+		<MvASSIGN NAME = "g.Address_Fax"					VALUE = "{ l.address:fax }">
+		<MvASSIGN NAME = "g.Address_Address1"				VALUE = "{ l.address:addr1 }">
+		<MvASSIGN NAME = "g.Address_Address2"				VALUE = "{ l.address:addr2 }">
+		<MvASSIGN NAME = "g.Address_City"					VALUE = "{ l.address:city }">
+		<MvASSIGN NAME = "g.Address_State"					VALUE = "{ l.address:state }">
+		<MvASSIGN NAME = "g.Address_Zip"					VALUE = "{ l.address:zip }">
+		<MvASSIGN NAME = "g.Address_Country"				VALUE = "{ l.address:cntry }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CustomerAddress_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CustomerAddress_Validate() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customeraddress_invalid_addinfo' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.address:cust_id" 					VALUE = "{ g.Customer:id }">
+	<MvASSIGN NAME = "l.address:descrip" 					VALUE = "{ g.Address_Description }">
+	<MvASSIGN NAME = "l.address:fname" 						VALUE = "{ g.Address_FirstName }">
+	<MvASSIGN NAME = "l.address:lname" 						VALUE = "{ g.Address_LastName }">
+	<MvASSIGN NAME = "l.address:email" 						VALUE = "{ g.Address_Email }">
+	<MvASSIGN NAME = "l.address:comp" 						VALUE = "{ g.Address_Company }">
+	<MvASSIGN NAME = "l.address:phone" 						VALUE = "{ g.Address_Phone }">
+	<MvASSIGN NAME = "l.address:fax" 						VALUE = "{ g.Address_Fax }">
+	<MvASSIGN NAME = "l.address:addr1" 						VALUE = "{ g.Address_Address1 }">
+	<MvASSIGN NAME = "l.address:addr2" 						VALUE = "{ g.Address_Address2 }">
+	<MvASSIGN NAME = "l.address:city" 						VALUE = "{ g.Address_City }">
+	<MvASSIGN NAME = "l.address:state" 						VALUE = "{ g.Address_State }">
+	<MvASSIGN NAME = "l.address:zip" 						VALUE = "{ g.Address_Zip }">
+	<MvASSIGN NAME = "l.address:cntry" 						VALUE = "{ g.Address_Country }">
+	<MvASSIGN NAME = "l.address:resdntl" 					VALUE = "{ g.Address_Residential }">
+
+	<MvIF EXPR = "{ NOT g.Address_Validated }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingRules_Load( l.shippingrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.Store:addrval_id AND l.shippingrules:aval_cust }">
+			<MvASSIGN NAME = "l.unvalidated_address:addr1"		VALUE = "{ l.address:addr1 }">
+			<MvASSIGN NAME = "l.unvalidated_address:addr2"		VALUE = "{ l.address:addr2 }">
+			<MvASSIGN NAME = "l.unvalidated_address:city"		VALUE = "{ l.address:city }">
+			<MvASSIGN NAME = "l.unvalidated_address:state"		VALUE = "{ l.address:state }">
+			<MvASSIGN NAME = "l.unvalidated_address:zip"		VALUE = "{ l.address:zip }">
+			<MvASSIGN NAME = "l.unvalidated_address:cntry"		VALUE = "{ l.address:cntry }">
+			<MvASSIGN NAME = "l.unvalidated_address:comp"		VALUE = "{ l.address:comp }">
+			<MvASSIGN NAME = "l.unvalidated_address:resdntl"	VALUE = "{ l.address:resdntl }">
+
+			<MvIF EXPR = "{ NOT Runtime_Validate_Address( l.unvalidated_address, 'customeraddress_validate_addinfo', g.Validated_Addresses ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ g.UI_Exception }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Insert( l.address ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00007', 'Customer address created', g.Customer ) }">
+
+	<MvASSIGN NAME = "g.Address_ID" 					VALUE = "{ l.address:id }">
+
+	<MvIF EXPR = "{ g.Address_Default_Shipping OR g.Address_Default_Billing }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, l.customer ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Address_Default_Shipping }">
+			<MvASSIGN NAME = "l.customer:ship_id" 		VALUE = "{ l.address:id }">
+			<MvASSIGN NAME = "l.customer:ship_descrip"	VALUE = "{ l.address:descrip }">
+			<MvASSIGN NAME = "l.customer:ship_fname" 	VALUE = "{ l.address:fname }">
+			<MvASSIGN NAME = "l.customer:ship_lname" 	VALUE = "{ l.address:lname }">
+			<MvASSIGN NAME = "l.customer:ship_email" 	VALUE = "{ l.address:email }">
+			<MvASSIGN NAME = "l.customer:ship_phone" 	VALUE = "{ l.address:phone }">
+			<MvASSIGN NAME = "l.customer:ship_fax" 		VALUE = "{ l.address:fax }">
+			<MvASSIGN NAME = "l.customer:ship_comp" 	VALUE = "{ l.address:comp }">
+			<MvASSIGN NAME = "l.customer:ship_addr" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr1" 	VALUE = "{ l.address:addr1 }">
+			<MvASSIGN NAME = "l.customer:ship_addr2"	VALUE = "{ l.address:addr2 }">
+			<MvASSIGN NAME = "l.customer:ship_city"		VALUE = "{ l.address:city }">
+			<MvASSIGN NAME = "l.customer:ship_state"	VALUE = "{ l.address:state }">
+			<MvASSIGN NAME = "l.customer:ship_zip"		VALUE = "{ l.address:zip }">
+			<MvASSIGN NAME = "l.customer:ship_cntry"	VALUE = "{ l.address:cntry }">
+			<MvASSIGN NAME = "l.customer:ship_res"		VALUE = "{ l.address:resdntl }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Address_Default_Billing }">
+			<MvASSIGN NAME = "l.customer:bill_id" 		VALUE = "{ l.address:id }">
+			<MvASSIGN NAME = "l.customer:bill_descrip"	VALUE = "{ l.address:descrip }">
+			<MvASSIGN NAME = "l.customer:bill_fname" 	VALUE = "{ l.address:fname }">
+			<MvASSIGN NAME = "l.customer:bill_lname" 	VALUE = "{ l.address:lname }">
+			<MvASSIGN NAME = "l.customer:bill_email" 	VALUE = "{ l.address:email }">
+			<MvASSIGN NAME = "l.customer:bill_phone" 	VALUE = "{ l.address:phone }">
+			<MvASSIGN NAME = "l.customer:bill_fax" 		VALUE = "{ l.address:fax }">
+			<MvASSIGN NAME = "l.customer:bill_comp" 	VALUE = "{ l.address:comp }">
+			<MvASSIGN NAME = "l.customer:bill_addr" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr1" 	VALUE = "{ l.address:addr1 }">
+			<MvASSIGN NAME = "l.customer:bill_addr2"	VALUE = "{ l.address:addr2 }">
+			<MvASSIGN NAME = "l.customer:bill_city"		VALUE = "{ l.address:city }">
+			<MvASSIGN NAME = "l.customer:bill_state"	VALUE = "{ l.address:state }">
+			<MvASSIGN NAME = "l.customer:bill_zip"		VALUE = "{ l.address:zip }">
+			<MvASSIGN NAME = "l.customer:bill_cntry"	VALUE = "{ l.address:cntry }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( l.customer ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Address_Default_Shipping AND g.Address_Default_Billing }">	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00008', 'Customer default shipping and billing address updated', l.customer ) }">
+		<MvELSEIF EXPR = "{ g.Address_Default_Shipping }">								<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00009', 'Customer default shipping address updated', l.customer ) }">
+		<MvELSEIF EXPR = "{ g.Address_Default_Billing }">								<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00010', 'Customer default billing address updated', l.customer ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Customer" 					VALUE = "{ l.customer }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CustomerAddress_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CustomerAddress_Validate() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customeraddress_invalid_editinfo' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, l.customer ) OR
+					NOT [ g.Module_Library_DB ].StandardFields_Load_Cached( l.std_flds ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Load( l.customer:id, g.Address_ID, l.address ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_address' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.address:descrip"				VALUE = "{ g.Address_Description }">
+
+	<MvIF EXPR = "{ l.std_flds:mode_fname NE 'H' }"> 	<MvASSIGN NAME = "l.address:fname"		VALUE = "{ g.Address_FirstName }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_lname NE 'H' }"> 	<MvASSIGN NAME = "l.address:lname"		VALUE = "{ g.Address_LastName }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_email NE 'H' }"> 	<MvASSIGN NAME = "l.address:email"		VALUE = "{ g.Address_Email }"> 		</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_comp NE 'H' }"> 	<MvASSIGN NAME = "l.address:comp"		VALUE = "{ g.Address_Company }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_phone NE 'H' }"> 	<MvASSIGN NAME = "l.address:phone"		VALUE = "{ g.Address_Phone }"> 		</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_fax NE 'H' }"> 		<MvASSIGN NAME = "l.address:fax"		VALUE = "{ g.Address_Fax }"> 		</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_addr NE 'H' }"> 	<MvASSIGN NAME = "l.address:addr1"		VALUE = "{ g.Address_Address1 }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_addr2 NE 'H' }"> 	<MvASSIGN NAME = "l.address:addr2"		VALUE = "{ g.Address_Address2 }"> 	</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_city NE 'H' }"> 	<MvASSIGN NAME = "l.address:city"		VALUE = "{ g.Address_City }"> 		</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_state NE 'H' }"> 	<MvASSIGN NAME = "l.address:state"		VALUE = "{ g.Address_State }"> 		</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_zip NE 'H' }"> 		<MvASSIGN NAME = "l.address:zip"		VALUE = "{ g.Address_Zip }"> 		</MvIF>
+	<MvIF EXPR = "{ l.std_flds:mode_cntry NE 'H' }"> 	<MvASSIGN NAME = "l.address:cntry"		VALUE = "{ g.Address_Country }"> 	</MvIF>
+
+	<MvIF EXPR = "{ l.std_flds:ship_res EQ 'A' }">		<MvASSIGN NAME = "l.address:resdntl" VALUE = "{ ISNULL l.address:comp }">
+	<MvELSE>											<MvASSIGN NAME = "l.address:resdntl" VALUE = "{ g.Address_Residential }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Address_Validated }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingRules_Load( l.shippingrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ g.Store:addrval_id AND l.shippingrules:aval_cust }">
+			<MvASSIGN NAME = "l.unvalidated_address:addr1"		VALUE = "{ l.address:addr1 }">
+			<MvASSIGN NAME = "l.unvalidated_address:addr2"		VALUE = "{ l.address:addr2 }">
+			<MvASSIGN NAME = "l.unvalidated_address:city"		VALUE = "{ l.address:city }">
+			<MvASSIGN NAME = "l.unvalidated_address:state"		VALUE = "{ l.address:state }">
+			<MvASSIGN NAME = "l.unvalidated_address:zip"		VALUE = "{ l.address:zip }">
+			<MvASSIGN NAME = "l.unvalidated_address:cntry"		VALUE = "{ l.address:cntry }">
+			<MvASSIGN NAME = "l.unvalidated_address:comp"		VALUE = "{ l.address:comp }">
+			<MvASSIGN NAME = "l.unvalidated_address:resdntl"	VALUE = "{ l.address:resdntl }">
+
+			<MvIF EXPR = "{ NOT Runtime_Validate_Address( l.unvalidated_address, 'customeraddress_validate_editinfo', g.Validated_Addresses ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ g.UI_Exception }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Update( l.address ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00011', 'Customer address updated', l.customer ) }">
+
+	<MvASSIGN NAME = "l.update_message_list"			VALUE = "">
+	<MvASSIGN NAME = "l.update_message_count"			VALUE = 0>
+
+	<MvIF EXPR = "{ g.Address_Default_Shipping }">
+		<MvASSIGN NAME = "l.customer:ship_id" 			VALUE = "{ l.address:id }">
+		<MvASSIGN NAME = "l.customer:ship_descrip"		VALUE = "{ l.address:descrip }">
+		<MvASSIGN NAME = "l.customer:ship_fname" 		VALUE = "{ l.address:fname }">
+		<MvASSIGN NAME = "l.customer:ship_lname" 		VALUE = "{ l.address:lname }">
+		<MvASSIGN NAME = "l.customer:ship_email" 		VALUE = "{ l.address:email }">
+		<MvASSIGN NAME = "l.customer:ship_phone" 		VALUE = "{ l.address:phone }">
+		<MvASSIGN NAME = "l.customer:ship_fax" 			VALUE = "{ l.address:fax }">
+		<MvASSIGN NAME = "l.customer:ship_comp" 		VALUE = "{ l.address:comp }">
+		<MvASSIGN NAME = "l.customer:ship_addr" 		VALUE = "">
+		<MvASSIGN NAME = "l.customer:ship_addr1" 		VALUE = "{ l.address:addr1 }">
+		<MvASSIGN NAME = "l.customer:ship_addr2"		VALUE = "{ l.address:addr2 }">
+		<MvASSIGN NAME = "l.customer:ship_city"			VALUE = "{ l.address:city }">
+		<MvASSIGN NAME = "l.customer:ship_state"		VALUE = "{ l.address:state }">
+		<MvASSIGN NAME = "l.customer:ship_zip"			VALUE = "{ l.address:zip }">
+		<MvASSIGN NAME = "l.customer:ship_cntry"		VALUE = "{ l.address:cntry }">
+		<MvASSIGN NAME = "l.customer:ship_res"			VALUE = "{ l.address:resdntl }">
+
+		<MvASSIGN NAME = "l.update_message_count"		VALUE = "{ miva_array_insert( l.update_message_list, 'default shipping address updated', -1 ) }">
+	<MvELSEIF EXPR = "{ NOT g.Address_Default_Shipping AND l.customer:ship_id EQ l.address:id }">
+		<MvASSIGN NAME = "l.customer:ship_id"			VALUE = 0>
+
+		<MvIF EXPR = "{ [ g.Feature_Filename_CUS_UT ].CustomerAddress_CustomerShipping_Compare_Same( l.customer, l.address ) }">
+			<MvASSIGN NAME = "l.customer:ship_descrip"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_fname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_lname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_email" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_phone" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_fax" 		VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_comp" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr1" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr2"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_city"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_state"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_zip"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_cntry"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_res"		VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.update_message_count"		VALUE = "{ miva_array_insert( l.update_message_list, 'default shipping address removed', -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Address_Default_Billing }">
+		<MvASSIGN NAME = "l.customer:bill_id" 			VALUE = "{ l.address:id }">
+		<MvASSIGN NAME = "l.customer:bill_descrip"		VALUE = "{ l.address:descrip }">
+		<MvASSIGN NAME = "l.customer:bill_fname" 		VALUE = "{ l.address:fname }">
+		<MvASSIGN NAME = "l.customer:bill_lname" 		VALUE = "{ l.address:lname }">
+		<MvASSIGN NAME = "l.customer:bill_email" 		VALUE = "{ l.address:email }">
+		<MvASSIGN NAME = "l.customer:bill_phone" 		VALUE = "{ l.address:phone }">
+		<MvASSIGN NAME = "l.customer:bill_fax" 			VALUE = "{ l.address:fax }">
+		<MvASSIGN NAME = "l.customer:bill_comp" 		VALUE = "{ l.address:comp }">
+		<MvASSIGN NAME = "l.customer:bill_addr" 		VALUE = "">
+		<MvASSIGN NAME = "l.customer:bill_addr1" 		VALUE = "{ l.address:addr1 }">
+		<MvASSIGN NAME = "l.customer:bill_addr2"		VALUE = "{ l.address:addr2 }">
+		<MvASSIGN NAME = "l.customer:bill_city"			VALUE = "{ l.address:city }">
+		<MvASSIGN NAME = "l.customer:bill_state"		VALUE = "{ l.address:state }">
+		<MvASSIGN NAME = "l.customer:bill_zip"			VALUE = "{ l.address:zip }">
+		<MvASSIGN NAME = "l.customer:bill_cntry"		VALUE = "{ l.address:cntry }">
+
+		<MvASSIGN NAME = "l.update_message_count"		VALUE = "{ miva_array_insert( l.update_message_list, 'default billing address updated', -1 ) }">
+	<MvELSEIF EXPR = "{ NOT g.Address_Default_Billing AND l.customer:bill_id EQ l.address:id }">
+		<MvASSIGN NAME = "l.customer:bill_id"			VALUE = 0>
+
+		<MvIF EXPR = "{ [ g.Feature_Filename_CUS_UT ].CustomerAddress_CustomerBilling_Compare_Same( l.customer, l.address ) }">
+			<MvASSIGN NAME = "l.customer:bill_descrip"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_fname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_lname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_email" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_phone" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_fax" 		VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_comp" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr1" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr2"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_city"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_state"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_zip"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_cntry"	VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.update_message_count"		VALUE = "{ miva_array_insert( l.update_message_list, 'default billing address removed', -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.update_message_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( l.customer ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00012', 'Customer ' $ miva_joinstring( l.update_message_list, ', ', '' ), l.customer ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer" 					VALUE = "{ l.customer }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Address information updated successfully.' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CustomerAddress_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Address_ID" 					VALUE = "{ int( g.Address_ID ) }">
+
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Load( l.customer:id, g.Address_ID, l.address ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_address' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Count_Active_CustomerAddress( l.customer:id, l.address:id, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.count GT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customeraddress_in_use' ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Update_All_CustomerAddress( l.customer:id, l.address:id, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Delete( l.address:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00013', 'Customer address deleted', l.customer ) }">
+
+	<MvASSIGN NAME = "l.update_message_list"			VALUE = "">
+	<MvASSIGN NAME = "l.update_message_count"			VALUE = 0>
+
+	<MvIF EXPR = "{ ( l.address:id EQ l.customer:ship_id ) OR ( l.address:id EQ l.customer:bill_id ) }">
+		<MvIF EXPR = "{ l.address:id EQ l.customer:ship_id }">
+			<MvASSIGN NAME = "l.customer:ship_id" 		VALUE = 0>
+			<MvASSIGN NAME = "l.customer:ship_descrip"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_fname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_lname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_email" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_phone" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_fax" 		VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_comp" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr1" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_addr2"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_city"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_state"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_zip"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_cntry"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:ship_res"		VALUE = 0>
+
+			<MvASSIGN NAME = "l.update_message_count"	VALUE = "{ miva_array_insert( l.update_message_list, 'default shipping address removed', -1 ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.address:id EQ l.customer:bill_id }">
+			<MvASSIGN NAME = "l.customer:bill_id" 		VALUE = 0>
+			<MvASSIGN NAME = "l.customer:bill_descrip"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_fname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_lname" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_email" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_phone" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_fax" 		VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_comp" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr1" 	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_addr2"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_city"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_state"	VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_zip"		VALUE = "">
+			<MvASSIGN NAME = "l.customer:bill_cntry"	VALUE = "">
+
+			<MvASSIGN NAME = "l.update_message_count"	VALUE = "{ miva_array_insert( l.update_message_list, 'default billing address removed', -1 ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.update_message_count }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( l.customer ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00014', 'Customer ' $ miva_joinstring( l.update_message_list, ', ', '' ), l.customer ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Customer" 					VALUE = "{ l.customer }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CustomerAddress_ChangeDefault" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.ShippingAddress_ID" 		VALUE = "{ int( g.ShippingAddress_ID ) }">
+	<MvASSIGN NAME = "g.BillingAddress_ID" 			VALUE = "{ int( g.BillingAddress_ID ) }">
+
+	<MvIF EXPR = "{ NOT g.ShippingAddress_ID AND NOT g.BillingAddress_ID }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_address' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Load_ID( g.Basket:cust_id, l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.ShippingAddress_ID }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Load( l.customer:id, g.ShippingAddress_ID, l.address ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_address' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.customer:ship_id" 		VALUE = "{ l.address:id }">
+		<MvASSIGN NAME = "l.customer:ship_descrip"	VALUE = "{ l.address:descrip }">
+		<MvASSIGN NAME = "l.customer:ship_fname" 	VALUE = "{ l.address:fname }">
+		<MvASSIGN NAME = "l.customer:ship_lname" 	VALUE = "{ l.address:lname }">
+		<MvASSIGN NAME = "l.customer:ship_email" 	VALUE = "{ l.address:email }">
+		<MvASSIGN NAME = "l.customer:ship_phone" 	VALUE = "{ l.address:phone }">
+		<MvASSIGN NAME = "l.customer:ship_fax" 		VALUE = "{ l.address:fax }">
+		<MvASSIGN NAME = "l.customer:ship_comp" 	VALUE = "{ l.address:comp }">
+		<MvASSIGN NAME = "l.customer:ship_addr" 	VALUE = "">
+		<MvASSIGN NAME = "l.customer:ship_addr1" 	VALUE = "{ l.address:addr1 }">
+		<MvASSIGN NAME = "l.customer:ship_addr2"	VALUE = "{ l.address:addr2 }">
+		<MvASSIGN NAME = "l.customer:ship_city"		VALUE = "{ l.address:city }">
+		<MvASSIGN NAME = "l.customer:ship_state"	VALUE = "{ l.address:state }">
+		<MvASSIGN NAME = "l.customer:ship_zip"		VALUE = "{ l.address:zip }">
+		<MvASSIGN NAME = "l.customer:ship_cntry"	VALUE = "{ l.address:cntry }">
+		<MvASSIGN NAME = "l.customer:ship_res"		VALUE = "{ l.address:resdntl }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.BillingAddress_ID }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].CustomerAddress_Load( l.customer:id, g.BillingAddress_ID, l.address ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_address' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.customer:bill_id" 		VALUE = "{ l.address:id }">
+		<MvASSIGN NAME = "l.customer:bill_descrip"	VALUE = "{ l.address:descrip }">
+		<MvASSIGN NAME = "l.customer:bill_fname" 	VALUE = "{ l.address:fname }">
+		<MvASSIGN NAME = "l.customer:bill_lname" 	VALUE = "{ l.address:lname }">
+		<MvASSIGN NAME = "l.customer:bill_email" 	VALUE = "{ l.address:email }">
+		<MvASSIGN NAME = "l.customer:bill_phone" 	VALUE = "{ l.address:phone }">
+		<MvASSIGN NAME = "l.customer:bill_fax" 		VALUE = "{ l.address:fax }">
+		<MvASSIGN NAME = "l.customer:bill_comp" 	VALUE = "{ l.address:comp }">
+		<MvASSIGN NAME = "l.customer:bill_addr" 	VALUE = "">
+		<MvASSIGN NAME = "l.customer:bill_addr1" 	VALUE = "{ l.address:addr1 }">
+		<MvASSIGN NAME = "l.customer:bill_addr2"	VALUE = "{ l.address:addr2 }">
+		<MvASSIGN NAME = "l.customer:bill_city"		VALUE = "{ l.address:city }">
+		<MvASSIGN NAME = "l.customer:bill_state"	VALUE = "{ l.address:state }">
+		<MvASSIGN NAME = "l.customer:bill_zip"		VALUE = "{ l.address:zip }">
+		<MvASSIGN NAME = "l.customer:bill_cntry"	VALUE = "{ l.address:cntry }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_CUS_DB ].Customer_Update( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.ShippingAddress_ID AND g.BillingAddress_ID }">	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00017', 'Customer default shipping and billing address updated', l.customer ) }">
+	<MvELSEIF EXPR = "{ g.ShippingAddress_ID }">						<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00018', 'Customer default shipping address updated', l.customer ) }">
+	<MvELSEIF EXPR = "{ g.BillingAddress_ID }">							<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Action( 'MER-CUS-RNT-00019', 'Customer default billing address updated', l.customer ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer" 					VALUE = "{ l.customer }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v56_CustomerAddress_Compatibility" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Customer_ShipAddress }">
+		<MvIF EXPR = "{ ISNULL g.Customer_ShipAddress2 }">
+			<MvASSIGN NAME = "g.Customer_ShipAddress"	VALUE = "{ g.Customer_ShipAddress1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Customer_ShipAddress"	VALUE = "{ g.Customer_ShipAddress1 $ ' ' $ g.Customer_ShipAddress2 }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Customer_BillAddress }">
+		<MvIF EXPR = "{ ISNULL g.Customer_BillAddress2 }">
+			<MvASSIGN NAME = "g.Customer_BillAddress"	VALUE = "{ g.Customer_BillAddress1 }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Customer_BillAddress"	VALUE = "{ g.Customer_BillAddress1 $ ' ' $ g.Customer_BillAddress2 }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>

@@ -1,0 +1,133 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2017 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-GIM-
+| Next Error Code: 4    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "GeneratedImage_FindOrInsert_Image_Dimensions" PARAMETERS = "image var, width, height, generatedimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.image:width LT l.width ) AND ( l.image:height LT l.height ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-GIM-00001', 'Image dimensions are not large enough to be constrained' ) }">
+	<MvELSEIF EXPR = "{ GeneratedImage_Load_Dimensions( l.image:id, l.width, l.height, l.generatedimage ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| We use MvLOCKFILE here instead of DB_Lock_Table so that we can perform the locking on a per-image basis
+	|
+	</MvCOMMENT>
+
+	<MvLOCKFILE FILE = "{ g.MerchantPath $ 'generatedimage_' $ g.Store:id $ '_' $ l.image:id }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ GeneratedImage_FindOrInsert_Image_Dimensions_LowLevel( l.image, l.width, l.height, l.generatedimage ) }">
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GeneratedImage_FindOrInsert_Image_Dimensions_LowLevel" PARAMETERS = "image var, width, height, generatedimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ GeneratedImage_Load_Dimensions( l.image:id, l.width, l.height, l.generatedimage ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load the source image and do the resize operation into memory, then
+	| use basically the same logic as in Image_FindOrInsert_RenameFile_NoDuplicates to
+	| rename the file into its final destination.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.extension"			VALUE = "{ [ g.Library_Filename_Utilities ].Extension( l.image:image ) }">
+	<MvASSIGN NAME = "l.filepath_noext"		VALUE = "{ substring( l.image:image, 1, len( l.image:image ) - len( l.extension ) ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Type( g.imageroot $ l.image:image, 'script', l.sourcefile_type ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.source_gdimage"		VALUE = "{ [ g.Library_Filename_Utilities ].Image_gdCreateFromFile_Type( l.sourcefile_type, g.imageroot $ l.image:image, 'script' ) }">
+
+	<MvIF EXPR = "{ l.source_gdimage LE 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result"					VALUE = "{ [ g.Library_Filename_Utilities ].Image_ResizeIntoBoundingBox_gdImage( l.source_gdimage, l.width, l.height, l.output_gdimage, l.output_width, l.output_height ) }">
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageDestroy( l.source_gdimage ) }">
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result"					VALUE = "{ [ g.Library_Filename_Utilities ].Image_gdSaveToMemory_Type( l.output_gdimage, l.sourcefile_type, l.output_buffer ) }">
+	<MvASSIGN NAME = "l.null"			        VALUE = "{ gdImageDestroy( l.output_gdimage ) }">
+
+	<MvFOR INDEX = "l.attempt" COUNT = "{ 100 }">
+		<MvIF EXPR = "{ l.attempt EQ 1 }">	<MvASSIGN NAME = "l.filepath" VALUE = "{ l.filepath_noext $ '_' $ l.output_width $ 'x' $ l.output_height $ l.extension }">
+		<MvELSE>							<MvASSIGN NAME = "l.filepath" VALUE = "{ l.filepath_noext $ '_' $ l.output_width $ 'x' $ l.output_height $ '_' $ l.attempt $ l.extension }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.outputfile_path"	VALUE = "{ g.imageroot $ l.filepath }">
+
+		<MvCOMMENT>
+		|
+		| file_create atomically either creates the file or tells us it already exists.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.file_exists"		VALUE = "{ file_create( l.outputfile_path, 'script', l.output_buffer ) LT 0 }">
+		<MvIF EXPR = "{ l.file_exists }">
+			<MvCOMMENT>
+			|
+			| If the size or MD5 sum of an existing file does not match the new file,
+			| we must rename the new file.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ ISNULL l.outputfile_size }">											<MvASSIGN NAME = "l.outputfile_size"	VALUE = "{ len_var( l.output_buffer ) }">	</MvIF>
+			<MvIF EXPR = "{ ssize( l.outputfile_path ) NE l.outputfile_size }">						<MvFORCONTINUE>																		</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.outputfile_md5 }">												<MvASSIGN NAME = "l.outputfile_md5"	VALUE = "{ crypto_md5( l.output_buffer ) }">	</MvIF>
+			<MvIF EXPR = "{ NOT crypto_md5_file( l.outputfile_path, 'script', l.existing_md5 ) }">	<MvFORCONTINUE>																		</MvIF>
+			<MvIF EXPR = "{ l.existing_md5 NE l.outputfile_md5 }">									<MvFORCONTINUE>																		</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| If we reach this point, we have atomically created the file and are ready to insert a GeneratedImage record.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.null"						VALUE = "{ schmod( l.outputfile_path, '0644' ) }">
+
+		<MvASSIGN NAME = "l.generatedimage:image_id"	VALUE = "{ l.image:id }">
+		<MvASSIGN NAME = "l.generatedimage:image"		VALUE = "{ l.filepath }">
+		<MvASSIGN NAME = "l.generatedimage:width"		VALUE = "{ l.output_width }">
+		<MvASSIGN NAME = "l.generatedimage:height"		VALUE = "{ l.output_height }">
+
+		<MvIF EXPR = "{ NOT GeneratedImage_Insert_LowLevel( l.generatedimage ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvFOR>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-GIM-00003', 'Unable to generate a unique image filename after 100 attempts' ) }">
+</MvFUNCTION>

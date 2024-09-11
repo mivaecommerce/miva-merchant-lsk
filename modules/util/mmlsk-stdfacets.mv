@@ -1,0 +1,2711 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-UTL-FCT-
+| Next Error Code: 109
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-stdfacets">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Standard Facets">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.00">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "This module will expose product price, category, and attributes as facets for search and navigation.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, vis_util, util, prod_facet, provision_store, scheduledtask, not_cat, json, clientside, clientside_sri, vis_productbe">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature data_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| sNN_StandardFacets
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'StandardFacets
+						  (
+							price 		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL() 	$ ',
+							price_n		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
+							category	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL() 	$ ',
+							attributes	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL() 	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.standardfacets" 			VALUE = "">
+	<MvASSIGN NAME = "l.standardfacets:price" 		VALUE = 1>
+	<MvASSIGN NAME = "l.standardfacets:price_n" 	VALUE = 5>
+	<MvASSIGN NAME = "l.standardfacets:category" 	VALUE = 1>
+	<MvASSIGN NAME = "l.standardfacets:attributes"	VALUE = 1>
+
+	<MvIF EXPR = "{ NOT StandardFacets_Insert( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_CategoryFacetHierarchy
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	 = "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy
+						   (
+							cat_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+							depth		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+							child_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+						   )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00019', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	 = "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy_1 ON ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy ( cat_id, child_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00020', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	 = "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy_2 ON ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy ( child_id, depth )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_AttributeFacets
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacets
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							lookup	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							prompt	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							active	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00031', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacets_1 ON ' $ g.Store_Table_Prefix $ 'AttributeFacets ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00032', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacets_2 ON ' $ g.Store_Table_Prefix $ 'AttributeFacets ( lookup )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00033', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacets_3 ON ' $ g.Store_Table_Prefix $ 'AttributeFacets ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00108', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacets_4 ON ' $ g.Store_Table_Prefix $ 'AttributeFacets ( prompt )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00103', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacets_5 ON ' $ g.Store_Table_Prefix $ 'AttributeFacets ( active )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00074', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_AttributeFacetXProduct
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct
+						  (
+							af_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00037', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct_1 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct ( af_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00038', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct_2 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct ( af_id, product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00039', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_AttributeFacetOptions
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							af_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							lookup	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							prompt	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							active	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00034', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions_1 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00035', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions_2 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions ( af_id, lookup )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00036', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions_3 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions ( af_id, prompt )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00104', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_AttributeFacetOptionXProduct
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct
+						  (
+							afo_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00040', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct_1 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct ( afo_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00041', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct_2 ON ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct ( afo_id, product_id  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00042', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Store keys
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'AttributeFacets', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'AttributeFacetOptions', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create the Update Category Hierarchy Scheduled Task
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.task"				VALUE = "">
+	<MvASSIGN NAME = "l.task:descrip"		VALUE = "Update Category Facet Hierarchy">
+	<MvASSIGN NAME = "l.task:enabled"		VALUE = 1>
+	<MvASSIGN NAME = "l.task:loglevel"		VALUE = "WE">
+	<MvASSIGN NAME = "l.task:trig"			VALUE = "catfacethierarchy">
+	<MvASSIGN NAME = "l.task:trig_delay"	VALUE = 30>
+	<MvASSIGN NAME = "l.task:runint"		VALUE = 0>
+	<MvASSIGN NAME = "l.task:runonce"		VALUE = 1>
+	<MvASSIGN NAME = "l.task:mnt_mode"		VALUE = 0>
+	<MvASSIGN NAME = "l.task:mnt_advnce"	VALUE = 1800>
+	<MvASSIGN NAME = "l.task:lastrun"		VALUE = 0>
+	<MvASSIGN NAME = "l.task:nextrun"		VALUE = "{ s.dyn_time_t }">
+	<MvASSIGN NAME = "l.task:module_id"		VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.task:operation"		VALUE = "category_hierarchy">
+	<MvASSIGN NAME = "l.task:config"		VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SCH_DB ].ScheduledTask_Insert( l.task ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create the Update Attribute Facets Scheduled Task
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.task"				VALUE = "">
+	<MvASSIGN NAME = "l.task:descrip"		VALUE = "Update Attribute Facets">
+	<MvASSIGN NAME = "l.task:enabled"		VALUE = 1>
+	<MvASSIGN NAME = "l.task:loglevel"		VALUE = "WE">
+	<MvASSIGN NAME = "l.task:trig"			VALUE = "attributefacets">
+	<MvASSIGN NAME = "l.task:trig_delay"	VALUE = 30>
+	<MvASSIGN NAME = "l.task:runint"		VALUE = 0>
+	<MvASSIGN NAME = "l.task:runonce"		VALUE = 1>
+	<MvASSIGN NAME = "l.task:mnt_mode"		VALUE = 0>
+	<MvASSIGN NAME = "l.task:mnt_advnce"	VALUE = 1800>
+	<MvASSIGN NAME = "l.task:lastrun"		VALUE = 0>
+	<MvASSIGN NAME = "l.task:nextrun"		VALUE = "{ s.dyn_time_t }">
+	<MvASSIGN NAME = "l.task:module_id"		VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.task:operation"		VALUE = "attribute_facets">
+	<MvASSIGN NAME = "l.task:config"		VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SCH_DB ].ScheduledTask_Insert( l.task ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'AttributeFacets' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'AttributeFacetOptions' ) }">
+
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'StandardFacets' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacets' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00047', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature util
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation" PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature vis_util
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Utility_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "STANDARD_FACETS:Standard Facet Settings">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT StandardFacets_Load( g.StandardFacets ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab NE 'STANDARD_FACETS' }">
+		<MvHIDE FIELDS = "g.StandardFacets">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<table border="0" cellpadding="2" cellspacing="0" width="100%">
+		<tr>
+			<td nowrap><b>Facets:</b></td>
+			<td width="100%">
+				<label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.StandardFacets:price, 'StandardFacets:price', 1, 'Price' ) }"></label>
+			</td>
+		</tr>
+		<tr>
+			<td nowrap>&nbsp;</td>
+			<td width="100%">
+				<label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.StandardFacets:category, 'StandardFacets:category', 1, 'Category' ) }"></label>
+			</td>
+		</tr>
+		<tr>
+			<td nowrap>&nbsp;</td>
+			<td width="100%">
+				<label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.StandardFacets:attributes, 'StandardFacets:attributes', 1, 'Attributes' ) }"></label>
+			</td>
+		</tr>
+		<tr>
+			<td nowrap><b>Maximum Price Options:</b></td>
+			<td width="100%">
+				<input type="text" size="5" name="StandardFacets:price_n" value="{ encodeentities( g.StandardFacets:price_n ) }" />
+			</td>
+		</tr>
+	</table>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.StandardFacets:price" 		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.StandardFacets:price ) }">
+	<MvASSIGN NAME = "g.StandardFacets:price_n" 	VALUE = "{ trim( g.StandardFacets:price_n ) }">
+	<MvASSIGN NAME = "g.StandardFacets:category" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.StandardFacets:category ) }">
+	<MvASSIGN NAME = "g.StandardFacets:attributes" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.StandardFacets:attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( g.StandardFacets:price_n ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'STANDARD_FACETS', 'StandardFacets:price_n', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Utility_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.standardfacets:price" 		VALUE = "{ g.StandardFacets:price }">
+	<MvASSIGN NAME = "l.standardfacets:price_n" 	VALUE = "{ g.StandardFacets:price_n }">
+	<MvASSIGN NAME = "l.standardfacets:category" 	VALUE = "{ g.StandardFacets:category }">
+	<MvASSIGN NAME = "l.standardfacets:attributes"	VALUE = "{ g.StandardFacets:attributes }">
+
+	<MvIF EXPR = "{ NOT StandardFacets_Update( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature prod_facet
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Product_Facets" PARAMETERS = "module var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StandardFacets_Load_Cached( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facets" 		VALUE = "">
+	<MvASSIGN NAME = "l.facet_count" 	VALUE = 0>
+
+	<MvIF EXPR = "{ l.standardfacets:attributes }">	<MvASSIGN NAME = "l.facet_count"	VALUE = "{ StandardFacets_Product_Facets_Attribute( l.facets ) }">	</MvIF>
+	<MvIF EXPR = "{ l.standardfacets:category }">	<MvASSIGN NAME = "l.facet_count"	VALUE = "{ StandardFacets_Product_Facets_Category( l.facets ) }">	</MvIF>
+	<MvIF EXPR = "{ l.standardfacets:price }">		<MvASSIGN NAME = "l.facet_count"	VALUE = "{ StandardFacets_Product_Facets_Price( l.facets ) }">		</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.facet_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facets_Query" PARAMETERS = "module var, query var, facets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facets"			VALUE = "">
+	<MvASSIGN NAME = "l.facet_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT StandardFacets_Load_Cached( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.standardfacets:attributes }">	<MvASSIGN NAME = "l.facet_count" VALUE = "{ StandardFacets_Product_Facets_Query_Attribute( l.query, l.facets ) }">	</MvIF>
+	<MvIF EXPR = "{ l.standardfacets:category }">	<MvASSIGN NAME = "l.facet_count" VALUE = "{ StandardFacets_Product_Facets_Category( l.facets ) }">					</MvIF>
+	<MvIF EXPR = "{ l.standardfacets:price }">		<MvASSIGN NAME = "l.facet_count" VALUE = "{ StandardFacets_Product_Facets_Price( l.facets ) }">						</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.facet_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facet_Values_Query" PARAMETERS = "module var, query var, facet var, values var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.facet:code EQ 'category' }">							<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Values_Query_Category( l.query, l.facet, l.values ) }">
+	<MvELSEIF EXPR = "{ l.facet:code EQ 'price' }">							<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Values_Query_Price( l.query, l.facet, l.values ) }">
+	<MvELSEIF EXPR = "{ gettoken( l.facet:code, '-', 1 ) EQ 'attribute' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Values_Query_Attribute( l.query, l.facet, l.values ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00022', 'Unsupported facet' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facet_Values_Query_PostProcess" PARAMETERS = "module var, query var, facet var, values var, value_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.facet:code EQ 'price' }">
+		<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Values_Query_PostProcess_Price( l.query, l.facet, l.values, l.value_count ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facet_Value_Prompt" PARAMETERS = "module var, facet var, value var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.facet:code EQ 'category' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Value_Prompt_Category( l.facet, l.value ) }">
+	<MvELSEIF EXPR = "{ l.facet:code EQ 'price' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Value_Prompt_Price( l.facet, l.value ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facet_Value_Prompt_JavaScript" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session:cache:stdfacets:module_product_facet_value_javascript }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:stdfacets:module_product_facet_value_javascript" VALUE = 1>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_CurrencyFormatter_JavaScript() }">
+
+	<script type="text/javascript">
+		MMFacet_RangeSlider_FormatValue_AddHook( '<MvEVAL EXPR = "{ encodejavascriptstring( l.module:code ) }">', function( facet_code, value ) {
+			return MMCurrencyFormatter( value, true );
+		} );
+	</script>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facet_Value_Selected" PARAMETERS = "module var, facet var, value var, input_values var, input_value_count" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_search( l.input_values, 1, l.input_value, 'l.input_value EQ l.value' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Facet_Query_Search" PARAMETERS = "module var, query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.facet:code EQ 'category' }">							<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Query_Search_Category( l.query, l.facet, l.facet_values ) }">
+	<MvELSEIF EXPR = "{ l.facet:code EQ 'price' }">							<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Query_Search_Price( l.query, l.facet, l.facet_values ) }">
+	<MvELSEIF EXPR = "{ gettoken( l.facet:code, '-', 1 ) EQ 'attribute' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Query_Search_Attribute( l.query, l.facet, l.facet_values ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00023', 'Unsupported facet' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.tag" VALUE = "{ tolower( l.child:name ) }">
+
+		<MvIF EXPR = "{ l.tag EQ 'settings' }">							<MvEVAL EXPR = "{ Module_Provision_Store_Settings( l.module, l.child ) }">
+		<MvELSEIF EXPR = "{ l.tag EQ 'attributefacet_update' }">		<MvEVAL EXPR = "{ Module_Provision_Store_AttributeFacet_Update( l.module, l.child ) }">
+		<MvELSEIF EXPR = "{ l.tag EQ 'attributefacetoption_update' }">	<MvEVAL EXPR = "{ Module_Provision_Store_AttributeFacetOption_Update( l.module, l.child ) }">
+		<MvELSE>														<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child, 'Unknown tag \'' $ l.child:name $ '\'' ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StandardFacets_Load( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'EnabledFacets' ) }">
+		<MvASSIGN NAME = "l.standardfacets:price" 		VALUE = 0>
+		<MvASSIGN NAME = "l.standardfacets:category" 	VALUE = 0>
+		<MvASSIGN NAME = "l.standardfacets:attributes"	VALUE = 0>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:EnabledFacets[ 1 ], 'Price' ) }">		<MvASSIGN NAME = "l.standardfacets:price" 		VALUE = 1> </MvIF>
+		<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:EnabledFacets[ 1 ], 'Category' ) }">		<MvASSIGN NAME = "l.standardfacets:category" 	VALUE = 1> </MvIF>
+		<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:EnabledFacets[ 1 ], 'Attributes' ) }">	<MvASSIGN NAME = "l.standardfacets:attributes"	VALUE = 1> </MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer( 'O', l.provide_xml, 'MaximumPriceOptions', l.standardfacets:price_n ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT StandardFacets_Update( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-FCT-00002', 'Standard facets updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_AttributeFacet_Update" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'lookup', l.lookup ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT AttributeFacet_Load_Lookup( l.lookup, l.attributefacet ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Attribute Facet \'' $ l.lookup $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R:254', l.provide_xml, 'Prompt', l.prompt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attributefacet:prompt" VALUE = "{ l.prompt }">
+
+	<MvIF EXPR = "{ NOT AttributeFacet_Update( l.attributefacet ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT AttributeFacet_Update_All_Prompt( l.prompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_AttributeFacetOption_Update" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'attribute_lookup',	l.attribute_lookup ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'option_lookup',		l.option_lookup ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT AttributeFacet_Load_Lookup( l.attribute_lookup, l.attributefacet ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Attribute Facet \'' $ l.attribute_lookup $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT AttributeFacetOption_Load_Lookup( l.attributefacet:id, l.option_lookup, l.attributefacetoption ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Attribute Facet Option \'' $ l.option_lookup $ '\' does not exist for Attribute Facet \'' $ l.attribute_lookup $ '\'' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R:254', l.provide_xml, 'Prompt', l.prompt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attributefacetoption:prompt" VALUE = "{ l.prompt }">
+
+	<MvIF EXPR = "{ NOT AttributeFacetOption_Update( l.attributefacetoption ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT AttributeFacetOption_Update_All_Prompt( l.attributefacetoption:af_id, l.prompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Scheduled Task (scheduledtask)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:provision"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Operations" PARAMETERS = "module var, operations var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.operations"			VALUE = "">
+	<MvASSIGN NAME = "l.operation_count"	VALUE = 0>
+
+	<MvASSIGN NAME = "l.operation"			VALUE = "">
+	<MvASSIGN NAME = "l.operation:code"		VALUE = "category_hierarchy">
+	<MvASSIGN NAME = "l.operation:descrip"	VALUE = "Update Category Facet Hierarchy">
+	<MvASSIGN NAME = "l.operation_count"	VALUE = "{ miva_array_insert_var( l.operations, l.operation, -1 ) }">
+
+	<MvASSIGN NAME = "l.operation"			VALUE = "">
+	<MvASSIGN NAME = "l.operation:code"		VALUE = "attribute_facets">
+	<MvASSIGN NAME = "l.operation:descrip"	VALUE = "Update Attribute Facets">
+	<MvASSIGN NAME = "l.operation_count"	VALUE = "{ miva_array_insert_var( l.operations, l.operation, -1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.operation_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Fields" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Validate" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Update" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Delete" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Execute" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.task:operation EQ 'category_hierarchy' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_ScheduledTask_Execute_CategoryHierarchy( l.task ) }">
+	<MvELSEIF EXPR = "{ l.task:operation EQ 'attribute_facets' }">	<MvFUNCTIONRETURN VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Build( l.task ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00029', 'Unsupported operation' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Build" PARAMETERS = "task var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.result" VALUE = 1>
+
+	<MvIF EXPR = "{ l.result GT 0 }"> <MvASSIGN NAME = "l.result" VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Delete_AttributeFacetXProduct( l.task:state:delete_attributefacetxproduct ) }">				</MvIF>
+	<MvIF EXPR = "{ l.result GT 0 }"> <MvASSIGN NAME = "l.result" VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Update_AttributeFacets_Active( l.task:state:update_attributefacets_active ) }">				</MvIF>
+	<MvIF EXPR = "{ l.result GT 0 }"> <MvASSIGN NAME = "l.result" VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Insert_AttributeFacets( l.task:state:insert_attributefacets ) }">							</MvIF>
+
+	<MvIF EXPR = "{ l.result GT 0 }"> <MvASSIGN NAME = "l.result" VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Delete_AttributeFacetOptionXProduct( l.task:state:delete_attributefacetoptionxproduct ) }">	</MvIF>
+	<MvIF EXPR = "{ l.result GT 0 }"> <MvASSIGN NAME = "l.result" VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Update_AttributeFacetOptions_Active( l.task:state:update_attributefacetoptions_active ) }">	</MvIF>
+	<MvIF EXPR = "{ l.result GT 0 }"> <MvASSIGN NAME = "l.result" VALUE = "{ ScheduledTaskModuleExecute_AttributeFacets_Insert_AttributeFacetOptions( l.task:state:insert_attributefacetoptions ) }">				</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Update_AttributeFacets_Active" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.state }">
+		<MvASSIGN NAME = "l.state:completed" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.state:completed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacets SET active = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00075', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Update_AttributeFacetOptions_Active" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.state }">
+		<MvASSIGN NAME = "l.state:completed" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.state:completed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions SET active = 0' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00076', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Delete_AttributeFacetXProduct" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.state }">
+		<MvASSIGN NAME = "l.state:completed" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.state:completed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00056', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Delete_AttributeFacetOptionXProduct" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.state }">
+		<MvASSIGN NAME = "l.state:completed" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.state:completed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00057', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Insert_AttributeFacets" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.state }">
+		<MvASSIGN NAME = "l.state:completed"	VALUE = 0>
+		<MvASSIGN NAME = "l.state:last_attr_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.state:last_ata_id"	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.state:completed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "Attributes"
+				QUERY 	= "{ 'SELECT
+								a.id			AS attr_id,
+								a.prompt		AS prompt,
+								a.product_id	AS product_id,
+								0				AS ata_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a
+							  WHERE
+							  	a.type IN ( \'radio\', \'select\', \'swatch-select\' )		AND
+								a.required		= 1											AND
+								a.id			> ?
+							  UNION ALL
+							  SELECT
+								0				AS attr_id,
+								ata.prompt		AS prompt,
+								a.product_id	AS product_id,
+								ata.id			AS ata_id
+							  FROM
+								' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata,
+								' $ g.Store_Table_Prefix $ 'Attributes a
+							  WHERE
+								ata.type IN ( \'radio\', \'select\', \'swatch-select\' )	AND
+								ata.required	= 1											AND
+							  	ata.attemp_id	= a.attemp_id								AND
+								ata.id			> ?
+							  ORDER BY
+								ata_id, attr_id' }"
+				FIELDS	= "l.state:last_attr_id, l.state:last_ata_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00077', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT Attributes.d.EOF }">
+		<MvASSIGN NAME = "l.prompt"				VALUE = "{ substring_var( Attributes.d.prompt, 1, 254 ) }">
+
+		<MvASSIGN NAME = "l.state:last_attr_id"	VALUE = "{ Attributes.d.attr_id }">
+		<MvASSIGN NAME = "l.state:last_ata_id"	VALUE = "{ Attributes.d.ata_id }">
+
+		<MvIF EXPR = "{ NOT AttributeFacet_Load_Lookup( l.prompt, l.attributefacet ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attributefacet"			VALUE = "">
+			<MvASSIGN NAME = "l.attributefacet:lookup"	VALUE = "{ tolower( l.prompt ) }">
+			<MvASSIGN NAME = "l.attributefacet:prompt"	VALUE = "{ l.prompt }">
+			<MvASSIGN NAME = "l.attributefacet:active"	VALUE = 1>
+
+			<MvIF EXPR = "{ NOT AttributeFacet_Insert( l.attributefacet ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.attributefacetxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.attributefacetxproduct:af_id"		VALUE = "{ l.attributefacet:id }">
+		<MvASSIGN NAME = "l.attributefacetxproduct:product_id"	VALUE = "{ Attributes.d.product_id }">
+
+		<MvIF EXPR = "{ NOT AttributeFacetXProduct_Insert( l.attributefacetxproduct ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.attributefacet:active }">
+			<MvASSIGN NAME = "l.attributefacet:active" VALUE = 1>
+
+			<MvIF EXPR = "{ NOT AttributeFacet_Update_Active( l.attributefacet ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+			<MvFUNCTIONRETURN VALUE = -1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Attributes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+
+	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModuleExecute_AttributeFacets_Insert_AttributeFacetOptions" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.state }">
+		<MvASSIGN NAME = "l.state:completed"		VALUE = 0>
+		<MvASSIGN NAME = "l.state:last_option_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.state:last_ato_id"		VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.state:completed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Options"
+				QUERY	= "{ 'SELECT
+								af.id			AS af_id,
+								o.id			AS option_id,
+								o.prompt		AS prompt,
+								a.product_id	AS product_id,
+								0				AS ato_id
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'AttributeFacets af,
+							  	' $ g.Store_Table_Prefix $ 'Attributes a,
+							  	' $ g.Store_Table_Prefix $ 'Options o
+							  WHERE
+							  	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'af.lookup' ) $ '	= ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'SUBSTRING( a.prompt FROM 1 FOR 254 )' ) $ '	AND
+							  	a.id																		= o.attr_id																								AND
+							  	o.id																		> ?
+							  UNION ALL
+							  SELECT
+							  	af.id			AS af_id,
+							  	0				AS option_id,
+							  	ato.prompt		AS prompt,
+							  	a.product_id	AS product_id,
+							  	ato.id			AS ato_id
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'AttributeFacets af,
+							  	' $ g.Store_Table_Prefix $ 'Attributes a,
+							  	' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata,
+							  	' $ g.Store_Table_Prefix $ 'AttributeTemplateOptions ato
+							  WHERE
+							 	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'af.lookup' ) $ '	= ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'SUBSTRING( ata.prompt FROM 1 FOR 254 )' ) $ '	AND
+							 	ata.id																		= ato.attmpat_id																							AND
+							 	ata.attemp_id																= a.attemp_id																								AND
+							 	ato.id																		> ?
+							  ORDER BY
+							  	ato_id, option_id' }"
+				FIELDS	= "l.state:last_option_id, l.state:last_ato_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00078', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT Options.d.EOF }">
+		<MvASSIGN NAME = "l.prompt"					VALUE = "{ substring_var( Options.d.prompt, 1, 254 ) }">
+
+		<MvASSIGN NAME = "l.state:last_option_id"	VALUE = "{ Options.d.option_id }">
+		<MvASSIGN NAME = "l.state:last_ato_id"		VALUE = "{ Options.d.ato_id }">
+
+		<MvIF EXPR = "{ NOT AttributeFacetOption_Load_Lookup( Options.d.af_id, l.prompt, l.attributefacetoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attributefacetoption"			VALUE = "">
+			<MvASSIGN NAME = "l.attributefacetoption:af_id"		VALUE = "{ Options.d.af_id }">
+			<MvASSIGN NAME = "l.attributefacetoption:lookup"	VALUE = "{ tolower( l.prompt ) }">
+			<MvASSIGN NAME = "l.attributefacetoption:prompt"	VALUE = "{ l.prompt }">
+			<MvASSIGN NAME = "l.attributefacetoption:active"	VALUE = 1>
+
+			<MvIF EXPR = "{ NOT AttributeFacetOption_Insert( l.attributefacetoption ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.attributefacetoptionxproduct"				VALUE = "">
+		<MvASSIGN NAME = "l.attributefacetoptionxproduct:afo_id"		VALUE = "{ l.attributefacetoption:id }">
+		<MvASSIGN NAME = "l.attributefacetoptionxproduct:product_id"	VALUE = "{ Options.d.product_id }">
+
+		<MvIF EXPR = "{ NOT AttributeFacetOptionXProduct_Insert( l.attributefacetoptionxproduct ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.attributefacetoption:active }">
+			<MvASSIGN NAME = "l.attributefacetoption:active" VALUE = 1>
+
+			<MvIF EXPR = "{ NOT AttributeFacetOption_Update_Active( l.attributefacetoption ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+			<MvFUNCTIONRETURN VALUE = -1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Options" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Options">
+
+	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: not_cat
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_Category_Insert" PARAMETERS = "module var, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StandardFacets_Load_Cached( l.standardfacets ) OR
+					NOT l.standardfacets:category }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'catfacethierarchy' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Category_Update" PARAMETERS = "module var, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StandardFacets_Load_Cached( l.standardfacets ) OR
+					NOT l.standardfacets:category }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'catfacethierarchy' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Category_Delete" PARAMETERS = "module var, category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StandardFacets_Load_Cached( l.standardfacets ) OR
+					NOT l.standardfacets:category }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'catfacethierarchy' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/util/stdfacets/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_StandardFacet_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/util/stdfacets/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/util/stdfacets/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/util/stdfacets/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'UpdateAttributeFacets' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_UpdateAttributeFacets( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'AttributeFacetList_Load_Query' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_AttributeFacetList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'AttributeFacet_UpdatePrompts' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_AttributeFacet_UpdatePrompts( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'AttributeFacetList_Delete' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_AttributeFacetList_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'AttributeFacetOptionList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_AttributeFacetOptionList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'AttributeFacetOption_UpdatePrompts' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_AttributeFacetOption_UpdatePrompts( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'AttributeFacetOptionList_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_AttributeFacetOptionList_Delete( l.module ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_UpdateAttributeFacets" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'attributefacets' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetList_Load_Query_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.filter_name"	VALUE = "{ toupper( l.filter_name ) }">
+	<MvASSIGN NAME = "l.filter_value"	VALUE = "{ toupper( l.filter_value ) }">
+
+	<MvIF EXPR = "{ l.filter_name NE 'ATTRIBUTEFACET_SHOW' }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.filter_value EQ 'ACTIVE' }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( af.active = 1 )', '' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.query"				VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'af.lookup', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'af.prompt', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL( l.available_filters, 'af.active', '' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'af.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacets', 'af' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.query, l.filter, l.available_filters, l.module:module, 'JSON_AttributeFacetList_Load_Query_Filter', '', l.null ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, 'af.lookup,af.prompt,af.active', 'af.prompt' ) }">
+
+	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'AttributeFacets', l.sql, l.fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-FCT-00066', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attributefacet_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT AttributeFacets.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.attributefacet_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ AttributeFacet_Read( l.attributefacet ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.attributefacet_count ) }">
+				"id":		<MvEVAL EXPR = "{ int( l.attributefacet:id ) }">,
+				"lookup":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.attributefacet:lookup ) }">",
+				"prompt":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.attributefacet:prompt ) }">",
+				"active":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.attributefacet:active ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "AttributeFacets" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacet_UpdatePrompts" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.attributefacet_ids"			VALUE = "">
+	<MvASSIGN NAME = "l.attributefacet_id_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.prompt"						VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer_Array(	'R',		'AttributeFacet_IDs',	l.attributefacet_ids, l.attributefacet_id_count ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'R:254',	'Prompt',				l.prompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.attributefacet_id" ARRAY = "l.attributefacet_ids" COUNT = "{ l.attributefacet_id_count }">
+		<MvIF EXPR = "{ NOT AttributeFacet_Load_ID( l.attributefacet_id, l.attributefacet ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-FCT-00079', 'Attribute Facet does not exist' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.attributefacet:prompt" VALUE = "{ l.prompt }">
+
+		<MvIF EXPR = "{ NOT AttributeFacet_Update( l.attributefacet ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT AttributeFacet_Update_All_Prompt( l.prompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetList_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer_Array( 'R', 'AttributeFacet_IDs', l.attributefacet_ids, l.attributefacet_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.attributefacet_id" ARRAY = "l.attributefacet_ids" COUNT = "{ l.attributefacet_count }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvIF EXPR = "{ NOT AttributeFacet_Load_ID( l.attributefacet_id, l.attributefacet ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.attributefacet_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.attributefacet:active }">
+			<MvFOREACHCONTINUE>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT AttribteFacet_Delete( l.attributefacet ) }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.attributefacet_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetOptionList_Load_Query_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.filter_name"	VALUE = "{ toupper( l.filter_name ) }">
+	<MvASSIGN NAME = "l.filter_value"	VALUE = "{ toupper( l.filter_value ) }">
+
+	<MvIF EXPR = "{ l.filter_name NE 'ATTRIBUTEFACETOPTION_SHOW' }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.filter_value EQ 'ACTIVE' }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( afo.active = 1 )', '' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetOptionList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.query"				VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'afo.lookup',	'lookup' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'afo.prompt',	'prompt' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL( l.available_filters, 'afo.active',	'active' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'af.lookup',	'af_lookup' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'af.prompt',	'af_prompt' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'afo.*,
+																		  af.lookup AS af_lookup,
+																		  af.prompt AS af_prompt' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacetOptions', 'afo' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacets', 'af' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'afo.af_id = af.id', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.query, l.filter, l.available_filters, l.module:module, 'JSON_AttributeFacetOptionList_Load_Query_Filter', '', l.null ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, 'afo.lookup,afo.prompt,afo.active,af_lookup:af.lookup,af_prompt:af.prompt', 'af.lookup;afo.prompt' ) }">
+
+	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'AttributeFacetOptions', l.sql, l.fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-FCT-00067', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attributefacetoption_count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT AttributeFacetOptions.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.attributefacetoption_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ AttributeFacetOption_Read( l.attributefacetoption ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.attributefacetoption_count ) }">
+				"id":			<MvEVAL EXPR = "{ int( l.attributefacetoption:id ) }">,
+				"af_id":		<MvEVAL EXPR = "{ int( l.attributefacetoption:af_id ) }">,
+				"lookup":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.attributefacetoption:lookup ) }">",
+				"prompt":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.attributefacetoption:prompt ) }">",
+				"active":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.attributefacetoption:active ) }">,
+
+				"af_lookup":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( AttributeFacetOptions.d.af_lookup ) }">",
+				"af_prompt":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( AttributeFacetOptions.d.af_prompt ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "AttributeFacetOptions" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacetOptions">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetOption_UpdatePrompts" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.processed_lookup"				VALUE = "">
+	<MvASSIGN NAME = "l.attributefacetoption_ids"		VALUE = "">
+	<MvASSIGN NAME = "l.attributefacetoption_id_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.prompt"							VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer_Array(	'R',		'AttributeFacetOption_IDs',	l.attributefacetoption_ids, l.attributefacetoption_id_count ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'R:254',	'Prompt',					l.prompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.attributefacetoption_id" ARRAY = "l.attributefacetoption_ids" COUNT = "{ l.attributefacetoption_id_count }">
+		<MvIF EXPR = "{ NOT AttributeFacetOption_Load_ID( l.attributefacetoption_id, l.attributefacetoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-FCT-00107', 'Attribute Facet Option does not exist' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.attributefacetoption:prompt" VALUE = "{ l.prompt }">
+
+		<MvIF EXPR = "{ NOT AttributeFacetOption_Update( l.attributefacetoption ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.lookup" VARIABLE = "l.processed_lookup">
+			<MvMEMBER NAME = "{ l.attributefacetoption:af_id }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ISNULL l.lookup }">
+			<MvASSIGN NAME = "l.lookup" VALUE = 1>
+
+			<MvIF EXPR = "{ NOT AttributeFacetOption_Update_All_Prompt( l.attributefacetoption:af_id, l.prompt ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AttributeFacetOptionList_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer_Array( 'R', 'AttributeFacetOption_IDs', l.attributefacetoption_ids, l.attributefacetoption_id_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.attributefacetoption_id" ARRAY = "l.attributefacetoption_ids" COUNT = "{ l.attributefacetoption_id_count }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvIF EXPR = "{ NOT AttributeFacetOption_Load_ID( l.attributefacetoption_id, l.attributefacetoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.attributefacetoption_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.attributefacetoption:active }">
+			<MvFOREACHCONTINUE>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT AttribteFacetOption_Delete( l.attributefacetoption ) }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.attributefacetoption_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Batch Edit Screen Feature (vis_productbe)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Product_BatchEdit_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "STDFACETS_ATTRIBUTEFACETS:Attribute Facets, STDFACETS_ATTRIBUTEFACETOPTIONS:Attribute Facet Options">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_BatchEdit_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab EQ 'STDFACETS_ATTRIBUTEFACETS' }">
+		<MvEVAL EXPR = "{ Element_AttributeFacetList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_StandardFacet_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_AttributeFacetList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_StandardFacet_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new AttributeFacetList(); } );
+		</script>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'STDFACETS_ATTRIBUTEFACETOPTIONS' }">
+		<MvEVAL EXPR = "{ Element_AttributeFacetOptionList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_StandardFacet_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_AttributeFacetOptionList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_StandardFacet_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new AttributeFacetOptionList(); } );
+		</script>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_BatchEdit_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.tab EQ 'STDFACETS_ATTRIBUTEFACETS' }">
+		<MvEVAL EXPR = "{ Element_AttributeFacetList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'STDFACETS_ATTRIBUTEFACETOPTIONS' }">
+		<MvEVAL EXPR = "{ Element_AttributeFacetOptionList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_BatchEdit_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_BatchEdit_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_BatchEdit_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Attribute Facet(s)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facets_Attribute" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AttributeFacets"
+				QUERY	= "{ 'SELECT DISTINCT
+								code,
+								prompt
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'AttributeFacets
+							  WHERE
+							  	active = 1
+							  ORDER BY
+							  	prompt' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facet_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT AttributeFacets.d.EOF }">
+		<MvASSIGN NAME = "l.facet"					VALUE = "">
+		<MvASSIGN NAME = "l.facet:code"				VALUE = "{ AttributeFacets.d.code }">
+		<MvASSIGN NAME = "l.facet:name"				VALUE = "{ AttributeFacets.d.prompt }">
+		<MvASSIGN NAME = "l.facet:allowed_types"	VALUE = "checkbox,radio,select">
+
+		<MvASSIGN NAME = "l.facet_count"			VALUE = "{ miva_array_insert_var( l.facets, l.facet, -1 ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "AttributeFacets" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTL-FCT-00024', l.facet_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facets_Query_Attribute" PARAMETERS = "query var, facets var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.query, 'af.code, af.prompt' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacetXProduct',	'afxp' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacets',		'af' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'afxp.af_id			= af.id AND
+																		 afxp.product_id	= prod.id', '' ) }">
+
+	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "AttributeFacets"
+				QUERY 	= "{ l.sql }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00068', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facet_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT AttributeFacets.d.EOF }">
+		<MvASSIGN NAME = "l.facet"					VALUE = "">
+		<MvASSIGN NAME = "l.facet:code"				VALUE = "{ AttributeFacets.d.code }">
+		<MvASSIGN NAME = "l.facet:name"				VALUE = "{ AttributeFacets.d.prompt }">
+		<MvASSIGN NAME = "l.facet:allowed_types"	VALUE = "checkbox,radio,select">
+
+		<MvASSIGN NAME = "l.facet_count"			VALUE = "{ miva_array_insert_var( l.facets, l.facet, -1 ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "AttributeFacets" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTL-FCT-00069', l.facet_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_Attribute" PARAMETERS = "query var, facet var, values var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'afo.prompt, COUNT( * ) AS total' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacets',				'af' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacetOptions',			'afo' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct',	'afoxp' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( 'af.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( '?' ) $ '	AND
+																		 af.id				= afo.af_id																															AND
+																		 afoxp.afo_id		= afo.id																															AND
+																		 afoxp.product_id	= prod.id',
+																		 [ g.Module_Library_DB ].SQL_Query_Field( l.facet:code ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_GROUP_BY( l.query, 'afo.prompt' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query, 'prompt', '' ) }">
+
+	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvOPENVIEW NAME    = "Merchant"
+				VIEW    = "AttributeFacetOptions"
+				QUERY   = "{ l.sql }"
+				FIELDS  = "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00030', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.value_count"		VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT AttributeFacetOptions.d.EOF }">
+		<MvASSIGN NAME = "l.value"			VALUE = "">
+		<MvASSIGN NAME = "l.value:value"	VALUE = "{ AttributeFacetOptions.d.prompt }">
+		<MvASSIGN NAME = "l.value:count"	VALUE = "{ AttributeFacetOptions.d.total }">
+
+		<MvASSIGN NAME = "l.value_count"	VALUE = "{ miva_array_insert_var( l.values, l.value, -1 ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "AttributeFacetOptions" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacetOptions">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTL-FCT-00025', l.value_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Query_Search_Attribute" PARAMETERS = "query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Data_Reference( l.query, 'stdfacets', l.ref ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_DISTINCT( l.query ) }">
+
+	<MvASSIGN NAME = "l.ref:data:attribute:facet_count"			VALUE = "{ l.ref:data:attribute:facet_count + 1 }">
+
+	<MvASSIGN NAME = "l.attributefacets_alias"					VALUE = "{ 'af_' $ l.ref:data:attribute:facet_count }">
+	<MvASSIGN NAME = "l.attributefacetoptions_alias"			VALUE = "{ 'afo_' $ l.ref:data:attribute:facet_count }">
+	<MvASSIGN NAME = "l.attributefacetoptionxproduct_alias"		VALUE = "{ 'afoxp_' $ l.ref:data:attribute:facet_count }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacets',				l.attributefacets_alias ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacetOptions',			l.attributefacetoptions_alias ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct',	l.attributefacetoptionxproduct_alias ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( l.attributefacets_alias $ '.code' ) $ '	= ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( '?' ) $ ' AND ' $
+																		l.attributefacetoptions_alias $ '.af_id																= ' $ l.attributefacets_alias $ '.id										AND ' $
+																		l.attributefacetoptionxproduct_alias $ '.afo_id														= ' $ l.attributefacetoptions_alias $ '.id									AND ' $
+																		l.attributefacetoptionxproduct_alias $ '.product_id													= prod.id',
+																		[ g.Module_Library_DB ].SQL_Query_Field( l.facet:code ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+		<MvFOREACH ITERATOR = "l.facet_value" ARRAY = "l.facet_values">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( l.attributefacetoptions_alias $ '.prompt' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( '?' ), [ g.Module_Library_DB ].SQL_Query_Field( l.facet_value ) ) }">
+		</MvFOREACH>
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.query, 'AND', 'OR' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Category Facet
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facets_Category" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facet"					VALUE = "">
+	<MvASSIGN NAME = "l.facet:code"				VALUE = "category">
+	<MvASSIGN NAME = "l.facet:name"				VALUE = "Category">
+	<MvASSIGN NAME = "l.facet:allowed_types"	VALUE = "nested">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.facets, l.facet, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Value_Prompt_Category" PARAMETERS = "facet var, value var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dash_pos"	VALUE = "{ '-' IN l.value }">
+
+	<MvIF EXPR = "{ l.dash_pos EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ l.value }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ substring_var( l.value, l.dash_pos + 1, len_var( l.value ) - l.dash_pos ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_Category" PARAMETERS = "query var, facet var, values var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.values" 		VALUE = "">
+	<MvASSIGN NAME = "l.value_count" 	VALUE = 0>
+
+	<MvCOMMENT>
+	|
+	| Do not provide a category facet for category product list loads, because the present category product list load behavior
+	| is to display only products in the immediately selected category (i.e., products from child categories are not included),
+	| which means that the facet would only ever load the category we are already displaying, or would have to change the
+	| default/established behavior of category product list loads.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Get_Category( l.query, l.category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'facet_category.id AS facet_cat_id, facet_category.name AS facet_cat_name, COUNT( DISTINCT prod.id ) AS facet_cat_count, facet_category.disp_order AS facet_disp_order' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'CategoryXProduct', 'facet_catxprod' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'CategoryFacetHierarchy', 'facet_cathierarchy' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Categories', 'facet_category' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_catxprod.product_id		= prod.id					AND
+																		 facet_cathierarchy.child_id	= facet_catxprod.cat_id		AND
+																		 facet_cathierarchy.depth		= ?							AND
+																		 facet_category.id				= facet_cathierarchy.cat_id	AND
+																		 facet_category.active			= 1',
+															   [ g.Module_Library_DB ].SQL_Query_Field( int( l.facet:input_value_count ) ) ) }">
+
+	<MvIF EXPR = "{ l.facet:input_value_count }">
+		<MvASSIGN NAME = "l.cat_id"		VALUE = "{ int( gettoken( l.facet:input_values[ l.facet:input_value_count ], '-', 1 ) ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_category.parent_id	= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.cat_id ) ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Basket:cust_id EQ 0 ) OR ( ( g.Customer:agrpcount EQ 0 ) AND ( g.BusinessAccount:agrpcount EQ 0 ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_category.agrpcount = 0', '' ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '(
+																				( facet_category.agrpcount = 0 ) OR
+																				(
+																					facet_category.id IN
+																					(
+																						SELECT
+																							agxcat.cat_id
+																						FROM ' $
+																							g.Store_Table_Prefix $ 'AvailGroupXCategory agxcat
+																							LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Customers cust ON cust.id = ?
+																							LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCustomer agxcust ON cust.id = agxcust.cust_id AND agxcust.agrp_id = agxcat.agrp_id
+																							LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXBusinessAccount agxba ON cust.account_id = agxba.account_id AND agxba.agrp_id = agxcat.agrp_id
+																						WHERE
+																							agxcat.cat_id = facet_category.id 	AND
+																							(
+																								agxcust.cust_id	IS NOT NULL 	OR
+																								agxba.account_id IS NOT NULL
+																							)
+																					)
+																				)
+																			 )', [ g.Module_Library_DB ].SQL_Query_Field( g.Basket:cust_id ) ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_GROUP_BY( l.query, 'facet_category.id, facet_category.name, facet_category.disp_order' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query, 'facet_disp_order', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.facet_sql"		VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.facet_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Category_Facets', l.facet_sql, l.facet_fields, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT Category_Facets.d.EOF }">
+		<MvASSIGN NAME = "l.values" INDEX = "{ ++l.value_count }" 	MEMBER = "value" 	VALUE = "{ Category_Facets.d.facet_cat_id $ '-' $ Category_Facets.d.facet_cat_name }">
+		<MvASSIGN NAME = "l.values" INDEX = "{ l.value_count }" 	MEMBER = "count" 	VALUE = "{ Category_Facets.d.facet_cat_count }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Category_Facets" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Category_Facets">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Query_Search_Category" PARAMETERS = "query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.entries"	VALUE = "{ miva_array_max( l.facet_values ) }">
+	<MvIF EXPR = "{ l.entries LT 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00026', 'Invalid input value for category facet' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cat_id"		VALUE = "{ int( gettoken( l.facet_values[ l.entries ], '-', 1 ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_DISTINCT( l.query ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM_Before( l.query, 'prod', g.Store_Table_Prefix $ 'CategoryFacetHierarchy', 'facet_cathierarchy' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM_Before( l.query, 'prod', g.Store_Table_Prefix $ 'CategoryXProduct', 'facet_catxprod' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_cathierarchy.cat_id	= ?	AND
+																		 facet_catxprod.cat_id		= facet_cathierarchy.child_id AND
+																		 prod.id					= facet_catxprod.product_id',
+															   [ g.Module_Library_DB ].SQL_Query_Field( l.cat_id ) ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_First( l.query, 'AND' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_ScheduledTask_Execute_CategoryHierarchy" PARAMETERS = "task var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CategoryFacetHierarchy_Delete_All() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.category" ARRAY = "l.categories" COUNT = "{ [ g.Module_Library_DB ].CategoryList_Load_Parent( 0, l.categories ) }">
+		<MvIF EXPR = "{ NOT l.category:active }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT StandardFacets_ScheduledTask_Execute_CategoryHierarchy_LowLevel( l.task, l.null, 0, l.category:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_ScheduledTask_Execute_CategoryHierarchy_LowLevel" PARAMETERS = "task var, entries, depth, child_id" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.entry" ARRAY = "l.entries">
+		<MvIF EXPR = "{ NOT CategoryFacetHierarchy_Insert( l.entry:cat_id, l.entry:depth, l.child_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Every category has itself as a child in order to ensure that query results for a given "cat_id" in sNN_CategoryFacetHierarchy
+	| returns products in the category itself.  This simplifies the query in StandardFacets_Product_Facet_Query_Search_Category and
+	| improves performance in MivaSQL.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT CategoryFacetHierarchy_Insert( l.child_id, l.depth, l.child_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.new_entry:cat_id"	VALUE = "{ l.child_id }">
+	<MvASSIGN NAME = "l.new_entry:depth"	VALUE = "{ l.depth }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ miva_array_insert( l.entries, l.new_entry, -1 ) }">
+
+	<MvFOREACH ITERATOR = "l.category" ARRAY = "l.categories" COUNT = "{ [ g.Module_Library_DB ].CategoryList_Load_Parent( l.child_id, l.categories ) }">
+		<MvIF EXPR = "{ NOT l.category:active }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT StandardFacets_ScheduledTask_Execute_CategoryHierarchy_LowLevel( l.task, l.entries, l.depth + 1, l.category:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Price Facet
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facets_Price" PARAMETERS = "facets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facet"					VALUE = "">
+	<MvASSIGN NAME = "l.facet:code"				VALUE = "price">
+	<MvASSIGN NAME = "l.facet:name"				VALUE = "Price">
+	<MvASSIGN NAME = "l.facet:formatting"		VALUE = "currency">
+	<MvASSIGN NAME = "l.facet:allowed_types"	VALUE = "checkbox,radio,select,rangeslider">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.facets, l.facet, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_PostProcess_Price" PARAMETERS = "query var, facet var, values var, value_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.facet:input_value_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.facet:type EQ 'rangeslider' }">
+		<MvIF EXPR = "{ l.value_count NE 1 }">
+			<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.low_value"	VALUE = "{ min( gettoken( l.values[ 1 ]:value, '-', 1 ), gettoken( l.facet:input_values[ 1 ], '-', 1 ) ) }">
+		<MvASSIGN NAME = "l.high_value"	VALUE = "{ max( gettoken( l.values[ 1 ]:value, '-', 2 ), gettoken( l.facet:input_values[ 1 ], '-', 2 ) ) }">
+
+		<MvCOMMENT>
+		|
+		| Rangeslider doesn't use the count so we don't bother calculating it
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.values" INDEX = 1	MEMBER = "value"	VALUE = "{ l.low_value $ '-' $ l.high_value }">
+		<MvASSIGN NAME = "l.values" INDEX = 1	MEMBER = "count"	VALUE = 0>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there are input values, every one must be present in the resulting values, or we return the input values as the possible values.  This
+	| keeps the URL parameters, visible products and available facet values in parity.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.facet:input_value_count }">
+		<MvASSIGN NAME = "l.missing_input_value"			VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.input_value" ARRAY = "l.facet:input_values" COUNT = "{ l.facet:input_value_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.values, 1, l.value, 'l.value:value EQ l.input_value' ) }">
+				<MvASSIGN NAME = "l.missing_input_value"	VALUE = 1>
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.missing_input_value }">
+			<MvASSIGN NAME = "l.values"						VALUE = "">
+
+			<MvFOREACH INDEX = "l.value_pos" ITERATOR = "l.input_value" ARRAY = "l.facet:input_values" COUNT = "{ l.facet:input_value_count }">
+				<MvASSIGN NAME = "l.values" INDEX = "{ l.value_pos }" MEMBER = "value"		VALUE = "{ l.input_value }">
+
+				<MvASSIGN NAME = "l.low_value"	VALUE = "{ gettoken( l.input_value, '-', 1 ) ROUND 3 }">
+				<MvASSIGN NAME = "l.high_value"	VALUE = "{ gettoken( l.input_value, '-', 2 ) ROUND 3 }">
+
+				<MvIF EXPR = "{ NOT StandardFacets_Price_Count_Range( l.query, l.count_cache, l.low_value, l.high_value, l.values[ l.value_pos ]:count ) }">
+					<MvASSIGN NAME = "l.values" INDEX = "{ l.value_pos }" MEMBER = "count"	VALUE = 0>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.value_count"				VALUE = "{ l.facet:input_value_count }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Value_Prompt_Price" PARAMETERS = "facet var, value var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.low_value"	VALUE = "{ gettoken( l.value, '-', 1 ) }">
+	<MvASSIGN NAME = "l.high_value"	VALUE = "{ gettoken( l.value, '-', 2 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.low_value ) $ ' - ' $ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, ceil( l.high_value ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_Price" PARAMETERS = "query var, facet var, values var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StandardFacets_Load_Cached( l.standardfacets ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.values" 			VALUE = "">
+	<MvASSIGN NAME = "l.value_count"		VALUE = 0>
+
+	<MvASSIGN NAME = "l.price_break_query"	VALUE = "{ l.query }">
+
+	<MvIF EXPR = "{ ISNULL [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Get_DiscountSignature( l.query ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'COUNT( * ) AS product_count, MIN( prod.price ) AS min_price, MAX( prod.price ) AS max_price' ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_JOIN_DiscountPrices( l.query ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'COUNT( * ) AS product_count, MIN( ' $ [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) $ ' ) AS min_price, MAX( ' $ [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) $ ' ) AS max_price' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facet_sql"			VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.facet_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Price_Facets', l.facet_sql, l.facet_fields, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Price_Facets.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Price_Facets">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.product_count"	VALUE = "{ Price_Facets.d.product_count }">
+		<MvASSIGN NAME = "l.min_price"		VALUE = "{ Price_Facets.d.min_price }">
+		<MvASSIGN NAME = "l.max_price" 		VALUE = "{ Price_Facets.d.max_price }">
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Price_Facets">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.min_price EQ l.max_price }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.facet:type EQ 'rangeslider' }">
+		<MvASSIGN NAME = "l.values" INDEX = 1	MEMBER = "value"	VALUE = "{ floor( l.min_price ) $ '-' $ ceil( l.max_price ) }">
+		<MvASSIGN NAME = "l.values" INDEX = 1	MEMBER = "count"	VALUE = "{ l.product_count }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" 				VALUE = "{ StandardFacets_Price_Breaks_Query( l.price_break_query, l.standardfacets:price_n, l.min_price, l.max_price, l.breaks, l.values, l.value_count ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Query_Search_Price" PARAMETERS = "query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Get_DiscountSignature( l.query ) }">
+		<MvASSIGN NAME = "l.using_discountprices"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.using_discountprices"	VALUE = 1>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_JOIN_DiscountPrices( l.query ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+	<MvFOREACH ITERATOR = "l.facet_value" ARRAY = "l.facet_values">
+		<MvASSIGN NAME = "l.price_low"		VALUE = "{ gettoken( l.facet_value, '-', 1 ) ROUND 3 }">
+		<MvASSIGN NAME = "l.price_high"		VALUE = "{ gettoken( l.facet_value, '-', 2 ) ROUND 3 }">
+
+		<MvIF EXPR = "{ NOT l.using_discountprices }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.price >= ? AND prod.price <= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.price_low ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( l.price_high ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) $ ' >= ? AND ' $ [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) $ ' <= ?',
+																	   [ g.Module_Library_DB ].SQL_Query_Field( l.price_low ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( l.price_high ) ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Price_Round_Up" PARAMETERS = "price" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.price LT 25 }">			<MvFUNCTIONRETURN VALUE = "{ ceil( l.price ) }">
+	<MvELSEIF EXPR = "{ l.price LT 100 }">		<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 5 ) * 5 }">
+	<MvELSEIF EXPR = "{ l.price LT 250 }">		<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 10 ) * 10 }">
+	<MvELSEIF EXPR = "{ l.price LT 1000 }">		<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 25 ) * 25 }">
+	<MvELSEIF EXPR = "{ l.price LT 2500 }">		<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 100 ) * 100 }">
+	<MvELSEIF EXPR = "{ l.price LT 10000 }">	<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 250 ) * 250 }">
+	<MvELSEIF EXPR = "{ l.price LT 25000 }">	<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 1000 ) * 1000 }">
+	<MvELSEIF EXPR = "{ l.price LT 100000 }">	<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 2500 ) * 2500 }">
+	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ ceil( l.price / 5000 ) * 5000 }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Price_Round_Down" PARAMETERS = "price" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.price LT 25 }">			<MvFUNCTIONRETURN VALUE = "{ floor( l.price ) }">
+	<MvELSEIF EXPR = "{ l.price LT 100 }">		<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 5 ) * 5 }">
+	<MvELSEIF EXPR = "{ l.price LT 250 }">		<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 10 ) * 10 }">
+	<MvELSEIF EXPR = "{ l.price LT 1000 }">		<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 25 ) * 25 }">
+	<MvELSEIF EXPR = "{ l.price LT 2500 }">		<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 100 ) * 100 }">
+	<MvELSEIF EXPR = "{ l.price LT 10000 }">	<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 250 ) * 250 }">
+	<MvELSEIF EXPR = "{ l.price LT 25000 }">	<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 1000 ) * 1000 }">
+	<MvELSEIF EXPR = "{ l.price LT 100000 }">	<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 2500 ) * 2500 }">
+	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ floor( l.price / 5000 ) * 5000 }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Price_Breaks" PARAMETERS = "n, min_price, max_price, breaks var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.min_price EQ l.max_price }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.breaks"					VALUE = "">
+	<MvASSIGN NAME = "l.step"					VALUE = "{ ( l.max_price - l.min_price ) / l.n }">
+
+	<MvASSIGN NAME = "l.rounded_min_price"		VALUE = "{ StandardFacets_Price_Round_Up( l.min_price ) }">
+
+	<MvIF EXPR = "{ l.rounded_min_price - l.min_price GT l.step }">	<MvASSIGN NAME = "l.price" VALUE = "{ l.min_price }">
+	<MvELSE>														<MvASSIGN NAME = "l.price" VALUE = "{ l.rounded_min_price }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.last_break"				VALUE = "{ l.price }">
+
+	<MvWHILE EXPR = "{ ( l.break_count LT l.n ) AND ( l.price LT l.max_price ) }">
+		<MvASSIGN NAME = "l.break"				VALUE = "{ StandardFacets_Price_Round_Up( l.price ) }">
+
+		<MvIF EXPR = "{ ( l.break GT l.last_break ) AND ( l.break LT l.max_price ) }">
+			<MvASSIGN NAME = "l.break_count"	VALUE = "{ miva_array_insert( l.breaks, l.break, -1 ) }">
+			<MvASSIGN NAME = "l.last_break"		VALUE = "{ l.break }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.price"				VALUE = "{ l.price + l.step }">
+	</MvWHILE>
+
+	<MvASSIGN NAME = "l.break_count"			VALUE = "{ miva_array_insert( l.breaks, StandardFacets_Price_Round_Up( l.max_price ), -1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.break_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Price_Breaks_Query" PARAMETERS = "query var, n, min_price, max_price, breaks, values var, value_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.breaks"				VALUE = "">
+	<MvASSIGN NAME = "l.values"				VALUE = "">
+	<MvASSIGN NAME = "l.break_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.value_count"		VALUE = 0>
+
+	<MvASSIGN NAME = "l.value_query"		VALUE = "{ l.query }">
+
+	<MvCOMMENT>
+	|
+	| Never return a single value for the price facet, as it would match every available product and basically be useless
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.n LE 1 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.break_count"		VALUE = "{ StandardFacets_Price_Breaks( l.n, l.min_price, l.max_price, l.breaks ) }">
+	<MvIF EXPR = "{ l.break_count LE 1 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.low_value"			VALUE = "{ StandardFacets_Price_Round_Down( l.min_price ) }">
+	<MvASSIGN NAME = "l.value_insert_pos"	VALUE = -1>
+
+	<MvFOR COUNT = "{ l.n }">
+		<MvIF EXPR = "{ l.value_count }">
+			<MvCOMMENT>
+			|
+			| If we reach this point, we have produced fewer than the requested number of facet values, so split the value with
+			| the highest product count (> 1) and continue.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.value_pos"			VALUE = -1>
+			<MvASSIGN NAME = "l.max_value:count"	VALUE = 1>
+			<MvASSIGN NAME = "l.max_pos"			VALUE = -1>
+
+			<MvFOREACH INDEX = "l.value_pos" ITERATOR = "l.value" ARRAY = "l.values" COUNT = "{ l.value_count }">
+				<MvIF EXPR = "{ l.value:count GT l.max_value:count }">
+					<MvASSIGN NAME = "l.max_value"	VALUE = "{ l.value }">
+					<MvASSIGN NAME = "l.max_pos"	VALUE = "{ l.value_pos }">
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.max_pos LE 0 }">
+				<MvFORSTOP>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.last_breaks"		VALUE = "{ l.breaks }">
+			<MvASSIGN NAME = "l.break_count"		VALUE = "{ StandardFacets_Price_Breaks( l.n - l.value_count + 1, l.max_value:low, l.max_value:high, l.breaks ) }">
+
+			<MvIF EXPR = "{ l.break_count LT 2 }">				<MvFORSTOP>
+			<MvELSEIF EXPR = "{ l.breaks EQ l.last_breaks }">	<MvFORSTOP>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.value_count"		VALUE = "{ miva_array_delete( l.values, l.max_pos, 1 ) }">
+			<MvASSIGN NAME = "l.value_insert_pos"	VALUE = "{ l.max_pos }">
+
+			<MvASSIGN NAME = "l.low_value"			VALUE = "{ l.max_value:low }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Count products in the calculated breaks
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH INDEX = "l.break_pos" ITERATOR = "l.break" ARRAY = "l.breaks" COUNT = "{ l.break_count }">
+			<MvIF EXPR = "{ NOT StandardFacets_Price_Count_Range( l.query, l.count_cache, l.low_value, l.break, l.product_count ) }">
+				<MvFUNCTIONRETURN>
+			<MvELSEIF EXPR = "{ l.product_count }">
+				<MvASSIGN NAME = "l.new_value:low"			VALUE = "{ l.low_value }">
+				<MvASSIGN NAME = "l.new_value:high"			VALUE = "{ l.break }">
+				<MvASSIGN NAME = "l.new_value:value"		VALUE = "{ l.low_value $ '-' $ l.break }">
+				<MvASSIGN NAME = "l.new_value:count"		VALUE = "{ l.product_count }">
+
+				<MvASSIGN NAME = "l.value_count"			VALUE = "{ miva_array_insert( l.values, l.new_value, l.value_insert_pos ) }">
+				<MvIF EXPR = "{ l.value_insert_pos NE -1 }">
+					<MvASSIGN NAME = "l.value_insert_pos"	VALUE = "{ l.value_insert_pos + 1 }">
+				</MvIF>
+			<MvELSE>
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.low_value"					VALUE = "{ ( l.break + 0.01 ) ROUND 2 }">
+		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| If we just processed a split, previously generated break, fix up the next break so that there are no
+		| visible gaps in the price range
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ ( l.value_insert_pos GT 1 ) AND ( l.value_insert_pos LE l.value_count ) }">
+			<MvASSIGN NAME = "l.values" INDEX = "{ l.value_insert_pos }" MEMBER = "low"		VALUE = "{ l.values[ l.value_insert_pos - 1 ]:high + 0.01 }">
+			<MvASSIGN NAME = "l.values" INDEX = "{ l.value_insert_pos }" MEMBER = "value"	VALUE = "{ l.values[ l.value_insert_pos ]:low $ '-' $ l.values[ l.value_insert_pos ]:high }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.value_count EQ l.n }">
+			<MvFORSTOP>
+		</MvIF>
+	</MvFOR>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Price_Count_Range" PARAMETERS = "query var, count_cache var, min_price, max_price, product_count var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.cached_product_count" VARIABLE = "l.count_cache">
+		<MvMEMBER NAME = "{ l.min_price }">
+		<MvMEMBER NAME = "{ l.max_price }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT ISNULL l.cached_product_count }">
+		<MvASSIGN NAME = "l.product_count"		VALUE = "{ l.cached_product_count }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count_query"			VALUE = "{ l.query }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.count_query, 'COUNT( * ) AS product_count' ) }">
+
+	<MvIF EXPR = "{ ISNULL [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Get_DiscountSignature( l.count_query ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'prod.price >= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.min_price ) ) }">
+
+		<MvIF EXPR = "{ l.max_price }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'prod.price <= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.max_price ) ) }">
+		</MvIF>
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_JOIN_DiscountPrices( l.count_query ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) $ ' >= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.min_price ) ) }">
+
+		<MvIF EXPR = "{ l.max_price }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) $ ' <= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.max_price ) ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.facet_sql"				VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.count_query, l.facet_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Price_Facets', l.facet_sql, l.facet_fields, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Price_Facets.d.EOF }">	<MvASSIGN NAME = "l.product_count" VALUE = 0>
+	<MvELSE>								<MvASSIGN NAME = "l.product_count" VALUE = "{ Price_Facets.d.product_count }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cached_product_count"	VALUE = "{ l.product_count }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Price_Facets">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_StandardFacets
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StandardFacets_Read" PARAMETERS = "standardfacets var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.standardfacets:price" 		VALUE = "{ StandardFacets.d.price }">
+	<MvASSIGN NAME = "l.standardfacets:price_n" 	VALUE = "{ StandardFacets.d.price_n }">
+	<MvASSIGN NAME = "l.standardfacets:category" 	VALUE = "{ StandardFacets.d.category }">
+	<MvASSIGN NAME = "l.standardfacets:attributes"	VALUE = "{ StandardFacets.d.attributes }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Insert" PARAMETERS = "standardfacets var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'StandardFacets
+			 			  ( price, price_n, category, attributes )
+			 			  VALUES
+			 			  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.standardfacets:price, l.standardfacets:price_n, l.standardfacets:category, l.standardfacets:attributes">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Update" PARAMETERS = "standardfacets var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'StandardFacets
+			 			  SET
+			 			  	price		= ?,
+			 			  	price_n		= ?,
+							category	= ?,
+							attributes	= ?' }"
+			 FIELDS	= "l.standardfacets:price, l.standardfacets:price_n, l.standardfacets:category, l.standardfacets:attributes">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Load_Cached" PARAMETERS = "standardfacets var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache" VARIABLE = "g.Session:cache:standardfacets_load">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ StandardFacets_Load( l.cache:standardfacets ) }">
+
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.standardfacets"					VALUE = "{ l.cache:standardfacets }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Load" PARAMETERS = "standardfacets var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "StandardFacets"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'StandardFacets' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ StandardFacets.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "StandardFacets">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-FCT-00018' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ StandardFacets_Read( l.standardfacets ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "StandardFacets">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_CategoryFacetHierarchy
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CategoryFacetHierarchy_Delete_All" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00027', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CategoryFacetHierarchy_Insert" PARAMETERS = "cat_id, depth, child_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CategoryFacetHierarchy
+						  ( cat_id, depth, child_id )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.cat_id, l.depth, l.child_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00028', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AttributeFacets
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AttributeFacet_Read" PARAMETERS = "attributefacet var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.attributefacet"			VALUE = "">
+	<MvASSIGN NAME = "l.attributefacet:id"		VALUE = "{ AttributeFacets.d.id }">
+	<MvASSIGN NAME = "l.attributefacet:lookup"	VALUE = "{ AttributeFacets.d.lookup }">
+	<MvASSIGN NAME = "l.attributefacet:code"	VALUE = "{ AttributeFacets.d.code }">
+	<MvASSIGN NAME = "l.attributefacet:prompt"	VALUE = "{ AttributeFacets.d.prompt }">
+	<MvASSIGN NAME = "l.attributefacet:active"	VALUE = "{ AttributeFacets.d.active }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacet_Load_ID" PARAMETERS = "id, attributefacet var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "AttributeFacets"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AttributeFacets WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00080', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ AttributeFacets.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-FCT-00081' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AttributeFacet_Read( l.attributefacet ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacet_Load_Lookup" PARAMETERS = "lookup, attributefacet var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "AttributeFacets"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AttributeFacets WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'lookup' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.lookup">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00082', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ AttributeFacets.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-FCT-00083' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AttributeFacet_Read( l.attributefacet ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacets">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacet_Insert" PARAMETERS = "attributefacet var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.attributefacet:id"		VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'AttributeFacets' ) }">
+	<MvASSIGN NAME = "l.attributefacet:code"	VALUE = "{ StandardFacets_AttributeFacets_Build_Code( l.attributefacet:prompt ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AttributeFacets
+			 			  ( id, lookup, code, prompt, active )
+			 			  VALUES
+			 			  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS = "l.attributefacet:id, l.attributefacet:lookup, l.attributefacet:code, l.attributefacet:prompt, l.attributefacet:active">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00084', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacet_Update" PARAMETERS = "attributefacet var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.attributefacet:code" VALUE = "{ StandardFacets_AttributeFacets_Build_Code( l.attributefacet:prompt ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacets
+			 			  SET
+			 				lookup	= ?,
+			 				code	= ?,
+			 			  	prompt	= ?,
+			 			  	active	= ?
+			 			  WHERE
+			 			  	id		= ?' }"
+			 FIELDS = "l.attributefacet:lookup, l.attributefacet:code, l.attributefacet:prompt, l.attributefacet:active,
+					   l.attributefacet:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00085', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacet_Update_All_Prompt" PARAMETERS = "prompt" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.code" VALUE = "{ StandardFacets_AttributeFacets_Build_Code( l.prompt ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacets
+			 			  SET
+			 			  	code																	= ?,
+			 				prompt																	= ?
+			 			  WHERE
+			 			  	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prompt' ) $ '	= ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS = "l.code, l.prompt,
+			 		   l.prompt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00105', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacet_Update_Active" PARAMETERS = "attributefacet var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacets
+			 			  SET
+			 				active	= ?
+			 			  WHERE
+			 			  	id		= ?' }"
+			 FIELDS = "l.attributefacet:active,
+					   l.attributefacet:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00086', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttribteFacet_Delete" PARAMETERS = "attributefacet var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT AttributeFacetOption_Delete_All_AttributeFacet( l.attributefacet:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ AttribteFacet_Delete_LowLevel( l.attributefacet:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttribteFacet_Delete_LowLevel" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AttributeFacets WHERE id = ?' }"
+			 FIELDS = "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00087', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AttributeFacetOptions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Read" PARAMETERS = "attributefacetoption var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.attributefacetoption"			VALUE = "">
+	<MvASSIGN NAME = "l.attributefacetoption:id"		VALUE = "{ AttributeFacetOptions.d.id }">
+	<MvASSIGN NAME = "l.attributefacetoption:af_id"		VALUE = "{ AttributeFacetOptions.d.af_id }">
+	<MvASSIGN NAME = "l.attributefacetoption:lookup"	VALUE = "{ AttributeFacetOptions.d.lookup }">
+	<MvASSIGN NAME = "l.attributefacetoption:prompt"	VALUE = "{ AttributeFacetOptions.d.prompt }">
+	<MvASSIGN NAME = "l.attributefacetoption:active"	VALUE = "{ AttributeFacetOptions.d.active }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Load_Lookup" PARAMETERS = "af_id, lookup, attributefacetoption var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "AttributeFacetOptions"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions WHERE af_id = ? AND ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'lookup' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.af_id, l.lookup">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00088', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ AttributeFacetOptions.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacetOptions">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-FCT-00089' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AttributeFacetOption_Read( l.attributefacetoption ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacetOptions">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Load_ID" PARAMETERS = "id, attributefacetoption var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "AttributeFacetOptions"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00090', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ AttributeFacetOptions.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacetOptions">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-FCT-00091' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AttributeFacetOption_Read( l.attributefacetoption ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AttributeFacetOptions">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Insert" PARAMETERS = "attributefacetoption var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.attributefacetoption:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'AttributeFacetOptions' ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions
+						  ( id, af_id, lookup, prompt, active )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS = "l.attributefacetoption:id, l.attributefacetoption:af_id, l.attributefacetoption:lookup, l.attributefacetoption:prompt, l.attributefacetoption:active">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00092', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Update" PARAMETERS = "attributefacetoption var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions
+						  SET
+						  	af_id	= ?,
+						  	lookup	= ?,
+						  	prompt	= ?,
+						  	active	= ?
+						  WHERE
+						  	id		= ?' }"
+			 FIELDS = "l.attributefacetoption:af_id, l.attributefacetoption:lookup, l.attributefacetoption:prompt, l.attributefacetoption:active,
+					   l.attributefacetoption:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00093', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Update_All_Prompt" PARAMETERS = "af_id, prompt" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions
+			 			  SET
+			 				prompt																	= ?
+			 			  WHERE
+			 				af_id																	= ? AND
+			 			  	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prompt' ) $ '	= ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS = "l.prompt,
+					   l.af_id, l.prompt">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00106', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Update_Active" PARAMETERS = "attributefacetoption var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions
+			 			  SET
+			 				active	= ?
+			 			  WHERE
+			 			  	id		= ?' }"
+			 FIELDS = "l.attributefacetoption:active,
+					   l.attributefacetoption:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00094', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttribteFacetOption_Delete" PARAMETERS = "attributefacetoption var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions WHERE id = ?' }"
+			 FIELDS = "l.attributefacetoption:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00095', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AttributeFacetOption_Delete_All_AttributeFacet" PARAMETERS = "af_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AttributeFacetOptions WHERE af_id = ?' }"
+			 FIELDS = "l.af_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00096', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AttributeFacetXProduct
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AttributeFacetXProduct_Insert" PARAMETERS = "attributefacetxproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AttributeFacetXProduct
+						  ( af_id, product_id )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.attributefacetxproduct:af_id, l.attributefacetxproduct:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00097', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AttributeFacetOptionXProduct
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AttributeFacetOptionXProduct_Insert" PARAMETERS = "attributefacetoptionxproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AttributeFacetOptionXProduct
+			 			  ( afo_id, product_id )
+			 			  VALUES
+			 			  ( ?, ? )' }"
+			 FIELDS = "l.attributefacetoptionxproduct:afo_id, l.attributefacetoptionxproduct:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00098', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StandardFacets_AttributeFacets_Build_Code" PARAMETERS = "attribute_prompt" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.facet_code_prefix"			VALUE = "attribute-">
+	<MvASSIGN NAME = "l.facet_code_prefix_length"	VALUE = "{ len_var( l.facet_code_prefix ) }">
+
+	<MvIF EXPR = "{ g.Domain:strictcode }">
+		<MvASSIGN NAME = "l.validation_check_value"	VALUE = "{ glosub( l.attribute_prompt, '-', '' ) }">
+		<MvASSIGN NAME = "l.validation_check_value"	VALUE = "{ glosub( l.validation_check_value, '_', '' ) }">
+
+		<MvIF EXPR = "{ NOT isalnum( l.validation_check_value ) }">
+			<MvFUNCTIONRETURN VALUE = "{ l.facet_code_prefix $ crypto_md5( l.attribute_prompt ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ ( '%' IN l.attribute_prompt ) OR ( '\\' IN l.attribute_prompt ) }">
+			<MvFUNCTIONRETURN VALUE = "{ l.facet_code_prefix $ crypto_md5( l.attribute_prompt ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( ( l.facet_code_prefix_length + len_var( l.attribute_prompt ) ) GT 254 ) OR ( ' ' IN l.attribute_prompt ) OR ( '[' IN l.attribute_prompt ) OR ( ':' IN l.attribute_prompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ l.facet_code_prefix $ crypto_md5( l.attribute_prompt ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.facet_code_prefix $ l.attribute_prompt }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/util/stdfacets/functions.mv">
+<MvINCLUDE FILE = "modules/util/stdfacets/attributefacetlist.mv">
+<MvINCLUDE FILE = "modules/util/stdfacets/attributefacetdialog.mv">
+<MvINCLUDE FILE = "modules/util/stdfacets/attributefacetoptionlist.mv">
+<MvINCLUDE FILE = "modules/util/stdfacets/attributefacetoptiondialog.mv">

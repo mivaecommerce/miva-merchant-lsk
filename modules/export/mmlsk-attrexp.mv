@@ -1,0 +1,325 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-ATR-
+| Next Error Code: 5    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-attrexp">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Attributes to XML File">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.FlatAttribute_File" VALUE = "{ trim( g.FlatAttribute_File ) }">
+
+	<MvIF EXPR = "{ len( g.FlatAttribute_File ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatAttribute_File', 'Please specify a file' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ '/' IN g.FlatAttribute_File }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatAttribute_File', 'Please do not include a path in the file name' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatAttribute_Email" VALUE = "{ trim( g.FlatAttribute_Email ) }">
+
+	<MvIF EXPR = "{ g.FlatAttribute_SendEmail AND len( g.FlatAttribute_Email ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatAttribute_Email', 'Please specify a valid email address' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.FlatAttribute_Email ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatAttribute_Email', 'Please specify a valid email address' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Export" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.directory"		VALUE = "{ g.MerchantPath $ 's' $ padl( g.Store:id, 2, '0' ) $ '/export/' }">
+	<MvASSIGN NAME = "l.output"			VALUE = "{ l.directory $ g.FlatAttribute_File }">
+
+	<MvIF EXPR = "{ g.Progress_Bar EQ 100 }">
+		<MvIF EXPR = "{ g.Total_Attribute_Count EQ 1 }">	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( '1 attribute exported to \'' $ l.output $ '\'' ) }">
+		<MvELSE>											<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( g.Total_Attribute_Count $ ' attributes exported to \'' $ l.output $ '\'' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.FlatAttribute_SendEmail }">
+			<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.null" VALUE = "{ Send_Email_Attachment( g.Store:email, g.FlatAttribute_Email, '', 'Miva Merchant Attribute Export', g.FlatAttribute_File, l.directory, 'data' ) }">
+		</MvIF>		
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatAttribute_Export_Time_Start" VALUE = "{ s.time_t }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'data', l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ fexists( l.output ) }">
+		<MvIF EXPR = "{ g.FlatAttribute_Append }">
+			<MvASSIGN NAME = "l.header"	VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.output ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.FlatAttribute_Export_LastAttribute }">
+		<MvASSIGN NAME = "g.FlatAttribute_Export_LastAttribute" VALUE = 0>
+		<MvASSIGN NAME = "g.Attribute_Count"			VALUE = 0>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Attributes"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Attributes WHERE disp_order > ? ORDER BY product_id, disp_order' }"
+				FIELDS	= "g.FlatAttribute_Export_LastAttribute">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-ATR-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Total_Attribute_Count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Attr_Temp"
+					QUERY	= "{ 'SELECT COUNT(*) as attr_count FROM ' $ g.Store_Table_Prefix $ 'Attributes' }"
+					FIELDS	= "">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-ATR-00003', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Total_Attribute_Count" VALUE = "{ Attr_Temp.d.attr_count }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attr_Temp">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Start( 'Product Attribute Export Progress', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Show() }">
+
+	<MvASSIGN NAME = "l.count"	VALUE = "{ FlatAttribute_Export_Provisioning( l.output ) }">
+	
+	<MvIF EXPR = "{ Attributes.d.EOF }">
+		<MvASSIGN NAME = "g.FlatAttribute_Export_NeedRefresh" 	VALUE = 1>
+		<MvASSIGN NAME = "g.Progress_Bar"						VALUE = 100>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Attributes">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatAttribute_Export_Provisioning" PARAMETERS = "output" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.time_good" 		VALUE = 1>
+	<MvWHILE EXPR = "{ ( NOT Attributes.d.EOF ) AND l.time_good }">
+		<MvASSIGN NAME = "g.Attribute_Count"	VALUE = "{ g.Attribute_Count + 1 }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.Attribute_Count, g.Total_Attribute_Count ) }">
+
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Load_ID( Attributes.d.product_id, l.product ) }">
+			<MvIF EXPR = "{ ( g.FlatAttribute_ExportMode EQ 'Replace' ) AND 
+						  	( g.FlatAttribute_LastProduct NE l.product:id ) }">
+				<MvASSIGN NAME = "g.FlatAttribute_LastProduct" VALUE = "{ l.product:id }">
+
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '<ProductAttribute_Delete_All product_code="' $ l.product:code $ '" />' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ Attributes.d.type NE 'template' }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '<ProductAttribute_Add product_code="' $ l.product:code $ '">' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Code>'			$ miva_cdata_encode( Attributes.d.code )			$ '</Code>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Type>'			$ miva_cdata_encode( Attributes.d.type )			$ '</Type>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Prompt>'		$ miva_cdata_encode( Attributes.d.prompt )			$ '</Prompt>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Image>'		$ miva_cdata_encode( Attributes.d.image	)			$ '</Image>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Price>'		$ Attributes.d.price								$ '</Price>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Cost>'			$ Attributes.d.cost									$ '</Cost>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Weight>'		$ Attributes.d.weight								$ '</Weight>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Required>'		$ FlatAttribute_Boolean( Attributes.d.required )	$ '</Required>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Inventory>'	$ FlatAttribute_Boolean( Attributes.d.inventory )	$ '</Inventory>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '</ProductAttribute_Add>' ) }">
+
+				<MvDO FILE = "{ g.Module_Library_DB }" NAME = "l.option_count" VALUE = "{ OptionList_Load_Attribute( Attributes.d.id, l.option ) }">
+
+				<MvASSIGN NAME = "l.pos" VALUE = 1>
+				<MvWHILE EXPR = "{ l.pos LE l.option_count }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '<ProductAttributeOption_Add product_code="' $ l.product:code $ '" attribute_code="' $ Attributes.d.code $ '">' ) }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Code>'			$ miva_cdata_encode( l.option[ l.pos ]:code )	$ '</Code>' ) }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Prompt>'      	$ miva_cdata_encode( l.option[ l.pos ]:prompt )	$ '</Prompt>' ) }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Image>'		$ miva_cdata_encode( l.option[ l.pos ]:image ) 	$ '</Image>' ) }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Price>'		$ l.option[ l.pos ]:price						$ '</Price>' ) }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Cost>'			$ l.option[ l.pos ]:cost						$ '</Cost>' ) }">
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<Weight>'		$ l.option[ l.pos ]:weight						$ '</Weight>' ) }">
+
+					<MvIF EXPR = "{ Attributes.d.default_id EQ l.option[ l.pos ]:id }">
+						<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<DefaultOption>Yes</DefaultOption>' ) }">
+					</MvIF>
+
+					<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '</ProductAttributeOption_Add>' ) }">
+
+					<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos + 1 }">
+				</MvWHILE>
+			<MvELSEIF EXPR = "{ [ g.Module_Feature_ATT_DB ].AttributeTemplate_Load_ID( Attributes.d.attemp_id, l.attribute_template ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '<ProductAttribute_Add_Template product_code="' $ l.product:code $ '">' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '	<AttributeTemplateCode>' $ miva_cdata_encode( l.attribute_template:code ) $ '</AttributeTemplateCode>' ) }">
+				<MvEVAL EXPR = "{ FlatAttribute_Export_Line( l.output, '</ProductAttribute_Add_Template>' ) }">
+			</MvIF>
+		</MvIF>
+		
+		<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+			<MvASSIGN NAME = "l.end_time" VALUE = "20">
+		<MvELSE>
+			<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatAttribute_Export_Time_Start ) GT l.end_time }">
+			<MvASSIGN NAME = "l.time_good" 							VALUE = 0>
+			<MvASSIGN NAME = "l.attr_id" 							VALUE = "{ Attributes.d.disp_order }">
+			<MvASSIGN NAME = "g.FlatAttribute_Export_NeedRefresh" 	VALUE = 1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Attributes" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ g.FlatAttribute_Export_NeedRefresh AND ( NOT Attributes.d.EOF ) }">
+		<MvASSIGN NAME="g.FlatAttribute_Export_LastAttribute" VALUE = "{ l.attr_id }">
+	<MvELSE>
+		<MvASSIGN NAME="g.FlatAttribute_Export_NeedRefresh" VALUE="">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ g.Attribute_Count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatAttribute_Export_Line" PARAMETERS = "output, line" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEXPORT FILE = "{ l.output }" DELIMITER = "" FIELDS = "l.line">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatAttribute_Boolean" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.value }">
+		<MvFUNCTIONRETURN VALUE = "Yes">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "No">	
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.FlatAttribute_Export_NeedRefresh }">
+		<MvASSIGN NAME = "g.FlatAttribute_Append" 	VALUE = 1>
+
+		<MvHIDE FIELDS = "g.Attribute_Count,g.FlatAttribute_Export_LastAttribute,g.FlatAttribute_File,g.FlatAttribute_Append,
+						  g.FlatAttribute_Export_All, g.FlatAttribute_Category_Mode,g.FlatAttribute_Category_Code,
+						  g.FlatAttribute_Format, g.Module_Code,g.Progress_Bar, g.Total_Attribute_Count, 
+						  g.FlatAttribute_Email, g.FlatAttribute_SendEmail, g.FlatAttribute_ExportMode, g.FlatAttribute_LastProduct">
+
+		<script type="text/javascript">
+			function exp_continue()
+			{
+				document.forms[ Screen ].submit();
+			}
+			window.onload = exp_continue;
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_End() }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Load_Fields }">
+		<MvIF EXPR = "{ g.Reset NE 'No' }">
+			<MvASSIGN NAME = "g.FlatAttribute_File"			VALUE = "">
+			<MvASSIGN NAME = "g.FlatAttribute_Append"		VALUE = "">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL g.FlatAttribute_File }">			<MvASSIGN NAME = "g.FlatAttribute_File"			VALUE = "provide.xml">		</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatAttribute_Append }">		<MvASSIGN NAME = "g.FlatAttribute_Append"		VALUE = 1>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatAttribute_ExportMode }">	<MvASSIGN NAME = "g.FlatAttribute_ExportMode"	VALUE = "Add">				</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.title" VALUE = "Export Attributes to XML File"> 
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( l.title, 'EXPT', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_JavaScript( 'Exporting Attributes to XML File', 'EXPT', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_CSS() }">
+
+	<script language="JavaScript">
+<!--
+HaveCustomReset = 1;
+
+function CustomReset()
+{
+	document.EXPT.Reset.value = 'Yes';
+}
+//-->
+	</script>
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( l.title, 'EXPT', '' ) }">
+
+	<input type="hidden" name="Reset" value="No">
+	<MvHIDE FIELDS = "g.Module_Code">
+
+	<MvDO FILE = "{ g.Module_Admin }" NAME = "l.ok" VALUE = "{ BeginContent() }">
+	<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Destination', 105 ) }">
+				<tr><td valign="top" nowrap>
+					<b>Export Product Attributes to File:</b>
+				</td><td width="100%">
+					<input type="text" name="FlatAttribute_File" size=40 value = "{ encodeentities( g.FlatAttribute_File ) }">
+				</td></tr>
+				<tr><td valign="top" nowrap>
+					Email File To:
+				</td><td width="100%">
+				<MvIF EXPR = "{ NOT g.FlatAttribute_SendEmail }">
+					<input type="radio" name="FlatAttribute_SendEmail" value=0 checked>Do Not Email<br>
+					<input type="radio" name="FlatAttribute_SendEmail" value=1>
+				<MvELSE>
+					<input type="radio" name="FlatAttribute_SendEmail" value=0>Do Not Email<br>
+					<input type="radio" name="FlatAttribute_SendEmail" value=1 checked>
+				</MvIF>
+			
+					<input type="text" size=40 name="FlatAttribute_Email" value="{ encodeentities( g.Store:email ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>If File Exists:</b>
+				</td><td width="100%">
+				<MvIF EXPR = "{ g.FlatAttribute_Append }">
+					<input type="radio" name="FlatAttribute_Append" value=1 checked>Append To File<br>
+					<input type="radio" name="FlatAttribute_Append" value=0>Replace File
+				<MvELSE>
+					<input type="radio" name="FlatAttribute_Append" value=1>Append To File
+					<br>
+					<input type="radio" name="FlatAttribute_Append" value=0 checked>Replace File
+				</MvIF>
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td><td valign="top" nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Settings', 105 ) }">
+			<tr><td valign="top" nowrap>
+				<b>Export Product Attributes in:</b>
+			</td><td width="100%">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatAttribute_ExportMode', 'Add', 		g.FlatAttribute_ExportMode, 'Add Mode' ) }"><br>
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatAttribute_ExportMode', 'Replace', 	g.FlatAttribute_ExportMode, 'Replace All Mode' ) }">
+			</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+	</table>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Buttons( 'Export', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

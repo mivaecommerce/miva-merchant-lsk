@@ -1,0 +1,1042 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-TAX-STA-
+| Next Error Code: 42   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-statetax">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "State Based Sales Tax">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0702">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.01">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "tax, vis_store, provision_store, data_store, json, clientside, clientside_sri">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'StateTaxOptions
+						  (
+							taxstate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )	$ ',
+							vrfy_cntry	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL() 	$ ',
+							round_meth	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 ) $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'StateTaxStates
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							state		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )		$ ',
+							rate		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 3 )	$ ',
+							tax_ship	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'StateTaxStates_1 ON ' $ g.Store_Table_Prefix $ 'StateTaxStates ( state )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'StateTaxStates_2 ON ' $ g.Store_Table_Prefix $ 'StateTaxStates ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'StateTaxStates', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.options:taxstate"	VALUE = "S">
+	<MvASSIGN NAME = "l.options:vrfy_cntry"	VALUE = 1>
+	<MvASSIGN NAME = "l.options:round_meth" VALUE = "B">
+
+	<MvFUNCTIONRETURN VALUE = "{ StateTaxOptions_Insert( l.options ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00025', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'StateTaxOptions' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'StateTaxStates' }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'StateTaxStates' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sales Tax Calculation Feature (tax)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "TaxModule_Order_Hide_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Required" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_ProcessOrder" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Basket" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Basket:tax_exempt }">
+		<MvIF EXPR = "{ NOT g.Store:req_tax }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT StateTaxOptions_Load( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.options:taxstate EQ 'B' }">
+		<MvASSIGN NAME = "l.state"						VALUE = "{ g.Basket:bill_state }">
+		<MvASSIGN NAME = "l.country" 					VALUE = "{ g.Basket:bill_cntry }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.state"						VALUE = "{ g.Basket:ship_state }">
+		<MvASSIGN NAME = "l.country" 					VALUE = "{ g.Basket:ship_cntry }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.options:vrfy_cntry }">	<MvASSIGN NAME = "l.valid_country" VALUE = 1>
+	<MvELSE>										<MvASSIGN NAME = "l.valid_country" VALUE = "{ strcasecmp( l.country, g.Store:country ) EQ 0 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT StateTaxState_Load( l.state, l.statetax_state ) ) OR ( NOT l.valid_country ) }">
+		<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
+		<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketcharge:module_id" 	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketcharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.basketcharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.basketcharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.basketcharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.tax"							VALUE = 0.00>
+
+	<MvCOMMENT>
+	|
+	| l.non_tax_total keeps track of the total item price and the total baskets charges together so that if they fully cancel eachother out then the tax will also be 0.00 
+	| This functionality is necessary to avoid tax on $0.00 priced baskets, where the tax equals the cumulative loss of precision of rounding off high decimal tax amounts 
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.non_tax_total" 					VALUE = 0.00>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ NOT l.basketitem:taxable }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basket_item_price"			VALUE = "{ l.basketitem:price }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketoptions ) }">
+			<MvASSIGN NAME = "l.basket_item_price"		VALUE = "{ l.basket_item_price + l.basketoption:price }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.basketitem:tax" 			VALUE = "{ StateTax_Round( ( l.basket_item_price * l.basketitem:quantity ) * ( l.statetax_state:rate / 100 ), l.options:round_meth ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ miva_ieee754_normalize( 2, l.tax + l.basketitem:tax ) }">
+		<MvASSIGN NAME = "l.non_tax_total" 				VALUE = "{ miva_ieee754_normalize( 2, l.non_tax_total + ( l.basket_item_price * l.basketitem:quantity ) ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Update_Tax( l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+		<MvIF EXPR = "{ l.basketcharge:type EQ 'TAX' }">																				<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'SHIPPING' AND NOT l.statetax_state:tax_ship ) OR l.basketcharge:tax_exempt }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = "{ StateTax_Round( l.basketcharge:amount * ( l.statetax_state:rate / 100 ), l.options:round_meth ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ miva_ieee754_normalize( 2, l.tax + l.basketcharge:tax ) }">
+		<MvASSIGN NAME = "l.non_tax_total" 				VALUE = "{ miva_ieee754_normalize( 2, l.non_tax_total + l.basketcharge:amount ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.tax LT 0.00 }">
+		<MvASSIGN NAME = "l.tax"						VALUE = 0.00>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.non_tax_total LE 0.00 }">
+		<MvASSIGN NAME = "l.tax" 						VALUE = 0.00>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge"					VALUE = "">
+	<MvASSIGN NAME = "l.basketcharge:basket_id" 		VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basketcharge:module_id" 		VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basketcharge:type" 				VALUE = "TAX">
+	<MvASSIGN NAME = "l.basketcharge:descrip" 			VALUE = "Sales Tax">
+	<MvASSIGN NAME = "l.basketcharge:amount" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.basketcharge:disp_amt" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.basketcharge:tax_exempt" 		VALUE = 0>
+	<MvASSIGN NAME = "l.basketcharge:tax"				VALUE = 0.00>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basketcharge ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Order" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.order:cust_id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].TaxExempt_Load_Customer_ID( l.order:cust_id, l.tax_exempt ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.tax_exempt }">
+			<MvIF EXPR = "{ NOT g.Store:req_tax }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.ordercharge"				VALUE = "">
+			<MvASSIGN NAME = "l.ordercharge:order_id" 		VALUE = "{ l.order:id }">
+			<MvASSIGN NAME = "l.ordercharge:module_id" 		VALUE = "{ l.module:id }">
+			<MvASSIGN NAME = "l.ordercharge:type" 			VALUE = "TAX">
+			<MvASSIGN NAME = "l.ordercharge:descrip" 		VALUE = "Sales Tax">
+			<MvASSIGN NAME = "l.ordercharge:amount" 		VALUE = 0.00>
+			<MvASSIGN NAME = "l.ordercharge:disp_amt" 		VALUE = 0.00>
+			<MvASSIGN NAME = "l.ordercharge:tax_exempt" 	VALUE = 0>
+			<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = 0.00>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT StateTaxOptions_Load( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.options:taxstate EQ 'B' }">
+		<MvASSIGN NAME = "l.state"						VALUE = "{ l.order:bill_state }">
+		<MvASSIGN NAME = "l.country" 					VALUE = "{ l.order:bill_cntry }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.state"						VALUE = "{ l.order:ship_state }">
+		<MvASSIGN NAME = "l.country" 					VALUE = "{ l.order:ship_cntry }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.options:vrfy_cntry }">	<MvASSIGN NAME = "l.valid_country" VALUE = 1>
+	<MvELSE>										<MvASSIGN NAME = "l.valid_country" VALUE = "{ strcasecmp( l.country, g.Store:country ) EQ 0 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid_country }">										<MvASSIGN NAME = "l.calculate_tax" VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT StateTaxState_Load( l.state, l.statetax_state ) }">	<MvASSIGN NAME = "l.calculate_tax" VALUE = 0>
+	<MvELSE>																	<MvASSIGN NAME = "l.calculate_tax" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.calculate_tax }">
+		<MvASSIGN NAME = "l.ordercharge"				VALUE = "">
+		<MvASSIGN NAME = "l.ordercharge:order_id" 		VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.ordercharge:module_id" 		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.ordercharge:type" 			VALUE = "TAX">
+		<MvASSIGN NAME = "l.ordercharge:descrip" 		VALUE = "Sales Tax">
+		<MvASSIGN NAME = "l.ordercharge:amount" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.ordercharge:disp_amt" 		VALUE = 0.00>
+		<MvASSIGN NAME = "l.ordercharge:tax_exempt" 	VALUE = 0>
+		<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = 0.00>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.tax"							VALUE = 0.00>
+
+	<MvCOMMENT>
+	|
+	| l.non_tax_total keeps track of the total item price and the total order charges together so that if they fully cancel eachother out then the tax will also be 0.00
+	| This functionality is necessary to avoid tax on $0.00 priced orders, where the tax equals the cumulative loss of precision of rounding off high decimal tax amounts 
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.non_tax_total" 					VALUE = 0.00>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+		<MvIF EXPR = "{ NOT l.orderitem:taxable }">			<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 300 }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.orderitem_price"			VALUE = "{ l.orderitem:price }">
+
+		<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ [ g.Module_Library_DB ].OrderOptionList_Load_Line( l.orderitem:line_id, l.orderoptions ) }">
+			<MvASSIGN NAME = "l.orderitem_price"		VALUE = "{ l.orderitem_price + l.orderoption:price }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.orderitem:tax"				VALUE = "{ StateTax_Round( ( l.orderitem_price * l.orderitem:quantity ) * ( l.statetax_state:rate / 100 ), l.options:round_meth ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ miva_ieee754_normalize( 2, l.tax + l.orderitem:tax ) }">
+		<MvASSIGN NAME = "l.non_tax_total" 				VALUE = "{ miva_ieee754_normalize( 2, l.non_tax_total + ( l.orderitem_price * l.orderitem:quantity ) ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Tax( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Order( l.order:id, l.ordercharges ) }">
+		<MvIF EXPR = "{ l.ordercharge:type EQ 'TAX' }">																				<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( l.ordercharge:type EQ 'SHIPPING' AND NOT l.statetax_state:tax_ship ) OR l.ordercharge:tax_exempt }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = "{ StateTax_Round( l.ordercharge:amount * ( l.statetax_state:rate / 100 ), l.options:round_meth ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ miva_ieee754_normalize( 2, l.tax + l.ordercharge:tax ) }">
+		<MvASSIGN NAME = "l.non_tax_total" 				VALUE = "{ miva_ieee754_normalize( 2, l.non_tax_total + l.ordercharge:amount ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.tax LT 0.00 }">
+		<MvASSIGN NAME = "l.tax"						VALUE = 0.00>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.non_tax_total LE 0.00 }">
+		<MvASSIGN NAME = "l.tax" 						VALUE = 0.00>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ordercharge"					VALUE = "">
+	<MvASSIGN NAME = "l.ordercharge:order_id" 			VALUE = "{ l.order:id }">
+	<MvASSIGN NAME = "l.ordercharge:module_id" 			VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.ordercharge:type" 				VALUE = "TAX">
+	<MvASSIGN NAME = "l.ordercharge:descrip" 			VALUE = "Sales Tax">
+	<MvASSIGN NAME = "l.ordercharge:amount" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.ordercharge:disp_amt" 			VALUE = "{ l.tax }">
+	<MvASSIGN NAME = "l.ordercharge:tax_exempt" 		VALUE = 0>
+	<MvASSIGN NAME = "l.ordercharge:tax"				VALUE = 0.00>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].OrderCharge_Insert( l.ordercharge ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Edit Store Screen Feature (vis_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Store_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.StateTax_Options:taxstate" 		VALUE = "{ trim( g.StateTax_Options:taxstate ) }">
+	<MvASSIGN NAME = "g.StateTax_Options:vrfy_cntry" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.StateTax_Options:vrfy_cntry ) }">
+	<MvASSIGN NAME = "g.StateTax_Options:round_meth" 	VALUE = "{ trim( g.StateTax_Options:round_meth ) }">
+
+	<MvIF EXPR = "{ g.StateTax_Options:taxstate NE 'B' AND g.StateTax_Options:taxstate NE 'S' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'STATETAX_OPTIONS', '', 'Invalid value for \'Tax Based On\'' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.StateTax_Options:round_meth NE 'B' AND g.StateTax_Options:round_meth NE 'U' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'STATETAX_OPTIONS', '', 'Invalid value for \'Rounding Method\'' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.options:taxstate" 	VALUE = "{ g.StateTax_Options:taxstate }">
+	<MvASSIGN NAME = "l.options:vrfy_cntry" VALUE = "{ g.StateTax_Options:vrfy_cntry }">
+	<MvASSIGN NAME = "l.options:round_meth" VALUE = "{ g.StateTax_Options:round_meth }">
+
+	<MvIF EXPR = "{ NOT StateTaxOptions_Update( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00017', 'StateTax Configuration updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tabs" 		VALUE = "GT_STORE/STATETAX_OPTIONS:State Tax Options">
+
+	<MvIF EXPR = "{ [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) AND
+	 				[ g.Module_Admin ].CanI( 'STAT', 1, 0, 0, 0 ) }">
+		<MvASSIGN NAME = "l.tabs"	VALUE = "{ l.tabs $ ',STATETAX:State Based Sales Tax' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.tabs }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT StateTaxOptions_Load( g.StateTax_Options ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Admin ].Tab_Visible( l.tab, 'STATETAX_OPTIONS' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_STORE', 'STATETAX_OPTIONS' ) }">
+			<table width = "100%">
+				<tr>
+					<td nowrap><b>Tax Based On:</b></td>
+					<td width="100%">
+						<select name="StateTax_Options:taxstate">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'S', g.StateTax_Options:taxstate, 'Shipping State' ) }">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'B', g.StateTax_Options:taxstate, 'Billing State' ) }">
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td nowrap><b>Rounding Method:</b></td>
+					<td width="100%">
+						<select name="StateTax_Options:round_meth">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'B', g.StateTax_Options:round_meth, 'Bankers\' Rounding' ) }">
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'U', g.StateTax_Options:round_meth, 'Round Up' ) }">
+						</select>
+					</td>
+				</tr>
+				<tr>
+					<td nowrap>&nbsp;</td>
+					<td width="100%">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.StateTax_Options:vrfy_cntry, 'StateTax_Options:vrfy_cntry', 1, 'Only Tax Store Country' ) }">
+					</td>
+				</tr>
+			</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	<MvELSE>
+		<MvHIDE FIELDS = "g.StateTax_Options">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'STATETAX' }">
+		<MvEVAL EXPR = "{ Element_StateTaxStateList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_StateTax_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_StateTaxStateList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_StateTax_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script language="JavaScript">
+			MMScreen_LoadFinished( function() { new StateTaxStateList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_StateTaxStateList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'settings' }">			<MvEVAL EXPR = "{ Module_Provision_Store_Settings( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'state_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_State_Delete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'state_add' }">		<MvEVAL EXPR = "{ Module_Provision_Store_State_Add( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT StateTaxOptions_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 		'O', l.provide_xml, 'TaxState',			l.settings:taxstate, 	'Shipping,Billing', 'S,B' ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 		'O', l.provide_xml, 'RoundingMethod',	l.settings:round_meth, 	'Bankers,Up', 		'B,U' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 	'O', l.provide_xml, 'VerifyCountry',	l.settings:vrfy_cntry )	}">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT StateTaxOptions_Update( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00021', 'StateTax Configuration updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_State_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'state', l.state ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ StateTaxState_Load( l.state, l.statetax ) }">
+		<MvIF EXPR = "{ NOT StateTaxState_Delete( l.statetax ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00022', 'StateTax State \'' $ l.state $ '\' deleted' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_State_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.state:rate"		VALUE = 0.000>
+	<MvASSIGN NAME = "l.state:tax_ship" VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R', l.provide_xml,		'State',		l.state:state ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'O', l.provide_xml,		'Rate',			l.state:rate,			10, 3 ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'TaxShipping',	l.state:tax_ship ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ StateTaxState_Load( l.state:state, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'State \'' $ l.state:state $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT StateTaxState_Insert( l.state ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00023', 'StateTax State \'' $ l.state:state $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| StateTaxOptions table helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StateTaxOptions_Load" PARAMETERS = "options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "StateTaxOptions"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'StateTaxOptions' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.options:taxstate"	VALUE = "{ StateTaxOptions.d.taxstate }">
+	<MvASSIGN NAME = "l.options:vrfy_cntry"	VALUE = "{ StateTaxOptions.d.vrfy_cntry }">
+	<MvASSIGN NAME = "l.options:round_meth"	VALUE = "{ StateTaxOptions.d.round_meth }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxOptions">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxOptions_Insert" PARAMETERS = "options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'StateTaxOptions
+						  ( taxstate, vrfy_cntry, round_meth )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.options:taxstate, l.options:vrfy_cntry, l.options:round_meth">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxOptions_Update" PARAMETERS = "options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'StateTaxOptions
+						  SET
+							taxstate 	= ?,
+							vrfy_cntry	= ?,
+							round_meth	= ?' }"
+			 FIELDS	= "l.options:taxstate, l.options:vrfy_cntry, l.options:round_meth">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| StateTaxStates table helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StateTaxState_Read" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.state:id" 		VALUE = "{ StateTaxStates.d.id }">
+	<MvASSIGN NAME = "l.state:state"	VALUE = "{ StateTaxStates.d.state }">
+	<MvASSIGN NAME = "l.state:rate"		VALUE = "{ StateTaxStates.d.rate }">
+	<MvASSIGN NAME = "l.state:tax_ship"	VALUE = "{ StateTaxStates.d.tax_ship }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxState_Load" PARAMETERS = "state, statetax_state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "StateTaxStates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'StateTaxStates WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'state' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.state">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ StateTaxStates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxStates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-STA-00012' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ StateTaxState_Read( l.statetax_state ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxStates">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxState_Load_ID" PARAMETERS = "id, statetax_state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "StateTaxStates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'StateTaxStates WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00026', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ StateTaxStates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxStates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-STA-00027' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ StateTaxState_Read( l.statetax_state ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxStates">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxStateList_Load" PARAMETERS = "states var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "StateTaxStates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'StateTaxStates ORDER BY state' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT StateTaxStates.d.EOF }">
+		<MvASSIGN NAME = "l.state_count"	VALUE = "{ l.state_count + 1 }">
+		<MvEVAL EXPR = "{ StateTaxState_Read( l.states[ l.state_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "StateTaxStates" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxStates">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-TAX-STA-00013', l.state_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxState_Insert" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.state:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'StateTaxStates' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'StateTaxStates
+						  ( id, state, rate, tax_ship )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.state:id, l.state:state, l.state:rate, l.state:tax_ship">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxState_Update" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'StateTaxStates
+						  SET
+							state		= ?,
+							rate		= ?,
+							tax_ship	= ?
+						  WHERE
+						  	id 			= ?' }"
+			 FIELDS	= "l.state:state, l.state:rate, l.state:tax_ship,
+			 		   l.state:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00028', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateTaxState_Delete" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'StateTaxStates WHERE id = ?' }"
+			 FIELDS	= "l.state:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature clientside
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/tax/statetax/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_StateTax_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/statetax/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/statetax/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/statetax/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature json
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'StateTaxStateList_Load_Query' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_StateTaxStateList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'StateTaxState_Insert' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_StateTaxState_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'StateTaxState_Update' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_StateTaxState_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'StateTaxState_Delete' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_StateTaxState_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'StateTaxState_Update_TaxShipping' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_StateTaxState_Update_TaxShipping( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxState" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":		<MvEVAL EXPR = "{ int( l.state:id ) }">,
+	"state":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.state:state ) }">",
+	"rate":		<MvEVAL EXPR = "{ l.state:rate ROUND 3 }">,
+	"tax_ship":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.state:tax_ship ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxState_Load" PARAMETERS = "statetax var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.StateTax_ID" 	VALUE = "{ int( g.StateTax_ID ) }">
+	<MvASSIGN NAME = "g.State"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.State ) }">
+
+	<MvIF EXPR = "{ NOT StateTaxState_Load_ID( g.StateTax_ID, l.statetax ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT StateTaxState_Load( g.State, l.statetax ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-STA-00030', 'Unable to find state tax state' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxStateList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 's.rate',		'rate' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 's.tax_ship',	'tax_ship' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'st.name',		'state' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 's.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'st.name', 'state_name' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'StateTaxStates', 's' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 's', g.Store_Table_Prefix $ 'States', 'st', [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'st.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 's.state' ), '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'state:state_name,rate,tax_ship', 'state:state_name' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'StateTaxStates', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-STA-00031', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.statetaxstate_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT StateTaxStates.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.statetaxstate_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ StateTaxState_Read( l.statetaxstate ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.statetaxstate_count ) }">
+				<MvEVAL EXPR = "{ JSON_StateTaxState( l.statetaxstate ) }">,
+				"state_name": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( StateTaxStates.d.state_name ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "StateTaxStates" ROWS = 1>
+		</MvWHILE>
+		],
+		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "StateTaxStates">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxState_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.State"				VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.State ) }">
+	<MvASSIGN NAME = "g.Rate"				VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate ) }">
+	<MvASSIGN NAME = "g.Tax_Shipping"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Tax_Shipping ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Rate, 10, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.State }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( g.State, l.state ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-STA-00032', 'Unable to load state' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'State', '\'' $ l.state:name $ '\' cannot be assigned a tax rate because it has a null state code' ) }">
+	<MvELSEIF EXPR = "{ StateTaxState_Load( g.State, l.null ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( g.State, l.state ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-STA-00033', 'Unable to load state' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'State', 'State \'' $ l.state:name $ '\' already associated' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.statetax:state" 	VALUE = "{ g.State }">
+	<MvASSIGN NAME = "l.statetax:rate" 		VALUE = "{ g.Rate }">
+	<MvASSIGN NAME = "l.statetax:tax_ship" 	VALUE = "{ g.Tax_Shipping }">
+
+	<MvIF EXPR = "{ NOT StateTaxState_Insert( l.statetax ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00034', 'State Tax State \'' $ l.statetax:state $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxState_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.State" 			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.State ) }">
+	<MvASSIGN NAME = "g.Rate" 			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate ) }">
+	<MvASSIGN NAME = "g.Tax_Shipping"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Tax_Shipping ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Rate, 10, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.State }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( g.State, l.state ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-STA-00035', 'Unable to load state' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'State', '\'' $ l.state:name $ '\' cannot be assigned a tax rate because it has a null state code' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_StateTaxState_Load( l.statetax ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ toupper( l.statetax:state ) NE toupper( g.State ) }">
+		<MvIF EXPR = "{ StateTaxState_Load( g.State, l.null ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( g.State, l.state ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-STA-00036', 'Unable to load state' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'State', 'State tax state \'' $ l.state:name $ '\' already associated' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.statetax:state" 	VALUE = "{ g.State }">
+	<MvASSIGN NAME = "l.statetax:rate" 		VALUE = "{ g.Rate }">
+	<MvASSIGN NAME = "l.statetax:tax_ship" 	VALUE = "{ g.Tax_Shipping }">
+
+	<MvIF EXPR = "{ NOT StateTaxState_Update( l.statetax ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00037', 'State Tax State \'' $ l.statetax:state $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxState_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ JSON_StateTaxState_Load( l.statetax ) }">
+		<MvIF EXPR = "{ NOT StateTaxState_Delete( l.statetax ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00038', 'State Tax State \'' $ l.statetax:state $ '\' deleted' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateTaxState_Update_TaxShipping" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.Tax_Shipping"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Tax_Shipping ) }">
+
+	<MvIF EXPR = "{ NOT JSON_StateTaxState_Load( l.statetax ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.statetax:tax_ship"	VALUE = "{ g.Tax_Shipping }">
+
+	<MvIF EXPR = "{ NOT StateTaxState_Update( l.statetax ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-STA-00039', 'State Tax State \'' $ l.statetax:state $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StateTax_Round" PARAMETERS = "charge, round_meth" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT> Bankers' rounding: Round down on 4 or less, stay on 5, round up on 6 or more </MvCOMMENT>
+
+	<MvIF EXPR = "{ l.round_meth EQ 'B' }">
+		<MvFUNCTIONRETURN VALUE = "{ l.charge ROUND 2 }">
+	</MvIF>
+
+	<MvCOMMENT> Rounding up: Round up on 5 or more </MvCOMMENT>
+
+	<MvASSIGN NAME = "l.pos" VALUE = "{ '.' IN l.charge }">
+
+	<MvIF EXPR = "{ ( l.pos EQ 0 ) OR ( substring_var( l.charge, l.pos + 3, 1 ) NE '5' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ l.charge ROUND 2 }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ( l.charge + 0.001 ) ROUND 2 }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/tax/statetax/functions.mv">
+<MvINCLUDE FILE = "modules/tax/statetax/list.mv">

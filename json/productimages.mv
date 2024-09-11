@@ -1,0 +1,465 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-PIMG-
+| Next Error Code: 26   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Upload_ValidateFileUpload" PARAMETERS = "field, filename, content_type" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN VALUE = -1>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = -1>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = -1>	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If more than one uploaded file is present in a single call, just ignore it.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( NOT ISNULL g.Filename ) OR ( NOT ISNULL g.File_MD5 ) }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.content_type EQ 'image/jpeg'	OR
+					l.content_type EQ 'image/pjpeg'	OR
+					l.content_type EQ 'image/gif'	OR
+					l.content_type EQ 'image/png'	OR
+					l.content_type EQ 'image/webp' }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00014', 'Invalid or unsupported image type for file \'' $ l.filename $ '\'' ) }">
+	<MvEVAL EXPR = "{ JSON_FileUpload_Error( 'MER-JSN-PIMG-00001', 'Invalid or unsupported image type' ) }">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Upload_ProcessFileUpload" PARAMETERS = "field, filename, status, tempfile, content_type, size" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_ProcessFileUpload( 'Product Image', l.field, l.filename, l.status, l.tempfile, l.content_type, l.size ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Upload" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_ValidateUploadedFile( l.uploaded_tempfile ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result"						VALUE = "{ JSON_ProductImage_Upload_LowLevel( l.uploaded_tempfile ) }">
+	<MvASSIGN NAME = "l.null"						VALUE = "{ fdelete( l.uploaded_tempfile ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Upload_LowLevel" PARAMETERS = "uploaded_tempfile" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].Validate_Image_Extension_ToLowerCase( g.Filename, l.null ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00019', 'Product Image uploaded with invalid extension for file \'' $ g.Filename $ '\' at path \'' $ l.uploaded_tempfile $ '\'' ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PIMG-00007', 'Invalid image extension' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.filename"			VALUE = "{ JSON_Decode( g.Filename ) }">
+	<MvASSIGN NAME = "g.Product_ID"			VALUE = "{ int( g.Product_ID ) }">
+	<MvASSIGN NAME = "g.ImageType_ID"		VALUE = "{ int( g.ImageType_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Product_Load_ID( g.Product_ID, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.ImageType_ID EQ 0 }">
+		<MvASSIGN NAME = "l.imagetype:id"	VALUE = 0>
+		<MvASSIGN NAME = "l.imagetype:code"	VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ImageType_Load_ID( g.ImageType_ID, l.imagetype ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Insert_RenameFile_NoDuplicates( l.product:id, l.filename, l.uploaded_tempfile, 'data', fsize( l.uploaded_tempfile ), g.File_MD5, l.imagetype:id, l.productimage ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Image_Load_ID( l.productimage:image_id, l.image ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00020', 'Product Image \'' $ l.filename $ '\' uploaded for product \'' $ l.product:code $ '\', but image failed to load' ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00021', 'Product Image \'' $ l.image:image $ '\' uploaded for product \'' $ l.product:code $ '\'' ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"id":			<MvEVAL EXPR = "{ l.productimage:id }">,
+		"product_id":	<MvEVAL EXPR = "{ l.productimage:product_id }">,
+		"image_id":		<MvEVAL EXPR = "{ l.productimage:id }">,
+		"type_id":		<MvEVAL EXPR = "{ l.productimage:type_id }">,
+		"code":			"<MvEVAL EXPR = "{ JSON_Encode( l.imagetype:code ) }">",
+		"type_desc":	"<MvEVAL EXPR = "{ JSON_Encode( l.imagetype:descrip ) }">",
+		
+		"image":		"<MvEVAL EXPR = "{ JSON_Encode( l.image:image ) }">",
+		"width":		<MvEVAL EXPR = "{ l.image:width }">,
+		"height":		<MvEVAL EXPR = "{ l.image:height }">,
+		"disp_order":	<MvEVAL EXPR = "{ l.productimage:disp_order }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">	
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImageIndex_Load_ID" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.query"				VALUE = "">
+	<MvASSIGN NAME = "l.record"				VALUE = "">
+	<MvASSIGN NAME = "g.Product_ID"			VALUE = "{ int( g.Product_ID ) }">
+	<MvASSIGN NAME = "g.ProductImage_ID"	VALUE = "{ int( g.ProductImage_ID ) }">
+	<MvASSIGN NAME = "g.Filter"				VALUE = "{ trim( g.Filter ) }">
+	<MvASSIGN NAME = "g.Sort"				VALUE = "{ trim( g.Sort ) }">
+
+	<MvREFERENCE NAME = "l.productimage"	VARIABLE = "l.record:pi">
+	<MvREFERENCE NAME = "l.image"			VARIABLE = "l.record:i">
+	<MvREFERENCE NAME = "l.imagetype"		VARIABLE = "l.record:it">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Load_ID( g.ProductImage_ID, l.productimage ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PIMG-00012', 'ProductImage ' $ g.ProductImage_ID $ ' not found' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Image_Load_ID( l.productimage:image_id, l.image ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PIMG-00013', 'Image ' $ l.productimage:image_id $ ' not found' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.image:type_id }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ImageType_Load_ID( l.image:type_id, l.imagetype ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductImages', 'pi' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pi', g.Store_Table_Prefix $ 'Images', 'i', 'pi.image_id = i.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pi', g.Store_Table_Prefix $ 'ImageTypes', 'it', 'pi.type_id = it.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'pi.product_id = ?', 'g.Product_ID' ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.query, g.Filter, 
+								   'image:i.image,type_desc:it.descrip,type_code:it.code,width:i.width,height:i.height' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_OrderBy_Fields( l.query, g.Sort, 
+																 'image:i.image,type_desc:it.descrip,width:i.width,height:i.height,disp_order:pi.disp_order', 
+																 'pi.disp_order' ) }">
+	
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Index( l.query, l.record, l.index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"index":	<MvEVAL EXPR = "{ int( l.index ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImageList_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.productimage_id" ARRAY = "l.productimage_ids" COUNT = "{ JSON_Array_Integer( g.ProductImage_IDs, l.productimage_ids ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].ProductImage_Load_ID( l.productimage_id, l.productimage ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Delete( l.productimage ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">	
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00022', 'Product image \'' $ l.productimage:id $ '\', linked to product_id \'' $ l.productimage:product_id $ '\', deleted.' ) }">
+		</MvIF>
+	</MvFOREACH>
+	
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImageData" PARAMETERS = "productimagedata var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ int( l.productimagedata:productimage:id ) }">,
+	"product_id":	<MvEVAL EXPR = "{ int( l.productimagedata:productimage:product_id ) }">,
+	"image_id":		<MvEVAL EXPR = "{ int( l.productimagedata:productimage:image_id ) }">,
+	"type_id":		<MvEVAL EXPR = "{ int( l.productimagedata:productimage:type_id ) }">,
+	"code":			"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:code ) }">",
+	"type_desc":	"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:descrip ) }">",
+	"image":		"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:image:image ) }">",
+	"width":		<MvEVAL EXPR = "{ int( l.productimagedata:image:width ) }">,
+	"height":		<MvEVAL EXPR = "{ int( l.productimagedata:image:height ) }">,
+	"disp_order":	<MvEVAL EXPR = "{ int( l.productimagedata:productimage:disp_order ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImageList_Load_Product" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.product_id"		VALUE = "{ int( g.Product_ID ) }">
+
+	<MvASSIGN NAME = "l.image_count"	VALUE = "{ [ g.Library_DB ].ProductImageDataList_Load_Product( l.product_id, l.productimagedatalist ) }">
+	<MvIF EXPR = "{ l.image_count EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ l.image_count }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.image_pos ) }">
+		<MvEVAL EXPR = "{ JSON_ProductImageData( l.productimagedata ) }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+	</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImageList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters,	'i.image',		'image' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters,	'it.descrip',	'type_desc' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters,	'it.code',		'type_code' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters,	'i.width',		'width' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters,	'i.height',		'height' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )		OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )		OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )		OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'pi.id				AS productimage_id,
+																		  pi.product_id		AS productimage_product_id,
+																		  pi.image_id		AS productimage_image_id,
+																		  pi.type_id		AS productimage_type_id,
+																		  pi.disp_order		AS productimage_disp_order,
+																		  i.id				AS image_id,
+																		  i.image			AS image_image,
+																		  i.width			AS image_width,
+																		  i.height			AS image_height,
+																		  i.refcount		AS image_refcount,
+																		  it.id				AS imagetype_id,
+																		  it.code			AS imagetype_code,
+																		  it.descrip		AS imagetype_descrip' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'ProductImages', 'pi' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pi', g.Store_Table_Prefix $ 'Images', 'i', 'pi.image_id = i.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pi', g.Store_Table_Prefix $ 'ImageTypes', 'it', 'pi.type_id = it.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'pi.product_id = ?', [ g.Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, 'image:image_image,type_desc:imagetype_descrip,width:image_width,height:image_height,disp_order:productimage_disp_order',
+															'productimage_disp_order' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ProductImages', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PIMG-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productimage_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT ProductImages.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.productimage_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.productimage_count ) }">
+				"id":			<MvEVAL EXPR = "{ int( ProductImages.d.productimage_id ) }">,
+				"product_id":	<MvEVAL EXPR = "{ int( ProductImages.d.productimage_product_id ) }">,
+				"image_id":		<MvEVAL EXPR = "{ int( ProductImages.d.productimage_image_id ) }">,
+				"type_id":		<MvEVAL EXPR = "{ int( ProductImages.d.productimage_type_id ) }">,
+				"code":			"<MvEVAL EXPR = "{ JSON_Encode( ProductImages.d.imagetype_code ) }">",
+				"type_desc":	"<MvEVAL EXPR = "{ JSON_Encode( ProductImages.d.imagetype_descrip ) }">",
+				"image":		"<MvEVAL EXPR = "{ JSON_Encode( ProductImages.d.image_image ) }">",
+				"width":		<MvEVAL EXPR = "{ int( ProductImages.d.image_width ) }">,
+				"height":		<MvEVAL EXPR = "{ int( ProductImages.d.image_height ) }">,
+				"disp_order":	<MvEVAL EXPR = "{ int( ProductImages.d.productimage_disp_order ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "ProductImages" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductImages">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImageList_DisplayOrder_Update" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Product_ID"		VALUE = "{ int( g.Product_ID ) }">
+	<MvASSIGN NAME = "l.change_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.productimage_order" ARRAY = "g.ProductImage_Order" INDEX = "l.pos">
+		<MvASSIGN NAME = "l.productimage_order:id"					VALUE = "{ int( l.productimage_order:id ) }">
+		<MvASSIGN NAME = "l.productimage_order:offset"				VALUE = "{ int( l.productimage_order:offset ) }">
+		<MvASSIGN NAME = "l.productimage_order:original_offset"		VALUE = "{ int( l.productimage_order:original_offset ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Filename_Admin ].Validate_WholeNumber_Positive_Required( l.productimage_order:offset ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'ProductImage_Order[' $ l.pos $ ']', g.Validation_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.productimage_order" ARRAY = "g.ProductImage_Order">
+		<MvASSIGN NAME = "l.change_count"														VALUE = "{ l.change_count + 1 }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }" MEMBER = "product_id"			VALUE = "{ g.Product_ID }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }" MEMBER = "id"					VALUE = "{ l.productimage_order:id }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }" MEMBER = "offset"				VALUE = "{ l.productimage_order:offset }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }" MEMBER = "original_offset"	VALUE = "{ l.productimage_order:original_offset }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.change_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImageList_Update_Offsets( l.changes ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00011', 'Product image sort order updated' ) }">
+	
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'R', 'ProductImage_ID', g.ProductImage_ID ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Library_DB ].ProductImage_Load_ID( g.ProductImage_ID, l.productimage ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Delete( l.productimage ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PIMG-00023', 'Product image \'' $ l.productimage:id $ '\', linked to product_id \'' $ l.productimage:product_id $ '\', deleted.' ) }">
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Update_Type" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvASSIGN NAME = "l.imagetype_id" VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'R', 'ProductImage_ID',	l.productimage_id ) OR
+					NOT JSON_Input_Integer( 'o', 'ImageType_ID',	l.imagetype_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Load_ID( l.productimage_id, l.productimage ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PIMG-00024', 'Product image does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.imagetype_id }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ImageType_Load_ID( l.imagetype_id, l.null ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+			
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PIMG-00025', 'Image type does not exist' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productimage:type_id" VALUE = "{ l.imagetype_id }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Update_Type( l.productimage ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage" PARAMETERS = "productimage var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ int( l.productimage:id ) }">,
+	"disp_order":	<MvEVAL EXPR = "{ int( l.productimage:disp_order ) }">,
+	"product_id":	<MvEVAL EXPR = "{ int( l.productimage:product_id ) }">,
+	"image_id":		<MvEVAL EXPR = "{ int( l.productimage:image_id ) }">,
+	"type_id":		<MvEVAL EXPR = "{ int( l.productimage:type_id ) }">,
+	"refcount":		<MvEVAL EXPR = "{ int( l.productimage:refcount ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductImage_Add" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'IMGS', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Text(	'R', 'Filepath',		l.filepath ) OR
+					NOT JSON_Input_Integer(	'R', 'ImageType_ID',	l.imagetype_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Insert_ExistingFile( l.product:id, l.filepath, l.imagetype_id, l.productimage ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_ProductImage( l.productimage ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>

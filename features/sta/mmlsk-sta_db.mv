@@ -1,0 +1,394 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-STA-DTB-
+| Next Error Code: 23   
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| Stats
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "STA_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'Stats
+								(
+									hits		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+									visits		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+									orders		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+									revenue		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ ',
+									products	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+									resetdate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ '
+								) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "hits"			VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "visits" 		VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "orders" 		VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "revenue" 		VALUE = "0.00">
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "products" 	VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "resetdate" 	VALUE = "{ s.time_t }">
+
+	<MvIF EXPR = "{ NOT Stats_Insert( l.statistics ) }">
+		<MvFUNCTIONRETURN VALUE = 0 >
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'ProdStats
+								(
+									product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+									counter		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+									prod_name	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )	$ '
+								) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'ProdStats_1 ON ' $ g.Store_Table_Prefix $ 'ProdStats ( product_id ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'ProdStats_2 ON ' $ g.Store_Table_Prefix $ 'ProdStats ( counter ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "STA_Store_Delete" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'Stats' }">
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'ProdStats' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Read" PARAMETERS = "stats var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.stats:hits"			VALUE = "{ Stats.d.hits }">
+	<MvASSIGN NAME = "l.stats:visits"		VALUE = "{ Stats.d.visits }">
+	<MvASSIGN NAME = "l.stats:orders"		VALUE = "{ Stats.d.orders }">
+	<MvASSIGN NAME = "l.stats:revenue"		VALUE = "{ Stats.d.revenue }">
+	<MvASSIGN NAME = "l.stats:products"		VALUE = "{ Stats.d.products }">
+	<MvASSIGN NAME = "l.stats:resetdate"	VALUE = "{ Stats.d.resetdate }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Insert" PARAMETERS = "stats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'Stats
+					      ( hits, visits, orders, revenue, products, resetdate )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.stats:hits, l.stats:visits, l.stats:orders, l.stats:revenue, l.stats:products,
+					   l.stats:resetdate">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Update" PARAMETERS = "stats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Stats
+					      SET
+							hits		= ?,
+							visits		= ?,
+							orders		= ?,
+							revenue		= ?,
+							products	= ?,
+							resetdate	= ?' }"
+			 FIELDS	= "l.stats:hits, l.stats:visits, l.stats:orders, l.stats:revenue, l.stats:products,
+					   l.stats:resetdate">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Load" PARAMETERS = "stats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Stats"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Stats' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Stats_Read( l.stats ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Stats">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Inc_Hits" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Stats SET hits = hits + 1' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Inc_Visits" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Stats SET visits = visits + 1' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Inc_Orders" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Stats SET orders = orders + 1' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Inc_Revenue" PARAMETERS = "amount" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Stats SET revenue = revenue + ?' }"
+			 FIELDS	= "l.amount">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Inc_Products" PARAMETERS = "quantity" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Stats SET products = products + ?' }"
+			 FIELDS	= "l.quantity">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Stats_Update_Products_From_Basket" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketitem_count"	VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( l.basket:basket_id, l.basketitems ) }">
+
+	<MvASSIGN NAME = "l.basketitem_pos"		VALUE = 1>	
+	<MvWHILE EXPR = "{ l.basketitem_pos LE l.basketitem_count }">
+		<MvIF EXPR = "{ NOT Stats_Inc_Products( l.basketitems[ l.basketitem_pos ]:quantity ) OR 
+						NOT ProdStats_Add_Counts( l.basketitems[ l.basketitem_pos ]:product_id, l.basketitems[ l.basketitem_pos ]:name, l.basketitems[ l.basketitem_pos ]:quantity ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	
+		<MvASSIGN NAME = "l.basketitem_pos" VALUE = "{ l.basketitem_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| ProdStats
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ProdStats_Read" PARAMETERS = "prodstats var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.prodstats:product_id"	VALUE = "{ ProdStats.d.product_id }">
+	<MvASSIGN NAME = "l.prodstats:counter"		VALUE = "{ ProdStats.d.counter }">
+	<MvASSIGN NAME = "l.prodstats:prod_name"	VALUE = "{ ProdStats.d.prod_name }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProdStats_Insert" PARAMETERS = "prodstats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'ProdStats
+					      ( product_id, counter, prod_name )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.prodstats:product_id, l.prodstats:counter, l.prodstats:prod_name">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProdStats_Update" PARAMETERS = "prodstats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'ProdStats
+					      SET
+							counter		= ?,
+							prod_name	= ?
+					      WHERE
+						    product_id	= ?' }"
+			 FIELDS	= "l.prodstats:counter, l.prodstats:prod_name,
+					   l.prodstats:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProdStats_Load_Product" PARAMETERS = "product_id, prodstats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProdStats"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProdStats WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProdStats.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProdStats">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-STA-DTB-00020' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ProdStats_Read( l.prodstats ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProdStats">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProdStatsList_Load_Max" PARAMETERS = "max, prodstats var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProdStats"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProdStats ORDER BY counter DESC' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"	VALUE = 0>
+	<MvWHILE EXPR = "{ ( l.product_count LT l.max ) AND ( NOT ProdStats.d.EOF ) }">
+		<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count + 1 }">
+		<MvEVAL EXPR = "{ ProdStats_Read( l.prodstats[ l.product_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProdStats">
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProdStats">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-STA-DTB-00021', l.product_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProdStats_Add_Counts" PARAMETERS = "product_id, name, count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ProdStats_Load_Product( l.product_id, l.prodstats ) }">
+		<MvASSIGN NAME = "l.prodstats:prod_name" 	VALUE = "{ l.name }">
+		<MvASSIGN NAME = "l.prodstats:counter" 		VALUE = "{ l.prodstats:counter + l.count }">
+
+		<MvIF EXPR = "{ NOT ProdStats_Update( l.prodstats ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.prodstats:product_id" 	VALUE = "{ l.product_id }">
+		<MvASSIGN NAME = "l.prodstats:prod_name" 	VALUE = "{ l.name }">
+		<MvASSIGN NAME = "l.prodstats:counter" 		VALUE = "{ l.count }">
+
+		<MvIF EXPR = "{ NOT ProdStats_Insert( l.prodstats ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME =  "ProdStat_Count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProdStats"
+				QUERY	= "{ 'SELECT count(*) AS prodstat_count FROM ' $ g.Store_Table_Prefix $ 'ProdStats' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = "{ ProdStats.d.prodstat_count }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProdStats">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BestSellerList_Load_Offset" PARAMETERS = "offset, max_rec, nextoffset var, products var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProdStats ORDER BY counter DESC' }">
+
+	<MvIF EXPR = "{ l.max_rec EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>							<MvASSIGN NAME = "l.limit" VALUE = "{ l.max_rec + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ProdStats',
+																			 l.query, l.fields,
+																			 l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00018', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT ProdStats.d.EOF ) AND ( ( l.max_rec EQ 0 ) OR ( l.product_count LT l.max_rec ) ) }">
+		<MvASSIGN NAME = "l.product_count"	VALUE = "{ l.product_count + 1 }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( ProdStats.d.product_id, l.products[ l.product_count ] ) }">
+			<MvASSIGN NAME = "l.product_count" VALUE = "{ l.product_count - 1 }">
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProdStats">
+	</MvWHILE>
+
+	<MvIF EXPR = "{ ProdStats.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProdStats">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-STA-DTB-00022', l.product_count ) }">
+</MvFUNCTION>
+<MvCOMMENT>
+
+|
+| Create/Pack/Delete
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "STA_Store_Reset" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "hits"			VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "visits" 		VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "orders" 		VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "revenue" 		VALUE = "0.00">
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "products" 	VALUE = 0>
+	<MvASSIGN NAME = "l.statistics"	MEMBER = "resetdate" 	VALUE = "{ s.time_t }">
+
+	<MvIF EXPR = "{ NOT Stats_Update( l.statistics ) }">
+		<MvFUNCTIONRETURN VALUE = 0 >
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'ProdStats' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-STA-DTB-00019', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

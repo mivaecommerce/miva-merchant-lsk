@@ -1,0 +1,321 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-MOD-
+| Next Error Code: 11    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_Module_Validate" PARAMETERS = "module_code, module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ModuleAndFeatures_Load_Code( l.module_code, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-JSN-MOD-00009', 'Module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-JSN-MOD-00010', 'Module \'' $ l.module:code $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If a store is open, the module should be installed in the store if it contains
+	| an installable feature. Note, this list should be kept in sync with the list
+	| in lib/dbeng/modules.mv's StoreModule_Install_Transaction
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ JSON_Is_Store_Open() }">
+		<MvIF EXPR = "{ l.module:feature_hash:currency			OR
+						l.module:feature_hash:discount			OR
+						l.module:feature_hash:feed				OR
+						l.module:feature_hash:import			OR
+						l.module:feature_hash:fulfill			OR
+						l.module:feature_hash:log				OR
+						l.module:feature_hash:payment			OR
+						l.module:feature_hash:shipping			OR
+						l.module:feature_hash:shipping_label	OR
+						l.module:feature_hash:tax				OR
+						l.module:feature_hash:report			OR
+						l.module:feature_hash:storeui			OR
+						l.module:feature_hash:storeselui		OR
+						l.module:feature_hash:util				OR
+						l.module:feature_hash:component			OR
+						l.module:feature_hash:system			OR
+						l.module:feature_hash:boxpacking		OR
+						l.module:feature_hash:scheduledtask	}">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].StoreModule_Count_Module( l.module:id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module_Upload_ValidateFileUpload" PARAMETERS = "field, filename, content_type" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Module_Validate( g.Module_Code, l.module ) OR
+					NOT l.module:feature_hash:json_upload }">
+		<MvEVAL EXPR = "{ JSON_FileUpload_Error( 'invalid_module', 'Invalid module' ) }">
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.module:module ].Module_JSON_Upload_ValidateFileUpload( l.module, l.field, l.filename, l.content_type ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module_Upload_ProcessFileUpload" PARAMETERS = "field, filename, status, tempfile, content_type, size" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Module_Validate( g.Module_Code, l.module ) OR
+					NOT l.module:feature_hash:json_upload }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_FileUpload_Error( 'invalid_module', 'Invalid module' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.module:module ].Module_JSON_Upload_ProcessFileUpload( l.module, l.field, l.filename, l.status, l.tempfile, l.content_type, l.size ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module_JSON" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'R', 'Module_Code', l.module_code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Module_Validate( l.module_code, l.module ) OR
+					NOT l.module:feature_hash:json }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'invalid_module', 'Invalid module' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.module:module ].Module_JSON( l.module ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module_JSON_API" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'R', 'Module_Code',		l.module_code )	OR
+					NOT JSON_Input_Text( 'R', 'Module_Function',	l.function ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Module_Validate( l.module_code, l.module ) OR
+					NOT l.module:feature_hash:json_api }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'invalid_module', 'Invalid module' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.module:module ].Module_JSON_API( l.module, l.function ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":		<MvEVAL EXPR = "{ int( l.module:id ) }">,
+	"code":		"<MvEVAL EXPR = "{ JSON_Encode( l.module:code ) }">",
+	"name":		"<MvEVAL EXPR = "{ JSON_Encode( l.module:name ) }">",
+	"provider":	"<MvEVAL EXPR = "{ JSON_Encode( l.module:provider ) }">",
+	"api_ver":	"<MvEVAL EXPR = "{ JSON_Encode( l.module:api_ver ) }">",
+	"version":	"<MvEVAL EXPR = "{ JSON_Encode( l.module:version ) }">",
+	"module":	"<MvEVAL EXPR = "{ JSON_Encode( l.module:module ) }">",
+	"refcount":	<MvEVAL EXPR = "{ int( l.module:refcount ) }">,
+	"active":	<MvEVAL EXPR = "{ JSON_Boolean( l.module:active ) }">,
+	"priority":	<MvEVAL EXPR = "{ int( l.module:priority ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleList_Load_Features" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "l.outputmodule_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.module_pos"			VALUE = 1>
+	<MvASSIGN NAME = "l.module_count"		VALUE = "{ [ g.Library_DB ].ModuleList_Load_Features( g.Module_Features, l.modules ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ l.module_pos LE l.module_count }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.outputmodule_count ) }">
+		<MvEVAL EXPR = "{ JSON_Module( l.modules[ l.module_pos ] ) }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+		<MvASSIGN NAME = "l.module_pos"		VALUE = "{ l.module_pos + 1 }">
+	</MvWHILE>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT g.Admin_User_Administrator }"> 	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'm.code',		'code' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'm.name',		'name' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'm.provider',	'provider' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'm.api_ver',	'api_ver' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'm.version',	'version' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'm.module',	'module' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'm.refcount',	'refcount' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_BOOL(	l.available_filters, 'm.active',	'active' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'm.priority',	'priority' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'mxf.feature',	'feature' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(		'o', 'Filter',		l.filter )	OR
+					NOT JSON_Input_Text(		'o', 'Sort',		l.sort )	OR
+					NOT JSON_Input_Integer(		'o', 'Offset',		l.offset )	OR
+					NOT JSON_Input_Integer(		'o', 'Count',		l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'm.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, 'Modules', 'm' ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter_Callback(	l.search_query,	l.filter, l.available_filters, g.Module_JSON, '', 'JSON_ModuleList_Load_Query_Search_Filter', l.null ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy(	l.search_query,	l.sort, 'm.code,m.name,m.provider,m.api_ver,m.version,m.module,m.refcount,m.active,m.priority', 'm.code' ) }">
+
+	<MvIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'feature', l.null ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_DISTINCT_With_COUNT_SELECT( l.search_query, 'm.id' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Modules', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-MOD-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Modules.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.module_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].Module_Read( l.module ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Library_DB ].Module_Load_Features( l.module ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.module_count ) }">
+				<MvEVAL EXPR = "{ JSON_Module( l.module ) }">
+
+				, "features": "<MvEVAL EXPR = "{ JSON_Encode( l.module:feature_array ) }">"
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Modules" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Modules">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleList_Load_Query_Search_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_operator, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name NE 'feature' }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Data_Reference( l.query, 'FeatureJoins', l.ref ) }">
+
+	<MvASSIGN NAME = "l.ref:data:alias_counter"	VALUE = "{ l.ref:data:alias_counter + 1 }">
+	<MvASSIGN NAME = "l.table_alias"			VALUE = "{ 'mxf' $ l.ref:data:alias_counter }">
+
+	<MvASSIGN NAME = "l.on_clause"				VALUE = "">
+	<MvASSIGN NAME = "l.fields"					VALUE = "">
+	<MvASSIGN NAME = "l.field_count"			VALUE = 0>
+
+	<MvIF EXPR = "{ l.filter_operator EQ 'CO' OR l.filter_operator EQ 'NC' }">
+		<MvASSIGN NAME = "l.filter_value"		VALUE = "{ '%' $ l.filter_value $ '%' }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.filter_operator EQ 'EQ' OR
+					l.filter_operator EQ 'CO' OR
+					l.filter_operator EQ 'LIKE' }">
+		<MvASSIGN NAME = "l.field_count"		VALUE = "{ miva_array_insert( l.fields, [ g.Library_DB ].SQL_Query_Field( l.filter_value ), -1 ) }">
+		<MvASSIGN NAME = "l.where_clause"		VALUE = "{ l.table_alias $ '.module_id IS NOT NULL' }">
+
+		<MvIF EXPR = "{ l.filter_operator EQ 'EQ' }">			<MvASSIGN NAME = "l.on_clause" VALUE = "{ ' AND ' $ [ g.Library_Native_DBAPI ].DB_Filter_EQ(	'CHAR', l.table_alias $ '.feature', l.filter_value ) }">
+		<MvELSEIF EXPR = "{ l.filter_operator EQ 'CO' }">		<MvASSIGN NAME = "l.on_clause" VALUE = "{ ' AND ' $ [ g.Library_Native_DBAPI ].DB_Filter_CO(	'CHAR', l.table_alias $ '.feature', l.filter_value ) }">
+		<MvELSEIF EXPR = "{ l.filter_operator EQ 'LIKE' }">		<MvASSIGN NAME = "l.on_clause" VALUE = "{ ' AND ' $ [ g.Library_Native_DBAPI ].DB_Filter_LIKE(	'CHAR', l.table_alias $ '.feature', l.filter_value ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.filter_operator EQ 'NE' OR
+						l.filter_operator EQ 'NC' OR
+						l.filter_operator EQ 'NOTLIKE' }">
+		<MvASSIGN NAME = "l.field_count"		VALUE = "{ miva_array_insert( l.fields, [ g.Library_DB ].SQL_Query_Field( l.filter_value ), -1 ) }">
+		<MvASSIGN NAME = "l.where_clause"		VALUE = "{ l.table_alias $ '.module_id IS NULL' }">
+
+		<MvIF EXPR = "{ l.filter_operator EQ 'NE' }">			<MvASSIGN NAME = "l.on_clause" VALUE = "{ ' AND ' $ [ g.Library_Native_DBAPI ].DB_Filter_EQ(	'CHAR', l.table_alias $ '.feature', l.filter_value ) }">
+		<MvELSEIF EXPR = "{ l.filter_operator EQ 'NC' }">		<MvASSIGN NAME = "l.on_clause" VALUE = "{ ' AND ' $ [ g.Library_Native_DBAPI ].DB_Filter_CO(	'CHAR', l.table_alias $ '.feature', l.filter_value ) }">
+		<MvELSEIF EXPR = "{ l.filter_operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.on_clause" VALUE = "{ ' AND ' $ [ g.Library_Native_DBAPI ].DB_Filter_LIKE(	'CHAR', l.table_alias $ '.feature', l.filter_value ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.filter_operator EQ 'IN' OR
+						l.filter_operator EQ 'NOT_IN' }">
+		<MvASSIGN NAME = "l.on_clause_list"		VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.in_value" ARRAY = "l.in_values" COUNT = "{ miva_splitstring( l.filter_value, ',', l.in_values, 'trim,noempty' ) }">
+			<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.on_clause_list, [ g.Library_Native_DBAPI ].DB_Filter_EQ( 'CHAR', l.table_alias $ '.feature', l.in_value ), -1 ) }">
+			<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_insert( l.fields, [ g.Library_DB ].SQL_Query_Field( l.in_value ), -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.on_clause"			VALUE = "{ ' AND (' $ miva_joinstring( l.on_clause_list, ' OR ', '' ) $ ')' }">
+
+		<MvIF EXPR = "{ l.filter_operator EQ 'IN' }">	<MvASSIGN NAME = "l.where_clause" VALUE = "{ l.table_alias $ '.module_id IS NOT NULL' }">
+		<MvELSE>										<MvASSIGN NAME = "l.where_clause" VALUE = "{ l.table_alias $ '.module_id IS NULL' }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_count }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'm', 'ModuleXFeature', l.table_alias, l.table_alias $ '.module_id = m.id' $ l.on_clause, miva_joinstring( l.fields, ',', '' ) ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, l.where_clause, '' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module_Load" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Retrieve_Integer( 'Module_ID', l.module_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID_Cached( l.module_id, l.module ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-JSN-MOD-00005', 'Module not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve( 'Edit_Module', l.edit_module ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_Code_Cached( l.edit_module, l.module ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-JSN-MOD-00006', 'Module not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve( 'Module_Code', l.module_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_Code_Cached( l.module_code, l.module ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-JSN-MOD-00007', 'Module not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-JSN-MOD-00008', 'Unable to load module: One of Module_ID, Edit_Module, or Module_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Module_Loaders_Present" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Exists( 'Module_ID' )	OR
+								 JSON_Input_Exists( 'Edit_Module' )	OR
+								 JSON_Input_Exists( 'Module_Code' ) }">
+</MvFUNCTION>

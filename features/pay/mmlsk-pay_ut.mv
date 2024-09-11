@@ -1,0 +1,2599 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-PAY-UTL-
+| Next Error Code: 45    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PaymentMethodList_Load_Order_Authorize" PARAMETERS = "order var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods" 				VALUE = "">
+	<MvASSIGN NAME = "l.method_count" 			VALUE = "{ PaymentMethodList_Load_Order_Authorize_LowLevel( l.order, l.methods ) }">
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvIF EXPR = "{ l.mivapay_settings:pct_group }">
+			<MvASSIGN NAME = "l.method_count"	VALUE = "{ PaymentMethodList_Group_PaymentCardTypes( l.mivapay_settings, l.methods ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Load_Order_Authorize_OnSite" PARAMETERS = "order var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"				VALUE = "">
+	<MvASSIGN NAME = "l.method_count" 			VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.unfiltered_methods" COUNT = "{ PaymentMethodList_Load_Order_Authorize_LowLevel( l.order, l.unfiltered_methods ) }">
+		<MvIF EXPR = "{ l.method:module:api_ver LT 10.00 }">	<MvASSIGN NAME = "l.payment_url" VALUE = "{ [ g.Module_Root $ l.method:module:module ].PaymentModule_Payment_URL( l.method:module ) }">
+		<MvELSE>												<MvASSIGN NAME = "l.payment_url" VALUE = "{ [ g.Module_Root $ l.method:module:module ].PaymentModule_Payment_URL( l.method:module, l.method:code ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.payment_url }">
+			<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvIF EXPR = "{ l.mivapay_settings:pct_group }">
+			<MvASSIGN NAME = "l.method_count"	VALUE = "{ PaymentMethodList_Group_PaymentCardTypes( l.mivapay_settings, l.methods ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Load_Order_Authorize_LowLevel" PARAMETERS = "order var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods" 				VALUE = "">
+	<MvASSIGN NAME = "l.method_count" 			VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'payment', l.modules ) }">
+		<MvASSIGN NAME = "l.module:capabilities" VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.module:capabilities ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.order:id AND ( l.module:api_ver GE 5.70 ) }">	<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Methods( l.module, l.order, l.paymentmethods ) }">
+		<MvELSE>														<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Methods( l.module, l.paymentmethods ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.paymentmethod" ARRAY = "l.paymentmethods" COUNT = "{ l.paymentmethod_count }">
+			<MvASSIGN NAME = "l.paymentmethod:capabilities" VALUE = "">
+
+			<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+				<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.paymentmethod:code, l.paymentmethod:capabilities ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentMethodRules_Load_MethodOrDefault_Cached( l.module:code, l.paymentmethod:code, 0, l.paymentmethodrules ) }">
+				<MvASSIGN NAME = "l.paymentmethod:priority"	VALUE = 0>
+			<MvELSE>
+				<MvASSIGN NAME = "l.paymentmethod:priority"	VALUE = "{ l.paymentmethodrules:priority }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.paymentmethodrules:descrip }">
+				<MvASSIGN NAME = "l.paymentmethod:name"	VALUE = "{ l.paymentmethodrules:descrip }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method_count" VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.paymentmethod, l.null, l.null, l.methods ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) AND
+					MivaPay_Verify_Enabled_WithCardTypes_Cached( l.mivapay_settings, l.paymentcardtypes, l.paymentcardtype_count ) }">
+		<MvFOREACH ITERATOR = "l.paymentcardtype" ARRAY = "l.paymentcardtypes" COUNT = "{ l.paymentcardtype_count }">
+			<MvASSIGN NAME = "l.method"					VALUE = "">
+			<MvASSIGN NAME = "l.method:code"			VALUE = "{ l.paymentcardtype:meth_code }">
+			<MvASSIGN NAME = "l.method:name"			VALUE = "{ l.paymentcardtype:type }">
+			<MvASSIGN NAME = "l.method:capabilities"	VALUE = "{ l.paymentcardtype:capabilities }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentMethodRules_Load_MethodOrDefault_Cached( '', '', l.paymentcardtype:id, l.paymentmethodrules ) }">
+				<MvASSIGN NAME = "l.method:priority"	VALUE = 0>
+			<MvELSE>
+				<MvASSIGN NAME = "l.method:priority"	VALUE = "{ l.paymentmethodrules:priority }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.paymentmethodrules:descrip }">
+				<MvASSIGN NAME = "l.method:name"		VALUE = "{ l.paymentmethodrules:descrip }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method_count"			VALUE = "{ PaymentMethodList_AppendMethod( l.paymentcardtype:module, l.method, l.null, l.paymentcardtype, l.methods ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ PaymentMethodList_Runtime_Sort( l.methods ) }">
+
+	<MvIF EXPR = "{ l.order:cust_id }">
+		<MvASSIGN NAME = "l.paymentcardmethods" 		VALUE = "">
+		<MvASSIGN NAME = "l.paymentcardmethod_count" 	VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.paymentcard" ARRAY = "l.paymentcards" COUNT = "{ [ g.Module_Feature_PAY_DB ].CustomerPaymentCardList_Load_Customer( l.order:cust_id, l.paymentcards ) }">
+			<MvIF EXPR = "{ ISNULL l.paymentcard:mod_code }">
+				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.paymentcard:mod_code, l.paymentcard_module ) OR
+								NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.paymentcard_module:id, 'payment', l.storemodule ) OR
+								NOT l.paymentcard_module:active }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method_pos" 						VALUE = "{ miva_array_search( l.methods, 1, l.search_method, 'l.search_method:module:code EQ l.paymentcard:mod_code AND l.search_method:code EQ l.paymentcard:meth_code AND l.search_method:paymentcardtype:id EQ l.paymentcard:type_id' ) }">
+
+			<MvIF EXPR = "{ l.method_pos AND l.search_method:capabilities:mivapay }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID_Cached( l.paymentcard:type_id, l.paymentcardtype ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.method" 						VALUE = "{ l.search_method }">
+				<MvASSIGN NAME = "l.paymentcardmethod_count" 		VALUE = "{ PaymentMethodList_AppendMethod( l.paymentcard_module, l.method, l.paymentcard, l.paymentcardtype, l.paymentcardmethods ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.method_count"							VALUE = "{ miva_array_merge( l.paymentcardmethods, 1, l.paymentcardmethod_count, l.methods, 1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.order:id }">
+		<MvASSIGN NAME = "l.orderpaymentcardmethods" 				VALUE = "">
+		<MvASSIGN NAME = "l.orderpaymentcardmethod_count" 			VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.orderpaymentcard" ARRAY = "l.orderpaymentcards" COUNT = "{ [ g.Module_Feature_PAY_DB ].OrderPaymentCardList_Load_Order( l.order:id, l.orderpaymentcards ) }">
+			<MvIF EXPR = "{ ISNULL l.orderpaymentcard:mod_code }">
+				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.orderpaymentcard:mod_code, l.orderpaymentcard_module ) OR
+								NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.orderpaymentcard_module:id, 'payment', l.storemodule ) OR
+								NOT l.orderpaymentcard_module:active }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method_pos" 						VALUE = "{ miva_array_search( l.methods, 1, l.search_method, 'l.search_method:module:code EQ l.orderpaymentcard:mod_code AND l.search_method:code EQ l.orderpaymentcard:meth_code AND l.search_method:paymentcardtype:id EQ l.orderpaymentcard:type_id' ) }">
+
+			<MvIF EXPR = "{ l.method_pos AND l.search_method:capabilities:mivapay }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID_Cached( l.orderpaymentcard:type_id, l.orderpaymentcardtype ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.method" 						VALUE = "{ l.search_method }">
+				<MvASSIGN NAME = "l.orderpaymentcardmethod_count" 	VALUE = "{ PaymentMethodList_AppendMethod( l.orderpaymentcard_module, l.method, l.orderpaymentcard, l.orderpaymentcardtype, l.orderpaymentcardmethods ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.method_count"							VALUE = "{ miva_array_merge( l.orderpaymentcardmethods, 1, l.orderpaymentcardmethod_count, l.methods, 1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-PAY-UTL-00038', l.method_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Load_Basket" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Feature_Filename_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+	<MvASSIGN NAME = "l.method_count"		VALUE = "{ PaymentMethodList_Load_Basket_LowLevel( l.mivapay_settings, l.methods ) }">
+
+	<MvIF EXPR = "{ l.mivapay_settings:pct_group }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ PaymentMethodList_Group_PaymentCardTypes( l.mivapay_settings, l.methods ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Load_Basket_LowLevel" PARAMETERS = "mivapay_settings var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Basket:total }">
+		<MvASSIGN NAME = "g.Basket:total"				VALUE = "{ [ g.Module_Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.restricted_product_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.paymentmethod_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem_count"				VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+
+	<MvCOMMENT>
+	|
+	| Build list of excluded payment methods based on product payment rules
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].ProductPaymentRules_Load_ProductOrDefault( l.basketitem:product_id, l.masterpaymentrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.masterpaymentrules:limitmeths }">
+			<MvEVAL EXPR = "{ ProductPaymentRules_Merge_ProductPaymentMethods( l.basketitem:product_id,
+																			   l.paymentmethods, l.paymentmethod_count, l.restricted_product_count ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.part_product" ARRAY = "l.part_products" COUNT = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.basketitem:product_id, l.basketitem:variant_id, l.part_products ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Load_ProductOrDefault( l.part_product:id, l.partpaymentrules ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.partpaymentrules:limitmeths }">
+				<MvEVAL EXPR = "{ ProductPaymentRules_Merge_ProductPaymentMethods( l.part_product:id,
+																				   l.paymentmethods, l.paymentmethod_count, l.restricted_product_count ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT ProductPaymentRules_Finalize_PaymentMethods( l.paymentmethods, l.paymentmethod_count, l.restricted_product_count, l.method_lookup, l.paymentcardtype_lookup ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Build full list of payment methods, minus those excluded by the product payment rules
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.paymentmethods" 		VALUE = "">
+	<MvASSIGN NAME = "l.paymentmethod_count" 	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'payment', l.modules ) }">
+		<MvIF EXPR = "{ l.restricted_product_count }">
+			<MvIF EXPR = "{ NOT miva_member_exists( l.method_lookup, l.module:code ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.module_method_lookup" VARIABLE = "l.method_lookup">
+				<MvMEMBER NAME = "{ l.module:code }">
+			</MvREFERENCEARRAY>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.module:capabilities" VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.module:capabilities ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.module_method" ARRAY = "l.module_methods" COUNT = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Methods( l.module, l.module_methods ) }">
+			<MvIF EXPR = "{ l.restricted_product_count }">
+				<MvREFERENCEARRAY NAME = "l.method_exists" VARIABLE = "l.module_method_lookup">
+					<MvMEMBER NAME = "{ l.module_method:code }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT l.method_exists }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.module_method:capabilities" VALUE = "">
+
+			<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+				<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.module_method:code, l.module_method:capabilities ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.module_method, l.null, l.null, l.paymentmethods ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ MivaPay_Verify_Enabled_WithCardTypes_Cached( l.mivapay_settings, l.paymentcardtypes, l.paymentcardtype_count ) }">
+		<MvFOREACH ITERATOR = "l.paymentcardtype" ARRAY = "l.paymentcardtypes" COUNT = "{ l.paymentcardtype_count }">
+			<MvIF EXPR = "{ l.restricted_product_count }">
+				<MvREFERENCEARRAY NAME = "l.method_exists" VARIABLE = "l.paymentcardtype_lookup">
+					<MvDIMENSION INDEX = "{ l.paymentcardtype:id }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT l.method_exists }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.paymentmethod"					VALUE = "">
+			<MvASSIGN NAME = "l.paymentmethod:code"				VALUE = "{ l.paymentcardtype:meth_code }">
+			<MvASSIGN NAME = "l.paymentmethod:name"				VALUE = "{ l.paymentcardtype:type }">
+			<MvASSIGN NAME = "l.paymentmethod:capabilities"		VALUE = "{ l.paymentcardtype:capabilities }">
+
+			<MvASSIGN NAME = "l.paymentmethod_count" 	VALUE = "{ PaymentMethodList_AppendMethod( l.paymentcardtype:module, l.paymentmethod, l.null, l.paymentcardtype, l.paymentmethods ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Exclude payment methods based on the "Exclude This method Unless Permitted by Products" setting
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.methods" 		VALUE = "">
+	<MvASSIGN NAME = "l.method_count" 	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT PaymentMethodList_Filter_ExcludeByDefault( l.paymentmethods, l.paymentmethod_count, l.basketitems, l.basketitem_count, l.methods, l.method_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply the Payment Method Rules (geographic restrictions, order total restrictions, exclusions based on other payment methods), and sort the method list
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.method_count"	VALUE = "{ PaymentMethodList_Apply_Rules( l.methods, l.method_count,
+																				  g.Basket:cust_id, g.Basket:total,
+																				  g.Basket:bill_addr1, g.Basket:bill_addr2, g.Basket:bill_state, g.Basket:bill_zip, g.Basket:bill_cntry ) }">
+
+	<MvASSIGN NAME = "l.null" 			VALUE = "{ PaymentMethodList_Runtime_Sort( l.methods ) }">
+
+	<MvIF EXPR = "{ g.Customer_Session_Verified AND g.Basket:cust_id }">
+		<MvASSIGN NAME = "l.paymentcardmethods" 					VALUE = "">
+		<MvASSIGN NAME = "l.paymentcardmethod_count" 				VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.paymentcard" ARRAY = "l.paymentcards" COUNT = "{ [ g.Module_Feature_PAY_DB ].CustomerPaymentCardList_Load_Customer( g.Basket:cust_id, l.paymentcards ) }">
+			<MvASSIGN NAME = "l.method_pos" VALUE = "{ miva_array_search( l.methods, 1, l.search_method, 'l.search_method:module:code EQ l.paymentcard:mod_code AND l.search_method:code EQ l.paymentcard:meth_code AND l.search_method:paymentcardtype:id EQ l.paymentcard:type_id' ) }">
+
+			<MvIF EXPR = "{ l.method_pos AND l.search_method:capabilities:mivapay }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID_Cached( l.paymentcard:type_id, l.paymentcardtype ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.method" 						VALUE = "{ l.methods[ l.method_pos ] }">
+				<MvASSIGN NAME = "l.paymentcardmethod_count" 		VALUE = "{ PaymentMethodList_AppendMethod( l.paymentcard_module, l.method, l.paymentcard, l.paymentcardtype, l.paymentcardmethods ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.method_count"							VALUE = "{ miva_array_merge( l.paymentcardmethods, 1, l.paymentcardmethod_count, l.methods, 1 ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Subscriptions only permit payment cards or payment card types
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Basket:sub_count }">
+		<MvASSIGN NAME = "l.method_count"		VALUE = "{ miva_array_filter( l.methods, 1, l.method, 'l.method:paymentcard:id OR l.method:paymentcardtype:id', l.methods ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Group_PaymentCardTypes" PARAMETERS = "mivapay_settings var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method_count"			VALUE = "{ miva_array_elements( l.methods ) }">
+	<MvASSIGN NAME = "l.first_paymentcard_pos"	VALUE = "{ miva_array_search( l.methods, 1, l.method, 'l.method:paymentcard:id LE 0 AND l.method:orderpaymentcard:id LE 0 AND l.method:paymentcardtype:id GT 0' ) }">
+
+	<MvIF EXPR = "{ l.first_paymentcard_pos }">
+		<MvASSIGN NAME = "l.paymentmethod"						VALUE = "">
+		<MvASSIGN NAME = "l.paymentmethod:code"					VALUE = "mivapay">
+		<MvASSIGN NAME = "l.paymentmethod:name"					VALUE = "{ l.mivapay_settings:pct_desc }">
+		<MvASSIGN NAME = "l.paymentmethod:module:id"			VALUE = -1>
+		<MvASSIGN NAME = "l.paymentmethod:module:api_ver"		VALUE = 9.06>
+		<MvASSIGN NAME = "l.paymentmethod:capabilities:mivapay"	VALUE = 1>
+		<MvASSIGN NAME = "l.paymentmethod:paymentcard:id"		VALUE = 0>
+		<MvASSIGN NAME = "l.paymentmethod:paymentcardtype:id"	VALUE = -1>
+		<MvASSIGN NAME = "l.paymentmethod:paymentcardtype:type"	VALUE = "{ l.mivapay_settings:pct_desc }">
+
+		<MvASSIGN NAME = "l.method_count"		VALUE = "{ miva_array_insert( l.methods, l.paymentmethod, l.first_paymentcard_pos ) }">
+		<MvASSIGN NAME = "l.method_count"		VALUE = "{ miva_array_filter( l.methods, 1, l.method, 'l.method:paymentcard:id OR l.method:orderpaymentcard:id OR l.method:paymentcardtype:id LE 0', l.methods ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentCardTypeList_Load_Basket" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Feature_Filename_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+	<MvASSIGN NAME = "l.method_count"	VALUE = "{ PaymentMethodList_Load_Basket_LowLevel( l.mivapay_settings, l.methods ) }">
+	<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_filter( l.methods, 1, l.method, 'l.method:paymentcardtype:id GT 0', l.methods ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductPaymentRules_Merge_ProductPaymentMethods" PARAMETERS = "product_id,
+																				   merged_paymentmethods var, merged_paymentmethod_count var, restricted_product_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.restricted_product_count" VALUE = "{ l.restricted_product_count + 1 }">
+
+	<MvFOREACH ITERATOR = "l.productpaymentmethod" ARRAY = "l.productpaymentmethods" COUNT = "{ [ g.Module_Feature_PAY_DB ].ProductPaymentMethodList_Load_Product( l.product_id, l.productpaymentmethods ) }">
+		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.merged_paymentmethod" ARRAY = "l.merged_paymentmethods" COUNT = "{ l.merged_paymentmethod_count }">
+			<MvIF EXPR = "{ ( l.productpaymentmethod:mod_code EQ l.merged_paymentmethod:mod_code ) AND
+							( l.productpaymentmethod:meth_code EQ l.merged_paymentmethod:meth_code ) AND
+							( l.productpaymentmethod:pctype_id EQ l.merged_paymentmethod:pctype_id ) }">
+				<MvASSIGN NAME = "l.merged_paymentmethod:product_count"	VALUE = "{ l.merged_paymentmethod:product_count + 1 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.pos GT l.merged_paymentmethod_count }">
+			<MvASSIGN NAME = "l.productpaymentmethod:product_count"									VALUE = 1>
+			<MvASSIGN NAME = "l.merged_paymentmethods" INDEX = "{ ++l.merged_paymentmethod_count }"	VALUE = "{ l.productpaymentmethod }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductPaymentRules_Finalize_PaymentMethods" PARAMETERS = "merged_paymentmethods var, merged_paymentmethod_count, restricted_product_count,
+																			   method_lookup var, paymentcardtype_lookup var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Merge allowed payment methods
+	|
+	</MvCOMMENT>
+	
+	<MvASSIGN NAME = "l.method_lookup"				VALUE = "">
+	<MvASSIGN NAME = "l.paymentcardtype_lookup"		VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.paymentmethod" ARRAY = "l.merged_paymentmethods" COUNT = "{ l.merged_paymentmethod_count }">
+		<MvIF EXPR = "{ l.paymentmethod:product_count EQ l.restricted_product_count }">
+			<MvIF EXPR = "{ l.paymentmethod:pctype_id }">
+				<MvASSIGNARRAY NAME = "l.paymentcardtype_lookup" VALUE = 1>
+					<MvDIMENSION INDEX = "{ l.paymentmethod:pctype_id }">
+				</MvASSIGNARRAY>
+			<MvELSE>
+				<MvASSIGNARRAY NAME = "l.method_lookup" VALUE = 1>
+					<MvMEMBER NAME = "{ l.paymentmethod:mod_code }">
+					<MvMEMBER NAME = "{ l.paymentmethod:meth_code }">
+				</MvASSIGNARRAY>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Filter_ExcludeByDefault" PARAMETERS = "methods var, method_count, basketitems var, basketitem_count, filtered_methods var, filtered_methods_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.filtered_methods"		VALUE = "">
+	<MvASSIGN NAME = "l.filtered_methods_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ l.method:paymentcardtype:id }">
+			<MvASSIGN NAME = "l.module_code"	VALUE = "">
+			<MvASSIGN NAME = "l.method_code"	VALUE = "">
+			<MvASSIGN NAME = "l.pctype_id"		VALUE = "{ l.method:paymentcardtype:id }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.module_code"	VALUE = "{ l.method:module:code }">
+			<MvASSIGN NAME = "l.method_code"	VALUE = "{ l.method:code }">
+			<MvASSIGN NAME = "l.pctype_id"		VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentMethodRules_Load_MethodOrDefault_Cached( l.module_code, l.method_code, l.pctype_id, l.method:paymentmethodrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.method:paymentmethodrules:exclude_df }">
+			<MvASSIGN NAME = "l.filtered_methods_count" VALUE = "{ miva_array_insert_var( l.filtered_methods, l.method, -1 ) }">
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH INDEX = "l.basketitem_pos" ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].ProductPaymentMethodList_Load_Product_Cached( l.basketitem:product_id, l.productpaymentmethods ) }">
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ miva_array_search( l.productpaymentmethods, 1, l.productpaymentmethod, '( l.productpaymentmethod:pctype_id EQ l.pctype_id ) AND
+																									( l.productpaymentmethod:mod_code EQ l.module_code ) AND
+																									( l.productpaymentmethod:meth_code EQ l.method_code )' ) EQ 0 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.part_product_count" VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.basketitem:product_id, l.basketitem:variant_id, l.part_products ) }">
+
+			<MvFOREACH INDEX = "l.part_product_pos" ITERATOR = "l.part_product" ARRAY = "l.part_products" COUNT = "{ l.part_product_count }">
+				<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].ProductPaymentMethodList_Load_Product_Cached( l.part_product:id, l.partproductpaymentmethods ) }">
+					<MvFOREACHSTOP>
+				</MvIF>
+
+				<MvIF EXPR = "{ miva_array_search( l.partproductpaymentmethods, 1, l.partproductpaymentmethod, '( l.partproductpaymentmethod:pctype_id EQ l.pctype_id ) AND
+																												( l.partproductpaymentmethod:mod_code EQ l.module_code ) AND
+																												( l.partproductpaymentmethod:meth_code EQ l.method_code )' ) EQ 0 }">
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.part_product_pos LE l.part_product_count }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.basketitem_pos GT l.basketitem_count }">
+			<MvASSIGN NAME = "l.filtered_methods_count" VALUE = "{ miva_array_insert_var( l.filtered_methods, l.method, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Apply_Rules" PARAMETERS = "methods var, method_count,
+																 cust_id, total,
+																 addr1, addr2, state, zip, country" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Apply Payment Method Rules
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ l.method:paymentcardtype:id }">
+			<MvASSIGN NAME = "l.module_code"	VALUE = "">
+			<MvASSIGN NAME = "l.method_code"	VALUE = "">
+			<MvASSIGN NAME = "l.pctype_id"		VALUE = "{ l.method:paymentcardtype:id }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.module_code"	VALUE = "{ l.method:module:code }">
+			<MvASSIGN NAME = "l.method_code"	VALUE = "{ l.method:code }">
+			<MvASSIGN NAME = "l.pctype_id"		VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentMethodRules_Load_MethodOrDefault_Cached( l.module_code, l.method_code, l.pctype_id, l.paymentmethodrules ) }">
+			<MvASSIGN NAME = "l.method:excluded"	VALUE = 0>
+			<MvASSIGN NAME = "l.method:priority"	VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.method:excluded"	VALUE = "{ PaymentMethodRules_Exclude( l.paymentmethodrules, l.cust_id, l.total, l.addr1, l.addr2, l.state, l.zip, l.country ) }">
+			<MvASSIGN NAME = "l.method:priority"	VALUE = "{ l.paymentmethodrules:priority }">
+
+			<MvIF EXPR = "{ NOT ISNULL l.paymentmethodrules:descrip }">
+				<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.paymentmethodrules:descrip }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Sort by priority descending
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ PaymentMethodList_Runtime_Sort( l.methods ) }">
+
+	<MvCOMMENT>
+	|
+	| Apply inter-method exclusions.  Circular exclusions are consistently resolved by
+	| always applying exclusions by descending priority
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ l.method:excluded }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.method:paymentcardtype:id }">
+			<MvASSIGN NAME = "l.module_code"	VALUE = "">
+			<MvASSIGN NAME = "l.method_code"	VALUE = "">
+			<MvASSIGN NAME = "l.pctype_id"		VALUE = "{ l.method:paymentcardtype:id }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.module_code"	VALUE = "{ l.method:module:code }">
+			<MvASSIGN NAME = "l.method_code"	VALUE = "{ l.method:code }">
+			<MvASSIGN NAME = "l.pctype_id"		VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.exclusion" ARRAY = "l.exclusions" COUNT = "{ [ g.Module_Feature_PAY_DB ].PaymentMethodExclusionList_Load_Excluder( l.module_code, l.method_code, l.pctype_id, l.exclusions ) }">
+			<MvFOREACH ITERATOR = "l.inner_method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+				<MvIF EXPR = "{ l.inner_method:paymentcardtype:id }">
+					<MvASSIGN NAME = "l.inner_module_code"	VALUE = "">
+					<MvASSIGN NAME = "l.inner_method_code"	VALUE = "">
+					<MvASSIGN NAME = "l.inner_pctype_id"	VALUE = "{ l.inner_method:paymentcardtype:id }">
+				<MvELSE>
+					<MvASSIGN NAME = "l.inner_module_code"	VALUE = "{ l.inner_method:module:code }">
+					<MvASSIGN NAME = "l.inner_method_code"	VALUE = "{ l.inner_method:code }">
+					<MvASSIGN NAME = "l.inner_pctype_id"	VALUE = 0>
+				</MvIF>
+
+				<MvIF EXPR = "{ ( l.inner_module_code EQ l.exclusion:excludedmo ) AND
+								( l.inner_method_code EQ l.exclusion:excludedme ) AND
+								( l.inner_pctype_id EQ l.exclusion:excludedti ) }">
+					<MvASSIGN NAME = "l.inner_method:excluded"	VALUE = 1>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Eliminate excluded methods
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.collapsed_count"									VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
+		<MvIF EXPR = "{ NOT l.method:excluded }">
+			<MvASSIGN NAME = "l.collapsed_count"							VALUE = "{ l.collapsed_count + 1 }">
+			<MvASSIGN NAME = "l.collapsed" INDEX = "{ l.collapsed_count }"	VALUE = "{ l.method }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.methods"											VALUE = "{ l.collapsed }">
+	<MvFUNCTIONRETURN VALUE = "{ l.collapsed_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_Valid_ForBasket" PARAMETERS = "module var, method_code, pctype_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Basket:sub_count AND NOT l.pctype_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_found"		VALUE = 0>
+
+	<MvIF EXPR = "{ l.module:api_ver GE 9.05 }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Enabled_Methods( l.module, l.methods ) }">
+		<MvASSIGN NAME = "l.method_found"	VALUE = "{ miva_array_search( l.methods, 1, l.method, 'l.method:code EQ l.method_code' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.method_found }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Methods( l.module, l.methods ) }">
+		<MvASSIGN NAME = "l.method_found"	VALUE = "{ miva_array_search( l.methods, 1, l.method, 'l.method:code EQ l.method_code' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.method_found }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.pctype_id }">
+		<MvASSIGN NAME = "l.pmr_module_code"	VALUE = "">
+		<MvASSIGN NAME = "l.pmr_method_code"	VALUE = "">
+		<MvASSIGN NAME = "l.pmr_pctype_id"		VALUE = "{ l.pctype_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.pmr_module_code"	VALUE = "{ l.module:code }">
+		<MvASSIGN NAME = "l.pmr_method_code"	VALUE = "{ l.method_code }">
+		<MvASSIGN NAME = "l.pmr_pctype_id"		VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentMethodRules_Load_MethodOrDefault_Cached( l.pmr_module_code, l.pmr_method_code, l.pmr_pctype_id, l.paymentmethodrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Basket:total }">
+		<MvASSIGN NAME = "g.Basket:total"				VALUE = "{ [ g.Module_Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PaymentMethodRules_Exclude( l.paymentmethodrules, g.Basket:cust_id, g.Basket:total, g.Basket:bill_addr1, g.Basket:bill_addr2, g.Basket:bill_state, g.Basket:bill_zip, g.Basket:bill_cntry ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem_count"				VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+
+	<MvCOMMENT>
+	|
+	| Build list of excluded payment methods based on product payment rules
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].ProductPaymentRules_Load_ProductOrDefault( l.basketitem:product_id, l.masterpaymentrules ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.masterpaymentrules:limitmeths }">
+			<MvEVAL EXPR = "{ ProductPaymentRules_Merge_ProductPaymentMethods( l.basketitem:product_id,
+																			   l.paymentmethods, l.paymentmethod_count, l.restricted_product_count ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.part_product" ARRAY = "l.part_products" COUNT = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.basketitem:product_id, l.basketitem:variant_id, l.part_products ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Load_ProductOrDefault( l.part_product:id, l.partpaymentrules ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.partpaymentrules:limitmeths }">
+				<MvEVAL EXPR = "{ ProductPaymentRules_Merge_ProductPaymentMethods( l.part_product:id,
+																					 l.paymentmethods, l.paymentmethod_count, l.restricted_product_count ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT ProductPaymentRules_Finalize_PaymentMethods( l.paymentmethods, l.paymentmethod_count, l.restricted_product_count, l.method_lookup, l.paymentcardtype_lookup ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.restricted_product_count }">
+		<MvIF EXPR = "{ l.pctype_id }">
+			<MvREFERENCEARRAY NAME = "l.method_exists" VARIABLE = "l.paymentcardtype_lookup">
+				<MvDIMENSION INDEX = "{ l.pctype_id }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT l.method_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+			</MvIF>
+		<MvELSE>
+			<MvREFERENCEARRAY NAME = "l.method_exists" VARIABLE = "l.method_lookup">
+				<MvMEMBER NAME = "{ l.module:code }">
+				<MvMEMBER NAME = "{ l.method_code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT l.method_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method" 					VALUE = "">
+	<MvASSIGN NAME = "l.paymentcardtype" 			VALUE = "">
+
+	<MvIF EXPR = "{ NOT l.pctype_id }">
+		<MvASSIGN NAME = "l.method" 				VALUE = "">
+		<MvASSIGN NAME = "l.method:module" 			VALUE = "{ l.module }">
+		<MvASSIGN NAME = "l.method:code" 			VALUE = "{ l.method_code }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID_Cached( l.pctype_id, l.paymentcardtype ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.paymentcardtype:mod_code }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.paymentcardtype:mod_code, l.module ) OR
+							NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.method"					VALUE = "">
+		<MvASSIGN NAME = "l.method:code"			VALUE = "{ l.paymentcardtype:meth_code }">
+		<MvASSIGN NAME = "l.method:name"			VALUE = "{ l.paymentcardtype:type }">
+		<MvASSIGN NAME = "l.method:capabilities"	VALUE = "">
+
+		<MvASSIGN NAME = "l.module:capabilities"	VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.module:capabilities ) }"> </MvIF>
+		<MvIF EXPR = "{ l.module:api_ver GE 9.06 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.method:code, l.method:capabilities ) }"> </MvIF>
+
+		<MvIF EXPR = "{ NOT l.method:capabilities:mivapay }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count" 	VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.method, l.null, l.paymentcardtype, l.methods ) }">
+
+	<MvIF EXPR = "{ NOT PaymentMethodList_Filter_ExcludeByDefault( l.methods, 1, l.basketitems, l.basketitem_count, l.null, l.filtered_methods_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.filtered_methods_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodRules_Exclude" PARAMETERS = "paymentmethodrules var, cust_id, total, addr1, addr2, state, zip, country" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.total LT l.paymentmethodrules:min_total }">													<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.paymentmethodrules:max_total AND ( l.total GT l.paymentmethodrules:max_total ) }">		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.paymentmethodrules:states }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.paymentmethodrules:states, l.state ) }">							<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.paymentmethodrules:zips }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].ZipInList( l.paymentmethodrules:zips, l.zip ) }">		<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.paymentmethodrules:countries }">
+		<MvIF EXPR = "{ NOT miva_member_exists( l.paymentmethodrules:countries, l.country ) }">						<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentmethodrules:agrpcount }">
+		<MvIF EXPR = "{ NOT l.cust_id }">																			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AGR_DB ].AvailabilityGroupList_Load_PaymentMethod_And_Customer( l.paymentmethodrules:mod_code, l.paymentmethodrules:meth_code, l.paymentmethodrules:pctype_id, l.cust_id, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Load_Enabled" PARAMETERS = "paymentmethods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.paymentmethod_count" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'payment', l.modules ) }">
+		<MvASSIGN NAME = "l.methods"				VALUE = "">
+		<MvASSIGN NAME = "l.module:capabilities"	VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.module:capabilities ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:api_ver LT 9.05 }">
+			<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Methods( l.module, l.methods ) }">
+				<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.method, l.null, l.null, l.paymentmethods ) }">
+			</MvFOREACH>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Enabled_Methods( l.module, l.methods ) }">
+			<MvASSIGN NAME = "l.method:capabilities" VALUE = "">
+
+			<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+				<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.method:code, l.method:capabilities ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.method, l.null, l.null, l.paymentmethods ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-PAY-UTL-00004', l.paymentmethod_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodAndPaymentCardTypeList_Load_Enabled" PARAMETERS = "paymentmethods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.paymentmethod_count" VALUE = 0>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) AND l.mivapay_settings:enabled }">
+		<MvFOREACH ITERATOR = "l.paymentcardtype" ARRAY = "l.paymentcardtypes" COUNT = "{ [ g.Module_Feature_PAY_DB ].PaymentCardTypeList_Load_All( l.paymentcardtypes ) }">
+			<MvASSIGN NAME = "l.module" VALUE = "">
+
+			<MvIF EXPR = "{ NOT ISNULL l.paymentcardtype:mod_code }">
+				<MvIF EXPR = "{ [ g.Module_Library_DB ].Module_Load_Code_Cached( l.paymentcardtype:mod_code, l.loaded_module ) AND
+								[ g.Module_Library_DB ].StoreModule_Load_Cached( l.loaded_module:id, 'payment', l.storemodule ) AND
+								l.loaded_module:active }">
+					<MvASSIGN NAME = "l.loaded_module:capabilities"	VALUE = "">
+
+					<MvIF EXPR = "{ l.loaded_module:api_ver GE 9.03 }">
+						<MvEVAL EXPR = "{ [ g.Module_Root $ l.loaded_module:module ].PaymentModule_Capabilities( l.loaded_module, l.loaded_module:capabilities ) }">
+					</MvIF>
+
+					<MvIF EXPR = "{ l.loaded_module:capabilities:mivapay }">
+						<MvASSIGN NAME = "l.module" 	VALUE = "{ l.loaded_module }">
+					</MvIF>
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.method"					VALUE = "">
+			<MvASSIGN NAME = "l.method:code"			VALUE = "">
+			<MvASSIGN NAME = "l.method:name"			VALUE = "{ l.paymentcardtype:type }">
+			<MvASSIGN NAME = "l.method:capabilities"	VALUE = "">
+
+			<MvIF EXPR = "{ l.loaded_module:api_ver GE 9.06 }">
+				<MvEVAL EXPR = "{ [ g.Module_Root $ l.loaded_module:module ].PaymentModule_Method_Capabilities( l.loaded_module, l.method:code, l.method:capabilities ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.paymentmethod_count"	VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.method, l.null, l.paymentcardtype, l.paymentmethods ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'payment', l.modules ) }">
+		<MvASSIGN NAME = "l.module:capabilities" VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.module:capabilities ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:api_ver LT 9.05 }">
+			<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Methods( l.module, l.methods ) }">
+				<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.method, l.null, l.null, l.paymentmethods ) }">
+			</MvFOREACH>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Enabled_Methods( l.module, l.methods ) }">
+			<MvASSIGN NAME = "l.method:capabilities" VALUE = "">
+
+			<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+				<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.method:code, l.method:capabilities ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.paymentmethod_count" VALUE = "{ PaymentMethodList_AppendMethod( l.module, l.method, l.null, l.null, l.paymentmethods ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-PAY-UTL-00015', l.paymentmethod_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_AppendMethod" PARAMETERS = "module var, method var, paymentcard var, paymentcardtype var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:module"						VALUE = "{ l.module }">
+	<MvASSIGN NAME = "l.method:module_id"					VALUE = "{ l.module:id }">
+
+	<MvIF EXPR = "{ NOT int( l.paymentcard:id ) }">
+		<MvASSIGN NAME = "l.method:paymentcard:id" 			VALUE = 0>
+		<MvASSIGN NAME = "l.method:orderpaymentcard:id" 	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.method:name" 					VALUE = "{ l.paymentcard:type $ ' ending in ' $ l.paymentcard:lastfour $ ' - Expires ' $ padl( l.paymentcard:exp_month, 2, '0' ) $ '/' $ l.paymentcard:exp_year }">
+
+		<MvIF EXPR = "{ NOT int( l.paymentcard:cust_id ) }">
+			<MvASSIGN NAME = "l.method:paymentcard:id"		VALUE = 0>
+			<MvASSIGN NAME = "l.method:orderpaymentcard"	VALUE = "{ l.paymentcard }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.method:paymentcard"			VALUE = "{ l.paymentcard }">
+			<MvASSIGN NAME = "l.method:orderpaymentcard:id"	VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT int( l.paymentcardtype:id ) }">
+		<MvASSIGN NAME = "l.method:paymentcardtype:id" 		VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.method:paymentcardtype" 		VALUE = "{ l.paymentcardtype }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module:capabilities:balance }">
+		<MvASSIGN NAME = "l.method:balance"					VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Balance( l.method:module, l.method:code ) }">
+		<MvASSIGN NAME = "l.method:formatted_balance"		VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.method:balance ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Runtime_Sort_Callback" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:priority LT l.right:priority }">									<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:priority GT l.right:priority }">								<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.left:paymentcardtype:id AND NOT l.right:paymentcardtype:id }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ NOT l.left:paymentcardtype:id AND l.right:paymentcardtype:id }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.left:module:code LT l.right:module:code }">							<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:module:code GT l.right:module:code }">						<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:code LT l.right:code }">										<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:code GT l.right:code }">										<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethodList_Runtime_Sort" PARAMETERS = "method_list var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_sort( l.method_list, 'PaymentMethodList_Runtime_Sort_Callback', l.null ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_Parse_Runtime" PARAMETERS = "paymentmethod, cust_id, module_code var, module_data var, paymentcard var, paymentcardtype var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ PaymentMethod_Parse( l.paymentmethod, l.cust_id, 0, l.module_code, l.module_data, l.paymentcard, l.paymentcardtype ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_Parse" PARAMETERS = "paymentmethod, cust_id, order_id, module_code var, module_data var, paymentcard var, paymentcardtype var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.cust_id"		VALUE = "{ int( l.cust_id ) }">
+	<MvASSIGN NAME = "l.order_id"		VALUE = "{ int( l.order_id ) }">
+	<MvASSIGN NAME = "l.module_code" 	VALUE = "{ substring( l.paymentmethod, 1, ( ':' IN l.paymentmethod ) - 1 ) }">
+	<MvASSIGN NAME = "l.module_data" 	VALUE = "{ substring( l.paymentmethod, ( ':' IN l.paymentmethod ) + 1, len( l.paymentmethod ) ) }">
+
+	<MvIF EXPR = "{ ( l.module_code EQ 'mivapay' ) OR ( l.module_code EQ 'paymentcard' ) OR ( l.module_code EQ 'orderpaymentcard' ) OR ( l.module_code EQ 'paymentcardtype' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT MivaPay_Verify_Enabled_Cached( l.mivapay_settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module_code EQ 'mivapay' }">
+			<MvIF EXPR = "{ NOT l.mivapay_settings:pct_group }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.module_data"		VALUE = "">
+			<MvASSIGN NAME = "l.paymentcardtype:id"	VALUE = -1>
+		<MvELSEIF EXPR = "{ l.module_code EQ 'paymentcard' }">
+			<MvIF EXPR = "{ l.cust_id LE 0 }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00014', 'Invalid customer' ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Load_ID_Cached( l.module_data, l.cust_id, l.paymentcard ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.module_code"		 VALUE = "{ l.paymentcard:mod_code }">
+			<MvASSIGN NAME = "l.module_data"		 VALUE = "{ l.paymentcard:meth_code }">
+		<MvELSEIF EXPR = "{ l.module_code EQ 'orderpaymentcard' }">
+			<MvIF EXPR = "{ l.order_id LE 0 }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00036', 'Invalid order' ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCard_Load_ID( l.module_data, l.order_id, l.paymentcard ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.module_code"		 VALUE = "{ l.paymentcard:mod_code }">
+			<MvASSIGN NAME = "l.module_data"		 VALUE = "{ l.paymentcard:meth_code }">
+		<MvELSEIF EXPR = "{ l.module_code EQ 'paymentcardtype' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID_Cached( l.module_data, l.paymentcardtype ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.module_code"		 VALUE = "{ l.paymentcardtype:mod_code }">
+			<MvASSIGN NAME = "l.module_data"		 VALUE = "{ l.paymentcardtype:meth_code }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_Parse_Runtime_WithModule" PARAMETERS = "paymentmethod, cust_id, module var, module_data var, paymentcard var, paymentcardtype var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PaymentMethod_Parse_Runtime( l.paymentmethod, l.cust_id, l.module_code, l.module_data, l.paymentcard, l.paymentcardtype ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ PaymentMethod_LoadAndValidate_Module( l.module_code, l.module_data, l.module ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_LoadAndValidate_Module" PARAMETERS = "module_code, module_data, module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module_code EQ 'mivapay' }">
+		<MvASSIGN NAME = "l.module"				VALUE = "">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ ISNULL l.module_code }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00011', 'Invalid payment module' ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.module_code, l.module ) OR
+						NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00012', 'Invalid payment module' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module:capabilities"	VALUE = "">
+
+	<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+		<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.module:capabilities ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentcard:id OR l.paymentcardtype:id }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.06 }">
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.module_data, l.method_capabilities ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.method_capabilities:mivapay }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00013', 'Invalid payment method' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_Parse_Runtime_WithMivaPayResponse" PARAMETERS = "paymentmethod, cust_id, module_code var, module_data var, paymentcard var, paymentcardtype var, response_xml var, response_signature var, mivapay_response var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ PaymentMethod_Parse_WithMivaPayResponse( l.paymentmethod, l.cust_id, 0, l.module_Code, l.module_data, l.paymentcard, l.paymentcardtype, l.response_xml, l.response_signature, l.mivapay_response ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentMethod_Parse_WithMivaPayResponse" PARAMETERS = "paymentmethod, cust_id, order_id, module_code var, module_data var, paymentcard var, paymentcardtype var, response_xml var, response_signature var, mivapay_response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PaymentMethod_Parse( l.paymentmethod, l.cust_id, l.order_id, l.module_code, l.module_data, l.paymentcard, l.paymentcardtype ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentcard:id OR l.paymentcardtype:id }">
+		<MvASSIGN NAME = "l.response_xml"				VALUE = "{ trim( l.response_xml ) }">
+		<MvASSIGN NAME = "l.response_signature"			VALUE = "{ trim( l.response_signature ) }">
+
+		<MvIF EXPR = "{ ISNULL l.response_xml }">
+			<MvCOMMENT>
+			|
+			| A MivaPay response is required for a payment card type (grouped or ungrouped), but optional for a stored payment card
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.paymentcard:id }">
+				<MvASSIGN NAME = "l.mivapay_response"	VALUE = "">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00023', 'Missing MivaPay response for Payment Card Type based transaction' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT MivaPay_PaymentResponse_ValidateParseAndFlatten( l.response_xml, l.response_signature, l.mivapay_response ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.paymentcardtype:id EQ -1 }">
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].PaymentCardType_Load_Type( l.mivapay_response:CardType, l.paymentcardtype ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.module_code"	VALUE = "{ l.paymentcardtype:mod_code }">
+			<MvASSIGN NAME = "l.module_data"	VALUE = "{ l.paymentcardtype:meth_code }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentCardTypeList_Runtime_Sort_Callback" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:priority LT l.right:priority }">				<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:priority GT l.right:priority }">			<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.left:type LT l.right:type }">						<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:type GT l.right:type }">					<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentCardTypeList_Runtime_Sort" PARAMETERS = "method_list var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_sort( l.method_list, 'PaymentCardTypeList_Runtime_Sort_Callback', l.null ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_Notify_AuthorizationFailure" PARAMETERS = "basket var, source, source_id, payment_module var, payment_module_data, amount" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'not_payment', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Payment_AuthorizationFailure( l.module, l.basket, l.source, l.source_id, l.payment_module, l.payment_module_data, l.amount ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].PaymentRules_Load_Cached( l.paymentrules ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.authorization_error_text"		VALUE = "">
+	<MvASSIGN NAME = "l.payment_module_method"			VALUE = "{ [ g.Module_Root $ l.payment_module:module ].PaymentModule_Payment_Description( l.payment_module, l.payment_module_data ) }">
+
+	<MvIF EXPR = "{ g.Session:cache:error_message_count }">
+		<MvASSIGN NAME = "l.authorization_error_text"	VALUE = "{ g.Session:cache:error_messages[ g.Session:cache:error_message_count ] }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_AuthorizationFailure( l.basket:order_id, l.basket:cust_id, l.payment_module:name, l.payment_module_method, l.amount, l.authorization_error_text, l.paymentrules:rc_mode, l.paymentrules:bl_auto ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_Process_RuntimeAuthorizationFailure" PARAMETERS = "basket var, payment_module var, payment_module_data, amount, exception" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].PaymentRules_Load_Cached( l.paymentrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Log the failure first
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.authorizationfailure"					VALUE = "">
+	<MvASSIGN NAME = "l.authorizationfailure:order_id"			VALUE = "{ l.basket:order_id }">
+	<MvASSIGN NAME = "l.authorizationfailure:cust_id"			VALUE = "{ l.basket:cust_id }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_res"			VALUE = "{ l.basket:ship_res }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_fname"		VALUE = "{ l.basket:ship_fname }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_lname"		VALUE = "{ l.basket:ship_lname }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_email"		VALUE = "{ l.basket:ship_email }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_comp"			VALUE = "{ l.basket:ship_comp }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_phone"		VALUE = "{ l.basket:ship_phone }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_fax"			VALUE = "{ l.basket:ship_fax }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_addr1"		VALUE = "{ l.basket:ship_addr1 }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_addr2"		VALUE = "{ l.basket:ship_addr2 }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_city"			VALUE = "{ l.basket:ship_city }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_state"		VALUE = "{ l.basket:ship_state }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_zip"			VALUE = "{ l.basket:ship_zip }">
+	<MvASSIGN NAME = "l.authorizationfailure:ship_cntry"		VALUE = "{ l.basket:ship_cntry }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_fname"		VALUE = "{ l.basket:bill_fname }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_lname"		VALUE = "{ l.basket:bill_lname }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_email"		VALUE = "{ l.basket:bill_email }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_comp"			VALUE = "{ l.basket:bill_comp }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_phone"		VALUE = "{ l.basket:bill_phone }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_fax"			VALUE = "{ l.basket:bill_fax }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_addr1"		VALUE = "{ l.basket:bill_addr1 }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_addr2"		VALUE = "{ l.basket:bill_addr2 }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_city"			VALUE = "{ l.basket:bill_city }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_state"		VALUE = "{ l.basket:bill_state }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_zip"			VALUE = "{ l.basket:bill_zip }">
+	<MvASSIGN NAME = "l.authorizationfailure:bill_cntry"		VALUE = "{ l.basket:bill_cntry }">
+	<MvASSIGN NAME = "l.authorizationfailure:dtstamp"			VALUE = "{ s.time_t }">
+	<MvASSIGN NAME = "l.authorizationfailure:ip"				VALUE = "{ s.remote_addr }">
+	<MvASSIGN NAME = "l.authorizationfailure:mod_name"			VALUE = "{ l.payment_module:name }">
+	<MvASSIGN NAME = "l.authorizationfailure:method"			VALUE = "{ [ g.Module_Root $ l.payment_module:module ].PaymentModule_Payment_Description( l.payment_module, l.payment_module_data ) }">
+	<MvASSIGN NAME = "l.authorizationfailure:amount"			VALUE = "{ l.amount }">
+
+	<MvIF EXPR = "{ g.Session:cache:error_message_count }">
+		<MvASSIGN NAME = "l.authorizationfailure:error_text"	VALUE = "{ substring_var( g.Session:cache:error_messages[ g.Session:cache:error_message_count ], 1, 254 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].AuthorizationFailure_Insert( l.authorizationfailure ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Increment_AuthorizationFailures( l.basket:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Payment_Notify_AuthorizationFailure( l.basket, 'shopper', l.basket:cust_id, l.payment_module, l.payment_module_data, l.amount ) }">
+
+	<MvCOMMENT>
+	|
+	| Update the moving reCAPTCHA window
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.paymentrules:rc_mode EQ 'auto' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].AuthorizationFailure_Count_NewerThan( s.time_t - l.paymentrules:rc_thresh, l.count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.count LT l.paymentrules:rc_qty }">
+			<MvASSIGN NAME = "l.rc_t_end" VALUE = 0>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].AuthorizationFailure_Load_Newest_Offset( l.paymentrules:rc_qty - 1, l.authorizationfailure ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.rc_t_end" VALUE = "{ l.authorizationfailure:dtstamp + l.paymentrules:rc_thresh }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].PaymentRules_Update_reCAPTCHA_TimeEnd( l.rc_t_end ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Process Payment Rule settings
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.paymentrules:bl_auto }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].AuthorizationFailure_Count_IPNewerThan( s.remote_addr, s.time_t - l.paymentrules:bl_time, l.count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.count GE l.paymentrules:bl_fails }">
+			<MvASSIGN NAME = "l.expires" VALUE = "{ s.time_t + l.paymentrules:bl_dur }">
+
+			<MvIF EXPR = "{ NOT Payment_AuthorizationBlacklist_Blacklist_IP( s.remote_addr, l.expires ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Runtime_Log_Action( 'MER-PAY-UTL-00006', 'IP \'' $ s.remote_addr $ '\' was auto blacklisted' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Payment_AuthDelay( l.paymentrules ) }">
+
+	<MvIF EXPR = "{ l.paymentrules:max_fails }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Load_ID( l.basket:basket_id, l.basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.basket:auth_fails GE l.paymentrules:max_fails }">
+			<MvASSIGN NAME = "g.Checkout_Session_Verified"		VALUE = 0>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'checkout_invalid_session' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Session:cache:error_message_count EQ 0 }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Unable to authorize payment.' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( l.exception ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_AuthDelay" PARAMETERS = "paymentrules var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.paymentrules:auth_delay }">
+		<MvEVAL EXPR = "{ miva_sleep( l.paymentrules:auth_delay ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_BuildSeconds" PARAMETERS = "duration, unit" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.unit EQ 'd' }">		<MvASSIGN NAME = "l.mult" VALUE = "{ 60 * 60 * 24 }">
+	<MvELSEIF EXPR = "{ l.unit EQ 'h' }">	<MvASSIGN NAME = "l.mult" VALUE = "{ 60 * 60 }">
+	<MvELSE>								<MvASSIGN NAME = "l.mult" VALUE = "{ 60 }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.duration * l.mult }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_AuthorizationBlacklist_Blacklist_IP" PARAMETERS = "ip, expires" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ AuthorizationBlacklist_Normalize_CIDR( l.ip, l.normalized_start_ip, l.normalized_end_ip ) }">
+
+	<MvASSIGN NAME = "l.authorizationblacklist:ip"			VALUE = "{ l.ip }">
+	<MvASSIGN NAME = "l.authorizationblacklist:expires" 	VALUE = "{ l.expires }">
+	<MvASSIGN NAME = "l.authorizationblacklist:start_ip"	VALUE = "{ l.normalized_start_ip }">
+	<MvASSIGN NAME = "l.authorizationblacklist:end_ip" 		VALUE = "{ l.normalized_end_ip }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].AuthorizationBlacklist_Insert( l.authorizationblacklist ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].AuthorizationBlacklist_Update_Expires( l.expires, l.ip ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_reCAPTCHA_Languages" PARAMETERS = "languages var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ar">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Arabic">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "af">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Afrikaans">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "am">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Amharic">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "hy">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Armenian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "az">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Azerbaijani">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "eu">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Basque">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "bn">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Bengali">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "bg">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Bulgarian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ca">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Catalan">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "zh-HK">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Chinese (Hong Kong)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "zh-CN">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Chinese (Simplified)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "zh-TW">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Chinese (Traditional)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "hr">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Croatian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "cs">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Czech">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "da">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Danish">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "nl">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Dutch">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "en-GB">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "English (UK)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "en">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "English (US)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "et">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Estonian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "fil">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Filipino">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "fi">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Finnish">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "fr">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "French">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "fr-CA">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "French (Canadian)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "gl">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Galician">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ka">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Georgian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "de">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "German">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "de-AT">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "German (Austria)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "de-CH">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "German (Switzerland)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "el">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Greek">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "gu">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Gujarati">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "iw">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Hebrew">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "hi">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Hindi">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "hu">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Hungarain">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "is">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Icelandic">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "id">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Indonesian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "it">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Italian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ja">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Japanese">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "kn">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Kannada">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ko">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Korean">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "lo">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Laothian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "lv">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Latvian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "lt">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Lithuanian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ms">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Malay">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ml">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Malayalam">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "mr">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Marathi">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "mn">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Mongolian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "no">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Norwegian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "fa">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Persian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "pl">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Polish">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "pt">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Portuguese">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "pt-BR">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Portuguese (Brazil)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "pt-PT">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Portuguese (Portugal)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ro">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Romanian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ru">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Russian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "sr">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Serbian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "si">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Sinhalese">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "sk">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Slovak">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "sl">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Slovenian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "es">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Spanish">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "es-419">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Spanish (Latin America)">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "sw">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Swahili">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "sv">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Swedish">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ta">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Tamil">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "te">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Telugu">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "th">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Thai">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "tr">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Turkish">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "uk">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Ukrainian">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "ur">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Urdu">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "vi">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Vietnamese">
+
+	<MvASSIGN NAME = "l.language_count"												VALUE = "{ ++l.language_count }">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "code"	VALUE = "zu">
+	<MvASSIGN NAME = "l.languages" INDEX = "{ l.language_count }" MEMBER = "name"	VALUE = "Zulu">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.language_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_reCAPTCHA_Is_Active" PARAMETERS = "paymentrules var, payment_module var, module_data, paymentcardtype_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.paymentrules:rc_mode EQ 'off' }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.payment_module:module }">
+		<MvIF EXPR = "{ l.payment_module:api_ver LT 10.00 }">	<MvASSIGN NAME = "l.url" VALUE = "{ [ g.Module_Root $ l.payment_module:module ].PaymentModule_Payment_URL( l.payment_module ) }">
+		<MvELSE>												<MvASSIGN NAME = "l.url" VALUE = "{ [ g.Module_Root $ l.payment_module:module ].PaymentModule_Payment_URL( l.payment_module, l.module_data ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL l.url }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentrules:rc_ignzero }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) EQ 0.00 }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentrules:rc_mode EQ 'on' }">			<MvASSIGN NAME = "l.active" VALUE = 1>
+	<MvELSEIF EXPR = "{ l.paymentrules:rc_mode EQ 'auto' }">	<MvASSIGN NAME = "l.active" VALUE = "{ l.paymentrules:rc_t_end AND ( l.paymentrules:rc_t_end GT s.time_t ) }">
+	<MvELSE>													<MvASSIGN NAME = "l.active" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.active }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentcardtype_id }">
+		<MvASSIGN NAME = "l.module_code" 	VALUE = "">
+		<MvASSIGN NAME = "l.method_code" 	VALUE = "">
+		<MvASSIGN NAME = "l.pctype_id" 		VALUE = "{ l.paymentcardtype_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.module_code" 	VALUE = "{ l.payment_module:code }">
+		<MvASSIGN NAME = "l.method_code" 	VALUE = "{ l.module_data }">
+		<MvASSIGN NAME = "l.pctype_id" 		VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentMethodRules_Load_MethodOrDefault_Cached( l.module_code, l.method_code, l.pctype_id, l.paymentmethodrules ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentmethodrules:disable_rc }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Payment_reCAPTCHA_Validate" PARAMETERS = "paymentrules var, response" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.remoteip"	VALUE = "{ s.remote_addr }">
+	<MvASSIGN NAME = "l.secret"		VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.paymentrules:rc_prv_key ) }">
+
+	<MIVA MvCALL_ERROR = "nonfatal, nodisplay">
+	<MvCALL METHOD = "POST"
+			ACTION = "https://www.google.com/recaptcha/api/siteverify"
+			FIELDS = "l.secret, l.response, l.remoteip">
+			<MvASSIGN NAME = "l.google_response" VALUE = "{ l.google_response $ s.callvalue }">
+	</MvCALL>
+	<MIVA MvCALL_ERROR = "fatal, display">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_json_decode( l.google_response, l.data ) AND l.data:success }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Payment_LockFile" PARAMETERS = "order_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ g.MerchantPath $ crypto_md5( l.order_id ) $ ' orderpayment lock file' }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| MivaPay
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CustomerPaymentCard_Register" PARAMETERS = "cust_id, cardtype, fname, lname, cardnumber, exp_month, exp_year,
+															    bill_addr1, bill_addr2, bill_city, bill_state, bill_zip, bill_cntry,
+																paymentcard var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.cardnumber"				VALUE = "{ glosub( glosub( trim( l.cardnumber ), '-', '' ), ' ', '' ) }">
+
+	<MvIF EXPR = "{ ( ISNULL l.cardnumber ) OR ( NOT isdigit( l.cardnumber ) ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00031', 'Invalid card number' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].PaymentCardType_Load_Type_Cached( l.cardtype, l.pctype ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00032', 'Invalid payment card type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT MivaPay_CreateToken( l.cardnumber, l.paymentcard:token ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.paymentcard:cust_id"	VALUE = "{ l.cust_id }">
+	<MvASSIGN NAME = "l.paymentcard:fname"		VALUE = "{ l.fname }">
+	<MvASSIGN NAME = "l.paymentcard:lname"		VALUE = "{ l.lname }">
+	<MvASSIGN NAME = "l.paymentcard:exp_month"	VALUE = "{ l.exp_month }">
+	<MvASSIGN NAME = "l.paymentcard:exp_year"	VALUE = "{ l.exp_year }">
+	<MvASSIGN NAME = "l.paymentcard:lastfour"	VALUE = "{ substring_var( l.cardnumber, len_var( l.cardnumber ) - 3, 4 ) }">
+	<MvASSIGN NAME = "l.paymentcard:addr1"		VALUE = "{ l.bill_addr1 }">
+	<MvASSIGN NAME = "l.paymentcard:addr2"		VALUE = "{ l.bill_addr2 }">
+	<MvASSIGN NAME = "l.paymentcard:city"		VALUE = "{ l.bill_city }">
+	<MvASSIGN NAME = "l.paymentcard:state"		VALUE = "{ l.bill_state }">
+	<MvASSIGN NAME = "l.paymentcard:zip"		VALUE = "{ l.bill_zip }">
+	<MvASSIGN NAME = "l.paymentcard:cntry"		VALUE = "{ l.bill_cntry }">
+	<MvASSIGN NAME = "l.paymentcard:lastused"	VALUE = 0>
+	<MvASSIGN NAME = "l.paymentcard:type_id"	VALUE = "{ l.pctype:id }">
+	<MvASSIGN NAME = "l.paymentcard:refcount"	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_Filename_PAY_DB ].CustomerPaymentCard_Insert( l.paymentcard ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_SessionData" PARAMETERS = "operation, key" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT crypto_hmac_sha256( l.operation, l.key, 'hex', l.sessiondata ) }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.sessiondata }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Validate_Response" PARAMETERS = "mivapay_response var, operation, key" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ strcmp( l.mivapay_response:SessionData, MivaPay_SessionData( l.operation, l.key ) ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00044', 'SessionData mismatch' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_CreateToken" PARAMETERS = "cardnumber, token var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.request_xml"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"><CreateTokenRequest>
+		<Merchant><MvEVAL EXPR = "{ miva_cdata_encode( l.mivapay_settings:merchant ) }"></Merchant>
+		<CardNumber><MvEVAL EXPR = "{ miva_cdata_encode( l.cardnumber ) }"></CardNumber>
+	</CreateTokenRequest><MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MvASSIGN NAME = "l.null"				VALUE = "{ crypto_hmac_sha256( l.request_xml, crypto_base64_decode( [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.mivapay_settings:signkey ) ), 'binary', l.signature ) }">
+	<MvASSIGN NAME = "l.RequestXML"			VALUE = "{ crypto_base64_encode( l.request_xml ) }">
+	<MvASSIGN NAME = "l.RequestSignature"	VALUE = "{ crypto_base64_encode( l.signature ) }">
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCAPTURE VARIABLE = "l.response_xml">
+		<MvCALL METHOD	= "POST"
+				ACTION	= "{ l.mivapay_settings:payment_url_sep $ 'Function=CreateToken' }"
+				FIELDS	= "l.RequestXML, l.RequestSignature"
+				FLAGS	= "force_https, force_verify, noparse">
+			<MvEVAL EXPR = "{ s.callvalue }">
+		</MvCALL>
+	</MvCAPTURE>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00039', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.response_xml, l.response ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_lineno, l.error_message ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00033', 'XML Parse Error: Line ' $ l.error_lineno $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MivaPay_CreateTokenResponse_Flatten( l.response:CreateTokenResponse, l.mivapay_struct ) }">
+
+	<MvIF EXPR = "{ tolower( l.mivapay_struct:Status ) NE 'success' }">
+		<MvIF EXPR = "{ NOT ISNULL l.mivapay_struct:ErrorMessage }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00034', l.mivapay_struct:ErrorMessage ) }">
+		<MvELSE>														<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00035', 'An unknown error has occurred' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.token"				VALUE = "{ l.mivapay_struct:Token }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_CreateTokenResponse_Flatten" PARAMETERS = "xml var, output var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tag"				VALUE = "{ tolower( l.xml:name ) }">
+	<MvASSIGN NAME = "l.value"				VALUE = "{ trim( l.xml:value ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.value }">
+		<MvASSIGN NAME = "l.output" VALUE = "{ l.value }">
+	<MvELSE>
+		<MvFOREACH ITERATOR = "l.child" ARRAY = "l.xml:children">
+			<MvREFERENCEARRAY NAME = "l.output_child" VARIABLE = "l.output">
+				<MvMEMBER NAME = "{ l.child:name }">
+			</MvREFERENCEARRAY>
+
+			<MvEVAL EXPR = "{ MivaPay_TransactionResponse_Flatten( l.child, l.output_child ) }">
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_PaymentCard_Delete_Token" PARAMETERS = "token" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.request_xml"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"><PaymentCardDeleteRequest>
+		<Credentials>
+			<Merchant><MvEVAL EXPR = "{ miva_cdata_encode( l.mivapay_settings:merchant ) }"></Merchant>
+
+			<MvASSIGN NAME = "l.decrypted_secret" VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.mivapay_settings:secret ) }">
+			<Secret><MvEVAL EXPR = "{ miva_cdata_encode( l.decrypted_secret ) }"></Secret>
+		</Credentials>
+
+		<PaymentTokens>
+			<PaymentToken><MvEVAL EXPR = "{ miva_cdata_encode( l.token ) }"></PaymentToken>
+		</PaymentTokens>
+	</PaymentCardDeleteRequest><MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCAPTURE VARIABLE = "l.discard">
+		<MvCALL METHOD	= "XML"
+				ACTION	= "{ l.mivapay_settings:delete_url }"
+				FIELDS	= "l.request_xml"
+				FLAGS	= "force_https, force_verify, noparse">
+			<MvEVAL EXPR = "{ s.callvalue }">
+		</MvCALL>
+	</MvCAPTURE>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00040', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_Call" PARAMETERS = "api, endpoint, content_type, headers, paymentcard var, request var, replacements, response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT MivaPay_Transaction_Call_LowLevel( l.api, l.endpoint, l.content_type, l.headers, l.paymentcard, l.request, l.replacements, l.mivapay_response ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.response" VALUE = "{ crypto_base64_decode( l.mivapay_response:ResponseBody ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_Call_LowLevel" PARAMETERS = "api, endpoint, content_type, headers, paymentcard var, request var, replacements, mivapay_response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.decrypted_secret" VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.mivapay_settings:secret ) }">
+
+	<MvCAPTURE VARIABLE = "l.mivapay_request_xml"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"><MivaPayRequest>
+		<Credentials>
+			<Merchant><MvEVAL EXPR = "{ miva_cdata_encode( l.mivapay_settings:merchant ) }"></Merchant>
+			<Secret><MvEVAL EXPR = "{ miva_cdata_encode( l.decrypted_secret ) }"></Secret>
+		</Credentials>
+		<PaymentToken><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:token ) }"></PaymentToken>
+		<MvIF EXPR = "{ ( NOT ISNULL l.paymentcard:tokencvvsession ) AND ( NOT ISNULL l.paymentcard:tokencvvnonce ) }">
+			<PaymentTokenCVV>
+				<Session><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:tokencvvsession ) }"></Session>
+				<Nonce><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:tokencvvnonce ) }"></Nonce>
+			</PaymentTokenCVV>
+		</MvIF>
+		<Request>
+			<API><MvEVAL EXPR = "{ miva_cdata_encode( l.api ) }"></API>
+			<Endpoint><MvEVAL EXPR = "{ miva_cdata_encode( l.endpoint ) }"></Endpoint>
+			<Headers>
+				<MvFOREACH ITERATOR = "l.header" ARRAY = "l.headers">
+					<Header><MvEVAL EXPR = "{ miva_cdata_encode( l.header ) }"></Header>
+				</MvFOREACH>
+			</Headers>
+			<ContentType><MvEVAL EXPR = "{ miva_cdata_encode( l.content_type ) }"></ContentType>
+			<Body><MvEVAL EXPR = "{ miva_cdata_encode( crypto_base64_encode( l.request ) ) }"></Body>
+			<MvIF EXPR = "{ NOT ISNULL l.replacements }">
+				<Replacements>
+					<MvFOREACH ITERATOR = "l.replacement" ARRAY = "l.replacements">
+						<Replacement search="{ encodeentities( l.replacement:search ) }" replace="{ encodeentities( l.replacement:replace ) }" />
+					</MvFOREACH>
+				</Replacements>
+			</MvIF>
+		</Request>
+	</MivaPayRequest><MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCAPTURE VARIABLE = "l.mivapay_response_xml">
+		<MvCALL METHOD	= "XML"
+				ACTION	= "{ l.mivapay_settings:transact_url }"
+				FIELDS	= "l.mivapay_request_xml"
+				FLAGS	= "force_https, force_verify, noparse">
+			<MvEVAL EXPR = "{ s.callvalue }">
+		</MvCALL>
+	</MvCAPTURE>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00041', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.mivapay_response_xml, l.mivapay_xml ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_lineno, l.error_message ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00005', 'XML Parse Error: Line ' $ l.error_lineno $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MivaPay_TransactionResponse_Flatten( l.mivapay_xml:MivaPayResponse, l.mivapay_response ) }">
+
+	<MvIF EXPR = "{ tolower( l.mivapay_response:Status ) NE 'success' }">
+		<MvIF EXPR = "{ NOT ISNULL l.mivapay_response:ErrorMessage }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00016', l.mivapay_response:ErrorMessage ) }">
+		<MvELSE>														<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00017', 'An unknown error has occurred' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_SOAP_Call" PARAMETERS = "api, endpoint, soap_action, response_namespace_domain, headers, paymentcard var, request var, replacements, response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.soap_action }">
+		<MvASSIGN NAME = "l.header_count"	VALUE = "{ miva_array_insert( l.headers, 'SOAPAction: "' $ l.soap_action $ '"', -1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ MivaPay_Transaction_SOAP_Call_LowLevel( l.api, l.endpoint, l.response_namespace_domain, l.headers, '', '', '', l.paymentcard, l.request, l.replacements, l.response ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_SOAP_Call_WithCertificate" PARAMETERS = "api, endpoint, soap_action, response_namespace_domain, headers, certfile, certtype, certpass, paymentcard var, request var, replacements, response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.soap_action }">
+		<MvASSIGN NAME = "l.header_count"	VALUE = "{ miva_array_insert( l.headers, 'SOAPAction: "' $ l.soap_action $ '"', -1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ MivaPay_Transaction_SOAP_Call_LowLevel( l.api, l.endpoint, l.response_namespace_domain, l.headers, l.certfile, l.certtype, l.certpass, l.paymentcard, l.request, l.replacements, l.response ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_SOAP_Authenticated_Call_WithCertificate" PARAMETERS = "api, endpoint, soap_action, response_namespace_domain, headers, login, password, certfile, certtype, certpass, paymentcard var, request var, replacements, response var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.header_count"		VALUE = "{ miva_array_insert( l.headers, 'Authorization: Basic ' $ crypto_base64_encode( l.login $ ':' $ l.password ), -1 ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.soap_action }">
+		<MvASSIGN NAME = "l.header_count"	VALUE = "{ miva_array_insert( l.headers, 'SOAPAction: "' $ l.soap_action $ '"', -1 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ MivaPay_Transaction_SOAP_Call_LowLevel( l.api, l.endpoint, l.response_namespace_domain, l.headers, l.certfile, l.certtype, l.certpass, l.paymentcard, l.request, l.replacements, l.response ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_SOAP_Call_LowLevel" PARAMETERS = "api, endpoint, response_namespace_domain, headers, certfile, certtype, certpass, paymentcard var, request var, replacements, response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.decrypted_secret" VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.mivapay_settings:secret ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.certfile }">
+		<MvIF EXPR = "{ file_read( l.certfile, 'data', l.certcontent ) LE 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00018', 'Certificate not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.mivapay_request_xml"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"><MivaPayRequest>
+		<Credentials>
+			<Merchant><MvEVAL EXPR = "{ miva_cdata_encode( l.mivapay_settings:merchant ) }"></Merchant>
+			<Secret><MvEVAL EXPR = "{ miva_cdata_encode( l.decrypted_secret ) }"></Secret>
+		</Credentials>
+		<PaymentToken><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:token ) }"></PaymentToken>
+		<MvIF EXPR = "{ ( NOT ISNULL l.paymentcard:tokencvvsession ) AND ( NOT ISNULL l.paymentcard:tokencvvnonce ) }">
+			<PaymentTokenCVV>
+				<Session><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:tokencvvsession ) }"></Session>
+				<Nonce><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:tokencvvnonce ) }"></Nonce>
+			</PaymentTokenCVV>
+		</MvIF>
+		<Request>
+			<API><MvEVAL EXPR = "{ miva_cdata_encode( l.api ) }"></API>
+			<Endpoint><MvEVAL EXPR = "{ miva_cdata_encode( l.endpoint ) }"></Endpoint>
+
+			<MvIF EXPR = "{ miva_array_elements( l.headers ) }">
+				<Headers>
+					<MvFOREACH ITERATOR = "l.header" ARRAY = "l.headers">
+						<Header><MvEVAL EXPR = "{ miva_cdata_encode( l.header ) }"></Header>
+					</MvFOREACH>
+				</Headers>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.certfile AND NOT ISNULL l.certtype }">
+				<Certificate>
+					<Content><MvEVAL EXPR = "{ miva_cdata_encode( l.certcontent ) }"></Content>
+					<Type><MvEVAL EXPR = "{ miva_cdata_encode( l.certtype ) }"></Type>
+					<Pass><MvEVAL EXPR = "{ miva_cdata_encode( l.certpass ) }"></Pass>
+				</Certificate>
+			</MvIF>
+
+			<ContentType><MvEVAL EXPR = "{ miva_cdata_encode( 'text/xml; charset=utf-8' ) }"></ContentType>
+			<Body><MvEVAL EXPR = "{ miva_cdata_encode( crypto_base64_encode( l.request ) ) }"></Body>
+
+			<MvIF EXPR = "{ NOT ISNULL l.replacements }">
+				<Replacements>
+					<MvFOREACH ITERATOR = "l.replacement" ARRAY = "l.replacements">
+						<Replacement search="{ encodeentities( l.replacement:search ) }" replace="{ encodeentities( l.replacement:replace ) }" />
+					</MvFOREACH>
+				</Replacements>
+			</MvIF>
+		</Request>
+	</MivaPayRequest><MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCAPTURE VARIABLE = "l.mivapay_response_xml">
+		<MvCALL METHOD	= "XML"
+				ACTION	= "{ l.mivapay_settings:transact_url }"
+				FIELDS	= "l.mivapay_request_xml"
+				FLAGS	= "force_https, force_verify, noparse">
+			<MvEVAL EXPR = "{ s.callvalue }">
+		</MvCALL>
+	</MvCAPTURE>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00042', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.mivapay_response_xml, l.mivapay_xml ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_lineno, l.error_message ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00019', 'XML Parse Error: Line ' $ l.error_lineno $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MivaPay_TransactionResponse_Flatten( l.mivapay_xml:MivaPayResponse, l.mivapay_struct ) }">
+
+	<MvIF EXPR = "{ tolower( l.mivapay_struct:Status ) NE 'success' }">
+		<MvIF EXPR = "{ NOT ISNULL l.mivapay_struct:ErrorMessage }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00020', l.mivapay_struct:ErrorMessage ) }">
+		<MvELSE>														<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00021', 'An unknown error has occurred' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ gettoken( l.mivapay_struct:Headers[ 1 ], ' ', 2 ) NE '200' }">
+		<MvCOMMENT>
+		|
+		| We do not return here, as we may also have a SOAP fault, so we need
+		| to continue processing.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.space_pos"	VALUE = "{ ' ' IN l.mivapay_struct:Headers[ 1 ] }">
+		<MvASSIGN NAME = "g.SOAP_Error"	VALUE = "{ substring_var( l.mivapay_struct:Headers[ 1 ], l.space_pos + 1, len_var( l.mivapay_struct:Headers[ 1 ] ) - l.space_pos ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.response_raw"	VALUE = "{ crypto_base64_decode( l.mivapay_struct:ResponseBody ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].SOAP_Call_Response_ValidateParseAndFlatten( l.response_namespace_domain, l.mivapay_struct:ResponseXMLEncoding, l.response_raw, l.response ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00022', g.SOAP_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_TransactionResponse_Flatten" PARAMETERS = "xml var, output var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tag"				VALUE = "{ tolower( l.xml:name ) }">
+	<MvASSIGN NAME = "l.value"				VALUE = "{ trim( l.xml:value ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.value }">
+		<MvASSIGN NAME = "l.output" VALUE = "{ l.value }">
+	<MvELSEIF EXPR = "{ ( l.tag EQ 'responseheaders' ) }">
+		<MvASSIGN NAME = "l.elements"		VALUE = "{ miva_array_elements( l.output ) }">
+
+		<MvIF EXPR = "{ l.elements LE 0 }">	<MvASSIGN NAME = "l.index" VALUE = 1>
+		<MvELSE>							<MvASSIGN NAME = "l.index" VALUE = "{ l.elements + 1 }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.child" ARRAY = "l.xml:children">
+			<MvREFERENCEARRAY NAME = "l.output_child" VARIABLE = "l.output">
+				<MvDIMENSION INDEX = "{ l.index++ }">
+			</MvREFERENCEARRAY>
+
+			<MvEVAL EXPR = "{ MivaPay_TransactionResponse_Flatten( l.child, l.output_child ) }">
+		</MvFOREACH>
+	<MvELSE>
+		<MvFOREACH ITERATOR = "l.child" ARRAY = "l.xml:children">
+			<MvREFERENCEARRAY NAME = "l.output_child" VARIABLE = "l.output">
+				<MvMEMBER NAME = "{ l.child:name }">
+			</MvREFERENCEARRAY>
+
+			<MvEVAL EXPR = "{ MivaPay_TransactionResponse_Flatten( l.child, l.output_child ) }">
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_PaymentResponse_ValidateParseAndFlatten" PARAMETERS = "base64_response var, base64_signature var, output var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.response_xml"	VALUE = "{ crypto_base64_decode( l.base64_response ) }">
+	<MvASSIGN NAME = "l.signature"		VALUE = "{ crypto_base64_decode( l.base64_signature ) }">
+
+	<MvIF EXPR = "{ NOT crypto_hmac_sha256( l.response_xml, crypto_base64_decode( [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.mivapay_settings:signkey ) ), 'binary', l.calculated_signature ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00008', 'Unable to calculate signature' ) }">
+	</MvIF>
+	
+	<MvIF EXPR = "{ l.signature NE l.calculated_signature }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00009', 'Response signature mismatch' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.response_xml, l.xml ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_lineno, l.error_message ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00010', 'XML Parse Error: Line ' $ l.error_lineno $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MivaPay_PaymentResponse_Flatten( l.xml:PaymentFormResponse, l.output ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_PaymentResponse_Flatten" PARAMETERS = "xml var, output var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tag"		VALUE = "{ tolower( l.xml:name ) }">
+	<MvASSIGN NAME = "l.value"		VALUE = "{ trim( l.xml:value ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.value }">
+		<MvASSIGN NAME = "l.output"	VALUE = "{ l.value }">
+	<MvELSE>
+		<MvFOREACH ITERATOR = "l.child" ARRAY = "l.xml:children">
+			<MvREFERENCEARRAY NAME = "l.output_child" VARIABLE = "l.output">
+				<MvMEMBER NAME = "{ l.child:name }">
+			</MvREFERENCEARRAY>
+
+			<MvEVAL EXPR = "{ MivaPay_PaymentResponse_Flatten( l.child, l.output_child ) }">
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Default_CSS" STANDARDOUTPUTLEVEL = "">
+<MIVA STANDARDOUTPUTLEVEL = "text, html">{
+	"selector": "body",
+	"properties":
+	{
+		"margin": "0",
+		"padding": "0",
+		"font": "normal 1em Arial, Helvetica, Verdana, sans-serif",
+		"font-size": "12px",
+		"color": "#000000",
+		"-webkit-font-smoothing": "antialiased",
+		"-moz-osx-font-smoothing": "grayscale"
+	}
+},
+{
+	"selector": "#payment-fields",
+	"properties":
+	{
+		"margin-top": "2px"
+	}
+},
+{
+	"selector": "#mvp_cvv",
+	"properties":
+	{
+		"width": "30px"
+	}
+},
+{
+	"selector": ".form_row",
+	"properties":
+	{
+		"white-space": "nowrap",
+		"margin": "0 0 4px 0",
+		"text-align": "left"
+	}
+},
+{
+	"selector": ".form_row.invalid label",
+	"properties":
+	{
+		"color": "#dd0000"
+	}
+},
+{
+	"selector": ".form_row.invalid input[type=\"text\"], .form_row.invalid select",
+	"properties":
+	{
+		"border-color": "#cc0000 #ff0000 #ff0000 #ff0000"
+	}
+},
+{
+	"selector": "label",
+	"properties":
+	{
+		"display": "inline-block",
+		"width": "150px"
+	}
+},
+{
+	"selector": ".bold",
+	"properties":
+	{
+		"font-weight": "bold"
+	}
+},
+{
+	"selector": "select, input[type=\"text\"]",
+	"properties":
+	{
+		"border-width": "1px",
+		"border-style": "solid",
+		"border-color": "#333333 #bbbbbb #bbbbbb #bbbbbb",
+		"padding": "1px 2px",
+		"font": "normal 1em Arial, Helvetica, Verdana, sans-serif"
+	}
+},
+{
+	"selector": "input[type=\"text\"]",
+	"properties":
+	{
+		"width": "200px"
+	}
+},
+{
+	"selector": "select",
+	"properties":
+	{
+		"max-width": "206px",
+		"margin": "0 0 4px 0"
+	}
+}<MIVA STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Verify_Enabled" PARAMETERS = "mivapay_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.mivapay_settings:enabled }">
+		<MvFOREACH ITERATOR = "l.cardtype" ARRAY = "l.cardtypes" COUNT = "{ [ g.Module_Feature_PAY_DB ].PaymentCardTypeList_Load_Linked( l.cardtypes ) }">
+			<MvIF EXPR = "{ ISNULL l.cardtype:mod_code }">
+				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.cardtype:mod_code, l.cardtype:module ) OR
+								NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.cardtype:module:id, 'payment', l.storemodule ) OR
+								NOT l.cardtype:module:active }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.cardtype:capabilities"			VALUE = "">
+			<MvASSIGN NAME = "l.cardtype:module:capabilities"	VALUE = "">
+
+			<MvIF EXPR = "{ l.cardtype:module:api_ver GE 9.03 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.cardtype:module:module ].PaymentModule_Capabilities( l.cardtype:module, l.cardtype:module:capabilities ) }"> </MvIF>
+			<MvIF EXPR = "{ l.cardtype:module:api_ver GE 9.06 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.cardtype:module:module ].PaymentModule_Method_Capabilities( l.cardtype:module, l.cardtype:meth_code, l.cardtype:capabilities ) }"> </MvIF>
+
+			<MvIF EXPR = "{ NOT l.cardtype:capabilities:mivapay }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Verify_Enabled_Cached" PARAMETERS = "mivapay_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache" VARIABLE = "g.Session:cache:mivapay_verify_enabled">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result" VALUE = "{ MivaPay_Verify_Enabled( l.mivapay_settings ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Verify_Enabled_WithCardTypes" PARAMETERS = "mivapay_settings var, cardtypes var, cardtype_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.mivapay_settings:enabled }">
+		<MvFOREACH ITERATOR = "l.cardtype" ARRAY = "l.loaded_cardtypes" COUNT = "{ [ g.Module_Feature_PAY_DB ].PaymentCardTypeList_Load_Linked( l.loaded_cardtypes ) }">
+			<MvIF EXPR = "{ ISNULL l.cardtype:mod_code }">
+				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.cardtype:mod_code, l.cardtype:module ) OR
+								NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.cardtype:module:id, 'payment', l.storemodule ) OR
+								NOT l.cardtype:module:active }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.cardtype:capabilities"			VALUE = "">
+			<MvASSIGN NAME = "l.cardtype:module:capabilities"	VALUE = "">
+
+			<MvIF EXPR = "{ l.cardtype:module:api_ver GE 9.03 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.cardtype:module:module ].PaymentModule_Capabilities( l.cardtype:module, l.cardtype:module:capabilities ) }"> </MvIF>
+			<MvIF EXPR = "{ l.cardtype:module:api_ver GE 9.06 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.cardtype:module:module ].PaymentModule_Method_Capabilities( l.cardtype:module, l.cardtype:meth_code, l.cardtype:capabilities ) }"> </MvIF>
+
+			<MvIF EXPR = "{ NOT l.cardtype:capabilities:mivapay }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.cardtype_count" VALUE = "{ miva_array_insert( l.cardtypes, l.cardtype, -1 ) }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.cardtype_count }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Verify_Enabled_WithCardTypes_Cached" PARAMETERS = "mivapay_settings var, cardtypes var, cardtype_count var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:mivapay_verify_enabled_withcardtypes">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ MivaPay_Verify_Enabled_WithCardTypes( l.mivapay_settings, l.cache:cardtypes, l.cache:cardtype_count ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cardtypes"						VALUE = "{ l.cache:cardtypes }">
+	<MvASSIGN NAME = "l.cardtype_count"					VALUE = "{ l.cache:cardtype_count }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Generate_CVV_Nonce" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ crypto_base64_encode( crypto_rand_bytes( 32 ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MivaPay_Map_CVV_Setting" PARAMETERS = "cvv_setting, paymentcardtype_cvv" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.paymentcardtype_cvv }">
+		<MvFUNCTIONRETURN VALUE = "hidden">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cvv_setting }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| ApplePay
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "MivaPay_Transaction_Call_ApplePay" PARAMETERS = "api, endpoint, content_type, headers, paymenttoken var, request var, replacements, response var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.mivapay_request_xml"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"><ApplePayRequest>
+		<MerchantID><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:merch_id ) }"></MerchantID>
+		<ApplePayToken>
+			<Header>
+				<PublicKeyHash><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:paymentData:header:publicKeyHash ) }"></PublicKeyHash>
+				<EphemeralPublicKey><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:paymentData:header:ephemeralPublicKey ) }"></EphemeralPublicKey>
+				<TransactionID><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:paymentData:header:transactionId ) }"></TransactionID>
+			</Header>
+			<Data><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:paymentData:data ) }"></Data>
+			<Signature><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:paymentData:signature ) }"></Signature>
+			<Version><MvEVAL EXPR = "{ miva_cdata_encode( l.paymenttoken:paymentData:version ) }"></Version>
+		</ApplePayToken>
+		<Request>
+			<API><MvEVAL EXPR = "{ miva_cdata_encode( l.api ) }"></API>
+			<Endpoint><MvEVAL EXPR = "{ miva_cdata_encode( l.endpoint ) }"></Endpoint>
+			<Headers>
+				<MvFOREACH ITERATOR = "l.header" ARRAY = "l.headers">
+					<Header><MvEVAL EXPR = "{ miva_cdata_encode( l.header ) }"></Header>
+				</MvFOREACH>
+			</Headers>
+			<ContentType><MvEVAL EXPR = "{ miva_cdata_encode( l.content_type ) }"></ContentType>
+			<Body><MvEVAL EXPR = "{ miva_cdata_encode( crypto_base64_encode( l.request ) ) }"></Body>
+			<MvIF EXPR = "{ NOT ISNULL l.replacements }">
+				<Replacements>
+					<MvFOREACH ITERATOR = "l.replacement" ARRAY = "l.replacements">
+						<Replacement search="{ encodeentities( l.replacement:search ) }" replace="{ encodeentities( l.replacement:replace ) }" />
+					</MvFOREACH>
+				</Replacements>
+			</MvIF>
+		</Request>
+	</ApplePayRequest><MIVA STANDARDOUTPUTLEVEL = ""></MvCAPTURE>
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCAPTURE VARIABLE = "l.mivapay_response_xml">
+		<MvCALL METHOD	= "XML"
+				ACTION	= "{ l.mivapay_settings:applepay_url }"
+				FIELDS	= "l.mivapay_request_xml"
+				FLAGS	= "force_https, force_verify, noparse">
+			<MvEVAL EXPR = "{ s.callvalue }">
+		</MvCALL>
+	</MvCAPTURE>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00043', g.MvCALL_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.mivapay_response_xml, l.mivapay_xml ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_lineno, l.error_message ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00024', 'XML Parse Error: Line ' $ l.error_lineno $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MivaPay_TransactionResponse_Flatten( l.mivapay_xml:ApplePayResponse, l.mivapay_struct ) }">
+
+	<MvIF EXPR = "{ tolower( l.mivapay_struct:Status ) NE 'success' }">
+		<MvIF EXPR = "{ NOT ISNULL l.mivapay_struct:ErrorMessage }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00025', l.mivapay_struct:ErrorMessage ) }">
+		<MvELSE>														<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00026', 'An unknown error has occurred' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.response" VALUE = "{ crypto_base64_decode( l.mivapay_struct:ResponseBody ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Payment Card Type Validation Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PaymentCardType_Validate_Prefixes" PARAMETERS = "prefix_list" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.prefix" ARRAY = "l.prefixes" COUNT = "{ miva_splitstring( l.prefix_list, ',', l.prefixes, 'trim' ) }">
+		<MvASSIGN NAME = "l.dash_pos"	VALUE = "{ '-' IN l.prefix }">
+
+		<MvIF EXPR = "{ l.dash_pos EQ 0 }">
+			<MvIF EXPR = "{ ISNULL l.prefix OR NOT isdigit( l.prefix ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00027', 'Prefixes must be numeric.  Multiple values must be separated by commas.' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.low"	VALUE = "{ substring_var( l.prefix, 1, l.dash_pos - 1 ) }">
+			<MvASSIGN NAME = "l.high"	VALUE = "{ substring_var( l.prefix, l.dash_pos + 1, len_var( l.prefix ) - l.dash_pos ) }">
+
+			<MvIF EXPR = "{ ( ISNULL l.low ) OR ( ISNULL l.high ) OR ( NOT isdigit( l.low ) ) OR ( NOT isdigit( l.high ) ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00028', 'Prefixes must be numeric.  Multiple values must be separated by commas.' ) }">
+			<MvELSEIF EXPR = "{ l.high LT l.low }">																				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00029', 'Prefix high value must be greater than or equal to the prefix low value.' ) }">
+			<MvELSEIF EXPR = "{ len_var( l.low ) NE len_var( l.high ) }">														<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-UTL-00030', 'Prefix low and high values must be of equal lengths.' ) }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Card Type Prediction
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PredictCardType" PARAMETERS = "ccnum" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.ccnum_len"	VALUE = "{ len_var( l.ccnum ) }">
+
+	<MvIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,		'15',						'34, 37' ) }">														<MvFUNCTIONRETURN VALUE = "American Express">
+	<MvELSEIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,	'14, 15, 16, 17, 18, 19',	'36' ) }">															<MvFUNCTIONRETURN VALUE = "Diners Club">
+	<MvELSEIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,	'16, 17, 18, 19',			'300-305, 3095, 38-39' ) }">										<MvFUNCTIONRETURN VALUE = "Diners Club">
+	<MvELSEIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,	'16, 17, 18, 19',			'6011, 622126-622925, 624000-626999, 628200-628899, 64, 65' ) }">	<MvFUNCTIONRETURN VALUE = "Discover">
+	<MvELSEIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,	'16, 17, 18, 19',			'3528-3589' ) }">													<MvFUNCTIONRETURN VALUE = "JCB">
+	<MvELSEIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,	'16',						'510000-559999, 222100-272099' ) }">								<MvFUNCTIONRETURN VALUE = "MasterCard">
+	<MvELSEIF EXPR = "{ PredictCardType_Compare( l.ccnum, l.ccnum_len,	'13, 16',					'4' ) }">															<MvFUNCTIONRETURN VALUE = "Visa">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PredictCardType_Compare" PARAMETERS = "ccnum, ccnum_len, lengths, prefixes" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null"							VALUE = "{ miva_splitstring( l.lengths, ',', l.permitted_lengths, 'trim' ) }">
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.permitted_lengths, 1, l.permitted_length, 'l.permitted_length EQ l.ccnum_len' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.permitted_prefix" ARRAY = "l.permitted_prefixes" COUNT = "{ miva_splitstring( l.prefixes, ',', l.permitted_prefixes, 'trim' ) }">
+		<MvASSIGN NAME = "l.permitted_prefix_len"		VALUE = "{ len_var( l.permitted_prefix ) }">
+		<MvASSIGN NAME = "l.dash_pos"					VALUE = "{ '-' IN l.permitted_prefix }">
+
+		<MvIF EXPR = "{ l.dash_pos EQ 0 }">
+			<MvIF EXPR = "{ substring_var( l.ccnum, 1, len_var( l.permitted_prefix ) ) EQ l.permitted_prefix }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.permitted_prefix_low"	VALUE = "{ substring_var( l.permitted_prefix, 1, l.dash_pos - 1 ) }">
+			<MvASSIGN NAME = "l.permitted_prefix_high"	VALUE = "{ substring_var( l.permitted_prefix, l.dash_pos + 1, l.permitted_prefix_len - l.dash_pos ) }">
+
+			<MvASSIGN NAME = "l.ccnum_prefix"			VALUE = "{ substring_var( l.ccnum, 1, len_var( l.permitted_prefix_low ) ) }">
+
+			<MvIF EXPR = "{ ( l.ccnum_prefix GE l.permitted_prefix_low ) AND ( l.ccnum_prefix LE l.permitted_prefix_high ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentCardType_Validate_Lengths" PARAMETERS = "length_list" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.length" ARRAY = "l.lengths" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.length_list, ',', l.lengths ) }">
+		<MvIF EXPR = "{ ISNULL l.length OR NOT isdigit( l.length ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Authorization Blacklists
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AuthorizationBlacklist_Normalize_CIDR" PARAMETERS = "cidr, normalized_start_ip var, normalized_end_ip var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Library_Utilities ].Parse_CIDR_Components( l.cidr, l.components ) }">
+	<MvASSIGN NAME = "l.segments"					VALUE = "">
+	<MvASSIGN NAME = "l.segment_count"				VALUE = 0>
+
+	<MvIF EXPR = "{ l.components:version EQ 4 }">
+		<MvASSIGN NAME = "l.segment_count"			VALUE = "{ AuthorizationBlacklist_Segments_IPv4( l.components:ip, l.segments ) }">
+		<MvASSIGN NAME = "l.offset"					VALUE = "{ 96 + l.components:routing_prefix }">
+	<MvELSEIF EXPR = "{ l.components:version EQ 6 }">
+		<MvASSIGN NAME = "l.segment_count"			VALUE = "{ AuthorizationBlacklist_Segments_IPv6( l.components:ip, l.segments ) }">
+		<MvASSIGN NAME = "l.offset"					VALUE = "{ l.components:routing_prefix }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.segment_count NE 8 }">
+		<MvASSIGN NAME = "l.segment_count"			VALUE = "{ AuthorizationBlacklist_Segments_Invalid( l.components:ip, l.segments ) }">
+		<MvASSIGN NAME = "l.offset"					VALUE = 128>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.offset EQ 128 }">
+		<MvASSIGN NAME = "l.normalized_start_ip"	VALUE = "{ AuthorizationBlacklist_Segments_Normalize( l.segments ) }">
+		<MvASSIGN NAME = "l.normalized_end_ip"		VALUE = "{ l.normalized_start_ip }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ AuthorizationBlacklist_Segments_Calculate_Range( l.segments, l.offset, l.start_ip_segments, l.end_ip_segments ) }">
+
+		<MvASSIGN NAME = "l.normalized_start_ip"	VALUE = "{ AuthorizationBlacklist_Segments_Normalize( l.start_ip_segments ) }">
+		<MvASSIGN NAME = "l.normalized_end_ip"		VALUE = "{ AuthorizationBlacklist_Segments_Normalize( l.end_ip_segments ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AuthorizationBlacklist_Segments_Normalize" PARAMETERS = "segments var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.normalized_ip">
+		<MvFOREACH ITERATOR = "l.segment" ARRAY = "l.segments" INDEX = "l.pos" COUNT = 8>
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				<MvEVAL EXPR = ":">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ padl( l.segment, 5, '0' ) }">
+		</MvFOREACH>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.normalized_ip }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AuthorizationBlacklist_Segments_Invalid" PARAMETERS = "ip, segments var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.segments"		VALUE = "">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0, -1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.segment_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AuthorizationBlacklist_Segments_IPv4" PARAMETERS = "ip, segments var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_splitstring( l.ip, '.', l.octets, '' ) }">
+
+	<MvASSIGN NAME = "l.segments"		VALUE = "">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x64,												-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0xff9b, 											-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0,												-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0,												-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0,												-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, 0x0,												-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, ( l.octets[ 1 ] BITSL 8 ) BITOR l.octets[ 2 ],	-1 ) }">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_array_insert( l.segments, ( l.octets[ 3 ] BITSL 8 ) BITOR l.octets[ 4 ],	-1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.segment_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AuthorizationBlacklist_Segments_IPv6" PARAMETERS = "ip, segments var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.segments"		VALUE = "">
+	<MvASSIGN NAME = "l.segment_count"	VALUE = "{ miva_splitstring( l.ip, ':', l.segments, '' ) }">
+
+	<MvIF EXPR = "{ l.segment_count NE 8 }">
+		<MvCOMMENT>
+		|
+		| If the IPv6 address does not contain 8 hextets we search for the empty
+		| hextet position representing 1 or more omitted hextets
+		|
+		| 2001:db8::ff00:42:8329 is converted into 2001:0db8:0:0:0:ff00:0042:8329
+		| ::1 is converted into 0:0:0:0:0:0:0:1
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.double_colon_pos" VALUE = "{ miva_array_search( l.segments, 1, l.hextet, 'ISNULL l.hextet' ) }">
+
+		<MvWHILE EXPR = "{ l.segment_count LT 8 }">
+			<MvASSIGN NAME = "l.segment_count" VALUE = "{ miva_array_insert( l.segments, 0x0, l.double_colon_pos ) }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.segment" ARRAY = "l.segments" COUNT = "{ l.segment_count }">
+		<MvASSIGN NAME = "l.segment" VALUE = "{ int( '0x' $ l.segment ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.segment_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AuthorizationBlacklist_Segments_Calculate_Range" PARAMETERS = "segments var, offset, start_ip_segments var, end_ip_segments var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.start_ip_segments"			VALUE = "">
+	<MvASSIGN NAME = "l.end_ip_segments"			VALUE = "">
+	<MvASSIGN NAME = "l.start_ip_segment_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.end_ip_segment_count"		VALUE = 0>
+
+	<MvASSIGN NAME = "l.segments_to_copy"			VALUE = "{ floor( l.offset / 16 ) }">
+
+	<MvCOMMENT>
+	|
+	| Copy the segments that will remain the same
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.segments_to_copy }">
+		<MvASSIGN NAME = "l.start_ip_segment_count"	VALUE = "{ miva_array_copy_ref( l.segments, 1, l.segments_to_copy, l.start_ip_segments,	-1 ) }">
+		<MvASSIGN NAME = "l.end_ip_segment_count"	VALUE = "{ miva_array_copy_ref( l.segments, 1, l.segments_to_copy, l.end_ip_segments,	-1 ) }">
+
+		<MvIF EXPR = "{ l.segments_to_copy EQ 8 }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply the bit masks only to the segment that needs it
+	|
+	</MvCOMMENT>
+
+	<MvREFERENCEARRAY NAME = "l.segment" VARIABLE = "l.segments">
+		<MvDIMENSION INDEX = "{ l.segments_to_copy + 1 }">
+	</MvREFERENCEARRAY>
+
+	<MvASSIGN NAME = "l.bits_to_keep"				VALUE = "{ l.offset MOD 16 }">
+
+	<MvIF EXPR = "{ l.bits_to_keep GT 0 }">
+		<MvASSIGN NAME = "l.low_bitmask"			VALUE = "{ 0xFFFF BITSL ( 16 - l.bits_to_keep ) }">
+		<MvASSIGN NAME = "l.high_bitmask"			VALUE = "{ 0xFFFF BITSR l.bits_to_keep }">
+
+		<MvASSIGN NAME = "l.start_ip_segment_count" VALUE = "{ miva_array_insert( l.start_ip_segments,	l.segment BITAND l.low_bitmask, -1 ) }">
+		<MvASSIGN NAME = "l.end_ip_segment_count"	VALUE = "{ miva_array_insert( l.end_ip_segments,	l.segment BITOR l.high_bitmask, -1 ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| All remaining segments should have their segment set to 0x0000 and 0xFFFF
+	|
+	</MvCOMMENT>
+
+	<MvWHILE EXPR = "{ l.start_ip_segment_count LE 8 }">
+		<MvASSIGN NAME = "l.start_ip_segment_count"	VALUE = "{ miva_array_insert( l.start_ip_segments,	0x0000, -1 ) }">
+	</MvWHILE>
+
+	<MvWHILE EXPR = "{ l.end_ip_segment_count LE 8 }">
+		<MvASSIGN NAME = "l.end_ip_segment_count"	VALUE = "{ miva_array_insert( l.end_ip_segments,	0xFFFF, -1 ) }">
+	</MvWHILE>
+</MvFUNCTION>

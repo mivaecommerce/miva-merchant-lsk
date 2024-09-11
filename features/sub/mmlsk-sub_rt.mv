@@ -1,0 +1,254 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-SUB-RNT-
+| Next Error Code: 1    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Action_CustomerSubscription_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified OR NOT g.Basket:cust_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.ProductSubscriptionTerm_ID"	VALUE = "{ int( g.ProductSubscriptionTerm_ID ) }">
+	<MvASSIGN NAME = "g.Subscription_ID"			VALUE = "{ int( g.Subscription_ID ) }">
+	<MvASSIGN NAME = "g.PaymentCard_ID"				VALUE = "{ int( g.PaymentCard_ID ) }">
+	<MvASSIGN NAME = "g.NextOrderDate_Year"			VALUE = "{ int( g.NextOrderDate_Year ) }">
+	<MvASSIGN NAME = "g.NextOrderDate_Month"		VALUE = "{ int( g.NextOrderDate_Month ) }">
+	<MvASSIGN NAME = "g.NextOrderDate_Day"			VALUE = "{ int( g.NextOrderDate_Day ) }">
+	<MvASSIGN NAME = "g.NextOrderDate"				VALUE = "{ int( g.NextOrderDate ) }">
+	<MvASSIGN NAME = "g.Address_ID"					VALUE = "{ int( g.Address_ID ) }">
+	<MvASSIGN NAME = "g.Quantity"					VALUE = "{ trim( g.Quantity ) }">
+	<MvASSIGN NAME = "g.ShippingMethod"				VALUE = "{ trim( g.ShippingMethod ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Load_ID( g.Subscription_ID, l.subscription ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'invalid_subscription' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.subscription:cust_id NE g.Basket:cust_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'invalid_subscription' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.subscription:product_id, l.productsubscriptionsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.PaymentCard_ID EQ 0 }">
+		<MvIF EXPR = "{ l.subscription:custpc_id NE 0 }">
+			<MvASSIGN NAME = "g.SubscriptionPaymentCard_Invalid"		VALUE = 1>
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Load_ID( g.PaymentCard_ID, g.Basket:cust_id, l.paymentcard ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.SubscriptionPaymentCard_Invalid"			VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.subscription:custpc_id"						VALUE = "{ l.paymentcard:id }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].CustomerAddress_Load_ID_Cached( g.Address_ID, l.customeraddress ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.SubscriptionAddress_Invalid"				VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.subscription:addr_id"						VALUE = "{ l.customeraddress:id }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:can_term AND ( ( l.productsubscriptionsettings:term_min EQ 0 ) OR ( l.subscription:termproc GE l.productsubscriptionsettings:term_min ) ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( g.ProductSubscriptionTerm_ID, l.productsubscriptionterm ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "g.SubscriptionTerm_Invalid"				VALUE = 1>
+		<MvELSE>
+			<MvIF EXPR = "{ l.subscription:subterm_id NE l.productsubscriptionterm:id }">
+				<MvASSIGN NAME = "l.subscription:subterm_id"			VALUE = "{ l.productsubscriptionterm:id }">
+				<MvASSIGN NAME = "l.subscription:termrem"				VALUE = "{ l.productsubscriptionterm:term }">
+				<MvASSIGN NAME = "l.subscription:termproc"				VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:can_qty AND ( ( l.productsubscriptionsettings:qty_min EQ 0 ) OR ( l.subscription:termproc GE l.productsubscriptionsettings:qty_min ) ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( g.Quantity ) }">
+			<MvASSIGN NAME = "g.SubscriptionQuantity_Invalid"			VALUE = 1>
+		<MvELSE>
+			<MvASSIGN NAME = "l.subscription:quantity"					VALUE = "{ g.Quantity }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productsubscriptionsettings:can_date AND ( ( l.productsubscriptionsettings:date_min EQ 0 ) OR ( l.subscription:termproc GE l.productsubscriptionsettings:date_min ) ) }">
+		<MvASSIGN NAME = "l.date_tomorrow"								VALUE = "{ mktime_t( time_t_year( s.time_t, g.Merchant_Local_Timezone ), time_t_month( s.time_t, g.Merchant_Local_Timezone ), time_t_dayofmonth( s.time_t, g.Merchant_Local_Timezone ) + 1, 0, 0, 0, g.Merchant_Local_Timezone ) }">
+
+		<MvIF EXPR = "{ g.NextOrderDate NE 0 }">
+			<MvIF EXPR = "{ g.NextOrderDate LT l.date_tomorrow }">
+				<MvASSIGN NAME = "g.SubscriptionNextDate_Invalid"		VALUE = 1>
+			<MvELSE>
+				<MvASSIGN NAME = "l.subscription:nextdate"				VALUE = "{ g.NextOrderDate }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( g.NextOrderDate_Year, 1970, 2038 )	OR
+							NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( g.NextOrderDate_Month, 1, 12 )		OR
+							NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( g.NextOrderDate_Day, 1, 31 ) }">
+				<MvASSIGN NAME = "g.SubscriptionNextDate_Invalid"		VALUE = 1>
+			<MvELSE>
+				<MvASSIGN NAME = "l.nextdate"							VALUE = "{ mktime_t( g.NextOrderDate_Year, g.NextOrderDate_Month, g.NextOrderDate_Day, 0, 0, 0, g.Merchant_Local_Timezone ) }">
+
+				<MvIF EXPR = "{ l.nextdate LT l.date_tomorrow }">
+					<MvASSIGN NAME = "g.SubscriptionNextDate_Invalid"	VALUE = 1>
+				<MvELSE>
+					<MvASSIGN NAME = "l.subscription:nextdate"			VALUE = "{ l.nextdate }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.SubscriptionPaymentCard_Invalid	AND
+					NOT g.SubscriptionAddress_Invalid		AND
+					NOT g.SubscriptionTerm_Invalid			AND
+					NOT g.SubscriptionQuantity_Invalid		AND
+					NOT g.SubscriptionNextDate_Invalid }">
+		<MvWHILE EXPR = "{ 1 }">
+			<MvASSIGN NAME = "l.module_code"							VALUE = "{ substring( g.ShippingMethod, 1, ( ':' IN g.ShippingMethod ) - 1 ) }">
+			<MvASSIGN NAME = "l.module_data"							VALUE = "{ substring( g.ShippingMethod, ( ':' IN g.ShippingMethod ) + 1, len( g.ShippingMethod ) ) }">
+
+			<MvIF EXPR = "{ ISNULL l.module_code }">
+				<MvIF EXPR = "{ l.subscription:ship_id NE 0 }">
+					<MvASSIGN NAME = "g.SubscriptionShipping_Invalid"	VALUE = 1>
+
+					<MvWHILESTOP>
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code( l.module_code, l.module ) OR
+								NOT [ g.Module_Library_DB ].StoreModule_Load( l.module:id, 'shipping', l.storemodule ) OR
+								NOT l.module:active }">
+				<MvASSIGN NAME = "g.SubscriptionShipping_Invalid"		VALUE = 1>
+
+				<MvWHILESTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( l.subscription:product_id, l.product ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'product_not_found' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.option_count"								VALUE = "{ [ g.Module_Feature_SUB_DB ].SubscriptionOptionList_Load_Subscription( l.subscription:id, l.options ) }">
+			<MvASSIGN NAME = "l.attribute_count"							VALUE = "{ [ g.Module_Feature_SUB_UT ].SubscriptionOptions_BuildAttributes( l.options, l.option_count, l.attributes ) }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Validate_Attributes_DetermineVariant( l.product, 0, l.attributes, l.attribute_count, l.basketoptions, l.basketoption_count, l.variant_id ) OR
+							l.variant_id EQ -1 }">
+				<MvASSIGN NAME = "l.variant_id"								VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.original_basket"							VALUE = "{ g.Basket }">
+			<MvASSIGN NAME = "g.Basket"										VALUE = "">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
+				<MvASSIGN NAME = "g.SubscriptionShipping_Invalid"			VALUE = 1>
+				<MvASSIGN NAME = "g.Basket"									VALUE = "{ l.original_basket }">
+
+				<MvWHILESTOP>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_SUB_UT ].Subscription_CreateBasket_LowLevel( g.Customer, l.customeraddress, l.paymentcard, l.product, l.basketoptions, l.basketoption_count, l.variant_id, l.attr_price_override, l.subscription:id, l.productsubscriptionterm:id, l.subscription:quantity, g.Basket ) }">
+				<MvASSIGN NAME = "g.SubscriptionShipping_Invalid"			VALUE = 1>
+				<MvASSIGN NAME = "g.Basket"									VALUE = "{ l.original_basket }">
+
+				<MvWHILESTOP>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT l.module:id }">
+					<MvASSIGN NAME = "l.subscription:ship_id"				VALUE = 0>
+					<MvASSIGN NAME = "l.subscription:ship_data"				VALUE = "">
+				<MvELSE>
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_UT ].ShippingMethod_Valid_ForBasket( l.module, l.module_data ) }">
+						<MvASSIGN NAME = "g.SubscriptionShipping_Invalid"	VALUE = 1>
+						<MvASSIGN NAME = "l.null"							VALUE = "{ [ g.Module_Library_DB ].Basket_Reset( g.Basket ) }">
+						<MvASSIGN NAME = "g.Basket"							VALUE = "{ l.original_basket }">
+
+						<MvWHILESTOP>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.subscription:ship_id"				VALUE = "{ l.module:id }">
+					<MvASSIGN NAME = "l.subscription:ship_data"				VALUE = "{ l.module_data }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.null"									VALUE = "{ [ g.Module_Feature_SUB_UT ].Subscription_Calculate_Basket( l.module, l.module_data, l.subscription:tax, l.subscription:shipping, l.subscription:subtotal, l.subscription:total ) }">
+				<MvASSIGN NAME = "l.null"									VALUE = "{ [ g.Module_Library_DB ].Basket_Reset( g.Basket ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "g.Basket"										VALUE = "{ l.original_basket }">
+			<MvWHILESTOP>
+		</MvWHILE>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.SubscriptionPaymentCard_Invalid	OR
+					g.SubscriptionAddress_Invalid		OR
+					g.SubscriptionShipping_Invalid		OR
+					g.SubscriptionTerm_Invalid			OR
+					g.SubscriptionQuantity_Invalid		OR
+					g.SubscriptionNextDate_Invalid }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'invalid_subscription_edit' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Update( l.subscription ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Information( 'Subscription updated successfully.' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_CustomerSubscription_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Customer_Session_Verified OR NOT g.Basket:cust_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'customer_invalid_session' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Subscription_ID" VALUE = "{ int( g.Subscription_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Load_ID( g.Subscription_ID, l.subscription ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.subscription:cust_id NE g.Basket:cust_id }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.subscription:product_id, l.productsubscriptionsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productsubscriptionsettings:can_cancel AND ( l.productsubscriptionsettings:cncl_min EQ 0 ) OR ( l.subscription:termproc GE l.productsubscriptionsettings:cncl_min ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].Subscription_Update_Status_Cancel_WithNotifications( l.subscription, 'Cancelled by customer' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

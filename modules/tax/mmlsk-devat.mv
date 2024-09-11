@@ -1,0 +1,1929 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-TAX-DEV-
+| Next Error Code: 82   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-devat">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "European VAT">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0500">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.01">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "tax, vis_product, vis_store, provision_store, data_store, vis_order, not_prod, clientside, clientside_sri, json, copy_prod">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Options
+						  (
+							otherrate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ ',
+							inclds_vat	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ ',
+							tax_ship	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ ',
+							ship_incld	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ ',
+							nontax_dsc	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.devat_options:otherrate" 	VALUE = 0>
+	<MvASSIGN NAME = "l.devat_options:inclds_vat" 	VALUE = 1>
+	<MvASSIGN NAME = "l.devat_options:tax_ship" 	VALUE = 1>
+	<MvASSIGN NAME = "l.devat_options:ship_incld" 	VALUE = 1>
+	<MvASSIGN NAME = "l.devat_options:nontax_dsc"	VALUE = "Tax free delivery outside EU">
+
+	<MvIF EXPR = "{ NOT DEVAT_Options_Insert( l.devat_options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Rates
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							descrip	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+							rate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'DEVAT_Rates_1 ON ' $ g.Store_Table_Prefix $ 'DEVAT_Rates ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'DEVAT_Rates_2 ON ' $ g.Store_Table_Prefix $ 'DEVAT_Rates ( rate, descrip )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'DEVAT_Rates', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rate_list" 	VALUE = "7.00,16.00">
+	<MvASSIGN NAME = "l.pos" 		VALUE = 1>
+
+	<MvASSIGN NAME = "l.rate" VALUE = "{ gettoken( l.rate_list, ',', l.pos ) }">
+	<MvWHILE EXPR = "{ len( l.rate ) }">
+		<MvASSIGN NAME = "l.devat_rate:rate" 	VALUE = "{ trim( gettoken( l.rate, ':', 1 ) ) }">
+		<MvASSIGN NAME = "l.devat_rate:descrip" VALUE = "{ trim( gettoken( l.rate, ':', 2 ) ) }">
+
+		<MvIF EXPR = "{ NOT DEVAT_Rate_Insert( l.devat_rate ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.pos"  VALUE = "{ l.pos + 1 }">
+		<MvASSIGN NAME = "l.rate" VALUE = "{ gettoken( l.rate_list, ',', l.pos ) }">
+	</MvWHILE>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Products
+						  (
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
+							rate_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'DEVAT_Products_1 ON ' $ g.Store_Table_Prefix $ 'DEVAT_Products ( product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'DEVAT_Products_2 ON ' $ g.Store_Table_Prefix $ 'DEVAT_Products ( rate_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Countries
+						  (
+							cty_alpha	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'DEVAT_Countries_1 ON ' $ g.Store_Table_Prefix $ 'DEVAT_Countries ( cty_alpha )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.country_list" VALUE = "AT,BE,DE,DK,ES,FI,FR,GB,GR,IE,IT,LU,NL,PT,SE">
+	<MvASSIGN NAME = "l.pos" 		  VALUE = 1>
+
+	<MvASSIGN NAME = "l.country" VALUE = "{ gettoken( l.country_list, ',', l.pos ) }">
+	<MvWHILE EXPR = "{ len( l.country ) }">
+		<MvIF EXPR = "{ NOT DEVAT_Country_Insert( l.country ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos + 1 }">
+		<MvASSIGN NAME = "l.country" VALUE = "{ gettoken( l.country_list, ',', l.pos ) }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00079', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Options' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Rates' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Products' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DEVAT_Countries' }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'DEVAT_Rates' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Sales Tax Calculation Feature (tax)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "TaxModule_Order_Hide_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<input type="hidden" name="DEVAT_VAT_ID" value="{ encodeentities( g.DEVAT_VAT_ID ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvDO FILE = "{ g.Module_Library_DB }" NAME = "l.standardfields_load" VALUE = "{ StandardFields_Load_Cached( l.standard_fields ) }">
+	<MvIF EXPR = "{ l.standardfields_load AND ( l.standard_fields:mode_cntry NE 'H' ) }">
+		<MvFUNCTIONRETURN VALUE = "vat_id">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Basket:tax_exempt }">
+		<MvIF EXPR = "{ l.field_id EQ 'vat_id' }">
+			<MvFUNCTIONRETURN VALUE = "VAT ID:">
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Required" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT g.Basket:tax_exempt }">
+		<MvIF EXPR = "{ l.field_id EQ 'vat_id' }">
+			<input type="text" name="DEVAT_VAT_ID" size="25" value="{ encodeentities( g.DEVAT_VAT_ID ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_ProcessOrder" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Basket" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DEVAT_Options_Load( l.devat_options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.DEVAT_VAT_ID" VALUE = "{ trim( g.DEVAT_VAT_ID ) }">
+
+	<MvIF EXPR = "{ ISNULL g.DEVAT_VAT_ID }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketInfo_Delete( g.Basket:basket_id, l.module:id, l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.basketinfo"					VALUE = "">
+		<MvASSIGN NAME = "l.basketinfo:basket_id"		VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketinfo:module_id"		VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.basketinfo:type"			VALUE = "{ l.module:code }">
+		<MvASSIGN NAME = "l.basketinfo:info"			VALUE = "">
+		<MvASSIGN NAME = "l.basketinfo:info:vat_id"		VALUE = "{ g.DEVAT_VAT_ID }">
+		<MvASSIGN NAME = "l.basketinfo:clronmod"		VALUE = 1>
+		<MvASSIGN NAME = "l.basketinfo:orderinfo"		VALUE = 1>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketInfo_InsertOrUpdate( l.basketinfo ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Basket:tax_exempt }">																						<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT DEVAT_Country_Load_Alpha( g.Basket:ship_cntry, l.devat_country ) }">								<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSEIF EXPR = "{ ( strcasecmp( l.devat_country:cty_alpha, g.Store:country ) NE 0 ) AND ( NOT ISNULL g.DEVAT_VAT_ID ) }">	<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSE>																													<MvASSIGN NAME = "l.tax_exempt" VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rates" 									VALUE = "">
+	<MvASSIGN NAME = "l.rate_count" 							VALUE = 0>
+	<MvASSIGN NAME = "l.included_vat" 							VALUE = 0.000>
+	<MvASSIGN NAME = "l.basketcharge_count"						VALUE = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+
+	<MvFOREACH ITERATOR = "l.devat_rate" ARRAY = "l.devat_rates" COUNT = "{ DEVAT_RateList_Load_All( l.devat_rates ) }">
+		<MvASSIGN NAME = "l.rate"								VALUE = "">
+		<MvASSIGN NAME = "l.rate:id"							VALUE = "{ l.devat_rate:id }">
+		<MvASSIGN NAME = "l.rate:rate"							VALUE = "{ l.devat_rate:rate }">
+		<MvASSIGN NAME = "l.rate:price"							VALUE = 0.00>
+		<MvASSIGN NAME = "l.rate:disp_tax"						VALUE = 0.000>
+		<MvASSIGN NAME = "l.rate:actual_tax"					VALUE = 0.000>
+		<MvASSIGN NAME = "l.rate:extra_multiplier"				VALUE = "{ l.devat_rate:rate / 100 }">
+		<MvASSIGN NAME = "l.rate:included_multiplier"			VALUE = "{ 1 - ( 100 / ( 100 + l.devat_rate:rate ) ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.devat_rate:descrip }">	<MvASSIGN NAME = "l.rate:descrip" VALUE = "{ l.devat_rate:descrip }">
+		<MvELSE>											<MvASSIGN NAME = "l.rate:descrip" VALUE = "{ 'Total includes ' $ ( l.devat_rate:rate ROUND 2 ) $ '% VAT' }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.rate_count" VALUE = "{ miva_array_insert_var( l.rates, l.rate, -1 ) }">
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Calculate rates for basket items
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ NOT l.basketitem:taxable }">																<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ NOT DEVAT_Product_Load_ID( l.basketitem:product_id, l.devat_product )  }">				<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ NOT miva_array_search( l.rates, 1, l.rate, 'l.rate:id EQ l.devat_product:rate_id' ) }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem_total"					VALUE = "{ l.basketitem:price }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketoptions ) }">
+			<MvASSIGN NAME = "l.basketitem_total"				VALUE = "{ l.basketitem_total + l.basketoption:price }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.rate:price"							VALUE = "{ l.rate:price + ( l.basketitem_total * l.basketitem:quantity ) }">
+
+		<MvIF EXPR = "{ l.devat_options:inclds_vat }">
+			<MvASSIGN NAME = "l.item_tax"						VALUE = "{ ( l.basketitem_total * l.rate:included_multiplier * l.basketitem:quantity ) ROUND 3 }">
+			<MvASSIGN NAME = "l.included_vat"					VALUE = "{ l.included_vat + l.item_tax }">
+			<MvASSIGN NAME = "l.rate:disp_tax"					VALUE = "{ l.rate:disp_tax + l.item_tax }">
+		<MvELSEIF EXPR = "{ NOT l.tax_exempt }">
+			<MvASSIGN NAME = "l.item_tax"						VALUE = "{ ( ( l.basketitem_total * l.basketitem:quantity ) * l.rate:extra_multiplier ) ROUND 3 }">
+			<MvASSIGN NAME = "l.rate:disp_tax"					VALUE = "{ l.rate:disp_tax + l.item_tax }">
+			<MvASSIGN NAME = "l.rate:actual_tax"				VALUE = "{ l.rate:actual_tax + l.item_tax }">
+			<MvASSIGN NAME = "l.basketitem:tax"					VALUE = "{ l.item_tax ROUND 2 }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Update_Tax( l.basketitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Calculate rates for shipping
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.devat_options:tax_ship }">
+		<MvCOMMENT>
+		|
+		| Find the tax rate that was used the most
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.big_rate" VALUE = "">
+
+		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.rate" ARRAY = "l.rates" COUNT = "{ l.rate_count }">
+			<MvIF EXPR = "{ ISNULL l.big_rate }">
+				<MvREFERENCEARRAY NAME = "l.big_rate" VARIABLE = "l.rates">
+					<MvDIMENSION INDEX = "{ l.pos }">
+				</MvREFERENCEARRAY>
+			<MvELSEIF EXPR = "{ ( l.rate:price NE 0 ) AND ( l.rate:rate NE 0 ) AND ( ( l.rate:price GT l.big_rate:price ) OR ( ( l.rate:price EQ l.big_rate:price ) AND ( l.rate:rate LT l.big_rate:rate ) ) ) }">
+				<MvREFERENCEARRAY NAME = "l.big_rate" VARIABLE = "l.rates">
+					<MvDIMENSION INDEX = "{ l.pos }">
+				</MvREFERENCEARRAY>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Calculate total shipping and apply it to the "most used" rate
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ISNULL l.big_rate }">
+			<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+				<MvIF EXPR = "{ l.basketcharge:type NE 'SHIPPING' }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.devat_options:ship_incld }">
+					<MvASSIGN NAME = "l.charge_tax" 			VALUE = "{ ( l.basketcharge:amount * l.big_rate:included_multiplier ) ROUND 3 }">
+					<MvASSIGN NAME = "l.included_vat" 			VALUE = "{ l.included_vat + l.charge_tax }">
+					<MvASSIGN NAME = "l.big_rate:disp_tax"		VALUE = "{ l.big_rate:disp_tax + l.charge_tax }">
+				<MvELSEIF EXPR = "{ NOT l.tax_exempt }">
+					<MvASSIGN NAME = "l.charge_tax" 			VALUE = "{ ( l.basketcharge:amount * l.big_rate:extra_multiplier ) ROUND 3 }">
+					<MvASSIGN NAME = "l.big_rate:disp_tax"		VALUE = "{ l.big_rate:disp_tax + l.charge_tax }">
+					<MvASSIGN NAME = "l.big_rate:actual_tax"	VALUE = "{ l.big_rate:actual_tax + l.charge_tax }">
+					<MvASSIGN NAME = "l.basketcharge:tax"		VALUE = "{ l.charge_tax ROUND 2 }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tax_exempt }">
+		<MvASSIGN NAME = "l.tax_charge"							VALUE = "">
+		<MvASSIGN NAME = "l.tax_charge:basket_id" 				VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.tax_charge:module_id" 				VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.tax_charge:type" 					VALUE = "TAX">
+		<MvASSIGN NAME = "l.tax_charge:amount" 					VALUE = "{ ( 0 - l.included_vat ) ROUND 3 }">
+		<MvASSIGN NAME = "l.tax_charge:disp_amt" 				VALUE = "{ ( 0 - l.included_vat ) ROUND 2 }">
+		<MvASSIGN NAME = "l.tax_charge:tax_exempt" 				VALUE = 0>
+		<MvASSIGN NAME = "l.tax_charge:tax"		 				VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT ISNULL g.DEVAT_VAT_ID }">			<MvASSIGN NAME = "l.tax_charge:descrip" VALUE = "{ 'VAT ID: ' $ g.DEVAT_VAT_ID }">
+		<MvELSE>												<MvASSIGN NAME = "l.tax_charge:descrip" VALUE = "{ l.devat_options:nontax_dsc }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.tax_charge ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Calculate rates for other charges
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.devat_options:inclds_vat }">
+		<MvASSIGN NAME = "l.filtered_rate_count"				VALUE = "{ miva_array_filter_ref( l.rates, 1, l.filtered_rate, 'l.filtered_rate:rate EQ l.devat_options:otherrate', l.filtered_rates ) }">
+
+		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+			<MvIF EXPR = "{ l.basketcharge:type EQ 'TAX' }">										<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.basketcharge:type EQ 'SHIPPING' OR l.basketcharge:tax_exempt }">	<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketcharge_tax"				VALUE = 0.000>
+
+			<MvFOREACH ITERATOR = "l.rate" ARRAY = "l.filtered_rates" COUNT = "{ l.filtered_rate_count }">
+				<MvASSIGN NAME = "l.basketcharge_rate_tax"		VALUE = "{ ( ( l.basketcharge:amount * l.devat_options:otherrate ) / 100 ) ROUND 3 }">
+				<MvASSIGN NAME = "l.basketcharge_tax"			VALUE = "{ l.basketcharge_tax + l.basketcharge_rate_tax }">
+
+				<MvASSIGN NAME = "l.rate:actual_tax"			VALUE = "{ l.rate:actual_tax + l.basketcharge_rate_tax }">
+				<MvASSIGN NAME = "l.rate:disp_tax"				VALUE = "{ l.rate:disp_tax + l.basketcharge_rate_tax }">
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.basketcharge:tax"				VALUE = "{ l.basketcharge_tax ROUND 2 }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.rate" ARRAY = "l.rates" COUNT = "{ l.rate_count }">
+		<MvASSIGN NAME = "l.tax_charge"							VALUE = "">
+		<MvASSIGN NAME = "l.tax_charge:basket_id" 				VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.tax_charge:module_id" 				VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.tax_charge:type"					VALUE = "TAX">
+		<MvASSIGN NAME = "l.tax_charge:descrip"					VALUE = "{ l.rate:descrip }">
+		<MvASSIGN NAME = "l.tax_charge:amount"					VALUE = "{ l.rate:actual_tax ROUND 3 }">
+		<MvASSIGN NAME = "l.tax_charge:disp_amt" 				VALUE = "{ l.rate:disp_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.tax_charge:tax_exempt" 				VALUE = 0>
+		<MvASSIGN NAME = "l.tax_charge:tax"		 				VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Insert( l.tax_charge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TaxModule_Calculate_Order" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DEVAT_Options_Load( l.devat_options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Load( l.order:id, l.module:id, l.module:code, l.orderinfo ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.order:cust_id }">
+		<MvASSIGN NAME = "l.order_tax_exempt" VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].TaxExempt_Load_Customer_ID( l.order:cust_id, l.order_tax_exempt ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.order_tax_exempt }">																									<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT DEVAT_Country_Load_Alpha( l.order:ship_cntry, l.devat_country ) }">												<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSEIF EXPR = "{ ( strcasecmp( l.devat_country:cty_alpha, g.Store:country ) NE 0 ) AND ( NOT ISNULL l.orderinfo:info:vat_id ) }">	<MvASSIGN NAME = "l.tax_exempt" VALUE = 1>
+	<MvELSE>																																<MvASSIGN NAME = "l.tax_exempt" VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rates" 									VALUE = "">
+	<MvASSIGN NAME = "l.rate_count" 							VALUE = 0>
+	<MvASSIGN NAME = "l.included_vat" 							VALUE = 0.000>
+	<MvASSIGN NAME = "l.ordercharge_count"						VALUE = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Order( l.order:id, l.ordercharges ) }">
+
+	<MvFOREACH ITERATOR = "l.devat_rate" ARRAY = "l.devat_rates" COUNT = "{ DEVAT_RateList_Load_All( l.devat_rates ) }">
+		<MvASSIGN NAME = "l.rate"								VALUE = "">
+		<MvASSIGN NAME = "l.rate:id"							VALUE = "{ l.devat_rate:id }">
+		<MvASSIGN NAME = "l.rate:rate"							VALUE = "{ l.devat_rate:rate }">
+		<MvASSIGN NAME = "l.rate:price"							VALUE = 0.00>
+		<MvASSIGN NAME = "l.rate:disp_tax"						VALUE = 0.000>
+		<MvASSIGN NAME = "l.rate:actual_tax"					VALUE = 0.000>
+		<MvASSIGN NAME = "l.rate:extra_multiplier"				VALUE = "{ l.devat_rate:rate / 100 }">
+		<MvASSIGN NAME = "l.rate:included_multiplier"			VALUE = "{ 1 - ( 100 / ( 100 + l.devat_rate:rate ) ) }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.devat_rate:descrip }">	<MvASSIGN NAME = "l.rate:descrip" VALUE = "{ l.devat_rate:descrip }">
+		<MvELSE>											<MvASSIGN NAME = "l.rate:descrip" VALUE = "{ 'Total includes ' $ ( l.devat_rate:rate ROUND 2 ) $ '% VAT' }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.rate_count" VALUE = "{ miva_array_insert_var( l.rates, l.rate, -1 ) }">
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Calculate rates for order items
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+		<MvIF EXPR = "{ NOT l.orderitem:taxable }">																	<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 300 }">															<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ NOT DEVAT_Product_Load_ID( l.orderitem:product_id, l.devat_product )  }">				<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ NOT miva_array_search( l.rates, 1, l.rate, 'l.rate:id EQ l.devat_product:rate_id' ) }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.orderitem_total"					VALUE = "{ l.orderitem:price }">
+
+		<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ [ g.Module_Library_DB ].OrderOptionList_Load_Line( l.orderitem:line_id, l.orderoptions ) }">
+			<MvASSIGN NAME = "l.orderitem_total"				VALUE = "{ l.orderitem_total + l.orderoption:price }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.rate:price"							VALUE = "{ l.rate:price + ( l.orderitem_total * l.orderitem:quantity ) }">
+
+		<MvIF EXPR = "{ l.devat_options:inclds_vat }">
+			<MvASSIGN NAME = "l.item_tax"						VALUE = "{ ( l.orderitem_total * l.rate:included_multiplier * l.orderitem:quantity ) ROUND 3 }">
+			<MvASSIGN NAME = "l.included_vat"					VALUE = "{ l.included_vat + l.item_tax }">
+			<MvASSIGN NAME = "l.rate:disp_tax"					VALUE = "{ l.rate:disp_tax + l.item_tax }">
+		<MvELSEIF EXPR = "{ NOT l.tax_exempt }">
+			<MvASSIGN NAME = "l.item_tax"						VALUE = "{ ( ( l.orderitem_total * l.orderitem:quantity ) * l.rate:extra_multiplier ) ROUND 3 }">
+			<MvASSIGN NAME = "l.rate:disp_tax"					VALUE = "{ l.rate:disp_tax + l.item_tax }">
+			<MvASSIGN NAME = "l.rate:actual_tax"				VALUE = "{ l.rate:actual_tax + l.item_tax }">
+			<MvASSIGN NAME = "l.orderitem:tax"					VALUE = "{ l.item_tax ROUND 2 }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Tax( l.orderitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Calculate rates for shipping
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.devat_options:tax_ship }">
+		<MvCOMMENT>
+		|
+		| Find the tax rate that was used the most
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.big_rate" VALUE = "">
+
+		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.rate" ARRAY = "l.rates" COUNT = "{ l.rate_count }">
+			<MvIF EXPR = "{ ISNULL l.big_rate }">
+				<MvREFERENCEARRAY NAME = "l.big_rate" VARIABLE = "l.rates">
+					<MvDIMENSION INDEX = "{ l.pos }">
+				</MvREFERENCEARRAY>
+			<MvELSEIF EXPR = "{ ( l.rate:price NE 0 ) AND ( l.rate:rate NE 0 ) AND ( ( l.rate:price GT l.big_rate:price ) OR ( ( l.rate:price EQ l.big_rate:price ) AND ( l.rate:rate LT l.big_rate:rate ) ) ) }">
+				<MvREFERENCEARRAY NAME = "l.big_rate" VARIABLE = "l.rates">
+					<MvDIMENSION INDEX = "{ l.pos }">
+				</MvREFERENCEARRAY>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Calculate total shipping and apply it to the "most used" rate
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ISNULL l.big_rate }">
+			<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ l.ordercharge_count }">
+				<MvIF EXPR = "{ l.ordercharge:type NE 'SHIPPING' }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.devat_options:ship_incld }">
+					<MvASSIGN NAME = "l.charge_tax" 			VALUE = "{ ( l.ordercharge:amount * l.big_rate:included_multiplier ) ROUND 3 }">
+					<MvASSIGN NAME = "l.included_vat" 			VALUE = "{ l.included_vat + l.charge_tax }">
+					<MvASSIGN NAME = "l.big_rate:disp_tax"		VALUE = "{ l.big_rate:disp_tax + l.charge_tax }">
+				<MvELSEIF EXPR = "{ NOT l.tax_exempt }">
+					<MvASSIGN NAME = "l.charge_tax" 			VALUE = "{ ( l.ordercharge:amount * l.big_rate:extra_multiplier ) ROUND 3 }">
+					<MvASSIGN NAME = "l.big_rate:disp_tax"		VALUE = "{ l.big_rate:disp_tax + l.charge_tax }">
+					<MvASSIGN NAME = "l.big_rate:actual_tax"	VALUE = "{ l.big_rate:actual_tax + l.charge_tax }">
+					<MvASSIGN NAME = "l.ordercharge:tax"		VALUE = "{ l.charge_tax ROUND 2 }">
+
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tax_exempt }">
+		<MvASSIGN NAME = "l.tax_charge"							VALUE = "">
+		<MvASSIGN NAME = "l.tax_charge:order_id" 				VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.tax_charge:module_id" 				VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.tax_charge:type" 					VALUE = "TAX">
+		<MvASSIGN NAME = "l.tax_charge:amount" 					VALUE = "{ ( 0 - l.included_vat ) ROUND 3 }">
+		<MvASSIGN NAME = "l.tax_charge:disp_amt" 				VALUE = "{ ( 0 - l.included_vat ) ROUND 2 }">
+		<MvASSIGN NAME = "l.tax_charge:tax_exempt" 				VALUE = 0>
+		<MvASSIGN NAME = "l.tax_charge:tax"		 				VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT ISNULL l.orderinfo:info:vat_id }">	<MvASSIGN NAME = "l.tax_charge:descrip" VALUE = "{ 'VAT ID: ' $ l.orderinfo:info:vat_id }">
+		<MvELSE>												<MvASSIGN NAME = "l.tax_charge:descrip" VALUE = "{ l.devat_options:nontax_dsc }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].OrderCharge_Insert( l.tax_charge ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Calculate rates for other charges
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.devat_options:inclds_vat }">
+		<MvASSIGN NAME = "l.filtered_rate_count"				VALUE = "{ miva_array_filter_ref( l.rates, 1, l.filtered_rate, 'l.filtered_rate:rate EQ l.devat_options:otherrate', l.filtered_rates ) }">
+
+		<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ l.ordercharge_count }">
+			<MvIF EXPR = "{ l.ordercharge:type EQ 'TAX' }">											<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.ordercharge:type EQ 'SHIPPING' OR l.ordercharge:tax_exempt }">	<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.ordercharge_tax"				VALUE = 0.000>
+
+			<MvFOREACH ITERATOR = "l.rate" ARRAY = "l.filtered_rates" COUNT = "{ l.filtered_rate_count }">
+				<MvASSIGN NAME = "l.ordercharge_rate_tax"		VALUE = "{ ( ( l.ordercharge:amount * l.devat_options:otherrate ) / 100 ) ROUND 3 }">
+				<MvASSIGN NAME = "l.ordercharge_tax"			VALUE = "{ l.ordercharge_tax + l.ordercharge_rate_tax }">
+
+				<MvASSIGN NAME = "l.rate:actual_tax"			VALUE = "{ l.rate:actual_tax + l.ordercharge_rate_tax }">
+				<MvASSIGN NAME = "l.rate:disp_tax"				VALUE = "{ l.rate:disp_tax + l.ordercharge_rate_tax }">
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.ordercharge:tax"				VALUE = "{ l.ordercharge_tax ROUND 2 }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.rate" ARRAY = "l.rates" COUNT = "{ l.rate_count }">
+		<MvASSIGN NAME = "l.tax_charge"							VALUE = "">
+		<MvASSIGN NAME = "l.tax_charge:order_id" 				VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.tax_charge:module_id" 				VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.tax_charge:type"					VALUE = "TAX">
+		<MvASSIGN NAME = "l.tax_charge:descrip"					VALUE = "{ l.rate:descrip }">
+		<MvASSIGN NAME = "l.tax_charge:amount"					VALUE = "{ l.rate:actual_tax ROUND 3 }">
+		<MvASSIGN NAME = "l.tax_charge:disp_amt" 				VALUE = "{ l.rate:disp_tax ROUND 2 }">
+		<MvASSIGN NAME = "l.tax_charge:tax_exempt" 				VALUE = 0>
+		<MvASSIGN NAME = "l.tax_charge:tax"		 				VALUE = 0.00>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Insert( l.tax_charge ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Add/Edit Screen Feature (vis_product)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Product_Tabs" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.can_view" VALUE = "{ CanI( g.Admin_User_Administrator, g.Admin_User_ID, 'STAX', 1, 0, 0, 0 ) }">
+	<MvIF EXPR = "{ l.can_view AND ( len( g.Edit_Product ) ) }">
+		<MvFUNCTIONRETURN VALUE = "DEVAT:VAT">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Head" PARAMETERS = "module var, tab, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Content" PARAMETERS = "module var, tab, load_fields, product var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ l.product:id }">
+			<MvIF EXPR = "{ DEVAT_Product_Load_ID( l.product:id, l.devat_product ) }">
+				<MvASSIGN NAME = "g.Product_DEVAT_Rate_ID" VALUE = "{ l.devat_product:rate_id }">
+			<MvELSE>
+				<MvASSIGN NAME = "g.Product_DEVAT_Rate_ID" VALUE = "">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "g.Product_DEVAT_Rate_ID" VALUE = "">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'DEVAT' }">
+		<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap>
+				VAT Rate:
+		</td><td width="100%">
+				<MvASSIGN NAME = "l.ok" VALUE = "{ DEVAT_Rate_Select( 'Product_DEVAT_Rate_ID', g.Product_DEVAT_Rate_ID ) }">
+		</td></tr>
+		</table>
+	<MvELSE>
+		<input type="hidden" name="Product_DEVAT_Rate_ID" value="{ encodeentities( g.Product_DEVAT_Rate_ID ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Library_Utilities ].CanI( g.Admin_User_Administrator, g.Admin_User_ID, 'PROD', 0, 0, 1, 0 ) }">
+		<MvASSIGN NAME = "l.devat_product:product_id" 	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.devat_product:rate_id" 		VALUE = "{ g.Product_DEVAT_Rate_ID }">
+
+		<MvIF EXPR = "{ DEVAT_Product_Load_ID( l.product:id, l.old_devat_product ) }">
+			<MvIF EXPR = "{ len( g.Product_DEVAT_Rate_ID ) }">
+				<MvIF EXPR = "{ l.old_devat_product:rate_id NE g.Product_DEVAT_Rate_ID }">
+					<MvIF EXPR = "{ NOT DEVAT_Product_Update( l.devat_product ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+
+					<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00053', 'DEVAT Product ID \'' $ l.product:id $ '\', Rate ID \'' $ l.old_devat_product:rate_id $ '\' updated' ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT DEVAT_Product_Delete( l.product:id ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00054', 'DEVAT Product ID \'' $ l.product:id $ '\' deleted' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ len( g.Product_DEVAT_Rate_ID ) }">
+			<MvIF EXPR = "{ NOT DEVAT_Product_Insert( l.devat_product ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00055', 'DEVAT Product ID \'' $ l.product:id $ '\', Rate ID \'' $ l.devat_product:rate_id $ '\' created' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Configuration Change Notification Feature (not_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ DEVAT_Product_Delete( l.product:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_LowStock" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_OutOfStock" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Edit Store Screen Feature (vis_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Store_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Store_DEVAT_Options_NonTaxed_Description"	VALUE = "{ trim( g.Store_DEVAT_Options_NonTaxed_Description ) }">
+
+	<MvIF EXPR = "{ len( g.Store_DEVAT_Options_NonTaxed_Description ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'DEVAT_OPT', 'Store_DEVAT_Options_NonTaxed_Description', 'Please enter a description for tax-exempt orders' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.devat_options:otherrate" 	VALUE = "{ g.Store_DEVAT_Options_OtherRate }">
+	<MvASSIGN NAME = "l.devat_options:inclds_vat" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Store_DEVAT_Options_Inclds_VAT ) }">
+	<MvASSIGN NAME = "l.devat_options:tax_ship" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Store_DEVAT_Options_Tax_Shipping ) }">
+	<MvASSIGN NAME = "l.devat_options:ship_incld" 	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Store_DEVAT_Options_Shipping_Inclds_VAT ) }">
+	<MvASSIGN NAME = "l.devat_options:nontax_dsc" 	VALUE = "{ g.Store_DEVAT_Options_NonTaxed_Description }">
+
+	<MvIF EXPR = "{ NOT DEVAT_Options_Update( l.devat_options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00063', 'DEVAT Configuration updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.tabs" 		VALUE = "GT_STORE/DEVAT_OPT:VAT Options">
+
+	<MvIF EXPR = "{ [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">
+		<MvASSIGN NAME = "l.tabs" 	VALUE = "{ l.tabs $ ',DEVAT:VAT Rates,DEVAT_CTY:VAT Countries' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.tabs }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields AND NOT g.Data_Entry_Error }">
+		<MvIF EXPR = "{ NOT DEVAT_Options_Load( l.devat_options ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Store_DEVAT_Options_OtherRate"				VALUE = "{ l.devat_options:otherrate }">
+		<MvASSIGN NAME = "g.Store_DEVAT_Options_Inclds_Vat" 			VALUE = "{ l.devat_options:inclds_vat }">
+		<MvASSIGN NAME = "g.Store_DEVAT_Options_Tax_Shipping" 			VALUE = "{ l.devat_options:tax_ship }">
+		<MvASSIGN NAME = "g.Store_DEVAT_Options_Shipping_Inclds_Vat" 	VALUE = "{ l.devat_options:ship_incld }">
+		<MvASSIGN NAME = "g.Store_DEVAT_Options_NonTaxed_Description"	VALUE = "{ l.devat_options:nontax_dsc }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'DEVAT' }">
+		<MvEVAL EXPR = "{ Element_EuropeanVATRateList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_EuropeanVAT_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_EuropeanVATRateList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_EuropeanVAT_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new EuropeanVATRateList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_EuropeanVATRateList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'DEVAT_CTY' }">
+		<MvEVAL EXPR = "{ Element_EuropeanVATCountryList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_EuropeanVAT_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_EuropeanVATCountryList_JavaScript( l.module ) }"> 
+			<MvEVAL EXPR = "{ Element_EuropeanVAT_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new EuropeanVATCountryList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ Element_EuropeanVATCountryList_HTML( l.module ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ok" VALUE = "{ DEVAT_Content_DEVAT_OPT( l.tab, l.load_fields ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Content_DEVAT_OPT" PARAMETERS = "tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ [ g.Module_Admin ].Tab_Visible( l.tab, 'DEVAT_OPT' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_STORE', 'DEVAT_OPT' ) }">
+		<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap>
+			<b>Other Basket Charges Rate:</b>
+		</td><td width="100%">
+			<select name="Store_DEVAT_Options_OtherRate">
+				<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawOption( 0, g.Store_DEVAT_Options_OtherRate, 'Not Taxed' ) }">
+
+				<MvASSIGN NAME = "l.count" VALUE = "{ DEVAT_RateList_Load_All( l.devat ) }">
+
+				<MvASSIGN NAME = "l.pos" VALUE = 1>
+				<MvWHILE EXPR = "{ l.pos LE l.count }">
+					<MvIF EXPR = "{ l.devat[l.pos]:rate }">
+						<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawOption_Encode( l.devat[l.pos]:rate, g.Store_DEVAT_Options_OtherRate, l.devat[l.pos]:rate $ '%' ) }">
+					</MvIF>
+					
+					<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos + 1 }">
+				</MvWHILE>
+			</select>
+		</td></tr>
+
+		<tr><td align="left" valign="middle" nowrap>
+			&nbsp;
+		</td><td align="left" valign="middle" width="100%">
+			<MvIF EXPR = "{ g.Store_DEVAT_Options_Inclds_Vat}">
+				<input type="checkbox" name="Store_DEVAT_Options_Inclds_Vat" checked>
+			<MvELSE>
+				<input type="checkbox" name="Store_DEVAT_Options_Inclds_Vat">
+			</MvIF>
+
+			Product Price Includes VAT
+		</td></tr>
+
+		<tr><td align="left" valign="middle" nowrap>
+			&nbsp;
+		</td><td align="left" valign="middle" width="100%">
+			<MvIF EXPR = "{ g.Store_DEVAT_Options_Tax_Shipping}">
+				<input type="checkbox" name="Store_DEVAT_Options_Tax_Shipping" checked>
+			<MvELSE>
+				<input type="checkbox" name="Store_DEVAT_Options_Tax_Shipping">
+			</MvIF>
+
+			Shipping Is Taxed
+		</td></tr>
+
+		<tr><td align="left" valign="middle" nowrap>
+			&nbsp;
+		</td><td align="left" valign="middle" width="100%">
+			<MvIF EXPR = "{ g.Store_DEVAT_Options_Shipping_Inclds_Vat}">
+				<input type="checkbox" name="Store_DEVAT_Options_Shipping_Inclds_Vat" checked>
+			<MvELSE>
+				<input type="checkbox" name="Store_DEVAT_Options_Shipping_Inclds_Vat">
+			</MvIF>
+
+			Shipping Includes VAT
+		</td></tr>
+
+		<tr><td align="left" valign="middle" nowrap>
+			<b>Description for Tax-Exempt Orders:</b>
+		</td><td align="left" valign="middle" width="100%">
+			<input type="text" size="40" name="Store_DEVAT_Options_NonTaxed_Description" value="{ encodeentities( g.Store_DEVAT_Options_NonTaxed_Description ) }">
+		</td></tr>
+		</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	<MvELSE>
+		<input type="hidden" name="Store_DEVAT_Options_OtherRate"				value="{ encodeentities( g.Store_DEVAT_Options_OtherRate ) }">
+		<input type="hidden" name="Store_DEVAT_Options_Inclds_Vat"				value="{ encodeentities( g.Store_DEVAT_Options_Inclds_Vat ) }">
+		<input type="hidden" name="Store_DEVAT_Options_Tax_Shipping"			value="{ encodeentities( g.Store_DEVAT_Options_Tax_Shipping ) }">
+		<input type="hidden" name="Store_DEVAT_Options_Shipping_Inclds_Vat"		value="{ encodeentities( g.Store_DEVAT_Options_Shipping_Inclds_Vat ) }">
+		<input type="hidden" name="Store_DEVAT_Options_NonTaxed_Description"	value="{ encodeentities( g.Store_DEVAT_Options_NonTaxed_Description ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Select" PARAMETERS = "name, default" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<select name = "{ l.name }">
+		<MvIF EXPR = "{ len( l.default ) }">
+			<option value = "">&lt;Not Taxed&gt;</option>
+		<MvELSE>
+			<option value = "" selected>&lt;Not Taxed&gt;</option>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.devat_rate_count" VALUE = "{ DEVAT_RateList_Load_All( l.devat_rate ) }">
+
+		<MvASSIGN NAME = "l.pos" VALUE = 1>
+		<MvWHILE EXPR = "{ l.pos LE l.devat_rate_count }">
+			<MvASSIGN NAME = "l.prompt" VALUE = "{ ( encodeentities( l.devat_rate[ l.pos ]:rate ) ROUND 2 ) $ '%' }">
+
+			<MvIF EXPR = "{ len( l.devat_rate[ l.pos ]:descrip ) }">
+				<MvASSIGN NAME = "l.prompt" VALUE = "{ encodeentities( l.devat_rate[ l.pos ]:descrip ) $ ': ' $ l.prompt }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.devat_rate[ l.pos ]:id EQ l.default }">
+				<MvEVAL EXPR = "{ '<option value = \"' $ encodeentities( l.devat_rate[ l.pos ]:id ) $ '\" selected>' $ l.prompt $ '</option>' }">
+			<MvELSE>
+				<MvEVAL EXPR = "{ '<option value = \"' $ encodeentities( l.devat_rate[ l.pos ]:id ) $ '\">' $ l.prompt $ '</option>' }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos + 1 }">
+		</MvWHILE>
+	</select>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Order Tabs Feature (vis_order)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.DEVAT_VAT_ID" VALUE = "{ trim( g.DEVAT_VAT_ID ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_ID( g.Edit_Order, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00081', 'Order not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.DEVAT_VAT_ID }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Delete( l.order:id, l.module:id, l.module:code ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.orderinfo"				VALUE = "">
+		<MvASSIGN NAME = "l.orderinfo:order_id"		VALUE = "{ l.order:id }">
+		<MvASSIGN NAME = "l.orderinfo:module_id"	VALUE = "{ l.module:id }">
+		<MvASSIGN NAME = "l.orderinfo:type"			VALUE = "{ l.module:code }">
+		<MvASSIGN NAME = "l.orderinfo:info"			VALUE = "">
+		<MvASSIGN NAME = "l.orderinfo:info:vat_id"	VALUE = "{ g.DEVAT_VAT_ID }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Insert( l.orderinfo ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Update( l.orderinfo ) }">						<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Delete_Order" PARAMETERS = "module var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "DEVAT:European VAT">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Head" PARAMETERS = "module var, tab, order var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_UI_JavaScript() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Order_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab NE 'DEVAT' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Load( g.Edit_Order, l.module:id, l.module:code, l.orderinfo ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<table style="display: none;"></table> <MvCOMMENT> Add wrapper on legacy order processing </MvCOMMENT>
+	<mm-input id="devat_item" title="VAT ID" type="text" name="DEVAT_VAT_ID" value="{ encodeentities( l.orderinfo:info:vat_id ) }" input-class="mm_input_common whole_width"></mm-input>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'options' }">				<MvEVAL EXPR = "{ Module_Provision_Store_Options( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'rates' }">			<MvEVAL EXPR = "{ Module_Provision_Store_Rates( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'countries' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Countries( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'product_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Product_Delete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'product_add' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Product_Add( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Options" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DEVAT_Options_Load( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml, 'PriceIncludesVAT',		l.options:inclds_vat )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml, 'ShippingIncludesVAT',	l.options:ship_incld )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml, 'TaxShipping',			l.options:tax_ship )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'O:254',	l.provide_xml, 'NonTaxedDescription',	l.options:nontax_dsc )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(		'O',		l.provide_xml, 'OtherChargeRate',		l.options:otherrate, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.options:otherrate NE 0 }">
+		<MvIF EXPR = "{ NOT DEVAT_Rate_Load_Rate( l.options:otherrate, l.null ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Rate not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DEVAT_Options_Update( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00064', 'DEVAT Configuration updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Rates" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DEVAT_Rate_Delete_All() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'rate' }">
+			<MvREFERENCE NAME = "l.rate_xml" VARIABLE = "{ 'l.provide_xml:children[' $ l.child_pos $ ']' }">
+			
+			<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number( l.rate_xml, 'percent', l.rate:rate, 10, 2 ) }">
+				<MvASSIGN NAME = "l.rate:descrip"	VALUE = "{ l.rate_xml:value }">
+				
+				<MvIF EXPR = "{ NOT DEVAT_Rate_Insert( l.rate ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.rate_xml ) }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00065', 'DEVAT Rate \'' $ l.rate:id $ '\' created' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Countries" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DEVAT_Country_Delete_All() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name NE 'country' }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child_xml, 'Unknown tag' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.child_xml, 'code', l.alpha ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ len_var( l.alpha ) GT 2 }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child_xml, 'Code must be 2 characters or less' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ DEVAT_Country_Load_Alpha( l.alpha, l.null ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child_xml, 'Country code \'' $ l.alpha $ '\' already exists' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT DEVAT_Country_Insert( l.alpha ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.child_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00066', 'DEVAT Country \'' $ l.alpha $ '\' created' ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Product_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'code', l.code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Load_Code( l.code, l.product ) }">
+		<MvIF EXPR = "{ NOT DEVAT_Product_Delete( l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.rate_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00067', 'DEVAT Product \'' $ l.product:code $ '\' deleted' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Product_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml,		'code',	l.code ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number( l.provide_xml,	'rate',	l.rate,	10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product \'' $ l.code $ '\' not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DEVAT_Rate_Load_Rate( l.rate, l.devat_rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Rate ' $ l.rate $ ' not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Product_Load_ID( l.product:id, l.devat_product ) }">
+		<MvASSIGN NAME = "l.devat_product:rate_id"		VALUE = "{ l.devat_rate:id }">
+
+		<MvIF EXPR = "{ NOT DEVAT_Product_Update( l.devat_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00068', 'DEVAT Product ID \'' $ l.product:id $ '\', Rate ID \'' $ l.devat_product:rate_id $ '\' updated' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.devat_product:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.devat_product:rate_id"		VALUE = "{ l.devat_rate:id }">
+
+		<MvIF EXPR = "{ NOT DEVAT_Product_Insert( l.devat_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00069', 'DEVAT Product ID \'' $ l.product:id $ '\', Rate ID \'' $ l.devat_product:rate_id $ '\' created' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DEVAT_Options
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DEVAT_Options_Read" PARAMETERS = "devat_options var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.devat_options:otherrate"	VALUE = "{ DEVAT_Options.d.otherrate }">
+	<MvASSIGN NAME = "l.devat_options:inclds_vat"	VALUE = "{ DEVAT_Options.d.inclds_vat }">
+	<MvASSIGN NAME = "l.devat_options:tax_ship"		VALUE = "{ DEVAT_Options.d.tax_ship }">
+	<MvASSIGN NAME = "l.devat_options:ship_incld"	VALUE = "{ DEVAT_Options.d.ship_incld }">
+	<MvASSIGN NAME = "l.devat_options:nontax_dsc"	VALUE = "{ DEVAT_Options.d.nontax_dsc }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Options_Insert" PARAMETERS = "devat_options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DEVAT_Options
+						  ( otherrate, inclds_vat, tax_ship, ship_incld, nontax_dsc )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.devat_options:otherrate, l.devat_options:inclds_vat, l.devat_options:tax_ship, l.devat_options:ship_incld,
+					   l.devat_options:nontax_dsc">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Options_Update" PARAMETERS = "devat_options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DEVAT_Options
+						  SET
+							otherrate	= ?,
+							inclds_vat	= ?,
+							tax_ship	= ?,
+							ship_incld	= ?,
+							nontax_dsc	= ?' }"
+			 FIELDS	= "l.devat_options:otherrate, l.devat_options:inclds_vat, l.devat_options:tax_ship, l.devat_options:ship_incld,
+					   l.devat_options:nontax_dsc">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Options_Load" PARAMETERS = "devat_options var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Options"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Options' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Options.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Options">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-DEV-00036' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DEVAT_Options_Read( l.devat_options ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Options">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DEVAT_Rates
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Read" PARAMETERS = "devat_rate var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.devat_rate:id"		VALUE = "{ DEVAT_Rates.d.id }">
+	<MvASSIGN NAME = "l.devat_rate:descrip"	VALUE = "{ DEVAT_Rates.d.descrip }">
+	<MvASSIGN NAME = "l.devat_rate:rate"	VALUE = "{ DEVAT_Rates.d.rate }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Insert" PARAMETERS = "devat_rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.devat_rate:id" 		VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'DEVAT_Rates' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DEVAT_Rates
+						  ( id, descrip, rate )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.devat_rate:id, l.devat_rate:descrip, l.devat_rate:rate">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Update" PARAMETERS = "devat_rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DEVAT_Rates
+						  SET
+							descrip	= ?,
+							rate	= ?
+						  WHERE
+							id		= ?' }"
+			 FIELDS	= "l.devat_rate:descrip, l.devat_rate:rate, l.devat_rate:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Delete" PARAMETERS = "rate_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Products
+						  WHERE
+							rate_id	= ?' }"
+			 FIELDS	= "l.rate_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Rates
+						  WHERE
+							id	= ?' }"
+			 FIELDS	= "l.rate_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Delete_All" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Products' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Rates' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_RateList_Load_All" PARAMETERS = "devat_rates var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Rates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Rates ORDER BY id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00019', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.devat_rate_count"	VALUE = 0>
+	<MvWHILE EXPR = "{ NOT DEVAT_Rates.d.EOF }">
+		<MvASSIGN NAME = "l.devat_rate_count"	VALUE = "{ l.devat_rate_count + 1 }">
+		<MvEVAL EXPR = "{ DEVAT_Rate_Read( l.devat_rates[ l.devat_rate_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "DEVAT_Rates" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Rates">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-TAX-DEV-00037', l.devat_rate_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Load_ID" PARAMETERS = "id, devat_rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Rates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Rates WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Rates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Rates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-DEV-00038' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DEVAT_Rate_Read( l.devat_rate ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Rates">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Rate_Load_Rate" PARAMETERS = "rate, devat_rate var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Rates"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Rates WHERE rate = ? ' }"
+				FIELDS	= "l.rate">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00021', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Rates.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Rates">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-DEV-00039' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DEVAT_Rate_Read( l.devat_rate ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Rates">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DEVAT_Products
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DEVAT_Product_Read" PARAMETERS = "devat_product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.devat_product:product_id"	VALUE = "{ DEVAT_Products.d.product_id }">
+	<MvASSIGN NAME = "l.devat_product:rate_id"		VALUE = "{ DEVAT_Products.d.rate_id }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Product_VAT_Read" PARAMETERS = "devat_product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.devat_product:name" 	VALUE = "{ DEVAT_Product_VAT.d.name }">
+	<MvASSIGN NAME = "l.devat_product:code" 	VALUE = "{ DEVAT_Product_VAT.d.code }">
+	<MvASSIGN NAME = "l.devat_product:rate_id" 	VALUE = "{ DEVAT_Product_VAT.d.rate_id }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Product_Insert" PARAMETERS = "devat_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DEVAT_Products
+						  ( product_id, rate_id )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.devat_product:product_id, l.devat_product:rate_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00022', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Product_Update" PARAMETERS = "devat_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DEVAT_Products
+						  SET
+							rate_id		= ?
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.devat_product:rate_id, l.devat_product:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00023', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Product_Delete" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Products
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Product_Load_ID" PARAMETERS = "product_id, devat_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Products"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Products WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00025', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Products">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-DEV-00040' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DEVAT_Product_Read( l.devat_product ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Products">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_ProductList_Load_Product" PARAMETERS = "devat_products var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Product_VAT"
+				QUERY	= "{ 'SELECT
+								prod.name AS name,
+								prod.code AS code,
+								devat.rate_id AS rate_id
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'DEVAT_Products devat,
+							  	' $ g.Store_Table_Prefix $ 'Products prod
+							  WHERE
+							  	devat.product_id = prod.id
+							  ORDER BY product_id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00026', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.prod_vat_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT DEVAT_Product_VAT.d.EOF }">
+		<MvASSIGN NAME = "l.prod_vat_count"	VALUE = "{ l.prod_vat_count + 1 }">
+		<MvEVAL EXPR = "{ DEVAT_Product_VAT_Read( l.devat_products[ l.prod_vat_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "DEVAT_Product_VAT" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Product_VAT">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-TAX-DEV-00041', l.prod_vat_count ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DEVAT_Countries
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DEVAT_Country_Insert" PARAMETERS = "alpha" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DEVAT_Countries
+						  ( cty_alpha )
+						  VALUES
+						  ( ? )' }"
+			 FIELDS	= "l.alpha">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00027', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Country_Delete" PARAMETERS = "alpha" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Countries WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'cty_alpha' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS	= "l.alpha">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00028', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Country_Delete_All" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Countries' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00029', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_Country_Load_Alpha" PARAMETERS = "alpha, country var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Countries"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Countries WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'cty_alpha' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.alpha">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00030', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Countries.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Countries">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-TAX-DEV-00042' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.country:cty_alpha" VALUE = "{ DEVAT_Countries.d.cty_alpha }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Countries">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DEVAT_CountryList_Load_All" PARAMETERS = "devat_countries var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "DEVAT_Countries"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DEVAT_Countries ORDER BY cty_alpha' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00031', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.devat_cty_count"	VALUE = 0>
+	<MvWHILE EXPR = "{ NOT DEVAT_Countries.d.EOF }">
+		<MvASSIGN NAME = "l.devat_cty_count"	VALUE = "{ l.devat_cty_count + 1 }">
+		<MvASSIGN NAME = "l.devat_countries" INDEX = "{ l.devat_cty_count }" MEMBER = "cty_alpha" VALUE = "{ DEVAT_Countries.d.cty_alpha }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "DEVAT_Countries" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Countries">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-TAX-DEV-00043', l.devat_cty_count ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/tax/devat/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_EuropeanVAT_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/devat/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/devat/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/tax/devat/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'EuropeanVATRateList_Load_Query' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATRateList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'EuropeanVATRate_Insert' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATRate_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'EuropeanVATRate_Update' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATRate_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'EuropeanVATRate_Delete' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATRate_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'EuropeanVATCountryList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATCountryList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'EuropeanVATCountry_Insert' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATCountry_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'EuropeanVATCountry_Delete' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_EuropeanVATCountry_Delete( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATRate_Load" PARAMETERS = "rate var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Rate_ID" VALUE = "{ int( g.Rate_ID ) }">
+
+	<MvIF EXPR = "{ NOT DEVAT_Rate_Load_ID( g.Rate_ID, l.rate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00070', 'Failed to load rate' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATCountry_Load" PARAMETERS = "country var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Alpha" VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Alpha ) }">
+
+	<MvIF EXPR = "{ NOT DEVAT_Country_Load_Alpha( g.Alpha, l.country ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00071', 'Failed to load country' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATRateList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.Filter"	VALUE = "{ trim( g.Filter ) }">
+	<MvASSIGN NAME = "g.Sort"	VALUE = "{ trim( g.Sort ) }">
+	<MvASSIGN NAME = "g.Offset"	VALUE = "{ int( g.Offset ) }">
+	<MvASSIGN NAME = "g.Count"	VALUE = "{ int( g.Count ) }">
+	
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'DEVAT_Rates', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, g.Filter, 'descrip,rate' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, g.Sort, 'descrip,rate', 'id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'DEVAT_Rates', l.search_sql, l.search_fields, g.Offset, g.Count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-DEV-00072', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.rate_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT DEVAT_Rates.d.EOF ) AND ( ( g.Count EQ 0 ) OR ( l.rate_count LT g.Count ) ) }">
+			<MvEVAL EXPR = "{ DEVAT_Rate_Read( l.rate ) }">
+			
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.rate_count ) }">
+				"id":			<MvEVAL EXPR = "{ int( l.rate:id ) }">,
+				"descrip":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.rate:descrip ) }">",
+				"rate":			<MvEVAL EXPR = "{ l.rate:rate ROUND 2 }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "DEVAT_Rates" ROWS = 1>
+		</MvWHILE>
+		],
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( g.Offset ) }">
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Rates">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATRate_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.Description" 	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Description ) }">
+	<MvASSIGN NAME = "g.Rate" 			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rate:descrip" 	VALUE = "{ g.Description }">
+	<MvASSIGN NAME = "l.rate:rate" 		VALUE = "{ g.Rate }">
+
+	<MvIF EXPR = "{ NOT DEVAT_Rate_Insert( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00073', 'DEVAT Rate \'' $ l.rate:id $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATRate_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_EuropeanVATRate_Load( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Description" 	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Description ) }">
+	<MvASSIGN NAME = "g.Rate" 			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Rate ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Length_NonNegative_Required( g.Rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Rate', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.rate:descrip" 	VALUE = "{ g.Description }">
+	<MvASSIGN NAME = "l.rate:rate" 		VALUE = "{ g.Rate }">
+
+	<MvIF EXPR = "{ NOT DEVAT_Rate_Update( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00074', 'DEVAT Rate \'' $ l.rate:id $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATRate_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_EuropeanVATRate_Load( l.rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DEVAT_Rate_Delete( l.rate:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00075', 'DEVAT Rate \'' $ l.rate:id $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATCountryList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STCT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.Filter"	VALUE = "{ trim( g.Filter ) }">
+	<MvASSIGN NAME = "g.Sort"	VALUE = "{ trim( g.Sort ) }">
+	<MvASSIGN NAME = "g.Offset"	VALUE = "{ int( g.Offset ) }">
+	<MvASSIGN NAME = "g.Count"	VALUE = "{ int( g.Count ) }">
+	
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'dc.cty_alpha,
+																				 c.name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'DEVAT_Countries', 'dc' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'dc', 'Countries', 'c', 'dc.cty_alpha = c.alpha', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, g.Filter, 'cty_alpha:dc.cty_alpha,name:c.name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, g.Sort, 'cty_alpha:dc.cty_alpha,name:c.name', 'dc.cty_alpha' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'DEVAT_Countries', l.search_sql, l.search_fields, g.Offset, g.Count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-TAX-DEV-00076', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.country_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT DEVAT_Countries.d.EOF ) AND ( ( g.Count EQ 0 ) OR ( l.country_count LT g.Count ) ) }">			
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.country_count ) }">
+				"cty_alpha": 	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( DEVAT_Countries.d.cty_alpha ) }">",
+				"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( DEVAT_Countries.d.name ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "DEVAT_Countries" ROWS = 1>
+		</MvWHILE>
+		],
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( g.Offset ) }">
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DEVAT_Countries">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATCountry_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R:2', 'Alpha', l.alpha ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DEVAT_Country_Load_Alpha( l.alpha, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Alpha', 'Country code \'' $ l.alpha $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DEVAT_Country_Insert( l.alpha ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00077', 'DEVAT Country \'' $ l.alpha $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EuropeanVATCountry_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STAX', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_EuropeanVATCountry_Load( l.country ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DEVAT_Country_Delete( l.country:cty_alpha ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-TAX-DEV-00078', 'DEVAT Country \'' $ l.country:cty_alpha $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Copy Feature (copy_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Copy_Product" PARAMETERS = "module var, source_product var, dest_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DEVAT_Product_Delete( l.dest_product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DEVAT_Products ( product_id, rate_id )
+						  SELECT
+						  	?, rate_id
+						  FROM ' $
+							g.Store_Table_Prefix $ 'DEVAT_Products
+						  WHERE
+							product_id = ?' }"
+			 FIELDS = "l.dest_product:id,
+					   l.source_product:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TAX-DEV-00080', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/tax/devat/functions.mv">
+<MvINCLUDE FILE = "modules/tax/devat/ratelist.mv">
+<MvINCLUDE FILE = "modules/tax/devat/countrylist.mv">

@@ -1,0 +1,256 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-BKC-
+| Next Error Code: 19   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "BasketCharge_Read" PARAMETERS = "basketcharge var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketcharge:basket_id"		VALUE = "{ BasketCharges.d.basket_id }">
+	<MvASSIGN NAME = "l.basketcharge:charge_id"		VALUE = "{ BasketCharges.d.charge_id }">
+	<MvASSIGN NAME = "l.basketcharge:module_id"		VALUE = "{ BasketCharges.d.module_id }">
+	<MvASSIGN NAME = "l.basketcharge:type"			VALUE = "{ BasketCharges.d.type }">
+	<MvASSIGN NAME = "l.basketcharge:descrip"		VALUE = "{ BasketCharges.d.descrip }">
+	<MvASSIGN NAME = "l.basketcharge:amount"		VALUE = "{ BasketCharges.d.amount }">
+	<MvASSIGN NAME = "l.basketcharge:disp_amt"		VALUE = "{ BasketCharges.d.disp_amt }">
+	<MvASSIGN NAME = "l.basketcharge:tax_exempt"	VALUE = "{ BasketCharges.d.tax_exempt }">
+	<MvASSIGN NAME = "l.basketcharge:tax"			VALUE = "{ BasketCharges.d.tax }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Insert" PARAMETERS = "basketcharge var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basketcharge:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00013', 'Basket is provisional' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge:charge_id"	VALUE = "{ StoreKey_Generate( 'BasketCharges' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ BasketCharge_Insert_LowLevel( l.basketcharge ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Insert_LowLevel" PARAMETERS = "basketcharge var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketcharge:descrip" VALUE = "{ substring_var( l.basketcharge:descrip, 1, 100 ) }">
+
+	<MvIF EXPR = "{ ISNULL l.basketcharge:tax }">
+		<MvASSIGN NAME = "l.basketcharge:tax"	VALUE = 0.00>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'BasketCharges
+					      ( basket_id, charge_id, module_id, type, descrip, amount, disp_amt, tax_exempt, tax )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.basketcharge:basket_id, l.basketcharge:charge_id, l.basketcharge:module_id,
+					   l.basketcharge:type, l.basketcharge:descrip, l.basketcharge:amount,
+					   l.basketcharge:disp_amt, l.basketcharge:tax_exempt, l.basketcharge:tax">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Update" PARAMETERS = "basketcharge var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketcharge:descrip" VALUE = "{ substring_var( l.basketcharge:descrip, 1, 100 ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'BasketCharges
+						  SET
+							basket_id	= ?,
+							module_id	= ?,
+							type		= ?,
+							descrip		= ?,
+							amount		= ?,
+							disp_amt	= ?,
+							tax_exempt	= ?,
+							tax			= ?
+						  WHERE
+							charge_id	= ?' }"
+			 FIELDS	= "l.basketcharge:basket_id, l.basketcharge:module_id, l.basketcharge:type, l.basketcharge:descrip,
+					   l.basketcharge:amount, l.basketcharge:disp_amt, l.basketcharge:tax_exempt, l.basketcharge:tax,
+					   l.basketcharge:charge_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Update_Tax" PARAMETERS = "basketcharge var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'BasketCharges
+			 			  SET
+			 				tax			= ?
+			 			  WHERE
+			 				charge_id	= ?' }"
+			 FIELDS = "l.basketcharge:tax,
+			 		   l.basketcharge:charge_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-BKC-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketChargeList_Load_Basket" PARAMETERS = "basket_id, basketcharges var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-BKC-00014', 0 ) }">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketCharges"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ? ORDER BY charge_id' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT BasketCharges.d.EOF }">
+		<MvASSIGN NAME = "l.basketcharge_count" VALUE = "{ l.basketcharge_count + 1 }">
+		<MvEVAL EXPR = "{ BasketCharge_Read( l.basketcharges[ l.basketcharge_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "BasketCharges" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-BKC-00009', l.basketcharge_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Count_Type" PARAMETERS = "basket_id, type" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ EOF_Return( 0 ) }">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketCharges"
+				QUERY	= "{ 'SELECT COUNT(*) AS charge_count FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ? AND type = ?' }"
+				FIELDS	= "l.basket_id, l.type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketCharges.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-BKC-00010' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = "{ BasketCharges.d.charge_count }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+
+	<MvFUNCTIONRETURN VALUE = "{ EOF_Return( l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Load" PARAMETERS = "basket_id, module_id, type, basketcharge var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketCharges"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ? AND module_id = ? AND type = ?' }"
+				FIELDS	= "l.basket_id, l.module_id, l.type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketCharges.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-BKC-00017' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ BasketCharge_Read( l.basketcharge ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketChargeList_Load_Type" PARAMETERS = "basket_id, type, basketcharges var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-BKC-00015', 0 ) }">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketCharges"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ? AND type = ? ORDER BY charge_id' }"
+				FIELDS	= "l.basket_id, l.type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketcharge_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT BasketCharges.d.EOF }">
+		<MvASSIGN NAME = "l.basketcharge_count" VALUE = "{ l.basketcharge_count + 1 }">
+		<MvEVAL EXPR = "{ BasketCharge_Read( l.basketcharges[ l.basketcharge_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "BasketCharges" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-BKC-00011', l.basketcharge_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Delete_All_Basket" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ?' }"
+			 FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Delete_All_Module" PARAMETERS = "basket_id, module_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ? AND module_id = ?' }"
+			 FIELDS	= "l.basket_id, l.module_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Delete_All_Type" PARAMETERS = "basket_id, type" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE basket_id = ? AND type = ?' }"
+			 FIELDS	= "l.basket_id, l.type">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Delete_Charge" PARAMETERS = "charge_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCharges WHERE charge_id = ?' }"
+			 FIELDS	= "l.charge_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BKC-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

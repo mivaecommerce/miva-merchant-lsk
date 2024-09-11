@@ -1,0 +1,540 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-FCT-
+| Next Error Code: 11   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-flatcat">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Categories to Flat File">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0803">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.FlatCategory_File" VALUE = "{ trim( g.FlatCategory_File ) }">
+
+	<MvIF EXPR = "{ len( g.FlatCategory_File ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCategory_File', 'Please specify a file' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ '/' IN g.FlatCategory_File }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCategory_File', 'Please do not include a path in the file name' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatCategory_Email" VALUE = "{ trim( g.FlatCategory_Email ) }">
+
+	<MvIF EXPR = "{ g.FlatCategory_SendEmail AND len( g.FlatCategory_Email ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCategory_Email', 'Please specify a valid email address' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.FlatCategory_Email ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCategory_Email', 'Please specify a valid email address' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( len( g.FlatCategory_Delimiter ) EQ 0 ) AND ( NOT g.FlatCategory_Delimiter_Tab ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatCategory_Delimiter', 'Please specify a delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatCategory_Delimiter_Tab }">
+		<MvASSIGN NAME = "g.FlatCategory_Delimiter" VALUE = "{ asciichar( 9 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT len( g.Category_Check_Code $
+							 g.Category_Check_Name $
+							 g.Category_Check_Page_Title $
+							 g.Category_Check_CanonicalURI $
+							 g.Category_Check_AlternateDisplayPage $
+							 g.Category_Check_Active $
+							 g.Category_Check_Created_Timestamp $
+							 g.Category_Check_Last_Updated_Timestamp $
+							 g.Category_Check_ParentCode ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select at least one field' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Export" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.directory"					VALUE = "{ g.MerchantPath $ 's' $ padl( g.Store:id, 2, '0' ) $ '/export/' }">
+	<MvASSIGN NAME = "l.output"						VALUE = "{ l.directory $ g.FlatCategory_File }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'data', l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ fexists( l.output ) }">
+		<MvIF EXPR = "{ NOT g.FlatCategory_Append }">
+			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.output ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.exported_customfield_count"	VALUE = "{ [ g.Module_Library_Utilities ].CustomFieldSelect_Selected_WithModules( g.FlatCategory_CustomFields, 'fields_cat', l.exported_customfields ) }">
+
+	<MvASSIGN NAME = "g.FlatCategory_Export_Time_Start" VALUE = "{ s.time_t }">
+	<MvIF EXPR = "{ g.FlatCategory_Export_Offset }">
+		<MvASSIGN NAME = "g.Category_Check_CustomFields" VALUE = "{ miva_array_deserialize( g.Category_Check_CustomFields ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+		<MvASSIGN NAME = "l.end_time" VALUE = "20">
+	<MvELSE>
+		<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+	</MvIF>
+
+	<MvCOMMENT>Export Header</MvCOMMENT>
+	<MvIF EXPR = "{ g.FlatCategory_Header }">
+		<MvIF EXPR = "{ NOT FlatCategory_Export_Header( l.output, l.exported_customfields, l.exported_customfield_count ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Export_Category_CustomFields_BuildExecutionPlan( l.exported_customfields, l.exported_customfield_count, l.customfield_plan, l.customfield_struct, l.customfield_values ) }">
+
+	<MvIF EXPR = "{ g.FlatCategory_Format EQ 'legacy' }">
+        <MvASSIGN NAME = "l.fields" VALUE = "{ Create_Fields_For_MvEXPORT( l.exported_customfields, l.exported_customfield_count ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.Total_Category_Count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Category_Temp"
+					QUERY	= "{ 'SELECT COUNT(*) as category_count FROM ' $ g.Store_Table_Prefix $ 'Categories' }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCT-00005', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Total_Category_Count" VALUE = "{ Category_Temp.d.category_count }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Category_Temp">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatCategory_Export_Limit" 				VALUE = 5000>
+	<MvASSIGN NAME = "g.FlatCategory_Export_CurrentRunCount"	VALUE = 0>
+
+	<MvIF EXPR = "{ ISNULL g.Category_Count }">
+		<MvASSIGN NAME = "g.Category_Count" 					VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.FlatCategory_Export_Offset }">
+		<MvASSIGN NAME = "g.FlatCategory_Export_Offset" 		VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Category_Count GE g.Total_Category_Count }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.Category_Count, g.Total_Category_Count ) }">
+
+		<MvIF EXPR = "{ g.Category_Count EQ 1 }">	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( '1 category exported to \'' $ l.output $ '\'' ) }">
+		<MvELSE>									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( g.Category_Count $ ' categories exported to \'' $ l.output $ '\'' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-EXP-FCT-00010', 'Categories exported' ) }">
+
+		<MvIF EXPR = "{ g.FlatCategory_SendEmail }">
+			<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.null" VALUE = "{ Send_Email_Attachment( g.Store:email, g.FlatCategory_Email, '', 'Miva Merchant Category Export', g.FlatCategory_File, l.directory, 'data' ) }">
+		</MvIF>		
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query" 			VALUE = "">
+	<MvASSIGN NAME = "l.parameters" 	VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'cat.id, cat.code, cat.page_title, cat.name, parent.code AS parent, cat.active, cat.disp_order, cat.dt_created, cat.dt_updated, cat.page_code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Categories', 'cat' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'cat', g.Store_Table_Prefix $ 'Categories', 	'parent', 'parent.id = cat.parent_id', 	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query, 'cat.depth, cat.disp_order', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.query" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.parameters ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Categories', l.query, l.parameters, g.FlatCategory_Export_Offset, g.FlatCategory_Export_Limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCT-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Start( 'Category Export Progress', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Show() }">
+
+	<MvASSIGN NAME = "l.time_good" VALUE = 1>
+	<MvWHILE EXPR = "{ NOT Categories.d.EOF AND l.time_good }">
+		<MvASSIGN NAME = "g.Category_Count" 						VALUE = "{ g.Category_Count + 1 }">
+		<MvASSIGN NAME = "g.FlatCategory_Export_CurrentRunCount" 	VALUE = "{ g.FlatCategory_Export_CurrentRunCount + 1 }">
+
+		<MvIF EXPR = "{ NOT Categories.d.dt_created }">	<MvASSIGN NAME = "g.Categories_Created_Formatted" VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "g.Categories_Created_Formatted" VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Categories.d.dt_created, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Categories.d.dt_created, s.miva_language ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Categories.d.dt_updated }">	<MvASSIGN NAME = "g.Categories_Updated_Formatted" VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "g.Categories_Updated_Formatted" VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Categories.d.dt_updated, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Categories.d.dt_updated, s.miva_language ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.Category_Count, g.Total_Category_Count ) }">
+
+		<MvEVAL EXPR = "{ Export_Category_CustomFields( l.customfield_plan, Categories.d.id, l.customfield_struct ) }">
+
+		<MvIF EXPR = "{ g.Category_Check_CanonicalURI }">
+			<MvASSIGN NAME = "l.uri"	VALUE = "">
+			<MvASSIGN NAME = "l.null" 	VALUE = "{ [ g.Module_Feature_URI_DB ].URI_Load_Category_Canonical( Categories.d.id, l.uri ) }">
+		</MvIF>
+
+        <MvIF EXPR = "{ g.FlatCategory_Format EQ 'categoryimport' }">
+            <MvIF EXPR = "{ NOT Modern_Export_Record( l.output, l.uri, l.customfield_values, l.exported_customfield_count ) }">
+                <MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+                <MvFUNCTIONRETURN VALUE = 0>
+            </MvIF>
+        <MvELSE>
+            <MvEXPORT FILE = "{ l.output }" FIELDS = "{ l.fields }" DELIMITER = "{ g.FlatCategory_Delimiter }">
+            <MvIF EXPR = "{ g.MvEXPORT_Error }">
+                <MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+                <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCT-00004', g.MvEXPORT_Error ) }">
+            </MvIF>
+
+			<MvFOREACH ITERATOR = "l.customfield_value" ARRAY = "l.customfield_values" COUNT = "{ l.exported_customfield_count }">
+				<MvASSIGN NAME = "l.customfield_value"	VALUE = "">
+			</MvFOREACH>
+        </MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatCategory_Export_Time_Start ) GT l.end_time }">
+			<MvASSIGN NAME = "l.time_good" 							VALUE = 0>
+			<MvASSIGN NAME = "g.FlatCategory_Export_NeedRefresh" 	VALUE = 1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+	</MvWHILE>
+
+	<MvASSIGN NAME = "g.FlatCategory_Export_Offset" VALUE = "{ g.FlatCategory_Export_Offset + g.FlatCategory_Export_CurrentRunCount }">
+
+	<MvIF EXPR = "{ ( Categories.d.EOF AND g.Category_Count LT g.Total_Category_Count ) OR g.Category_Count GE g.Total_Category_Count }">
+		<MvASSIGN NAME = "g.FlatCategory_Export_NeedRefresh" 	VALUE = 1>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.FlatCategory_Export_NeedRefresh }">
+		<MvASSIGN NAME = "g.FlatCategory_Append" 	VALUE = 1>
+		<MvASSIGN NAME = "g.FlatCategory_Header"	VALUE = 0>
+
+		<MvHIDE FIELDS = "g.Category_Count, g.FlatCategory_Format, g.FlatCategory_Delimiter_Tab, g.FlatCategory_Delimiter, 
+						  g.FlatCategory_Export_Offset, g.FlatCategory_File, g.FlatCategory_Append, g.FlatCategory_Export_Time_Start, 
+						  g.Module_Code, g.FlatCategory_CustomFields, g.Progress_Bar, g.Total_Category_Count, g.FlatCategory_Email, g.FlatCategory_SendEmail,
+						  g.Category_Check_Code, g.Category_Check_Name, g.Category_Check_Page_Title, g.Category_Check_ParentCode, g.Category_Check_CanonicalURI,
+						  g.Category_Check_AlternateDisplayPage, g.Category_Check_Active, g.Category_Check_Created_Timestamp, g.Category_Check_Last_Updated_Timestamp, g.FlatCategory_Header">
+
+		<script type="text/javascript">
+			function exp_continue()
+			{
+				document.forms[ Screen ].submit();
+			}
+			window.onload = exp_continue;
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_End() }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Load_Fields }">
+		<MvIF EXPR = "{ g.Reset NE 'No' }">
+			<MvASSIGN NAME = "g.FlatCategory_File"						VALUE = "">
+			<MvASSIGN NAME = "g.FlatCategory_Append"					VALUE = "">
+			<MvASSIGN NAME = "g.FlatCategory_Format"		   			VALUE = "">
+			<MvASSIGN NAME = "g.FlatCategory_Delimiter_Tab"				VALUE = "">
+			<MvASSIGN NAME = "g.FlatCategory_Delimiter"					VALUE = "">
+			<MvASSIGN NAME = "g.FlatCategory_Header"					VALUE = "">
+
+			<MvASSIGN NAME = "g.Category_Check_Code"					VALUE = 1>
+			<MvASSIGN NAME = "g.Category_Check_Name"					VALUE = 1>
+			<MvASSIGN NAME = "g.Category_Check_Page_Title"				VALUE = 1>
+			<MvASSIGN NAME = "g.Category_Check_ParentCode"				VALUE = 1>
+			<MvASSIGN NAME = "g.Category_Check_AlternateDisplayPage"	VALUE = 1>
+			<MvASSIGN NAME = "g.Category_Check_Active"					VALUE = 1>
+			<MvASSIGN NAME = "g.Category_Check_Created_Timestamp"		VALUE = 0>
+			<MvASSIGN NAME = "g.Category_Check_Last_Updated_Timestamp"	VALUE = 0>
+			<MvASSIGN NAME = "g.Category_Check_CanonicalURI"			VALUE = 1>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].InitializeCustomFieldSelect( l.empty_customfield_list, g.FlatCategory_CustomFields ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL g.FlatCategory_File }">			<MvASSIGN NAME = "g.FlatCategory_File"				VALUE = "categories.csv">	</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCategory_Append }">		<MvASSIGN NAME = "g.FlatCategory_Append"			VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCategory_Format }">	    <MvASSIGN NAME = "g.FlatCategory_Format" 	        VALUE = "categoryimport">   </MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCategory_Delimiter_Tab }">	<MvASSIGN NAME = "g.FlatCategory_Delimiter_Tab" 	VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCategory_Delimiter }">		<MvASSIGN NAME = "g.FlatCategory_Delimiter" 		VALUE = ",">				</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatCategory_Header }">		<MvASSIGN NAME = "g.FlatCategory_Header"			VALUE = 1>					</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( 'Export Categories To Flat File', 'EXPT', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_JavaScript( 'Exporting Categories to Flat File', 'EXPT', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_CSS() }">
+
+	<script language="JavaScript">
+<!--
+HaveCustomReset = 1;
+
+function CustomReset()
+{
+	document.EXPT.Reset.value = 'Yes';
+}
+//-->
+	</script>
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( 'Export Categories To Flat File', 'EXPT', '' ) }">
+
+	<input type="hidden" name="Reset" value="No">
+	<MvHIDE FIELDS = "g.Module_Code">
+
+	<MvDO FILE = "{ g.Module_Admin }" NAME = "l.ok" VALUE = "{ BeginContent() }">
+	<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Destination', 110 ) }">
+				<tr><td nowrap>
+					<font face="Arial, Helvetica" size=-1><b>
+					Export Categories to File:
+					</font></b>
+				</td><td width="100%">
+					<input type="text" name="FlatCategory_File" size=40 value = "{ encodeentities( g.FlatCategory_File ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>If File Exists:</b>
+				</td><td width="100%">
+					<MvIF EXPR = "{ g.FlatCategory_Append }">
+						<input type="radio" name="FlatCategory_Append" value="Yes" checked>Append To File<br>
+						<input type="radio" name="FlatCategory_Append" value="">Replace File
+					<MvELSE>
+						<input type="radio" name="FlatCategory_Append" value="Yes">Append To File
+
+						<br>
+
+						<input type="radio" name="FlatCategory_Append" value="" checked>Replace File
+					</MvIF>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					Email File To:
+				</td><td width="100%" nowrap>
+					<MvIF EXPR = "{ NOT g.FlatCategory_SendEmail }">
+						<input type="radio" name="FlatCategory_SendEmail" value=0 checked>Do Not Email<br>
+						<input type="radio" name="FlatCategory_SendEmail" value=1>
+					<MvELSE>
+						<input type="radio" name="FlatCategory_SendEmail" value=0>Do Not Email<br>
+						<input type="radio" name="FlatCategory_SendEmail" value=1 checked>
+					</MvIF>
+
+					<input type="text" size=40 name="FlatCategory_Email" value="{ encodeentities( g.Store:email ) }">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td><td width = "100%">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Format', 110 ) }">
+				<tr><td valign="top" nowrap>
+					<b>File Format:</b>
+				</td><td width="100%">
+					<select name="FlatCategory_Format">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'categoryimport', g.FlatCategory_Format, 'Category Import' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'legacy',         g.FlatCategory_Format, 'Legacy Import Categories From Flat File' ) }">
+					</select>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>Delimiter:</b>
+				</td><td width="100%">
+					<table border=0 cellpadding = 0 cellspacing = 0>
+					<tr><td>
+						<MvIF EXPR = "{ g.FlatCategory_Delimiter_Tab }">
+							<input type="radio" name="FlatCategory_Delimiter_Tab" value="Yes" checked> Tab
+						<MvELSE>
+							<input type="radio" name="FlatCategory_Delimiter_Tab" value="Yes"> Tab
+						</MvIF>
+					</td><td align="left" valign="middle">
+						&nbsp;
+					</td></tr>
+
+					<tr><td>
+						<MvIF EXPR = "{ g.FlatCategory_Delimiter_Tab }">
+							<input type="radio" name="FlatCategory_Delimiter_Tab" value=""> Other:
+						<MvELSE>
+							<input type="radio" name="FlatCategory_Delimiter_Tab" value="" checked> Other:
+						</MvIF>
+					</td><td align="left" valign="middle">
+						<input type="text" name="FlatCategory_Delimiter" value="{ encodeentities( g.FlatCategory_Delimiter ) }" size=10>
+					</td></tr>
+					</table>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					&nbsp;
+				</td><td width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.FlatCategory_Header, 'FlatCategory_Header', 'Yes', 'Export Field Names as Header' ) }">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Fields to Export', 'auto' ) }">
+				<tr><td valign="top" nowrap>
+					<b>Standard Fields:</b>
+				</td><td align="left" valign="middle" colspan=3>
+					<table border=0 cellpadding = 2 cellspacing = 0>
+						<tr><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_Code, 'Category_Check_Code', 'Yes', 'Code' ) }">
+						</td><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_Name, 'Category_Check_Name', 'Yes', 'Name' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_Page_Title, 'Category_Check_Page_Title', 'Yes', 'Page Title' ) }">
+						</td><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_Active, 'Category_Check_Active', 'Yes', 'Active' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_Created_Timestamp, 'Category_Check_Created_Timestamp', 'Yes', 'Created Timestamp' ) }">
+						</td><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_Last_Updated_Timestamp, 'Category_Check_Last_Updated_Timestamp', 'Yes', 'Last Updated Timestamp' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_ParentCode, 'Category_Check_ParentCode', 'Yes', 'Parent Category Code' ) }">
+						</td><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_AlternateDisplayPage, 'Category_Check_AlternateDisplayPage', 'Yes', 'Alternate Display Page' ) }">
+						</td></tr>
+
+						<tr><td align="left">
+							<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawCheckbox( g.Category_Check_CanonicalURI, 'Category_Check_CanonicalURI', 'Yes', 'Canonical URI' ) }">
+						</td><td align="left">
+							&nbsp;
+						</td></tr>
+					</table>
+				</td></tr>
+
+				<MvASSIGN NAME = "l.customfield_count"	VALUE = "{ [ g.Module_Library_Utilities ].CategoryCustomFieldList_Load( l.customfields ) }">
+				<MvIF EXPR = "{ l.customfield_count }">
+					<tr><td valign="top" nowrap>
+						Custom Fields:
+					</td><td width="100%" nowrap>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCustomFieldSelect( 'FlatCategory_CustomFields', g.FlatCategory_CustomFields, l.customfields, l.customfield_count ) }">
+					</td></tr>
+				</MvIF>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+	</table>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Buttons( 'Export', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatCategory_Export_Header" PARAMETERS = "output, customfields var, customfield_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.FlatCategory_Format EQ 'legacy' }">
+        <MvIF EXPR = "{ NOT Build_Legacy_Header( l.output, l.customfields, l.customfield_count ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+
+	<MvELSEIF EXPR = "{ g.FlatCategory_Format EQ 'categoryimport' }">
+        <MvIF EXPR = "{ NOT Build_Modern_Header( l.output, l.customfields, l.customfield_count ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+	</MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Build_Legacy_Header" PARAMETERS = "output, customfields var, customfield_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Category_Check_Code }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_CODE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Name }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_NAME' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Page_Title }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_PAGE_TITLE' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Active }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_ACTIVE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Created_Timestamp }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_CREATED_TIMESTAMP' ) }">		</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Last_Updated_Timestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_LAST_UPDATED_TIMESTAMP' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_ParentCode }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_PARENT_CODE' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_AlternateDisplayPage }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'ALTERNATE_DISPLAY_PAGE' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_CanonicalURI }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, 'CATEGORY_CANONICAL_URI' ) }">			</MvIF>
+
+    <MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ l.customfield_count }">
+        <MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatCategory_Delimiter, l.customfield:code ) }">
+    </MvFOREACH>
+
+    <MvEXPORT FILE = "{ l.output }" FIELDS = "l.header" DELIMITER = "">
+    <MvIF EXPR = "{ g.MvEXPORT_Error }">
+        <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FCT-00008', g.MvEXPORT_Error ) }">
+    </MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Build_Modern_Header" PARAMETERS = "output, customfields, customfield_count" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Category_Check_Code }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_CODE' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Name }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_NAME' ) }">						</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Page_Title }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_PAGE_TITLE' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Active }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_ACTIVE' ) }">					</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Created_Timestamp }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_CREATED_TIMESTAMP' ) }">		</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Last_Updated_Timestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_LAST_UPDATED_TIMESTAMP' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_ParentCode }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_PARENT_CODE' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_AlternateDisplayPage }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'ALTERNATE_DISPLAY_PAGE' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_CanonicalURI }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, 'CATEGORY_CANONICAL_URI' ) }">			</MvIF>
+
+    <MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ l.customfield_count }">
+        <MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatCategory_Delimiter, toupper( glosub( [ g.Module_Root $ l.customfield:module:module ].Module_Category_Field_Name( l.customfield:module, l.customfield:code ), ' ', '_' ) ) ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.header ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_Fields_For_MvEXPORT" PARAMETERS = "customfields var, customfield_count" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Category_Check_Code }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Categories.d.code' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Name }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Categories.d.name' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Page_Title }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Categories.d.page_title' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Active }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Categories.d.active' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Created_Timestamp }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'g.Categories_Created_Formatted' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Last_Updated_Timestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'g.Categories_Updated_Formatted' ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_ParentCode }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Categories.d.parent' ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_AlternateDisplayPage }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Categories.d.page_code' ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_CanonicalURI }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.uri:uri' ) }">						</MvIF>
+
+    <MvFOREACH ITERATOR = "l.field" INDEX = "l.pos" ARRAY = "l.customfields" COUNT = "{ l.customfield_count }">
+        <MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.customfield_values[' $ l.pos $ ']' ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ l.fields }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Modern_Export_Record" PARAMETERS = "output, uri var, customfield_values var, customfield_count" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ g.Category_Check_Code }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, Categories.d.code ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Name }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, Categories.d.name ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Page_Title }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, Categories.d.page_title ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Active }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, Categories.d.active ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Created_Timestamp }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, g.Categories_Created_Formatted ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_Last_Updated_Timestamp }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, g.Categories_Updated_Formatted ) }">	</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_ParentCode }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, Categories.d.parent ) }">				</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_AlternateDisplayPage }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, Categories.d.page_code ) }">			</MvIF>
+    <MvIF EXPR = "{ g.Category_Check_CanonicalURI }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, l.uri:uri ) }">						</MvIF>
+
+    <MvFOREACH ITERATOR = "l.value" ARRAY = "l.customfield_values" COUNT = "{ l.customfield_count }">
+        <MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatCategory_Delimiter, l.value ) }">
+		<MvASSIGN NAME = "l.value"	VALUE = "">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.record ) }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/export/export_include.mv">

@@ -1,0 +1,1615 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-PAY-
+| Next Error Code: 59   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_OrderPayment" PARAMETERS = "orderpayment var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":					<MvEVAL EXPR = "{ int( l.orderpayment:id ) }">,
+	"order_id":				<MvEVAL EXPR = "{ int( l.orderpayment:order_id ) }">,
+	"type":					<MvEVAL EXPR = "{ int( l.orderpayment:type ) }">,
+	"refnum":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderpayment:refnum ) }">",
+	"amount":				<MvEVAL EXPR = "{ l.orderpayment:amount ROUND 2 }">,
+	"formatted_amount":		"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderpayment:amount ) ) }">",
+	"available":			<MvEVAL EXPR = "{ l.orderpayment:available ROUND 2 }">,
+	"formatted_available":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderpayment:available ) ) }">",
+	"dtstamp":				<MvEVAL EXPR = "{ int( l.orderpayment:dtstamp ) }">,
+	"expires":				<MvEVAL EXPR = "{ int( l.orderpayment:expires ) }">,
+	"pay_id":				<MvEVAL EXPR = "{ int( l.orderpayment:pay_id ) }">,
+	"pay_secid":			<MvEVAL EXPR = "{ int( l.orderpayment:pay_secid ) }">,
+	"currency":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderpayment:currency ) }">",
+	"environ":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderpayment:environ ) }">",
+	"level":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderpayment:level ) }">"
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPaymentList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Order_Load( l.order ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderpayment_count"	VALUE = "{ [ g.Library_DB ].OrderPaymentList_Load_Order( l.order:id, l.orderpayments ) }">
+	<MvIF EXPR = "{ l.orderpayment_count EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+		<MvFOREACH ITERATOR = "l.orderpayment" ARRAY = "l.orderpayments" COUNT = "{ l.orderpayment_count }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_count ) }">
+			<MvEVAL EXPR = "{ JSON_OrderPayment( l.orderpayment ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+		</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AllOrderPaymentList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "{ JSON_BaseOrderList_Filters() }">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'op.type',		'' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'op.refnum',	'' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(	l.available_filters, 'op.amount',	'' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(	l.available_filters, 'op.available','' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'op.dtstamp',	'payment_dtstamp' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'op.expires',	'' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'op.ip',		'payment_ip' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'opm.name',	'payment_module' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'op.currency',	'payment_currency' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'op.environ',	'payment_environ' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'op.level',	'payment_level' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'ord.*,
+
+																		  op.id			AS payment_id,
+																		  op.type		AS payment_type,
+																		  op.refnum		AS payment_refnum,
+																		  op.available	AS payment_available,
+																		  op.expires	AS payment_expires,
+																		  op.ip			AS payment_ip,
+																		  op.amount		AS payment_amount,
+																		  op.dtstamp	AS payment_dtstamp,
+																		  op.currency	AS payment_currency,
+																		  op.environ	AS payment_environ,
+																		  op.level		AS payment_level' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Orders', 'ord' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'op.id IS NOT NULL', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ord', g.Store_Table_Prefix $ 'OrderPayments', 'op', 'ord.id = op.order_id',	'' ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter_Callback_With_CustomFields( l.search_query, l.filter, l.available_filters, g.Module_JSON, 'JSON_OrderList_Load_Query_Filter', 'JSON_AllOrderPaymentList_Load_Query_Advanced_Filter', 'JSON_Order_CustomFields_Query_Filter', l.ondemandcolumns ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy_Callback_With_CustomFields( l.search_query, l.sort, JSON_BaseOrderList_OrderBy() $ ',op.type,op.refnum,op.available,op.expires,payment_ip:op.ip,op.amount,payment_dtstamp:op.dtstamp,payment_currency:op.currency,payment_environ:op.environ,payment_level:op.level', 'op.id', g.Module_JSON, 'JSON_Order_CustomFields_Query_OrderBy' ) }">
+
+	<MvEVAL EXPR = "{ JSON_AllOrderPaymentList_Joins( l.filter, l.sort, l.ondemandcolumns, l.joins ) }">
+
+	<MvIF EXPR = "{ l.joins:customers }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'cust.login',	'cust_login' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'cust.pw_email',	'cust_pw_email' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ord', g.Store_Table_Prefix $ 'Customers', 'cust', 'cust.id = ord.cust_id', '' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.joins:businessaccounts }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'ba.title',		'business_title' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ord', g.Store_Table_Prefix $ 'BusinessAccounts', 'ba', 'cust.account_id = ba.id', '' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.joins:modules }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'opm.name',		'payment_module' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ord', 'Modules', 'opm', 'opm.id = op.pay_id', '' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Query_Callback_With_CustomFields( l.search_query, l.filter, g.Module_JSON, 'JSON_Order_CustomFields_Query' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" 	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Orders', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00053', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Order_CustomFields_Initialize( l.filter, l.customfield_state ) }">
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Orders.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.order_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].v56_Order_Read( l.order ) }">
+
+			<MvIF EXPR = "{ l.ondemandcolumns:cust_login }">		<MvASSIGN NAME = "l.order:cust_login"		VALUE = "{ Orders.d.cust_login }">		</MvIF>
+			<MvIF EXPR = "{ l.ondemandcolumns:cust_pw_email }">		<MvASSIGN NAME = "l.order:cust_pw_email"	VALUE = "{ Orders.d.cust_pw_email }">	</MvIF>
+			<MvIF EXPR = "{ l.ondemandcolumns:business_title }">	<MvASSIGN NAME = "l.order:business_title"	VALUE = "{ Orders.d.business_title }">	</MvIF>
+			<MvIF EXPR = "{ l.ondemandcolumns:payment_module }">	<MvASSIGN NAME = "l.order:payment_module"	VALUE = "{ Orders.d.payment_module }">	</MvIF>
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.order_count ) }">
+			<MvEVAL EXPR = "{ JSON_Order_OnDemandColumns( l.order, l.ondemandcolumns ) }">
+
+			, "orderpayment":
+			{
+				"id":					<MvEVAL EXPR = "{ int( Orders.d.payment_id ) }">,
+				"order_id":				<MvEVAL EXPR = "{ int( Orders.d.id ) }">,
+				"type":					<MvEVAL EXPR = "{ int( Orders.d.payment_type ) }">,
+				"refnum":				"<MvEVAL EXPR = "{ JSON_Encode( Orders.d.payment_refnum ) }">",
+				"amount":				<MvEVAL EXPR = "{ Orders.d.payment_amount ROUND 2 }">,
+				"formatted_amount":		"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Orders.d.payment_amount ) ) }">",
+				"available":			<MvEVAL EXPR = "{ Orders.d.payment_available ROUND 2 }">,
+				"formatted_available":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Orders.d.payment_available ) ) }">",
+				"dtstamp":				<MvEVAL EXPR = "{ int( Orders.d.payment_dtstamp ) }">,
+				"ip":					"<MvEVAL EXPR = "{ JSON_Encode( Orders.d.payment_ip ) }">",
+				"currency":				"<MvEVAL EXPR = "{ JSON_Encode( Orders.d.payment_currency ) }">",
+				"environ":				"<MvEVAL EXPR = "{ JSON_Encode( Orders.d.payment_environ ) }">",
+				"level":				"<MvEVAL EXPR = "{ JSON_Encode( Orders.d.payment_level ) }">"
+			}
+
+			<MvEVAL EXPR = "{ JSON_Order_CustomFields_With_View( l.customfield_state, Orders.d.id, 'Orders' ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+		</MvWHILE>
+		],
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">
+	}
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AllOrderPaymentList_Joins" PARAMETERS = "filter var, sort var, ondemandcolumns var, joins var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.sort_field"	VALUE = "{ [ g.Library_DB ].SQL_Sort_Field( l.sort, l.null ) }">
+
+	<MvIF EXPR = "{ l.ondemandcolumns:cust_login }">												<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	<MvELSEIF EXPR = "{ l.ondemandcolumns:cust_pw_email }">											<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	<MvELSEIF EXPR = "{ l.sort_field EQ 'cust_login' }">											<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	<MvELSEIF EXPR = "{ l.sort_field EQ 'cust_pw_email' }">											<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	<MvELSEIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'cust_login', l.null ) }">		<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	<MvELSEIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'cust_pw_email', l.null ) }">	<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	<MvELSE>																						<MvASSIGN NAME = "l.joins:customers"		VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.ondemandcolumns:business_title }">											<MvASSIGN NAME = "l.joins:businessaccounts"	VALUE = 1>
+	<MvELSEIF EXPR = "{ l.sort_field EQ 'business_title' }">										<MvASSIGN NAME = "l.joins:businessaccounts"	VALUE = 1>
+	<MvELSEIF EXPR = "{ JSON_Filter_Contains( l.filter, 'BusinessAccount_ID' ) }">					<MvASSIGN NAME = "l.joins:businessaccounts" VALUE = 1>
+	<MvELSEIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'business_title', l.null ) }">	<MvASSIGN NAME = "l.joins:businessaccounts"	VALUE = 1>
+	<MvELSE>																						<MvASSIGN NAME = "l.joins:businessaccounts"	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.joins:businessaccounts }">													<MvASSIGN NAME = "l.joins:customers"		VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.ondemandcolumns:payment_module }">											<MvASSIGN NAME = "l.joins:modules"			VALUE = 1>
+	<MvELSEIF EXPR = "{ l.sort_field EQ 'payment_module' }">										<MvASSIGN NAME = "l.joins:modules"			VALUE = 1>
+	<MvELSEIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'payment_module', l.null ) }">	<MvASSIGN NAME = "l.joins:modules"			VALUE = 1>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPaymentFieldList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'OrderPayment_ID', l.orderpayment_id ) OR
+					NOT JSON_Input_Text(	'o', 'Passphrase',		l.passphrase ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) OR
+					NOT [ g.Library_DB ].Module_Load_ID( l.orderpayment:pay_id, l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00014', 'Not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pay_data"			VALUE = "{ miva_array_deserialize( l.orderpayment:pay_data ) }">
+	<MvASSIGN NAME = "l.decrypted"			VALUE = "{ [ g.Library_Crypto ].Decrypt_OrderPayment( 'Order Payment Display', l.orderpayment, l.passphrase, l.secure_data ) }">
+
+	<MvIF EXPR = "{ NOT l.decrypted }">
+		<MvASSIGN NAME = "l.decrypt_error"	VALUE = "{ g.Error_Code $ ': ' $ g.Error_Message }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.desc"				VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Report_Description( l.module, l.pay_data ) }">
+	<MvASSIGN NAME = "l.fields"				VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Report_Fields( l.module, l.pay_data, l.secure_data ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		<MvIF EXPR = "{ l.orderpayment:pay_secid EQ 0 }">
+			"decrypt_status":	"not_encrypted",
+		<MvELSEIF EXPR = "{ l.decrypted }">
+			"decrypt_status":	"decrypted",
+		<MvELSE>
+			"decrypt_status":	"not_decrypted",
+			"decrypt_error":	"<MvEVAL EXPR = "{ JSON_Encode( l.decrypt_error ) }">",
+		</MvIF>
+		"description":			"<MvEVAL EXPR = "{ JSON_Encode( l.desc ) }">",
+		"ip":					"<MvEVAL EXPR = "{ JSON_Encode( l.orderpayment:ip ) }">",
+		"module":
+		{
+								<MvEVAL EXPR = "{ JSON_Module( l.module ) }">
+		}
+
+		<MvIF EXPR = "{ NOT ISNULL l.fields }">
+			,
+			"fields":
+			[
+				<MvFOREACH ITERATOR = "l.field" ARRAY = "l.field_array" COUNT = "{ miva_splitstring( l.fields, ',', l.field_array, 'trim' ) }">
+					<MvASSIGN NAME = "l.label"		VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Report_Label( l.module, l.field ) }">
+
+					<MvIF EXPR = "{ l.module:api_ver LT 4.14 }">
+						<MvASSIGN NAME = "l.value"	VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Report_Value( l.module, l.field ) }">
+					<MvELSE>
+						<MvASSIGN NAME = "l.value"	VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Report_Value( l.module, l.field, l.pay_data, l.secure_data ) }">
+					</MvIF>
+
+					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.field_count ) }">
+					"label":	"<MvEVAL EXPR = "{ JSON_Encode( l.label ) }">",
+					"value":	"<MvEVAL EXPR = "{ JSON_Encode( l.value ) }">"
+					<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+				</MvFOREACH>
+			]
+		</MvIF>
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EncryptionKey_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Encryption_ID"	VALUE = "{ int( g.Encryption_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Encryption_Load_ID( g.Encryption_ID, l.key ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"id":			<MvEVAL EXPR = "{ l.key:id }">,
+		"dt_created":	"<MvEVAL EXPR = "{ JSON_Encode( l.key:dt_created ) }">",
+		"prompt":		"<MvEVAL EXPR = "{ JSON_Encode( l.key:prompt ) }">",
+		"refcount":		<MvEVAL EXPR = "{ l.key:refcount }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EncryptionKeyList" PARAMETERS = "query, fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "Encryption"
+				QUERY 	= "{ l.query }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.encryption_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ NOT Encryption.d.EOF }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.encryption_count ) }">
+		"id":			<MvEVAL EXPR = "{ int( Encryption.d.id ) }">,
+		"dt_created":	"<MvEVAL EXPR = "{ JSON_Encode( Encryption.d.dt_created ) }">",
+		"prompt":		"<MvEVAL EXPR = "{ JSON_Encode( Encryption.d.prompt ) }">",
+		"refcount":		<MvEVAL EXPR = "{ int( Encryption.d.refcount ) }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Encryption" ROWS = 1>
+	</MvWHILE>
+	]
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Encryption">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EncryptionKeyList_Load_Batch" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Batch_ID"		VALUE = "{ int( g.Batch_ID ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_EncryptionKeyList( 'SELECT DISTINCT
+															e.id			AS id,
+															e.dt_created	AS dt_created,
+															e.prompt		AS prompt,
+															e.refcount		AS refcount
+														  FROM
+															' $ g.Store_Table_Prefix $ 'Orders o,
+															' $ g.Store_Table_Prefix $ 'OrderPayments p,
+															' $ g.Store_Table_Prefix $ 'Encryption e
+														  WHERE
+															o.batch_id	= ?				AND
+															p.order_id	= o.id			AND
+															e.id		= p.pay_secid
+														  ORDER BY
+															id',
+														 'g.Batch_ID' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EncryptionKeyList_Load_OrderList" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count"	VALUE = "{ JSON_Array_Integer( g.Order_IDs, g.JSON_EncryptionKeyList_Load_Capture_OrderList_Order_IDs ) }">
+	<MvIF EXPR = "{ l.order_count EQ 0 }">
+		<MvEVAL EXPR = "{ JSON_Response_Start() }">
+		[
+		]
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"			VALUE = "{ 'SELECT DISTINCT
+														e.id			AS id,
+														e.dt_created	AS dt_created,
+														e.prompt		AS prompt,
+														e.refcount		AS refcount
+													FROM
+														' $ g.Store_Table_Prefix $ 'OrderPayments p,
+														' $ g.Store_Table_Prefix $ 'Encryption e
+													WHERE
+														e.id			= p.pay_secid	AND
+														( p.order_id	= ?' }">
+	<MvASSIGN NAME = "l.fields"			VALUE = "g.JSON_EncryptionKeyList_Load_Capture_OrderList_Order_IDs[ 1 ]">
+
+	<MvASSIGN NAME = "l.order_pos"		VALUE = 2>
+	<MvWHILE EXPR = "{ l.order_pos LE l.order_count }">
+		<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' OR p.order_id = ?' }">
+		<MvASSIGN NAME = "l.fields"		VALUE = "{ l.fields $ ', g.JSON_EncryptionKeyList_Load_Capture_OrderList_Order_IDs[ ' $ l.order_pos $ ' ]' }">
+
+		<MvASSIGN NAME = "l.order_pos"	VALUE = "{ l.order_pos + 1 }">
+	</MvWHILE>
+
+	<MvASSIGN NAME = "l.query"			VALUE = "{ l.query $ ' ) ORDER BY id' }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_EncryptionKeyList( l.query, l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EncryptionKeyList_Load_Capture_Batch" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Batch_ID"		VALUE = "{ int( g.Batch_ID ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_EncryptionKeyList( 'SELECT DISTINCT
+															e.id			AS id,
+															e.dt_created	AS dt_created,
+															e.prompt		AS prompt,
+															e.refcount		AS refcount
+														  FROM
+															' $ g.Store_Table_Prefix $ 'Orders o,
+															' $ g.Store_Table_Prefix $ 'OrderPayments p,
+															' $ g.Store_Table_Prefix $ 'Encryption e
+														  WHERE
+															o.batch_id	= ?				AND
+															p.order_id	= o.id			AND
+															( p.type	= 1				OR
+															  p.type	= 3 )			AND
+															p.available	> 0				AND
+															e.id		= p.pay_secid
+														  ORDER BY
+															id',
+														 'g.Batch_ID' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_EncryptionKeyList_Load_Capture_OrderList" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count"	VALUE = "{ JSON_Array_Integer( g.Order_IDs, g.JSON_EncryptionKeyList_Load_Capture_OrderList_Order_IDs ) }">
+	<MvIF EXPR = "{ l.order_count EQ 0 }">
+		<MvEVAL EXPR = "{ JSON_Response_Start() }">
+		[
+		]
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"			VALUE = "{ 'SELECT DISTINCT
+														e.id			AS id,
+														e.dt_created	AS dt_created,
+														e.prompt		AS prompt,
+														e.refcount		AS refcount
+													FROM
+														' $ g.Store_Table_Prefix $ 'OrderPayments p,
+														' $ g.Store_Table_Prefix $ 'Encryption e
+													WHERE
+														e.id			= p.pay_secid	AND
+														( p.type		= 1				OR
+														  p.type		= 3 )			AND
+														p.available		> 0				AND
+														( p.order_id	= ?' }">
+	<MvASSIGN NAME = "l.fields"			VALUE = "g.JSON_EncryptionKeyList_Load_Capture_OrderList_Order_IDs[ 1 ]">
+
+	<MvASSIGN NAME = "l.order_pos"		VALUE = 2>
+	<MvWHILE EXPR = "{ l.order_pos LE l.order_count }">
+		<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' OR p.order_id = ?' }">
+		<MvASSIGN NAME = "l.fields"		VALUE = "{ l.fields $ ', g.JSON_EncryptionKeyList_Load_Capture_OrderList_Order_IDs[ ' $ l.order_pos $ ' ]' }">
+
+		<MvASSIGN NAME = "l.order_pos"	VALUE = "{ l.order_pos + 1 }">
+	</MvWHILE>
+
+	<MvASSIGN NAME = "l.query"			VALUE = "{ l.query $ ' ) ORDER BY id' }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_EncryptionKeyList( l.query, l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Order_Authorize_GenerateMivaPayRequest" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Order_Load( l.order ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'PaymentCardType_ID', l.paymentcardtype_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) OR
+					NOT [ g.Module_Feature_URI_DB ].URISettings_Load( l.uri_settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.mivapay_settings:enabled" VALUE = "{ [ g.Module_Feature_PAY_UT ].MivaPay_Verify_Enabled_WithCardTypes( l.mivapay_settings, l.paymentcardtypes, l.paymentcardtype_count ) }">
+
+	<MvIF EXPR = "{ NOT l.mivapay_settings:enabled }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00036', 'MivaPay has not been enabled/configured. Please enable MivaPay in settings and link at least one Payment Card Type to a payment method supporting MivaPay.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.paymentcardtype_id EQ -1 }">
+		<MvIF EXPR = "{ NOT l.mivapay_settings:pct_group }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00041', 'Invalid payment method' ) }">
+		<MvELSEIF EXPR = "{ l.paymentcardtype_count EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00039', 'No payment card types have been configured.' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID( l.paymentcardtype_id, l.paymentcardtype ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.module_code" VALUE = "{ l.paymentcardtype:mod_code }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.module_code, l.module ) OR
+						NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00038', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.capabilities"			VALUE = "">
+		<MvASSIGN NAME = "l.method_capabilities"	VALUE = "">
+
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.capabilities ) }"> </MvIF>
+		<MvIF EXPR = "{ l.module:api_ver GE 9.06 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.paymentcardtype:meth_code, l.method_capabilities ) }"> </MvIF>
+
+		<MvIF EXPR = "{ NOT l.method_capabilities:mivapay }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00037', 'MivaPay is not supported for the selected payment. Please ensure that the linked payment method supports MivaPay.' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.xml">
+		<MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"><PaymentFormRequest>
+			<Merchant><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.mivapay_settings:merchant ) }"></Merchant>
+			<Origin><MvEVAL EXPR = "{ miva_cdata_encode( [ g.Module_Library_Utilities ].RequestOrigin() ) }"></Origin>
+			<SessionData><MvEVAL EXPR = "{ miva_cdata_encode( [ g.Module_Feature_PAY_UT ].MivaPay_SessionData( 'order:' $ l.order:id, g.Session_ID ) ) }"></SessionData>
+
+			<MvCAPTURE VARIABLE = "l.css">
+				[
+					<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_UT ].MivaPay_Default_CSS() }">
+					, {
+						"selector": ".form_row label",
+						"properties":
+						{
+							"vertical-align": "top",
+							"padding": "7px 5px 0 2px",
+							"font-size": "11px",
+							"width": "128px"
+						}
+					},
+					{
+						"selector": ".form_row select, .form_row input[type=\"text\"]",
+						"properties":
+						{
+							"border-color": "#ccc"
+						}
+					}
+				]
+			</MvCAPTURE>
+
+			<StyleSheet>
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.css ) }">
+			</StyleSheet>
+
+			<Prompts>
+				<FirstName />
+				<LastName />
+				<MvIF EXPR = "{ l.paymentcardtype_id EQ -1 }">
+					<CardType />
+				</MvIF>
+				<CardNumber />
+				<ExpirationDate />
+
+				<MvIF EXPR = "{ l.mivapay_settings:cvv_ad_pct NE 'hidden' }">
+					<CVV />
+				</MvIF>
+			</Prompts>
+
+			<MvIF EXPR = "{ l.paymentcardtype_id EQ -1 }">
+				<PermittedCardTypes>
+					<MvFOREACH ITERATOR = "l.paymentcardtype" ARRAY = "l.paymentcardtypes" COUNT = "{ l.paymentcardtype_count }">
+						<PermittedCardType prefixes="{ encodeentities( l.paymentcardtype:prefixes ) }" lengths="{ encodeentities( l.paymentcardtype:lengths ) }" cvv="{ encodeentities( [ g.Module_Feature_PAY_UT ].MivaPay_Map_CVV_Setting( l.mivapay_settings:cvv_ad_pct, l.paymentcardtype:cvv ) ) }"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></PermittedCardType>
+					</MvFOREACH>
+				</PermittedCardTypes>
+			<MvELSE>
+				<PermittedCardTypes>
+					<PermittedCardType prefixes="{ encodeentities( l.paymentcardtype:prefixes ) }" lengths="{ encodeentities( l.paymentcardtype:lengths ) }" cvv="{ encodeentities( [ g.Module_Feature_PAY_UT ].MivaPay_Map_CVV_Setting( l.mivapay_settings:cvv_ad_pct, l.paymentcardtype:cvv ) ) }"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></PermittedCardType>
+				</PermittedCardTypes>
+			</MvIF>
+
+			<ExistingCard>
+				<MvIF EXPR = "{ l.paymentcardtype_id NE -1 }">
+					<CardType><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></CardType>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.mivapay_settings:cvv_ad_pct NE 'hidden' }">
+					<TokenCVVNonce><MvEVAL EXPR = "{ miva_cdata_encode( [ g.Module_Feature_PAY_UT ].MivaPay_Generate_CVV_Nonce() ) }"></TokenCVVNonce>
+				</MvIF>
+			</ExistingCard>
+
+			<MvIF EXPR = "{ l.mivapay_settings:ordr_cards }">
+				<UnstoredTokenExpiration><MvEVAL EXPR = "{ l.mivapay_settings:ordr_days * 60 * 60 * 24 }"></UnstoredTokenExpiration>
+			<MvELSE>
+				<UnstoredTokenExpiration><MvEVAL EXPR = "{ g.Domain:admexp * 60 }"></UnstoredTokenExpiration>
+			</MvIF>
+		</PaymentFormRequest><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.null" 				VALUE = "{ crypto_hmac_sha256( l.xml, crypto_base64_decode( [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.mivapay_settings:signkey ) ), 'binary', l.signature ) }">
+	<MvASSIGN NAME = "l.request_xml" 		VALUE = "{ crypto_base64_encode( l.xml ) }">
+	<MvASSIGN NAME = "l.request_signature"	VALUE = "{ crypto_base64_encode( l.signature ) }">
+
+	<MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"request_xml":			"<MvEVAL EXPR = "{ JSON_Encode( l.request_xml ) }">",
+		"request_signature":	"<MvEVAL EXPR = "{ JSON_Encode( l.request_signature ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AllOrderPaymentList_Load_Query_Advanced_Filter" PARAMETERS = "query var, field_count, filter_name, filter_operator, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'product_code' }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'ord.id = ( SELECT MAX( item.order_id ) FROM ' $ g.Store_Table_Prefix $ 'OrderItems item WHERE item.order_id = ord.id AND item.code = ? )', [ g.Library_DB ].SQL_Query_Field( l.filter_value ) ) }">
+		
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.filter_name EQ 'payment' }">
+		<MvIF EXPR = "{ l.filter_value EQ 'auth_0_capt' }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'ord.total_auth > 0 AND ord.net_capt = 0', '' ) }">
+		<MvELSEIF EXPR = "{ l.filter_value EQ 'partial_capt' }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'ord.net_capt < ord.total_auth AND ord.net_capt <> 0', '' ) }">
+		<MvELSEIF EXPR = "{ l.filter_value EQ 'capt_not_ship' }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, '( ord.status <> 200 AND ord.status <> 201 ) AND ( ord.net_capt > 0 )', '' ) }">
+		<MvELSEIF EXPR = "{ l.filter_value EQ 'ship_not_capt' }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, '( ord.status = 200 OR ord.status = 201 ) AND ( ord.net_capt = 0 )', '' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.filter_name EQ 'pay_id' }">
+		<MvASSIGN NAME = "l.data:payment_module" VALUE = 1>
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'op.pay_id = ?', [ g.Library_DB ].SQL_Query_Field( l.filter_value ) ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Order_Authorize" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Order_Load( l.order ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_id"								VALUE = 0>
+	<MvASSIGN NAME = "l.module_data"							VALUE = "">
+	<MvASSIGN NAME = "l.mivapay_responsexml"					VALUE = "">
+	<MvASSIGN NAME = "l.mivapay_response_signature"				VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'O', 'Module_ID',					l.module_id )					OR
+					NOT JSON_Input_Text(	'o', 'Module_Data',					l.module_data )					OR
+					NOT JSON_Input_Text(	'O', 'MivaPay_ResponseXML',			l.mivapay_responsexml )			OR
+					NOT JSON_Input_Text(	'O', 'MivaPay_ResponseSignature',	l.mivapay_response_signature )	OR
+					NOT JSON_Input_Number(	'R', 'Amount',						l.amount, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module_id }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID_Cached( l.module_id, l.module )						OR
+						NOT [ g.Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule )	OR
+						NOT l.module:active }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentMethod_Parse_WithMivaPayResponse( l.module_data, l.order:cust_id, l.order:id, l.module_code, l.module_data, l.paymentcard, l.paymentcardtype, l.mivapay_responsexml, l.mivapay_response_signature, l.mivapay_response ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00022', 'Invalid payment method' ) }">
+		<MvELSEIF EXPR = "{ NOT l.paymentcard:id AND NOT l.paymentcardtype:id }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00035', 'Invalid payment method' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentMethod_LoadAndValidate_Module( l.module_code, l.module_data, l.module ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00040', 'Invalid payment method' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL l.mivapay_response }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].MivaPay_Validate_Response( l.mivapay_response, 'order:' $ l.order:id, g.Session_ID ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00058', 'Invalid payment method' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.paymentcardtype:id }">
+			<MvASSIGN NAME = "l.paymentcard:cust_id"			VALUE = "{ l.order:cust_id }">
+			<MvASSIGN NAME = "l.paymentcard:type"				VALUE = "{ l.paymentcardtype:type }">
+			<MvASSIGN NAME = "l.paymentcard:type_id"			VALUE = "{ l.paymentcardtype:id }">
+			<MvASSIGN NAME = "l.paymentcard:mod_code"			VALUE = "{ l.paymentcardtype:mod_code }">
+			<MvASSIGN NAME = "l.paymentcard:meth_code"			VALUE = "{ l.paymentcardtype:meth_code }">
+			<MvASSIGN NAME = "l.paymentcard:addr1"				VALUE = "{ l.order:bill_addr1 }">
+			<MvASSIGN NAME = "l.paymentcard:addr2"				VALUE = "{ l.order:bill_addr2 }">
+			<MvASSIGN NAME = "l.paymentcard:city"				VALUE = "{ l.order:bill_city }">
+			<MvASSIGN NAME = "l.paymentcard:state"				VALUE = "{ l.order:bill_state }">
+			<MvASSIGN NAME = "l.paymentcard:zip"				VALUE = "{ l.order:bill_zip }">
+			<MvASSIGN NAME = "l.paymentcard:cntry"				VALUE = "{ l.order:bill_cntry }">
+			<MvASSIGN NAME = "l.paymentcard:lastused"			VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'FirstName' ) }">		<MvASSIGN NAME = "l.paymentcard:fname"		VALUE = "{ l.mivapay_response:FirstName }">					</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'LastName' ) }">		<MvASSIGN NAME = "l.paymentcard:lname"		VALUE = "{ l.mivapay_response:LastName }">					</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'ExpirationMonth' ) }">	<MvASSIGN NAME = "l.paymentcard:exp_month"	VALUE = "{ int( l.mivapay_response:ExpirationMonth ) }">	</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'ExpirationYear' ) }">	<MvASSIGN NAME = "l.paymentcard:exp_year"	VALUE = "{ int( l.mivapay_response:ExpirationYear ) }">		</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'CardLastFour' ) }">	<MvASSIGN NAME = "l.paymentcard:lastfour"	VALUE = "{ l.mivapay_response:CardLastFour }">				</MvIF>
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'Token' ) }">			<MvASSIGN NAME = "l.paymentcard:token"		VALUE = "{ l.mivapay_response:Token }">						</MvIF>
+
+		<MvIF EXPR = "{ miva_member_exists( l.mivapay_response, 'TokenCVV' ) }">
+			<MvASSIGN NAME = "l.paymentcard:tokencvvsession"	VALUE = "{ l.mivapay_response:TokenCVV:Session }">
+			<MvASSIGN NAME = "l.paymentcard:tokencvvnonce"		VALUE = "{ l.mivapay_response:TokenCVV:Nonce }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_Utilities ].Error_Clear() }">
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].FieldError_Clear() }">
+
+	<MvEVAL EXPR = "{ JSON_Input_Copy_Fields() }">
+
+	<MvIF EXPR = "{ l.module:api_ver GE 9.06 AND
+					NOT ISNULL l.paymentcard:token }">	<MvASSIGN NAME = "l.valid" VALUE = 1>
+	<MvELSEIF EXPR = "{ l.module:api_ver GE 5.70 }">	<MvASSIGN NAME = "l.valid" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Validate( l.module, l.order, l.module_data ) }">
+	<MvELSE>											<MvASSIGN NAME = "l.valid" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Validate( l.module, l.module_data ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.valid }">
+		<MvIF EXPR = "{ [ g.Library_Utilities ].Error_Is_PaymentMethod_Invalid() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00008', 'Invalid payment method' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ JSON_Response_Start() }">
+		{
+			"valid":				false,
+			"error_field":			"<MvEVAL EXPR = "{ JSON_Encode( g.Error_Field ) }">",
+			"error_field_message":	"<MvEVAL EXPR = "{ JSON_Encode( g.Error_Field_Message ) }">",
+			"invalid_fields":
+			[
+				<MvIF EXPR = "{ l.module:api_ver GE 5.70 }">		<MvASSIGN NAME = "l.fields" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Fields( l.module, l.order, l.module_data ) }">
+				<MvELSE>											<MvASSIGN NAME = "l.fields" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Fields( l.module, l.module_data ) }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.invalid_count"			VALUE = 0>
+				<MvASSIGN NAME = "l.field_pos"				VALUE = 1>
+				<MvASSIGN NAME = "l.field"					VALUE = "{ trim( gettoken( l.fields, ',', l.field_pos ) ) }">
+
+				<MvWHILE EXPR = "{ len( l.field ) }">
+					<MvIF EXPR = "{ l.module:api_ver GE 5.70 }">	<MvASSIGN NAME = "l.invalid" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Invalid( l.module, l.order, l.module_data, l.field ) }">
+					<MvELSE>										<MvASSIGN NAME = "l.invalid" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Invalid( l.module, l.module_data, l.field ) }">
+					</MvIF>
+
+					<MvIF EXPR = "{ l.invalid }">
+						<MvIF EXPR = "{ l.invalid_count }">
+							,
+						</MvIF>
+
+						"<MvEVAL EXPR = "{ JSON_Encode( l.field ) }">"
+
+						<MvASSIGN NAME = "l.invalid_count"	VALUE = "{ l.invalid_count + 1 }">
+					</MvIF>
+
+					<MvASSIGN NAME = "l.field_pos"			VALUE = "{ l.field_pos + 1 }">
+					<MvASSIGN NAME = "l.field"				VALUE = "{ trim( gettoken( l.fields, ',', l.field_pos ) ) }">
+				</MvWHILE>
+			]
+		}
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module:api_ver GE 9.06 AND NOT ISNULL l.paymentcard:token }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_PaymentCard( l.module, l.module_data, l.order, l.paymentcard, l.amount ) }">
+			<MvIF EXPR = "{ NOT l.paymentcard:id }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_PAY_UT ].MivaPay_PaymentCard_Delete_Token( l.paymentcard:token ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.paymentcard:id }">
+			<MvIF EXPR = "{ NOT l.mivapay_settings:ordr_cards }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].MivaPay_PaymentCard_Delete_Token( l.paymentcard:token ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+			<MvELSE>
+				<MvASSIGN NAME = "l.orderpaymentcard" 			VALUE = "">
+				<MvASSIGN NAME = "l.orderpaymentcard:fname" 	VALUE = "{ l.paymentcard:fname }">
+				<MvASSIGN NAME = "l.orderpaymentcard:lname" 	VALUE = "{ l.paymentcard:lname }">
+				<MvASSIGN NAME = "l.orderpaymentcard:exp_month" VALUE = "{ l.paymentcard:exp_month }">
+				<MvASSIGN NAME = "l.orderpaymentcard:exp_year" 	VALUE = "{ l.paymentcard:exp_year }">
+				<MvASSIGN NAME = "l.orderpaymentcard:lastfour" 	VALUE = "{ l.paymentcard:lastfour }">
+				<MvASSIGN NAME = "l.orderpaymentcard:addr1" 	VALUE = "{ l.paymentcard:addr1 }">
+				<MvASSIGN NAME = "l.orderpaymentcard:addr2" 	VALUE = "{ l.paymentcard:addr2 }">
+				<MvASSIGN NAME = "l.orderpaymentcard:city" 		VALUE = "{ l.paymentcard:city }">
+				<MvASSIGN NAME = "l.orderpaymentcard:state" 	VALUE = "{ l.paymentcard:state }">
+				<MvASSIGN NAME = "l.orderpaymentcard:zip" 		VALUE = "{ l.paymentcard:zip }">
+				<MvASSIGN NAME = "l.orderpaymentcard:cntry" 	VALUE = "{ l.paymentcard:cntry }">
+				<MvASSIGN NAME = "l.orderpaymentcard:token" 	VALUE = "{ l.paymentcard:token }">
+				<MvASSIGN NAME = "l.orderpaymentcard:type_id" 	VALUE = "{ l.paymentcard:type_id }">
+				<MvASSIGN NAME = "l.orderpaymentcard:expires" 	VALUE = "{ s.time_t + ( l.mivapay_settings:ordr_days * 60 * 60 * 24 ) }">
+				<MvASSIGN NAME = "l.orderpaymentcard:refcount" 	VALUE = 0>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCard_Insert( l.orderpaymentcard ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCardXOrder_Insert( l.orderpaymentcard, l.order ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.module:api_ver GE 5.60 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize( l.module, l.module_data, l.order, l.amount ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "g.Basket"				VALUE = "{ l.order }">
+		<MvASSIGN NAME = "g.Basket:order_id"	VALUE = "{ l.order:id }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_Authorize( l.module, l.module_data, l.amount, l.pay_data, l.secure_data ) }">
+			<MvIF EXPR = "{ g.Error_Message_Count EQ 0 }">
+				<MvASSIGN NAME = "l.message"	VALUE = "Unable to authorize payment">
+			<MvELSE>
+				<MvASSIGN NAME = "l.pos"			VALUE = 1>
+				<MvWHILE EXPR = "{ l.pos LE g.Error_Message_Count }">
+					<MvASSIGN NAME = "l.message"	VALUE = "{ l.message $ g.Error_Messages[ l.pos ] }">
+					<MvASSIGN NAME = "l.pos"		VALUE = "{ l.pos + 1 }">
+				</MvWHILE>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00015', l.message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Create( l.order:id,
+																  0,
+																  1, 
+																  l.order:id,
+																  l.amount, l.amount,
+																  l.module:id,
+																  l.pay_data,
+																  l.secure_data ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.secure_data"	VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_PaymentTotals( l.order ) OR
+					NOT [ g.Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PAY-00001', 'Payment authorized order_id=' $ l.order:id $ ' pay_id=' $ l.module:id $ ' amount=' $ ( l.amount ROUND 2 ) ) }">
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_PaymentOperation( 'MER-JSN-PAY-00009', 'Authorize', l.order:id, l.module:code, l.amount ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"valid":				true,
+		"total_auth":			<MvEVAL EXPR = "{ l.order:total_auth ROUND 2 }">,
+		"formatted_total_auth":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_auth ) ) }">",
+		"total_capt":			<MvEVAL EXPR = "{ l.order:total_capt ROUND 2 }">,
+		"formatted_total_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_capt ) ) }">",
+		"total_rfnd":			<MvEVAL EXPR = "{ l.order:total_rfnd ROUND 2 }">,
+		"formatted_total_rfnd":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_rfnd ) ) }">",
+		"net_capt":				<MvEVAL EXPR = "{ l.order:net_capt ROUND 2 }">,
+		"formatted_net_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:net_capt ) ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPayment_Capture" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'OrderPayment_ID', l.orderpayment_id ) OR
+					NOT JSON_Input_Number(	'R', 'Amount',			l.amount, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00055', 'Order payment not found' ) }">
+	</MvIF>
+
+	<MvLOCKFILE FILE = "{ [ g.Module_Feature_PAY_UT ].Order_Payment_LockFile( l.orderpayment:order_id ) }">
+		<MvASSIGN NAME = "l.result"	VALUE = "{ JSON_OrderPayment_Capture_LowLevel( l.orderpayment:id, l.amount ) }">
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPayment_Capture_LowLevel" PARAMETERS = "orderpayment_id, amount" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00043', 'Order payment not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( l.orderpayment:order_id, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00044', 'Order not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID( l.orderpayment:pay_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00045', 'Module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderpayment:available - l.amount LT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00032', 'The entered value exceeds the uncaptured authorization amount of this transaction' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.orderpayment:type NE 1 ) AND ( l.orderpayment:type NE 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00016', 'Invalid transaction type' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data"					VALUE = "{ miva_array_deserialize( l.orderpayment:pay_data ) }">
+
+	<MvIF EXPR = "{ l.orderpayment:pay_secid EQ 0 }">
+		<MvASSIGN NAME = "l.secure_data"		VALUE = "{ miva_array_deserialize( l.orderpayment:pay_secdat ) }">
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Retrieve( 'Passphrase', l.passphrase ) }">
+		<MvASSIGN NAME = "l.secure_data"		VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Library_Crypto ].Decrypt_OrderPayment( 'Order Payment Capture', l.orderpayment, l.passphrase, l.secure_data ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.passphrase"			VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module:api_ver GE 5.60 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_OrderPayment_Capture( l.module, l.order, l.orderpayment, l.data, l.secure_data, l.amount ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.orderpayment:available EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00017', 'Legacy authorization has already been processed' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Error_Code"			VALUE = "">
+		<MvASSIGN NAME = "g.Error_Message"		VALUE = "">
+
+		<MvIF EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Process( l.module, l.data, l.secure_data, l.order ) LE 0 }">
+			<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Update( l.orderpayment, l.data, l.secure_data ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ( ISNULL l.error_code ) AND ( ISNULL l.error_message ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00006', 'Information regarding the failure may be found in the payment details.' ) }">
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( l.error_code, l.error_message $ asciichar( 10 ) $ 'Additional information regarding the failure may be found in the payment details.' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.orderpayment:available"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Update_Amounts( l.orderpayment ) OR
+							NOT [ g.Library_DB ].OrderPayment_Create( l.order:id,
+																	  l.orderpayment:id,
+																	  2, 
+																	  l.order:id,
+																	  l.orderpayment:amount, 0,
+																	  l.module:id,
+																	  l.data,
+																	  l.secure_data ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.secure_data"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_PaymentTotals( l.order ) OR
+					NOT [ g.Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PAY-00002', 'Payment captured order_id=' $ l.order:id $ ' pay_id=' $ l.module:id $ ' amount=' $ ( l.amount ROUND 2 ) ) }">
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_PaymentOperation( 'MER-JSN-PAY-00010', 'Capture', l.order:id, l.module:code, l.amount ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"order_id":				<MvEVAL EXPR = "{ l.order:id }">,
+		"total_auth":			<MvEVAL EXPR = "{ l.order:total_auth ROUND 2 }">,
+		"formatted_total_auth":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_auth ) ) }">",
+		"total_capt":			<MvEVAL EXPR = "{ l.order:total_capt ROUND 2 }">,
+		"formatted_total_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_capt ) ) }">",
+		"total_rfnd":			<MvEVAL EXPR = "{ l.order:total_rfnd ROUND 2 }">,
+		"formatted_total_rfnd":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_rfnd ) ) }">",
+		"net_capt":				<MvEVAL EXPR = "{ l.order:net_capt ROUND 2 }">,
+		"formatted_net_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:net_capt ) ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPayment_Refund" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'OrderPayment_ID',	l.orderpayment_id ) OR
+					NOT JSON_Input_Number(	'R', 'Amount',			l.amount, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00056', 'Order payment not found' ) }">
+	</MvIF>
+
+	<MvLOCKFILE FILE = "{ [ g.Module_Feature_PAY_UT ].Order_Payment_LockFile( l.orderpayment:order_id ) }">
+		<MvASSIGN NAME = "l.result"	VALUE = "{ JSON_OrderPayment_Refund_LowLevel( l.orderpayment:id, l.amount ) }">
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPayment_Refund_LowLevel" PARAMETERS = "orderpayment_id, amount" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00046', 'Order payment not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( l.orderpayment:order_id, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00047', 'Order not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID( l.orderpayment:pay_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00048', 'Module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderpayment:available - l.amount LT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00031', 'The entered value exceeds the total captured for this transaction' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.orderpayment:type NE 4 ) AND ( l.orderpayment:type NE 5 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00018', 'Invalid transaction type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module:api_ver LT 5.60 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00019', 'Legacy modules do not support refund operations' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data" VALUE = "{ miva_array_deserialize( l.orderpayment:pay_data ) }">
+
+	<MvIF EXPR = "{ l.orderpayment:pay_secid EQ 0 }">
+		<MvASSIGN NAME = "l.secure_data" VALUE = "{ miva_array_deserialize( l.orderpayment:pay_secdat ) }">
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Retrieve( 'Passphrase', l.passphrase ) }">
+		<MvASSIGN NAME = "l.secure_data" VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Library_Crypto ].Decrypt_OrderPayment( 'Order Payment Refund', l.orderpayment, l.passphrase, l.secure_data ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.passphrase" VALUE = "">
+	</MvIF>
+
+	<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.ok" VALUE = "{ PaymentModule_OrderPayment_Refund( l.module, l.order, l.orderpayment, l.data, l.secure_data, l.amount ) }">
+	<MvIF EXPR = "{ NOT l.ok }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.secure_data" VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_PaymentTotals( l.order ) OR
+					NOT [ g.Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PAY-00003', 'Payment refunded order_id=' $ l.order:id $ ' pay_id=' $ l.module:id $ ' amount=' $ ( l.amount ROUND 2 ) ) }">
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_PaymentOperation( 'MER-JSN-PAY-00011', 'Refund', l.order:id, l.module:code, l.amount ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"order_id":				<MvEVAL EXPR = "{ l.order:id }">,
+		"total_auth":			<MvEVAL EXPR = "{ l.order:total_auth ROUND 2 }">,
+		"formatted_total_auth":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_auth ) ) }">",
+		"total_capt":			<MvEVAL EXPR = "{ l.order:total_capt ROUND 2 }">,
+		"formatted_total_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_capt ) ) }">",
+		"total_rfnd":			<MvEVAL EXPR = "{ l.order:total_rfnd ROUND 2 }">,
+		"formatted_total_rfnd":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_rfnd ) ) }">",
+		"net_capt":				<MvEVAL EXPR = "{ l.order:net_capt ROUND 2 }">,
+		"formatted_net_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:net_capt ) ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPayment_VOID" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'OrderPayment_ID',	l.orderpayment_id ) OR
+					NOT JSON_Input_Number(	'R', 'Amount',			l.amount, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00057', 'Order payment not found' ) }">
+	</MvIF>
+
+	<MvLOCKFILE FILE = "{ [ g.Module_Feature_PAY_UT ].Order_Payment_LockFile( l.orderpayment:order_id ) }">
+		<MvASSIGN NAME = "l.result"	VALUE = "{ JSON_OrderPayment_VOID_LowLevel( l.orderpayment:id, l.amount ) }">
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderPayment_VOID_LowLevel" PARAMETERS = "orderpayment_id, amount" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Load_ID( l.orderpayment_id, l.orderpayment ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00049', 'Order payment not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( l.orderpayment:order_id, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00050', 'Order not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID( l.orderpayment:pay_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00051', 'Module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderpayment:available - l.amount LT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00033', 'The entered value exceeds the uncaptured authorization amount of this transaction' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderpayment:type NE 3 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00020', 'Invalid transaction type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.module:api_ver LT 5.60 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00021', 'Legacy modules do not support void operations' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data" VALUE = "{ miva_array_deserialize( l.orderpayment:pay_data ) }">
+
+	<MvIF EXPR = "{ l.orderpayment:pay_secid EQ 0 }">
+		<MvASSIGN NAME = "l.secure_data" VALUE = "{ miva_array_deserialize( l.orderpayment:pay_secdat ) }">
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Retrieve( 'Passphrase', l.passphrase ) }">
+		<MvASSIGN NAME = "l.secure_data" VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Library_Crypto ].Decrypt_OrderPayment( 'Order Payment VOID', l.orderpayment, l.passphrase, l.secure_data ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.passphrase" VALUE = "">
+	</MvIF>
+
+	<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.ok" VALUE = "{ PaymentModule_OrderPayment_VOID( l.module, l.order, l.orderpayment, l.data, l.secure_data, l.amount ) }">
+	<MvIF EXPR = "{ NOT l.ok }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.secure_data" VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_PaymentTotals( l.order ) OR
+					NOT [ g.Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PAY-00004', 'Payment voided order_id=' $ l.order:id $ ' pay_id=' $ l.module:id $ ' amount=' $ ( l.amount ROUND 2 ) ) }">
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_PaymentOperation( 'MER-JSN-PAY-00012', 'Void', l.order:id, l.module:code, l.amount ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"order_id":				<MvEVAL EXPR = "{ l.order:id }">,
+		"total_auth":			<MvEVAL EXPR = "{ l.order:total_auth ROUND 2 }">,
+		"formatted_total_auth":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_auth ) ) }">",
+		"total_capt":			<MvEVAL EXPR = "{ l.order:total_capt ROUND 2 }">,
+		"formatted_total_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_capt ) ) }">",
+		"total_rfnd":			<MvEVAL EXPR = "{ l.order:total_rfnd ROUND 2 }">,
+		"formatted_total_rfnd":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:total_rfnd ) ) }">",
+		"net_capt":				<MvEVAL EXPR = "{ l.order:net_capt ROUND 2 }">,
+		"formatted_net_capt":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.order:net_capt ) ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PaymentMethodList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "l.allmethod_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.order_id"			VALUE = 0>
+	
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'o', 'Order_ID', l.order_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.order_id }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( l.order_id, l.order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Feature_PAY_UT ].PaymentMethodList_Load_Order_Authorize( l.order, l.methods ) }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.allmethod_count ) }">
+
+		<MvIF EXPR = "{ l.method:paymentcard:id }">
+			"mivapay": true,
+			"paymentcard":
+			{
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_JSON ].JSON_CustomerPaymentCard( l.method:paymentcard ) }">
+			},
+		<MvELSEIF EXPR = "{ l.method:orderpaymentcard:id }">
+			"mivapay": true,
+			"orderpaymentcard":
+			{
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_JSON ].JSON_OrderPaymentCard( l.method:orderpaymentcard ) }">
+			},
+		<MvELSEIF EXPR = "{ l.method:paymentcardtype:id }">
+			"mivapay": true,
+			"paymentcardtype":
+			{
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_JSON ].JSON_PaymentCardType( l.method:paymentcardtype ) }">
+			},
+		<MvELSE>
+			"mivapay": false,
+		</MvIF>
+
+		"module_id":	<MvEVAL EXPR = "{ l.method:module:id }">,
+		"module_api":	<MvEVAL EXPR = "{ l.method:module:api_ver }">,
+		"method_code":	"<MvEVAL EXPR = "{ JSON_Encode( l.method:code ) }">",
+		"method_name":	"<MvEVAL EXPR = "{ JSON_Encode( l.method:name ) }">"
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+	</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PaymentMethodList_Load_OnSite" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "l.allmethod_count"	VALUE = 0>
+	<MvASSIGN NAME = "g.Order_ID"			VALUE = "{ int( g.Order_ID ) }">
+
+	<MvIF EXPR = "{ g.Order_ID }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( g.Order_ID, l.order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Feature_PAY_UT ].PaymentMethodList_Load_Order_Authorize_OnSite( l.order, l.methods ) }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.allmethod_count ) }">
+
+		<MvIF EXPR = "{ l.method:paymentcard:id }">
+			"mivapay": true,
+			"paymentcard":
+			{
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_JSON ].JSON_CustomerPaymentCard( l.method:paymentcard ) }">
+			},
+		<MvELSEIF EXPR = "{ l.method:orderpaymentcard:id }">
+			"mivapay": true,
+			"orderpaymentcard":
+			{
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_JSON ].JSON_OrderPaymentCard( l.method:orderpaymentcard ) }">
+			},
+		<MvELSEIF EXPR = "{ l.method:paymentcardtype:id }">
+			"mivapay": true,
+			"paymentcardtype":
+			{
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PAY_JSON ].JSON_PaymentCardType( l.method:paymentcardtype ) }">
+			},
+		<MvELSE>
+			"mivapay": false,
+		</MvIF>
+
+		"module_id":	<MvEVAL EXPR = "{ l.method:module:id }">,
+		"module_api":	<MvEVAL EXPR = "{ l.method:module:api_ver }">,
+		"method_code":	"<MvEVAL EXPR = "{ JSON_Encode( l.method:code ) }">",
+		"method_name":	"<MvEVAL EXPR = "{ JSON_Encode( l.method:name ) }">"
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+	</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PaymentMethodFieldList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "g.Order_ID"	VALUE = "{ int( g.Order_ID ) }">
+	<MvASSIGN NAME = "g.Module_ID"	VALUE = "{ int( g.Module_ID ) }">
+
+	<MvIF EXPR = "{ g.Order_ID }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( g.Order_ID, l.order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Module_Load_ID( g.Module_ID, l.module ) OR
+					NOT [ g.Library_DB ].StoreModule_Load( g.Module_ID, 'payment', l.storemodule ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"fields":
+		[
+		<MvIF EXPR = "{ g.Order_ID AND ( l.module:api_ver GE 5.70 ) }">	<MvASSIGN NAME = "l.fields" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Fields( l.module, l.order, g.Module_Data ) }">
+		<MvELSE>														<MvASSIGN NAME = "l.fields" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Fields( l.module, g.Module_Data ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.field_pos"		VALUE = 1>
+		<MvASSIGN NAME = "l.field_code"		VALUE = "{ trim( gettoken( l.fields, ',', l.field_pos ) ) }">
+
+		<MvWHILE EXPR = "{ len( l.field_code ) }">
+			<MvIF EXPR = "{ g.Order_ID AND ( l.module:api_ver GE 5.70 ) }">
+				<MvASSIGN NAME = "l.prompt" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Prompt( l.module, l.order, g.Module_Data, l.field_code ) }">
+				<MvCAPTURE VARIABLE = "l.field"><MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Field( l.module, l.order, g.Module_Data, l.field_code ) }"></MvCAPTURE>
+			<MvELSE>
+				<MvASSIGN NAME = "l.prompt" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Prompt( l.module, g.Module_Data, l.field_code ) }">
+				<MvCAPTURE VARIABLE = "l.field"><MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Field( l.module, g.Module_Data, l.field_code ) }"></MvCAPTURE>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.field_count ) }">
+			"code":		"<MvEVAL EXPR = "{ JSON_Encode( l.field_code ) }">",
+			"prompt":	"<MvEVAL EXPR = "{ JSON_Encode( l.prompt ) }">",
+			"field":	"<MvEVAL EXPR = "{ JSON_Encode( l.field ) }">"
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvASSIGN NAME = "l.field_pos"	VALUE = "{ l.field_pos + 1 }">
+			<MvASSIGN NAME = "l.field_code"	VALUE = "{ trim( gettoken( l.fields, ',', l.field_pos ) ) }">
+		</MvWHILE>
+		],
+
+		<MvIF EXPR = "{ g.Order_ID AND ( l.module:api_ver GE 5.70 ) }">
+			<MvCAPTURE VARIABLE = "l.additional"><MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Order_Authorize_Hide_Additional_Fields( l.module, l.order, g.Module_Data ) }"></MvCAPTURE>
+		<MvELSE>
+			<MvCAPTURE VARIABLE = "l.additional"><MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Payment_Hide_Additional_Fields( l.module, g.Module_Data ) }"></MvCAPTURE>
+		</MvIF>
+
+		"additional": "<MvEVAL EXPR = "{ JSON_Encode( l.additional ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture_Decrypt_OrderPayment" PARAMETERS = "passphrase_index var, orderpayment var, data var, secure_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"				VALUE = "{ miva_array_deserialize( l.orderpayment:pay_data ) }">
+
+	<MvIF EXPR = "{ l.orderpayment:pay_secid EQ 0 }">
+		<MvASSIGN NAME = "l.secure_data"	VALUE = "{ miva_array_deserialize( l.orderpayment:pay_secdat ) }">
+	<MvELSEIF EXPR = "{ ISNULL l.passphrase_index[ l.orderpayment:pay_secid ] }">
+		<MvASSIGN NAME = "l.secure_data"	VALUE = "">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Crypto ].Decrypt_OrderPayment( 'Order Payment Capture', l.orderpayment, l.passphrase_index[ l.orderpayment:pay_secid ], l.secure_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture_OrderPayment" PARAMETERS = "module var, order var, orderpayment var, data var, secure_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:api_ver GE 5.60 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].PaymentModule_OrderPayment_Capture( l.module, l.order, l.orderpayment, l.data, l.secure_data, l.orderpayment:available ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "g.Error_Code"			VALUE = "">
+		<MvASSIGN NAME = "g.Error_Message"		VALUE = "">
+
+		<MvIF EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Process( l.module, l.data, l.secure_data, l.order ) LE 0 }">
+			<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Update( l.orderpayment, l.data, l.secure_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = -1>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( ISNULL l.error_code ) AND ( ISNULL l.error_message ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-JSN-PAY-00007', 'Information regarding the failure may be found in the payment details.' ) }">
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, l.error_message $ asciichar( 10 ) $ 'Additional information regarding the failure may be found in the payment details.' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.orderpayment:available"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderPayment_Update_Amounts( l.orderpayment ) OR
+							NOT [ g.Library_DB ].OrderPayment_Create( l.order:id,
+																	  l.orderpayment:id,
+																	  2, 
+																	  l.order:id,
+																	  l.orderpayment:amount, 0,
+																	  l.module:id,
+																	  l.data,
+																	  l.secure_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = -1>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture_Order_LowLevel" PARAMETERS = "order var, passphrase_index var, results var, result_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderpayment_count"					VALUE = "{ [ g.Library_DB ].OrderPaymentList_Load_Order( l.order:id, l.orderpayments ) }">
+
+	<MvIF EXPR = "{ NOT l.orderpayment_count }">
+		<MvASSIGN NAME = "l.result_count"					VALUE = "{ JSON_OrderList_Capture_Error( l.order:id, l.null, 'No payments to capture', l.results ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.orderpayment" ARRAY = "l.orderpayments" COUNT = "{ l.orderpayment_count }">
+		<MvIF EXPR = "{ ( ( l.orderpayment:type NE 1 ) AND ( l.orderpayment:type NE 3 ) ) OR ( l.orderpayment:available LE 0 ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.original_orderpayment"			VALUE = "{ l.orderpayment }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID_Cached( l.orderpayment:pay_id, l.module ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.result_count"				VALUE = "{ JSON_OrderList_Capture_Error( l.order:id, l.original_orderpayment, 'No module to handle capture', l.results ) }">
+		<MvELSEIF EXPR = "{ NOT JSON_OrderList_Capture_Decrypt_OrderPayment( l.passphrase_index, l.orderpayment, l.data, l.secure_data ) }">
+			<MvASSIGN NAME = "l.result_count"				VALUE = "{ JSON_OrderList_Capture_Error( l.order:id, l.original_orderpayment, g.Error_Message, l.results ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.capture_result"				VALUE = "{ JSON_OrderList_Capture_OrderPayment( l.module, l.order, l.orderpayment, l.data, l.secure_data ) }">
+
+			<MvIF EXPR = "{ l.capture_result EQ -1 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ l.capture_result EQ 0 }">
+				<MvASSIGN NAME = "l.result_count"			VALUE = "{ JSON_OrderList_Capture_Error( l.order:id, l.original_orderpayment, g.Error_Message, l.results ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.result_count"			VALUE = "{ JSON_OrderList_Capture_Success( l.order:id, l.original_orderpayment, 'Captured', l.results ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.secure_data"				VALUE = "">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_PaymentTotals( l.order ) OR
+					NOT [ g.Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture_Batch" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.results"				VALUE = "">
+	<MvASSIGN NAME = "l.result_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.processed"				VALUE = 0>
+	<MvASSIGN NAME = "l.last_order_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.query"					VALUE = "">
+	<MvASSIGN NAME = "l.fields"					VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'Batch_ID',		l.batch_id )		OR
+					NOT JSON_Input_Integer(	'O', 'Last_Order_ID',	l.last_order_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Passphrase_Index( g.Key_IDs, g.Passphrases, l.passphrase_index ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.query, 'o.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Orders', 'o' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'o.batch_id = ?', [ g.Library_DB ].SQL_Query_Field( l.batch_id ) ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY( l.query, 'o.id', 'ASC' ) }">
+
+	<MvIF EXPR = "{ l.last_order_id }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'o.id > ?', [ g.Library_DB ].SQL_Query_Field( l.last_order_id ) ) }">	
+	</MvIF>
+
+	<MvASSIGN NAME = "l.sql" 					VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+	<MvASSIGN NAME = "l.order_count"			VALUE = "{ [ g.Library_DB ].Order_Count_Batch( l.batch_id ) }">
+	<MvASSIGN NAME = "l.last_order_id"			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Orders', l.sql, l.fields, 0, 1000 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00054', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.timeout_t"				VALUE = "{ s.dyn_time_t + 5 }">
+
+	<MvWHILE EXPR = "{ NOT Orders.d.EOF }">
+		<MvASSIGN NAME = "l.processed"			VALUE = "{ ++l.processed }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Order_Read( l.order ) }">
+
+		<MvIF EXPR = "{ NOT JSON_OrderList_Capture_Order_LowLevel( l.order, l.passphrase_index, l.results, l.result_count ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+
+		<MvIF EXPR = "{ NOT Orders.d.EOF AND ( s.dyn_time_t GE l.timeout_t OR ( s.dyn_time_remaining NE -1 AND s.dyn_time_remaining LE 3 ) ) }">
+			<MvASSIGN NAME = "l.last_order_id"	VALUE = "{ l.order:id }">
+
+			<MvWHILESTOP>
+		</MvIF>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_OrderList_Capture( l.order_count, l.processed, l.last_order_id, l.results, l.result_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "l.results"				VALUE = "">
+	<MvASSIGN NAME = "l.result_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.processed"				VALUE = 0>
+	<MvASSIGN NAME = "l.timeout_t"				VALUE = "{ s.dyn_time_t + 5 }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer_Array( 'R', 'Order_IDs', l.order_ids, l.order_id_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Passphrase_Index( g.Key_IDs, g.Passphrases, l.passphrase_index ) }">
+
+	<MvFOREACH ITERATOR = "l.order_id" ARRAY = "l.order_ids" INDEX = "l.index" COUNT = "{ l.order_id_count }">
+		<MvASSIGN NAME = "l.processed"			VALUE = "{ ++l.processed }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( l.order_id, l.order ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.result_count"	VALUE = "{ JSON_OrderList_Capture_Error( l.order_id, l.null, 'Order not found', l.results ) }">
+		<MvELSEIF EXPR = "{ NOT JSON_OrderList_Capture_Order_LowLevel( l.order, l.passphrase_index, l.results, l.result_count ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.index NE l.order_id_count AND ( s.dyn_time_t GE l.timeout_t OR ( s.dyn_time_remaining NE -1 AND s.dyn_time_remaining LE 3 ) ) }">
+			<MvASSIGN NAME = "l.last_order_id"	VALUE = "{ l.order:id }">
+
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_OrderList_Capture( l.order_id_count, l.processed, l.last_order_id, l.results, l.result_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture_Success" PARAMETERS = "order_id, orderpayment var, message, results var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.result:success"		VALUE = 1>
+	<MvASSIGN NAME = "l.result:order_id"	VALUE = "{ int( l.order_id ) }">
+	<MvASSIGN NAME = "l.result:payment_id"	VALUE = "{ int( l.orderpayment:id ) }">
+	<MvASSIGN NAME = "l.result:dtstamp"		VALUE = "{ int( l.orderpayment:dtstamp ) }">
+	<MvASSIGN NAME = "l.result:amount"		VALUE = "{ l.orderpayment:available ROUND 2 }">
+	<MvASSIGN NAME = "l.result:status"		VALUE = "{ l.message }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.results, l.result, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderList_Capture_Error" PARAMETERS = "order_id, orderpayment var, message, results var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.result:success"		VALUE = 0>
+	<MvASSIGN NAME = "l.result:order_id"	VALUE = "{ int( l.order_id ) }">
+	<MvASSIGN NAME = "l.result:payment_id"	VALUE = "{ int( l.orderpayment:id ) }">
+	<MvASSIGN NAME = "l.result:dtstamp"		VALUE = "{ int( l.orderpayment:dtstamp ) }">
+	<MvASSIGN NAME = "l.result:amount"		VALUE = "{ l.orderpayment:available ROUND 2 }">
+	<MvASSIGN NAME = "l.result:status"		VALUE = "{ l.message }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.results, l.result, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Response_OrderList_Capture" PARAMETERS = "total, processed, last_order_id, results var, result_count" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total":			<MvEVAL EXPR = "{ int( l.total ) }">,
+		"processed":		<MvEVAL EXPR = "{ int( l.processed ) }">,
+		"last_order_id":	<MvEVAL EXPR = "{ int( l.last_order_id ) }">,
+		"data":
+		[
+		<MvFOREACH ITERATOR = "l.result" ARRAY = "l.results" COUNT = "{ l.result_count }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_result_count ) }">
+			"success":			<MvEVAL EXPR = "{ JSON_Boolean( l.result:success ) }">,
+			"order_id":			<MvEVAL EXPR = "{ int( l.result:order_id ) }">,
+			"payment_id":		<MvEVAL EXPR = "{ int( l.result:payment_id ) }">,
+			"dtstamp":			<MvEVAL EXPR = "{ int( l.result:dtstamp ) }">,
+			"amount":			<MvEVAL EXPR = "{ l.result:amount ROUND 2 }">,
+			"formatted_amount":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.result:amount ) ) }">",
+			"status":			"<MvEVAL EXPR = "{ JSON_Encode( l.result:status ) }">"
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+		</MvFOREACH>
+		]
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>

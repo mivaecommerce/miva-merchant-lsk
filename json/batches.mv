@@ -1,0 +1,192 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-BCH-
+| Next Error Code: 6    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_Batch" PARAMETERS = "batch var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ int( l.batch:id ) }">,
+	"batchdate":	<MvEVAL EXPR = "{ int( l.batch:batchdate ) }">,
+	"name":			"<MvEVAL EXPR = "{ JSON_Encode( l.batch:name ) }">"
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BatchList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"		VALUE = "">
+	<MvASSIGN NAME = "l.filter"					VALUE = "">
+	<MvASSIGN NAME = "l.sort"					VALUE = "">
+	<MvASSIGN NAME = "l.offset"					VALUE = 0>
+	<MvASSIGN NAME = "l.count"					VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'id',			'' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'batchdate',	'' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'name',		'' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Batches', '' ) }">
+	
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, 'id,batchdate,name', 'id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Batches', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-BCH-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.batch_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Batches.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.batch_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].Batch_Read( l.batch ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.batch_count ) }">
+				<MvEVAL EXPR = "{ JSON_Batch( l.batch ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Batches" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Batches">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BatchReportList_Load_Orders" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">									<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Batch_ID"				VALUE = "{ int( g.Batch_ID ) }">
+
+	<MvASSIGN NAME = "l.module_pos"				VALUE = 1>
+	<MvASSIGN NAME = "l.module_count"			VALUE = "{ [ g.Library_DB ].ModuleList_Load_Features( 'batchreport', l.modules ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ l.module_pos LE l.module_count }">
+		<MvIF EXPR = "{ l.modules[ l.module_pos ]:api_ver LT 5.70 }">
+			<MvIF EXPR = "{ g.Batch_ID }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_report_count ) }">
+				"code":		"",
+				"name":		"<MvEVAL EXPR = "{ JSON_Encode( l.modules[ l.module_pos ]:name ) }">",
+				"module":	{ <MvEVAL EXPR = "{ JSON_Module( l.modules[ l.module_pos ] ) }"> }
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.report_pos"		VALUE = 1>
+			<MvASSIGN NAME = "l.report_count"	VALUE = "{ [ g.Module_Root $ l.modules[ l.module_pos ]:module ].BatchReportModule_Order_Reports( l.modules[ l.module_pos ], l.reports ) }">
+
+			<MvWHILE EXPR = "{ l.report_pos LE l.report_count }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_report_count ) }">
+				"code":		"<MvEVAL EXPR = "{ JSON_Encode( l.reports[ l.report_pos ]:code ) }">",
+				"name":		"<MvEVAL EXPR = "{ JSON_Encode( l.reports[ l.report_pos ]:name ) }">",
+				"module":	{ <MvEVAL EXPR = "{ JSON_Module( l.modules[ l.module_pos ] ) }"> }
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+				<MvASSIGN NAME = "l.report_pos"	VALUE = "{ l.report_pos + 1 }">
+			</MvWHILE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.module_pos"			VALUE = "{ l.module_pos + 1 }">
+	</MvWHILE>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BatchReport_Run" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ModuleAndFeatures_Load_Code( g.Module_Code, l.module ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_HTML_Error( 'MER-JSN-BCH-00005', 'Module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT l.module:feature_hash:batchreport ) OR ( l.module:api_ver LT 5.70 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_HTML_Error( 'MER-JSN-BCH-00002', 'Module \'' $ l.module:name $ '\' does not support the 5.70 or newer Batch Reporting API' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Passphrase_Index( g.Key_IDs, g.Passphrases, g.passphrase ) }">
+
+	<MvASSIGN NAME = "l.order_count"				VALUE = "{ JSON_Array_Integer( g.Order_IDs, l.order_ids ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL g.Batch_ID }">
+		<MvASSIGN NAME = "l.loaded_order_count"		VALUE = "{ [ g.Library_DB ].OrderList_Load_Batch( g.Batch_ID, l.orders ) }">
+	<MvELSE>
+		<MvFOREACH ITERATOR = "l.order_id" ARRAY = "l.order_ids" COUNT = "{ l.order_count }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Load_ID( l.order_id, l.order ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.loaded_order_count"										VALUE = "{ l.loaded_order_count + 1 }">
+			<MvASSIGN NAME = "l.orders"				INDEX = "{ l.loaded_order_count }"	VALUE = "{ l.order }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].BatchReportModule_Run_OrderList( l.module, g.Report_Code, l.orders, l.loaded_order_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_HTML_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Batch_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'o:100', 'Batch_Name', l.batch_name ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.batch"				VALUE = "">
+	<MvASSIGN NAME = "l.batch:batchdate"	VALUE = "{ s.dyn_time_t }">
+	<MvASSIGN NAME = "l.batch:name"			VALUE = "{ l.batch_name }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Batch_Insert( l.batch ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.batch_name }">	<MvASSIGN NAME = "l.log_message" VALUE = "{ 'Batch \'' $ l.batch:name $ '\' created' }">
+	<MvELSE>									<MvASSIGN NAME = "l.log_message" VALUE = "{ 'Batch ' $ l.batch:id $ ' created' }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-BCH-00004', l.log_message ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_Batch( l.batch ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>

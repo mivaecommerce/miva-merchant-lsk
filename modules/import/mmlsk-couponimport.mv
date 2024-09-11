@@ -1,0 +1,705 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-COU-
+| Next Error Code: 8    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-couponimport">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Coupon Import">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "import, clientside, clientside_sri">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: clientside
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.len"	VALUE = "{ len_var( g.Filename ) }">
+
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ l.len }">		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/import/couponimport/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/import/couponimport/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: import
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:screen"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:persistent"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:format"				VALUE = "delimited">
+	<MvASSIGN NAME = "l.capabilities:persistent_provision"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>											field			name						header						required	default		validation		</MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'code',			'Coupon Code',				'COUPON_CODE',				1,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'descrip',		'Description',				'DESCRIPTION',				0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'custscope',	'Eligibility',				'ELIGIBILITY',				0,			'A',		'list:All,Customer,LoggedIn:A,X,L' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'dt_start',		'Not Valid Before',			'NOT_VALID_BEFORE',			0,			0,			'time_t' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'dt_end',		'Not Valid After',			'NOT_VALID_AFTER',			0,			0,			'time_t' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'max_use',		'Max Use (Total)',			'MAX_USE',					0,			0,			'integer_nonneg' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'max_per',		'Max Use (Per Shopper)',	'MAX_PER_SHOPPER',			0,			0,			'integer_nonneg' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'active',		'Active',					'ACTIVE',					0,			1,			'bool' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'pricegroups',	'Price Groups',				'PRICE_GROUPS',				0,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'customers',	'Customers',				'CUSTOMERS',				0,			'',			'string' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.fields"	VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed', 'Records Processed:', 0 ) }">
+
+	<MvIF EXPR = "{ l.import:config:coupons EQ 'add' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'update' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'addupdate' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'replace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'addreplace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'delete' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_deleted', 'Records Deleted:', 0 ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped', 'Records Skipped:', 0 ) }">
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'record_problems', 'Record Problems:', 0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 1 }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+    <MvASSIGN NAME = "l.list_pos"				VALUE = 0>
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ ImportModule_Delimited_Columns( l.module, l.import, l.run_data:columns_all ) }">
+        <MvIF EXPR = "{ miva_variable_value( 'l.run_data:columns_present:' $ l.column:field ) }">
+            <MvASSIGN NAME = "l.column:present"	VALUE = 1>
+
+            <MvREFERENCE NAME = "l.run_data:columns_list"		INDEX = "{ ++l.list_pos }"		VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+            <MvREFERENCE NAME = "l.run_data:columns_present"	MEMBER = "{ l.column:field }"	VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+        </MvIF>
+    </MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.run_data:columns_present:code, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].Coupon_Load_Code( l.record:code, l.existing_coupon ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:coupons EQ 'add' }">			<MvFUNCTIONRETURN VALUE = "{ Import_Add_Only( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'update' }">		<MvFUNCTIONRETURN VALUE = "{ Import_Update_Only( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'addupdate' }">	<MvFUNCTIONRETURN VALUE = "{ Import_Add_And_Update( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'replace' }">	<MvFUNCTIONRETURN VALUE = "{ Import_Replace_Only( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'addreplace' }"> <MvFUNCTIONRETURN VALUE = "{ Import_Add_And_Replace( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+	<MvELSEIF EXPR = "{ l.import:config:coupons EQ 'delete' }">		<MvFUNCTIONRETURN VALUE = "{ Import_Delete_Only( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-COU-00001', 'Unsupported coupon mode' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:id }">
+		<MvASSIGN NAME = "g.Import_Coupon_Coupons"							VALUE = "{ l.import:config:coupons }">
+
+		<MvIF EXPR = "{ ( l.import:config:delim_pricegroup EQ 9 )	OR
+						( l.import:config:delim_pricegroup EQ 44 )	OR
+						( l.import:config:delim_pricegroup EQ 59 )	OR
+						( l.import:config:delim_pricegroup EQ 32 ) }">
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup"			VALUE = "{ l.import:config:delim_pricegroup }">
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup_Other"	VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup"			VALUE = 0>
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup_Other"	VALUE = "{ asciichar( l.import:config:delim_pricegroup ) }">
+		</MvIF> 
+
+		<MvIF EXPR = "{ ( l.import:config:delim_customer EQ 9 )		OR
+						( l.import:config:delim_customer EQ 44 )	OR
+						( l.import:config:delim_customer EQ 59 )	OR
+						( l.import:config:delim_customer EQ 32 ) }">
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer"			VALUE = "{ l.import:config:delim_customer }">
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer_Other"		VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer"			VALUE = 0>
+			<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer_Other"		VALUE = "{ asciichar( l.import:config:delim_customer ) }">
+		</MvIF> 
+	<MvELSE>
+		<MvASSIGN NAME = "g.Import_Coupon_Coupons"							VALUE = "addupdate">
+		<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup"				VALUE = 59>
+		<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup_Other"		VALUE = "">
+		<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer"				VALUE = 59>
+		<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer_Other"			VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "coupons,delim_pricegroup,delim_customer">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'coupons' }">					<MvFUNCTIONRETURN VALUE = "<b>Coupons:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'delim_pricegroup' }">	<MvFUNCTIONRETURN VALUE = "<b>Price Group Delimiter:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'delim_customer' }">		<MvFUNCTIONRETURN VALUE = "<b>Customer Delimiter:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'coupons' }">
+		<select name="Import_Coupon_Coupons">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'add',			g.Import_Coupon_Coupons,	'Add New Coupons Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'update',		g.Import_Coupon_Coupons,	'Update Existing Coupons Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addupdate',	g.Import_Coupon_Coupons,	'Add New and Update Existing Coupons' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',		g.Import_Coupon_Coupons,	'Replace Existing Coupons Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addreplace',	g.Import_Coupon_Coupons,	'Add New and Replace Existing Coupons' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'delete',		g.Import_Coupon_Coupons,	'Delete Existing Coupons Only' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'delim_pricegroup' }">
+		<select name="Import_Coupon_Delimiter_PriceGroup" onchange="Import_Coupon_Delimiter_PriceGroup_Changed( this );">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 9,		g.Import_Coupon_Delimiter_PriceGroup,	'Tab' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 44,	g.Import_Coupon_Delimiter_PriceGroup,	'Comma' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 59,	g.Import_Coupon_Delimiter_PriceGroup,	'Semicolon' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 32,	g.Import_Coupon_Delimiter_PriceGroup,	'Space' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 0,		g.Import_Coupon_Delimiter_PriceGroup,	'Other' ) }">
+		</select>
+
+		<MvIF EXPR = "{ g.Import_Coupon_Delimiter_PriceGroup EQ 0 }">	<MvASSIGN NAME = "l.style"	VALUE = "display: inline;">
+		<MvELSE>														<MvASSIGN NAME = "l.style"	VALUE = "display: none;">
+		</MvIF>
+
+		<input id="import_coupon_delim_pricegroup_other" style="{ l.style }" type="text" size="2" maxlength="1" name="Import_Coupon_Delimiter_PriceGroup_Other" value="{ encodeentities( g.Import_Coupon_Delimiter_PriceGroup_Other ) }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'delim_customer' }">
+		<select name="Import_Coupon_Delimiter_Customer" onchange="Import_Coupon_Delimiter_Customer_Changed( this );">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 9,		g.Import_Coupon_Delimiter_Customer,	'Tab' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 44,	g.Import_Coupon_Delimiter_Customer,	'Comma' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 59,	g.Import_Coupon_Delimiter_Customer,	'Semicolon' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 32,	g.Import_Coupon_Delimiter_Customer,	'Space' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 0,		g.Import_Coupon_Delimiter_Customer,	'Other' ) }">
+		</select>
+
+		<MvIF EXPR = "{ g.Import_Coupon_Delimiter_Customer EQ 0 }">	<MvASSIGN NAME = "l.style"	VALUE = "display: inline;">
+		<MvELSE>													<MvASSIGN NAME = "l.style"	VALUE = "display: none;">
+		</MvIF>
+
+		<input id="import_coupon_delim_customer_other" style="{ l.style }" type="text" size="2" maxlength="1" name="Import_Coupon_Delimiter_Customer_Other" value="{ encodeentities( g.Import_Coupon_Delimiter_Customer_Other ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT g.Session:cache:couponimport:script_output ) AND
+					(
+						( l.field_id EQ 'delim_pricegroup' ) OR
+						( l.field_id EQ 'delim_customer' )
+					) }">
+		<MvASSIGN NAME = "g.Session:cache:couponimport:script_output"	VALUE = 1>
+		<MvASSIGN NAME = "l.integrity"									VALUE = "{ Module_Clientside_File_Integrity( l.module, 'functions.js', g.Session:clientside_minified ) }">
+
+		<img src="{ g.AdminGraphics_Path $ 'blank.gif' }" onload="{ 'var s = document.createElement( \'script\' ); s.setAttribute( \'src\', \'' $ [ g.Module_Admin ].JavaScriptEncode( g.clientside_url $ 'Module_Code=' $ encodeattribute( l.module:code ) $ '&Filename=functions.js' ) $ '\' ); s.setAttribute( \'integrity\', \'' $ encodejavascriptstring( l.integrity ) $ '\' ); s.setAttribute( \'crossorigin\', \'anonymous\' ); this.parentNode.appendChild( s );' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Import_Coupon_Coupons"							VALUE = "{ trim( g.Import_Coupon_Coupons ) }">
+	<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup"				VALUE = "{ trim( g.Import_Coupon_Delimiter_PriceGroup ) }">
+	<MvASSIGN NAME = "g.Import_Coupon_Delimiter_PriceGroup_Other"		VALUE = "{ trim( g.Import_Coupon_Delimiter_PriceGroup_Other ) }">
+	<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer"				VALUE = "{ trim( g.Import_Coupon_Delimiter_Customer ) }">
+	<MvASSIGN NAME = "g.Import_Coupon_Delimiter_Customer_Other"			VALUE = "{ trim( g.Import_Coupon_Delimiter_Customer_Other ) }">
+
+	<MvIF EXPR = "{ ( g.Import_Coupon_Coupons NE 'add' )		AND
+					( g.Import_Coupon_Coupons NE 'update' )		AND
+					( g.Import_Coupon_Coupons NE 'addupdate' )	AND
+					( g.Import_Coupon_Coupons NE 'replace' )	AND
+					( g.Import_Coupon_Coupons NE 'addreplace' )	AND
+					( g.Import_Coupon_Coupons NE 'delete' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select a coupon handling mode' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Import_Coupon_Delimiter_PriceGroup NE 0 }">
+		<MvIF EXPR = "{ g.Import_Coupon_Delimiter_PriceGroup EQ asciivalue( l.import:delim ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'The price group delimiter must be different than the import delimiter' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ len( g.Import_Coupon_Delimiter_PriceGroup_Other ) NE 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please enter a price group delimiter that is a single character' ) }">
+	<MvELSEIF EXPR = "{ l.import:delim EQ g.Import_Coupon_Delimiter_PriceGroup_Other }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Import_Coupon_Delimiter_PriceGroup_Other', 'The price group delimiter must be different than the import delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Import_Coupon_Delimiter_Customer NE 0 }">
+		<MvIF EXPR = "{ g.Import_Coupon_Delimiter_Customer EQ asciivalue( l.import:delim ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'The customer delimiter must be different than the import delimiter' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ len( g.Import_Coupon_Delimiter_Customer_Other ) NE 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please enter a customer delimiter that is a single character' ) }">
+	<MvELSEIF EXPR = "{ l.import:delim EQ g.Import_Coupon_Delimiter_Customer_Other }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Import_Coupon_Delimiter_Customer_Other', 'The customer delimiter must be different than the import delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.import:config:coupons"	VALUE = "{ g.Import_Coupon_Coupons }">
+
+	<MvIF EXPR = "{ g.Import_Coupon_Delimiter_PriceGroup EQ 0 }">	<MvASSIGN NAME = "l.import:config:delim_pricegroup"	VALUE = "{ asciivalue( g.Import_Coupon_Delimiter_PriceGroup_Other ) }">
+	<MvELSE>														<MvASSIGN NAME = "l.import:config:delim_pricegroup"	VALUE = "{ g.Import_Coupon_Delimiter_PriceGroup }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Import_Coupon_Delimiter_Customer EQ 0 }">		<MvASSIGN NAME = "l.import:config:delim_customer"	VALUE = "{ asciivalue( g.Import_Coupon_Delimiter_Customer_Other ) }">
+	<MvELSE>														<MvASSIGN NAME = "l.import:config:delim_customer"	VALUE = "{ g.Import_Coupon_Delimiter_Customer }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.import:config:delim_pricegroup"	VALUE = 59>
+	<MvASSIGN NAME = "l.import:config:delim_customer"	VALUE = 59>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'R', l.provide_xml, 'Coupons', l.import:config:coupons, 'add,update,addupdate,replace,addreplace,delete',
+																														  'add,update,addupdate,replace,addreplace,delete' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'PriceGroupDelimiter' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'R', l.provide_xml, 'PriceGroupDelimiter', l.import:config:delim_pricegroup, 'tab,comma,semicolon,space,other', '9,44,59,32,0' ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.import:config:delim_pricegroup EQ 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R:1', l.provide_xml, 'PriceGroupDelimiter_Other', l.delim ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.import:config:delim_pricegroup"	VALUE = "{ asciivalue( l.delim ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'CustomerDelimiter' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'R', l.provide_xml, 'CustomerDelimiter', l.import:config:delim_customer, 'tab,comma,semicolon,space,other', '9,44,59,32,0' ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.import:config:delim_customer EQ 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R:1', l.provide_xml, 'CustomerDelimiter_Other', l.delim ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.import:config:delim_customer"	VALUE = "{ asciivalue( l.delim ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:delim_pricegroup EQ asciivalue( l.import:delim ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'The price group delimiter must be different than the import delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:delim_customer EQ asciivalue( l.import:delim ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'The customer delimiter must be different than the import delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.columns_present:code }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-COU-00002', 'The Coupon Code field must be assigned to an import file column' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Problem" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Record Problem - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'record_problems', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Create" PARAMETERS = "session var, product var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.product, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvEVAL EXPR = "{ Set_Field_Default( l.session, l.product, l.run_data, l.column ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Update" PARAMETERS = "session var, product var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.product, l.run_data, l.column, 0 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Mode Specific Single Record Import Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Add_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.existing_coupon:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' already exists.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_Coupon( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_coupon:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Coupon( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Update" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_coupon:id }">
+		<MvIF EXPR = "{ NOT Import_Create_Coupon( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Update_Coupon( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_coupon:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Replace_Coupon( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Replace" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_coupon:id }">
+		<MvIF EXPR = "{ NOT Import_Create_Coupon( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Replace_Coupon( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Delete_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_coupon:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Delete_Coupon( l.import, l.session, l.record, l.run_data, l.existing_coupon ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Functions To Actually Import a Single Record
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Create_Coupon" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:use_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].Coupon_Insert( l.record ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' failed to create: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-COU-00003', 'Coupon \'' $ l.record:code $ '\' created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Import_Update_PriceGroups( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Customers( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Coupon" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Update( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Blank values are ignored for these fields, even when their columns are assigned
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:code }">				<MvASSIGN NAME = "l.existing_coupon:code"			VALUE = "{ l.record:code }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:custscope }">			<MvASSIGN NAME = "l.existing_coupon:custscope"		VALUE = "{ l.record:custscope }">	</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:dt_start }">			<MvASSIGN NAME = "l.existing_coupon:dt_start"		VALUE = "{ l.record:dt_start }">	</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:dt_end }">				<MvASSIGN NAME = "l.existing_coupon:dt_end"			VALUE = "{ l.record:dt_end }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:max_use }">				<MvASSIGN NAME = "l.existing_coupon:max_use"		VALUE = "{ l.record:max_use }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:max_per }">				<MvASSIGN NAME = "l.existing_coupon:max_per"		VALUE = "{ l.record:max_per }">		</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:active }">				<MvASSIGN NAME = "l.existing_coupon:active"			VALUE = "{ l.record:active }">		</MvIF>
+
+	<MvCOMMENT>
+	|
+	| When assigned, blank values are permitted for these fields
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:descrip }">		<MvASSIGN NAME = "l.existing_coupon:descrip"		VALUE = "{ l.record:descrip }">		</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].Coupon_Update( l.existing_coupon ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' failed to update: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-COU-00004', 'Coupon \'' $ l.existing_coupon:code $ '\' updated' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_updated', 1 ) }">
+
+	<MvASSIGN NAME = "l.existing_coupon:pricegroups"	VALUE = "{ l.record:pricegroups }">
+	<MvASSIGN NAME = "l.existing_coupon:customers"		VALUE = "{ l.record:customers }">
+
+	<MvIF EXPR = "{ NOT Import_Update_PriceGroups( l.import, l.session, l.existing_coupon, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Customers( l.import, l.session, l.existing_coupon, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Coupon" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].Coupon_Delete( l.existing_coupon ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' failed to replace: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-COU-00005', 'Coupon \'' $ l.existing_coupon:code $ '\' deleted' ) }">
+
+	<MvASSIGN NAME = "l.record:use_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].Coupon_Insert( l.record ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-COU-00006', 'Coupon \'' $ l.record:code $ '\' created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Import_Update_PriceGroups( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_Customers( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Delete_Coupon" PARAMETERS = "import var, session var, record var, run_data var, existing_coupon var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].Coupon_Delete( l.existing_coupon ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'coupon \'' $ l.record:code $ '\' failed to delete: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-COU-00007', 'Coupon \'' $ l.existing_coupon:code $ '\' deleted' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_deleted', 1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_PriceGroups" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( NOT l.run_data:columns_present:pricegroups ) OR ( ISNULL l.record:pricegroups ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.pricegroup_name" ARRAY = "l.pricegroup_names" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.record:pricegroups, asciichar( l.import:config:delim_pricegroup ), l.pricegroup_names ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroup_Load_Name( l.pricegroup_name, l.pricegroup ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ Record_Problem( l.session, 'No such price group \'' $ l.pricegroup_name $ '\'.' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].CouponXPriceGroup_Insert( l.record:id, l.pricegroup:id ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Customers" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( NOT l.run_data:columns_present:customers ) OR ( ISNULL l.record:customers ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:custscope NE 'X' }">
+		<MvEVAL EXPR = "{ Record_Problem( l.session, 'Coupon \'' $ l.record:code $ '\' has the incorrect eligibility to be restricted to specific customers.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.customer_identifier" ARRAY = "l.customer_identifiers" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.record:customers, asciichar( l.import:config:delim_customer ), l.customer_identifiers ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Login( l.customer_identifier, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Email( l.customer_identifier, l.customer ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvEVAL EXPR = "{ Record_Problem( l.session, 'No such customer \'' $ l.customer_identifier $ '\'.' ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].CouponXCustomer_Insert( l.record:id, l.customer:id ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

@@ -1,0 +1,333 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBA-
+| Next Error Code: 17    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DB_Supported_List" PARAMETERS = "list var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.list" INDEX = 1 VALUE = "mysql">
+	<MvASSIGN NAME = "l.list" INDEX = 2 VALUE = "postgresql">
+
+	<MvFUNCTIONRETURN VALUE = 2>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_PrivateKey_Supported_List" PARAMETERS = "list var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.list" INDEX = 1 VALUE = "mivasql">
+	<MvASSIGN NAME = "l.list" INDEX = 2 VALUE = "mysql">
+	<MvASSIGN NAME = "l.list" INDEX = 3 VALUE = "postgresql">
+
+	<MvFUNCTIONRETURN VALUE = 3>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Supported_Name" PARAMETERS = "type" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'mivasql' }">			<MvFUNCTIONRETURN VALUE = "MivaSQL">
+	<MvELSEIF EXPR = "{ l.type EQ 'mysql' }">		<MvFUNCTIONRETURN VALUE = "MySQL">
+	<MvELSEIF EXPR = "{ l.type EQ 'postgresql' }">	<MvFUNCTIONRETURN VALUE = "PostgreSQL">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Configuration_Save" PARAMETERS = "type, database, username, password, flags,
+														 privatekey_type, privatekey_database, privatekey_username, privatekey_password, privatekey_flags" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ fexists( 'merchdb.dat' ) }">
+		<MvIF EXPR = "{ NOT fdelete( 'merchdb.dat' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00001', 'Unable to delete merchdb.dat' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.preferred_ciphers"	VALUE = "{ [ g.Library_Filename_Crypto ].Encryption_Default_Preferred_Ciphers() }">
+
+	<MvIF EXPR = "{ len( l.password ) }">				<MvASSIGN NAME = "l.password"				VALUE = "{ DB_Encrypt_Password_Ciphers( l.preferred_ciphers, l.password ) }">				</MvIF>
+	<MvIF EXPR = "{ len( l.privatekey_password ) }">	<MvASSIGN NAME = "l.privatekey_password"	VALUE = "{ DB_Encrypt_Password_Ciphers( l.preferred_ciphers, l.privatekey_password ) }">	</MvIF>
+
+	<MvEXPORT FILE		= "merchdb.dat"
+			  FIELDS	= "l.type, l.database, l.username, l.password, l.flags,
+						   l.privatekey_type, l.privatekey_database, l.privatekey_username, l.privatekey_password, l.privatekey_flags"
+			  DELIMITER	= "|">
+	<MvIF EXPR = "{ g.MvEXPORT_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00002', g.MvEXPORT_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Configuration_Encrypt" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.data">
+		<MvIMPORT FILE		= "merchdb.dat"
+				  FIELDS	= "l.type,
+				  			   l.database,
+				  			   l.username,
+				  			   l.password,
+				  			   l.flags,
+				  			   l.privatekey_type,
+				  			   l.privatekey_database,
+				  			   l.privatekey_username,
+				  			   l.privatekey_password,
+				  			   l.privatekey_flags,
+				  			   l.delimited_sources"
+				  DELIMITER	= "|">
+			<MvIF EXPR = "{ ISNULL l.type }">
+				<MvIMPORTCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.password }">
+				<MvIF EXPR = "{ NOT DB_Password_Encrypted( l.password ) }">
+					<MvASSIGN NAME = "l.password" VALUE = "{ DB_Encrypt_Password( l.password ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.privatekey_password }">
+				<MvIF EXPR = "{ NOT DB_Password_Encrypted( l.privatekey_password ) }">
+					<MvASSIGN NAME = "l.privatekey_password" VALUE = "{ DB_Encrypt_Password( l.privatekey_password ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ l.type $ '|' $ l.database $ '|' $ l.username $ '|' $ l.password $ '|' $ l.flags $ '|' $ l.privatekey_type $ '|' $ l.privatekey_database $ '|' $ l.privatekey_username $ '|' $ l.privatekey_password $ '|' $ l.privatekey_flags $ '|' $ l.delimited_sources $ asciichar( 10 ) }">
+		</MvIMPORT>
+	</MvCAPTURE>
+
+	<MvIF EXPR = "{ g.MvIMPORT_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00014', 'Miva Merchant has not been installed, or merchdb.dat is missing/corrupted' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ file_create( 'merchdb.dat.tmp', 'data', l.data ) LT 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00015', 'Failed to create temporary merchdb.dat.tmp file: ' $ file_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT frename( 'merchdb.dat.tmp', 'merchdb.dat' ) }">
+		<MvASSIGN NAME = "l.file_last_error"	VALUE = "{ file_last_error() }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ fdelete( 'merchdb.dat.tmp' ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00016', 'Failed to rename merchdb.dat.tmp to merchdb.dat: ' $ l.file_last_error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Load_Source" PARAMETERS = "source, connection var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.connection"				VALUE = "">
+	<MvASSIGN NAME = "l.default_connection"		VALUE = "">
+	<MvASSIGN NAME = "l.encryption_required"	VALUE = 0>
+
+	<MvIMPORT FILE		= "merchdb.dat"
+			  FIELDS	= "l.imported_connection:type,
+			  			   l.imported_connection:database,
+			  			   l.imported_connection:username,
+			  			   l.imported_connection:password,
+			  			   l.imported_connection:flags,
+			  			   l.imported_connection:privatekey_type,
+			  			   l.imported_connection:privatekey_database,
+			  			   l.imported_connection:privatekey_username,
+			  			   l.imported_connection:privatekey_password,
+			  			   l.imported_connection:privatekey_flags,
+			  			   l.delimited_sources"
+			  DELIMITER	= "|">
+		<MvIF EXPR = "{ ISNULL l.imported_connection:type }">
+			<MvIMPORTCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.encryption_required }">
+			<MvIF EXPR = "{ NOT ISNULL l.imported_connection:password }">
+				<MvIF EXPR = "{ NOT DB_Password_Encrypted( l.imported_connection:password ) }">
+					<MvASSIGN NAME = "l.encryption_required" VALUE = 1>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.imported_connection:privatekey_password }">
+				<MvIF EXPR = "{ NOT DB_Password_Encrypted( l.imported_connection:privatekey_password ) }">
+					<MvASSIGN NAME = "l.encryption_required" VALUE = 1>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.default_connection AND ISNULL l.delimited_sources }">
+			<MvASSIGN NAME = "l.default_connection"					VALUE = "{ l.imported_connection }">
+			<MvASSIGN NAME = "l.default_connection:sources"			VALUE = "">
+			<MvASSIGN NAME = "l.default_connection:source_count"	VALUE = 0>
+
+			<MvIMPORTCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.connection }">
+			<MvASSIGN NAME = "l.unfiltered_source_count"			VALUE = "{ miva_splitstring( l.delimited_sources, ',', l.unfiltered_sources, 'trim, lower' ) }">
+			<MvASSIGN NAME = "l.source_count"						VALUE = "{ miva_array_filter( l.unfiltered_sources, 1, l.unfiltered_source, 'NOT ISNULL l.unfiltered_source', l.sources ) }">
+
+			<MvIF EXPR = "{ miva_array_search( l.sources, 1, l.search_source, 'l.search_source EQ l.source' ) }">
+				<MvASSIGN NAME = "l.connection"						VALUE = "{ l.imported_connection }">
+				<MvASSIGN NAME = "l.connection:sources"				VALUE = "{ l.sources }">
+				<MvASSIGN NAME = "l.connection:source_count"		VALUE = "{ l.source_count }">
+			</MvIF>
+		</MvIF>
+	</MvIMPORT>
+
+	<MvIF EXPR = "{ g.MvIMPORT_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00009', 'Miva Merchant has not been installed, or merchdb.dat is missing/corrupted' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.connection }">
+		<MvIF EXPR = "{ ISNULL l.default_connection }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00010', 'Unable to load database configuration' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.connection" VALUE = "{ l.default_connection }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.encryption_required }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ DB_Configuration_Encrypt() }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Open" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ DB_Open_Source( 'runtime' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Open_Source" PARAMETERS = "source" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Session:source"	VALUE = "{ l.source }">
+
+	<MvIF EXPR = "{ NOT DB_Load_Source( l.source, l.connection ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.connection:password }">
+		<MvASSIGN NAME = "l.decrypted_password" VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.decrypted_password" VALUE = "{ DB_Decrypt_Password( l.connection:password ) }">
+
+		<MvIF EXPR = "{ ISNULL l.decrypted_password }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00012', 'Unable to decrypt database password' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ DB_Open_Parameters( l.connection:type,
+													 l.connection:database,
+													 l.connection:username,
+													 l.decrypted_password,
+													 l.connection:flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Open_Parameters" PARAMETERS = "type, database, username, password, flags" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'mysql' }">
+		<MvASSIGN NAME = "g.Library_Filename_Native_DBAPI"	VALUE = "dbapi_mysql.mvc">
+	<MvELSEIF EXPR = "{ l.type EQ 'postgresql' }">
+		<MvASSIGN NAME = "g.Library_Filename_Native_DBAPI" 	VALUE = "dbapi_postgresql.mvc">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00005', 'Unsupported database type \'' $ l.type $ '\'' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Native_DBAPI"					VALUE = "{ l.type }">
+	<MvASSIGN NAME = "g.Library_Native_DBAPI"			VALUE = "{ g.Library_Path $ g.Library_Filename_Native_DBAPI }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Open( l.database, l.username, l.password ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Apply_Flags( 'Merchant', l.flags ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Open_PrivateKey" PARAMETERS = "name var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DB_Load_Source( g.Session:source, l.connection ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.connection:privatekey_type }">
+		<MvASSIGN NAME = "l.name"										VALUE = "Merchant">
+		<MvASSIGN NAME = "g.PrivateKey_Native_DBAPI"					VALUE = "{ g.Native_DBAPI }">
+		<MvASSIGN NAME = "g.Library_PrivateKey_Native_DBAPI"			VALUE = "{ g.Library_Native_DBAPI }">
+		<MvASSIGN NAME = "g.Library_Filename_PrivateKey_Native_DBAPI"	VALUE = "{ g.Library_Filename_Native_DBAPI }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.name" VALUE = "Merchant_PrivateKey">
+
+	<MvIF EXPR = "{ ISNULL l.connection:privatekey_password }">
+		<MvASSIGN NAME = "l.decrypted_password" VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.decrypted_password" VALUE = "{ DB_Decrypt_Password( l.connection:privatekey_password ) }">
+
+		<MvIF EXPR = "{ ISNULL l.decrypted_password }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00013', 'Unable to decrypt database password' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ DB_Open_PrivateKey_Parameters( l.connection:privatekey_type,
+																l.connection:privatekey_database,
+																l.connection:privatekey_username,
+																l.decrypted_password,
+																l.connection:privatekey_flags ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Close_PrivateKey" PARAMETERS = "name" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.name NE 'Merchant' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_PrivateKey_Native_DBAPI ].DB_Close_PrivateKey() }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Open_PrivateKey_Parameters" PARAMETERS = "type, database, username, password, flags" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'mivasql' }">
+		<MvASSIGN NAME = "g.Library_Filename_PrivateKey_Native_DBAPI"	VALUE = "dbapi_mivasql.mvc">
+	<MvELSEIF EXPR = "{ l.type EQ 'mysql' }">
+		<MvASSIGN NAME = "g.Library_Filename_PrivateKey_Native_DBAPI"	VALUE = "dbapi_mysql.mvc">
+	<MvELSEIF EXPR = "{ l.type EQ 'postgresql' }">
+		<MvASSIGN NAME = "g.Library_Filename_PrivateKey_Native_DBAPI" 	VALUE = "dbapi_postgresql.mvc">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBA-00008', 'Unsupported database type \'' $ l.type $ '\'' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.PrivateKey_Native_DBAPI"						VALUE = "{ l.type }">
+	<MvASSIGN NAME = "g.Library_PrivateKey_Native_DBAPI"				VALUE = "{ g.Library_Path $ g.Library_Filename_PrivateKey_Native_DBAPI }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_PrivateKey_Native_DBAPI ].DB_Open_PrivateKey( l.database, l.username, l.password ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Apply_Flags( 'Merchant_PrivateKeys', l.flags ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Increment_Lock_Table" PARAMETERS = "primary_table, additional_tables" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Increment_Requires_Lock() }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Lock_Table( l.primary_table, l.additional_tables ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Increment_Unlock_Table" PARAMETERS = "primary_table" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Increment_Requires_Lock() }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Unlock_Table( l.primary_table ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DB_Password_Encrypted" PARAMETERS = "password" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( 'PBES2:' IN l.password ) EQ 1 }">		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ ( 'ENC2:' IN l.password ) EQ 1 }">	<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ ( 'ENCR:' IN l.password ) EQ 1 }">	<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSE>												<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>

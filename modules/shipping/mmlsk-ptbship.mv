@@ -1,0 +1,1706 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-SHP-PTB-
+| Next Error Code: 95
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-ptbship">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Price Table Based Shipping">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0900">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.61">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to generate shipping charges based on the order total.  The Handling charge is a flat fee applied to every order that uses this method.  The Ceiling is the maximum order total for a particular shipping charge.  The Charge % is the shipping charge applied to the order based on the ceiling.  If there is no upper limit, enter \"+\" as the ceiling.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "shipping, vis_product, vis_shipping, provision_store, data_store, not_prod, json, clientside, clientside_sri, copy_prod">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PTBSOptions
+						 (
+							o_charges ' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL() $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00033', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ptbs_options:o_charges"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT PTBSOptions_Insert( l.ptbs_options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PTBSMethods
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+						    code		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+						    method		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
+						    handling	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'PTBSMethods_1 ON ' $ g.Store_Table_Prefix $ 'PTBSMethods ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'PTBSMethods_2 ON ' $ g.Store_Table_Prefix $ 'PTBSMethods ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							method_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							ceiling		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ ',
+							rate		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ ',
+							percent		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'PTBSBreaks_1 ON ' $ g.Store_Table_Prefix $ 'PTBSBreaks ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'PTBSBreaks_2 ON ' $ g.Store_Table_Prefix $ 'PTBSBreaks ( method_id, ceiling )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'PTBSProducts
+						  (
+							method_id	'	$ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							product_id	'	$ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							rate		'	$ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'PTBSProducts_1 ON ' $ g.Store_Table_Prefix $ 'PTBSProducts ( product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'PTBSProducts_2 ON ' $ g.Store_Table_Prefix $ 'PTBSProducts ( method_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'PTBSMethods', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'PTBSBreaks', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00084', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'PTBSMethods' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'PTBSBreaks' ) }">
+
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PTBSOptions' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PTBSMethods' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PTBSBreaks' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'PTBSProducts' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Calculation Feature (shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShippingModule_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ PTBSMethod_Load_Code( l.data, l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.method:method ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "method">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Label" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "Shipping Method:">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Value" PARAMETERS = "module var, field_id, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "{ ShippingModule_Description( l.module, l.data ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Shipping_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"			VALUE = "">
+	<MvASSIGN NAME = "l.method_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.basket_subtotal"	VALUE = "{ PTBS_Calculate_Basket_SubTotal( g.Basket:basket_id ) }">
+
+	<MvFOREACH ITERATOR = "l.ptbs_method" ARRAY = "l.ptbs_methods" COUNT = "{ PTBSMethodList_Load( l.ptbs_methods ) }">
+		<MvIF EXPR = "{ PTBS_Calculate_Basket( l.ptbs_method, l.basket_subtotal, l.shipping_total ) }">
+			<MvASSIGN NAME = "l.method"			VALUE = "">
+			<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.ptbs_method:code }">
+			<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.ptbs_method:method }">
+			<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.shipping_total }">
+
+			<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Enabled_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.ptbs_method" ARRAY = "l.ptbs_methods" COUNT = "{ PTBSMethodList_Load( l.ptbs_methods ) }">
+		<MvASSIGN NAME = "l.method"			VALUE = "">
+		<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.ptbs_method:code }">
+		<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.ptbs_method:method }">
+
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Calculate_Basket" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PTBSMethod_Load_Code( l.data, l.method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_subtotal" VALUE = "{ PTBS_Calculate_Basket_SubTotal( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ NOT PTBS_Calculate_Basket( l.method, l.basket_subtotal, l.shipping_total ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_charge"				VALUE = "">
+	<MvASSIGN NAME = "l.basket_charge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basket_charge:module_id" 	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basket_charge:type" 		VALUE = "SHIPPING">
+	<MvASSIGN NAME = "l.basket_charge:descrip" 		VALUE = "{ 'Shipping: ' $ l.method:method }">
+	<MvASSIGN NAME = "l.basket_charge:amount" 		VALUE = "{ l.shipping_total ROUND 2 }">
+	<MvASSIGN NAME = "l.basket_charge:disp_amt" 	VALUE = "{ l.basket_charge:amount }">
+	<MvASSIGN NAME = "l.basket_charge:tax_exempt" 	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basket_charge ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Add/Edit Screen Feature (vis_product)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Product_Tabs" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.can_view" VALUE = "{ CanI( g.Admin_User_Administrator, g.Admin_User_ID, 'SHIP', 1, 0, 0, 0 ) }">
+	<MvIF EXPR = "{ ( l.can_view ) AND ( len( g.Edit_Product ) ) }">
+		<MvFUNCTIONRETURN VALUE = "PTBS_Product:Price Table Shipping Charges">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Content" PARAMETERS = "module var, tab, load_fields, product var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab EQ 'PTBS_Product' }">
+		<MvEVAL EXPR = "{ Element_PriceTableBasedShippingChargeList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_PriceTableBasedShipping_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_PriceTableBasedShippingChargeList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_PriceTableBasedShipping_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new PriceTableBasedShippingChargeList( MMScreenContext.product.id ); } );
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+		<MvEVAL EXPR = "{ Element_PriceTableBasedShippingChargeList_HTML( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Configuration Change Notification Feature (not_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ PTBSProduct_Delete_All_Product( l.product:id ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Settings Screen Feature (vis_shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Shipping_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.PTBS_Options:o_charges" VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.PTBS_Options:o_charges ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PTBSOptions_Update( g.PTBS_Options ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00054', 'PTBS Options updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "PTBS_MnB:Price Table Based Shipping,GT_SHIPSETTINGS/PTBS_OPTIONS:Price Table Based Shipping Options">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT PTBSOptions_Load( g.PTBS_Options ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'PTBS_MnB' }">
+		<MvEVAL EXPR = "{ Element_PriceTableBasedShippingList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_PriceTableBasedShipping_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_PriceTableBasedShippingList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_PriceTableBasedShipping_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new PriceTableBasedShippingList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+		<MvEVAL EXPR = "{ Element_PriceTableBasedShippingList_HTML( l.module ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Admin ].Tab_Visible( g.Tab, 'PTBS_OPTIONS' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_SHIPSETTINGS', 'PTBS_OPTIONS' ) }">
+			<table width="100%">
+				<tr>
+					<td nowrap>&nbsp;</td>
+					<td width="100%">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.PTBS_Options:o_charges, 'PTBS_Options:o_charges', 1, 'Include <i>Other Basket Charges</i> in the Order Total' ) }">
+					</td>
+				</tr>
+			</table>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
+	<MvELSE>
+		<MvHIDE FIELDS = "g.PTBS_Options">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'settings' }">			<MvEVAL EXPR = "{ Module_Provision_Store_Settings( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'method_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Delete( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'method_add' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Method_Add( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'product_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Product_Delete( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'product_add' }">		<MvEVAL EXPR = "{ Module_Provision_Store_Product_Add( l.module, l.child_xml ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PTBSOptions_Load( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml, 'IncludeOtherCharges', l.options:o_charges ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSOptions_Update( l.options ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00092', 'PTBS Options updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'method', l.method ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Load_Code( l.method, l.ptbs_method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Method \'' $ l.method $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Delete( l.ptbs_method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00063', 'PTBS Method \'' $ l.ptbs_method:code $ '\' deleted' ) }">
+
+	<MvIF EXPR = "{ NOT PTBSBreak_Delete_All_Method( l.ptbs_method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00064', 'PTBS Method \'' $ l.ptbs_method:code $ '\' Break records deleted' ) }">
+
+	<MvIF EXPR = "{ NOT PTBSProduct_Delete_All_Method( l.ptbs_method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00065', 'PTBS Method \'' $ l.ptbs_method:code $ '\' Product records deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.ranges"			VALUE = "">
+	<MvASSIGN NAME = "l.range_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'O:100',	l.provide_xml,	'Code',		l.method:code )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'R:100',	l.provide_xml,	'Method',	l.method:method )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(	'R',		l.provide_xml,	'Handling',	l.method:handling, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSMethod_Load_Code( l.method:code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A shipping method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'range' }">
+			<MvASSIGN NAME = "l.range" VALUE = "">
+
+			<MvIF EXPR = "{ NOT Module_Provision_Store_Method_Range( l.module, l.child_xml, l.range ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.range_count" VALUE = "{ miva_array_insert_var( l.ranges, l.range, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.range_lookup" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.range" ARRAY = "l.ranges" COUNT = "{ l.range_count }">
+		<MvIF EXPR = "{ miva_member_exists( l.range_lookup, l.range:ceiling ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Range ceiling \'' $ l.range:ceiling $ '\' is already in use' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.range_lookup" MEMBER = "{ l.range:ceiling }" VALUE = 1>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00066', 'PTBS Method \'' $ l.method:code $ '\' created' ) }">
+
+	<MvFOREACH ITERATOR = "l.range" ARRAY = "l.ranges" COUNT = "{ l.range_count }">
+		<MvASSIGN NAME = "l.range:method_id" VALUE = "{ l.method:id }">
+
+		<MvIF EXPR = "{ NOT PTBSBreak_Insert( l.range ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00067', 'PTBS Method \'' $ l.method:code $ '\', Break \'' $ l.range:id $ '\' created' ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Range" PARAMETERS = "module var, provide_xml var, range var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(	'R', l.provide_xml,		'Ceiling',	l.range:ceiling ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'R', l.provide_xml,		'Rate',		l.range:rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.range:ceiling EQ '+' }">
+		<MvASSIGN NAME = "l.range:ceiling" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Max_NUMBER( 10, 2 ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Decimal( l.range:ceiling, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for Ceiling: ' $ g.Validation_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.range:percent" VALUE = "{ miva_member_exists( l.provide_xml:tags:Rate[ 1 ]:attribute, 'percent' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Product_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'method',		l.method ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'product_code',	l.product_code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Load_Code( l.method, l.ptbs_method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Method \'' $ l.method $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.product_code, l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product \'' $ l.product_code $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSProduct_Delete( l.ptbs_method:id, l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00068', 'PTBS Method \'' $ l.ptbs_method:code $ '\', Product \'' $ l.product:code $ '\' deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Product_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text(		l.provide_xml, 'method',		l.method )			OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text(		l.provide_xml, 'product_code',	l.product_code )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number(	l.provide_xml, 'rate',			l.rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Load_Code( l.method, l.ptbs_method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Method \'' $ l.method $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.product_code, l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product \'' $ l.product_code $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSProduct_Load( l.ptbs_method:id, l.product:id, l.ptbs_product ) }">
+		<MvASSIGN NAME = "l.ptbs_product:rate"			VALUE = "{ l.rate }">
+
+		<MvIF EXPR = "{ NOT PTBSProduct_Update( l.ptbs_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00069', 'PTBS Method \'' $ l.ptbs_method:code $ '\', Product \'' $ l.product:id $ '\' updated' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.ptbs_product"				VALUE = "">
+		<MvASSIGN NAME = "l.ptbs_product:method_id"		VALUE = "{ l.ptbs_method:id }">
+		<MvASSIGN NAME = "l.ptbs_product:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.ptbs_product:rate"			VALUE = "{ l.rate }">
+
+		<MvIF EXPR = "{ NOT PTBSProduct_Insert( l.ptbs_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00070', 'PTBS Method \'' $ l.ptbs_method:code $ '\', Product \'' $ l.product:id $ '\' created' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingMethodList_Load_Query' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingMethodList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingMethod_Insert' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingMethod_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingMethod_Update' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingMethod_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingMethod_Delete' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingMethod_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingBreak_Insert' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingBreak_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingBreak_Update' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingBreak_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingBreak_Delete' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingBreak_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingChargeList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingChargeList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'PriceTableBasedShippingCharge_Update' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_PriceTableBasedShippingCharge_Update( l.module ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Filter_Ceiling" PARAMETERS = "query var, field_count var, filter_name, filter_operator, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'ceiling' }">
+		<MvIF EXPR = "{ l.filter_operator EQ 'LIKE' OR l.filter_operator EQ 'NOTLIKE' }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.filter_value EQ '+' }">	<MvASSIGN NAME = "l.search_value" VALUE = "{ Max_Number() }">
+		<MvELSE>									<MvASSIGN NAME = "l.search_value" VALUE = "{ l.filter_value }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.filter_operator EQ 'IN' OR l.filter_operator EQ 'NOT_IN' }">
+			<MvFOREACH ITERATOR = "l.value" ARRAY = "l.values" COUNT = "{ miva_splitstring( l.search_value, ',', l.values, 'trim,noempty' ) }">
+				<MvIF EXPR = "{ l.value EQ '+' }">
+					<MvASSIGN NAME = "l.value" VALUE = "{ Max_Number() }">
+				</MvIF>
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.search_value" VALUE = "{ miva_joinstring( l.values, ',', '' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.query, 'NUMBER', 'b.ceiling', l.filter_operator, l.search_value, '', '' ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Method_Load" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Method_ID', l.method_id ) }">
+		<MvIF EXPR = "{ NOT PTBSMethod_Load_ID( l.method_id, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00085', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_Method', l.code ) }">
+		<MvIF EXPR = "{ NOT PTBSMethod_Load_Code( l.code, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00086', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Method_Code', l.code ) }">
+		<MvIF EXPR = "{ NOT PTBSMethod_Load_Code( l.code, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00087', 'Method not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00088', 'Unable to load method: One of Method_ID, Edit_Method, or Method_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Break_Load" PARAMETERS = "break var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Break_ID', l.break_id ) }">
+		<MvIF EXPR = "{ NOT PTBSBreak_Load_ID( l.break_id, l.break ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00089', 'Break not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00090', 'Unable to load break: Break_ID must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingMethodList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'm.code',		'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'm.method',	'method' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'm.handling',	'handling' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'b.ceiling',	'ceiling' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'b.rate',		'rate' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'b.percent',	'percent' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'm.id 			AS method_id,
+																				 m.code			AS method_code,
+																				 m.method 		AS method_method,
+																				 m.handling 	AS method_handling' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER(	l.search_query, 'b.id',			'break_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER(	l.search_query, 'b.method_id',	'break_method_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_NUMBER(		l.search_query, 'b.ceiling',	'break_ceiling' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_NUMBER(		l.search_query, 'b.rate',		'break_rate' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_BOOL(		l.search_query, 'b.percent',	'break_percent' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'PTBSMethods', 'm' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'm', g.Store_Table_Prefix $ 'PTBSBreaks', 'b', 'b.method_id = m.id', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.search_query, l.filter, l.available_filters, g.Module_Root $ l.module:module, '', 'JSON_Filter_Ceiling', l.null ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'code:m.code,method:m.method,handling:m.handling', 'm.method' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.search_query, 'b.ceiling', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSMethods"
+				QUERY	= "{ l.search_sql }"
+				FIELDS	= "{ l.search_fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-SHP-PTB-00073', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.method_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.break_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.last_method_id" VALUE = 0>
+	<MvASSIGN NAME = "l.last_break_id" 	VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ NOT PTBSMethods.d.EOF }">
+			<MvIF EXPR = "{ l.last_method_id NE PTBSMethods.d.method_id }">
+				<MvIF EXPR = "{ l.break_count }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+					]
+				</MvIF>
+
+				<MvIF EXPR = "{ l.method_count }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.method_count ) }">
+				"id": 		<MvEVAL EXPR = "{ int( PTBSMethods.d.method_id ) }">,
+				"code": 	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( PTBSMethods.d.method_code ) }">",
+				"method": 	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( PTBSMethods.d.method_method ) }">",
+				"handling":	<MvEVAL EXPR = "{ PTBSMethods.d.method_handling ROUND 2 }">
+
+				<MvASSIGN NAME = "l.total_count"	VALUE = "{ l.total_count + 1 }">
+				<MvASSIGN NAME = "l.last_method_id" VALUE = "{ PTBSMethods.d.method_id }">
+				<MvASSIGN NAME = "l.last_break_id" 	VALUE = 0>
+				<MvASSIGN NAME = "l.break_count" 	VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.last_break_id NE PTBSMethods.d.break_id AND NOT ISNULL PTBSMethods.d.break_id }">
+				<MvIF EXPR = "{ l.break_count }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT l.break_count }">
+					, "breaks":
+					[
+				</MvIF>
+
+				<MvIF EXPR = "{ PTBSMethods.d.break_ceiling EQ Max_Number() }">	<MvASSIGN NAME = "l.ceiling" VALUE = "+">
+				<MvELSE>														<MvASSIGN NAME = "l.ceiling" VALUE = "{ PTBSMethods.d.break_ceiling ROUND 2 }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.break_count ) }">
+				"id":			<MvEVAL EXPR = "{ int( PTBSMethods.d.break_id ) }">,
+				"method_id":	<MvEVAL EXPR = "{ int( PTBSMethods.d.break_method_id ) }">,
+				"ceiling":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.ceiling ) }">",
+				"rate":			<MvEVAL EXPR = "{ PTBSMethods.d.break_rate ROUND 2 }">,
+				"percent":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( PTBSMethods.d.break_percent ) }">
+
+				<MvASSIGN NAME = "l.total_count" 	VALUE = "{ l.total_count + 1 }">
+				<MvASSIGN NAME = "l.last_break_id"	VALUE = "{ PTBSMethods.d.break_id }">
+			</MvIF>
+
+			<MvSKIP NAME = "Merchant" VIEW = "PTBSMethods" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+
+		<MvIF EXPR = "{ l.break_count }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			]
+		</MvIF>
+
+		<MvIF EXPR = "{ l.method_count }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+		</MvIF>
+		],
+		"start_offset": 0,
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingMethod_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Code',		l.method:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'Method',	l.method:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'R',		'Handling',	l.method:handling ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSMethod_Load_Code( l.method:code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00074', 'PTBS Method \'' $ l.method:code $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingMethod_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_method" VALUE = "{ l.method }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Code',		l.method:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Method',	l.method:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'O',		'Handling',	l.method:handling ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSMethod_Load_Code( l.method:code, l.existing_method ) AND l.method:id NE l.existing_method:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Update( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.original_method:code, l.method:code ) NE 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_UT ].ShippingMethod_Update_References( l.module, l.original_method:code, l.method:code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00075', 'PTBS Method \'' $ l.method:code $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingMethod_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSMethod_Delete( l.method:id ) 			OR
+					NOT PTBSBreak_Delete_All_Method( l.method:id )	OR
+					NOT PTBSProduct_Delete_All_Method( l.method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00076', 'PTBS Method \'' $ l.method:code $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingBreak_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.break"				VALUE = "">
+	<MvASSIGN NAME = "l.break:method_id" 	VALUE = "{ l.method:id }">
+	<MvASSIGN NAME = "l.break:ceiling"		VALUE = "">
+	<MvASSIGN NAME = "l.break:rate"			VALUE = 0.00>
+	<MvASSIGN NAME = "l.break:percent"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'Ceiling', l.break:ceiling )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'R', 'Rate',	l.break:rate, 10, 2 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'R', 'Percent',	l.break:percent ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.break:ceiling EQ '+' }">
+		<MvASSIGN NAME = "l.max_number" VALUE = "{ Max_Number() }">
+
+		<MvIF EXPR = "{ PTBSBreak_Load_Ceiling( l.method:id, l.max_number, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', 'Ceiling already in use' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.break:ceiling" VALUE = "{ l.max_number }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Positive_Required( l.break:ceiling ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', g.Validation_Message ) }">
+		<MvELSEIF EXPR = "{ PTBSBreak_Load_Ceiling( l.method:id, l.break:ceiling, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', 'Ceiling already in use' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSBreak_Insert( l.break ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00091', 'PTBS Break \'' $ l.break:id $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingBreak_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Break_Load( l.break ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O', 'Ceiling', l.break:ceiling )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O', 'Rate',	l.break:rate, 10, 2 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O', 'Percent',	l.break:percent ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.break:ceiling EQ '+' }">
+		<MvASSIGN NAME = "l.max_number" VALUE = "{ Max_Number() }">
+
+		<MvIF EXPR = "{ PTBSBreak_Load_Ceiling( l.break:method_id, l.max_number, l.existing_break ) AND l.break:id NE l.existing_break:id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', 'Ceiling already in use' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.break:ceiling" VALUE = "{ l.max_number }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_FloatingPoint_Positive_Required( l.break:ceiling ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', g.Validation_Message ) }">
+		<MvELSEIF EXPR = "{ PTBSBreak_Load_Ceiling( l.break:method_id, l.break:ceiling, l.existing_break ) AND l.break:id NE l.existing_break:id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', 'Ceiling already in use' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSBreak_Update( l.break ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00077', 'PTBS Break \'' $ l.break:id $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingBreak_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Break_Load( l.break ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PTBSBreak_Delete( l.break:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00078', 'PTBS Break \'' $ l.break:id $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingChargeList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'code',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'method',	'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'm.*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_NUMBER( l.search_query, 'p.rate', 'rate' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'PTBSMethods', 'm' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'm', g.Store_Table_Prefix $ 'PTBSProducts', 'p', 'p.method_id = m.id AND p.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'code:m.code,method:m.method,rate:p.rate:null_number', 'm.method' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'PTBSMethods', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-SHP-PTB-00079', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT PTBSMethods.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.method_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.method_count ) }">
+			"method_id":	<MvEVAL EXPR = "{ int( PTBSMethods.d.id ) }">,
+			"code": 		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( PTBSMethods.d.code ) }">",
+			"method": 		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( PTBSMethods.d.method ) }">",
+			"rate": 		<MvEVAL EXPR = "{ PTBSMethods.d.rate ROUND 2 }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "PTBSMethods" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_PriceTableBasedShippingCharge_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Number( 'R', 'Rate', l.rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSProduct_Load( l.method:id, l.product:id, l.ptbs_product ) }">
+		<MvASSIGN NAME = "l.ptbs_product:rate" VALUE = "{ l.rate }">
+
+		<MvIF EXPR = "{ NOT PTBSProduct_Update( l.ptbs_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00081', 'PTBS Product \'' $ l.product:code $ '\', Method \'' $ l.method:code $ '\' updated' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.ptbs_product"				VALUE = "">
+		<MvASSIGN NAME = "l.ptbs_product:method_id" 	VALUE = "{ l.method:id }">
+		<MvASSIGN NAME = "l.ptbs_product:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.ptbs_product:rate" 			VALUE = "{ l.rate }">
+
+		<MvIF EXPR = "{ NOT PTBSProduct_Insert( l.ptbs_product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-PTB-00082', 'PTBS Product \'' $ l.product:code $ '\', Method \'' $ l.method:code $ '\' created' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/shipping/ptbship/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_PriceTableBasedShipping_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/ptbship/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/ptbship/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/ptbship/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Copy Feature (copy_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Copy_Product" PARAMETERS = "module var, source_product var, dest_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PTBSProduct_Delete_All_Product( l.dest_product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PTBSProducts ( method_id, product_id, rate )
+						  SELECT
+						  	method_id, ?, rate
+						  FROM ' $
+							g.Store_Table_Prefix $ 'PTBSProducts
+						  WHERE
+							product_id = ?' }"
+			 FIELDS = "l.dest_product:id,
+					   l.source_product:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00083', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_PTBSMethods
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PTBSMethod_Read" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"			VALUE = "{ PTBSMethods.d.id }">
+	<MvASSIGN NAME = "l.method:code"		VALUE = "{ PTBSMethods.d.code }">
+	<MvASSIGN NAME = "l.method:method"		VALUE = "{ PTBSMethods.d.method }">
+	<MvASSIGN NAME = "l.method:handling"	VALUE = "{ PTBSMethods.d.handling }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethod_Load_ID" PARAMETERS = "id, method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSMethods WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00039' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSMethod_Read( l.method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethod_Load_Method" PARAMETERS = "method, ptbs_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' ORDER BY id' }"
+				FIELDS	= "l.method">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00040' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSMethod_Read( l.ptbs_method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethod_Load_Code" PARAMETERS = "code, ptbs_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00093', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00094' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSMethod_Read( l.ptbs_method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethodList_Load" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSMethods ORDER BY ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) }"
+				FIELDS	= "">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT PTBSMethods.d.EOF }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ l.method_count + 1 }">
+
+		<MvEVAL EXPR = "{ PTBSMethod_Read( l.methods[ l.method_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "PTBSMethods" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-PTB-00041', l.method_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethod_Insert" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'PTBSMethods' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PTBSMethods
+						  ( id, code, method, handling )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.method:id, l.method:code, l.method:method, l.method:handling">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethod_Update" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'PTBSMethods
+						  SET
+						  	code		= ?,
+							method		= ?,
+							handling	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.method:code, l.method:method, l.method:handling,
+					   l.method:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSMethod_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PTBSMethods
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_PTBSBreaks
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PTBSBreak_Read" PARAMETERS = "break var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.break:id"			VALUE = "{ PTBSBreaks.d.id }">
+	<MvASSIGN NAME = "l.break:method_id"	VALUE = "{ PTBSBreaks.d.method_id }">
+	<MvASSIGN NAME = "l.break:ceiling"		VALUE = "{ PTBSBreaks.d.ceiling }">
+	<MvASSIGN NAME = "l.break:rate"			VALUE = "{ PTBSBreaks.d.rate }">
+	<MvASSIGN NAME = "l.break:percent"		VALUE = "{ PTBSBreaks.d.percent }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Load_ID" PARAMETERS = "id, break var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSBreaks"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSBreaks WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00019', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSBreaks.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00042' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSBreak_Read( l.break ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Load_Price" PARAMETERS = "method_id, price, break var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSBreaks"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+							  WHERE
+								method_id	= ? AND
+								ceiling		>= ?
+							  ORDER BY
+								ceiling		ASC' }"
+				FIELDS	= "l.method_id, l.price">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSBreaks.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00043' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSBreak_Read( l.break ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Load_Ceiling" PARAMETERS = "method_id, ceiling, break var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSBreaks"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+							  WHERE
+								method_id	= ? AND
+								ceiling		= ?
+							  ORDER BY
+								ceiling		ASC' }"
+				FIELDS	= "l.method_id, l.ceiling">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00021', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSBreaks.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00044' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSBreak_Read( l.break ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreakList_Load_Method" PARAMETERS = "method_id, breaks var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSBreaks"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSBreaks WHERE method_id = ? ORDER BY ceiling' }"
+				FIELDS	= "l.method_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.break_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT PTBSBreaks.d.EOF }">
+		<MvASSIGN NAME = "l.break_count"	VALUE = "{ l.break_count + 1 }">
+
+		<MvEVAL EXPR = "{ PTBSBreak_Read( l.breaks[ l.break_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "PTBSBreaks" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSBreaks">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-PTB-00045', l.break_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Insert" PARAMETERS = "break var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.break:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'PTBSBreaks' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+						  ( id, method_id, ceiling, rate, percent )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.break:id, l.break:method_id, l.break:ceiling, l.break:rate, l.break:percent">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00023', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Update" PARAMETERS = "break var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+						  SET
+							ceiling		= ?,
+							rate		= ?,
+							percent		= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.break:ceiling, l.break:rate, l.break:percent, l.break:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00025', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSBreak_Delete_All_Method" PARAMETERS = "method_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PTBSBreaks
+						  WHERE
+							method_id	= ?' }"
+			 FIELDS	= "l.method_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00026', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_PTBSOptions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PTBSOptions_Load" PARAMETERS = "ptbs_option var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSOptions"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSOptions' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00036', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSOptions.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSOptions">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00046' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.ptbs_option:o_charges"	VALUE = "{ PTBSOptions.d.o_charges }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSOptions">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSOptions_Insert" PARAMETERS = "ptbs_option var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PTBSOptions
+						  ( o_charges )
+						  VALUES
+						  ( ? )' }"
+			 FIELDS	= "l.ptbs_option:o_charges">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00037', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSOptions_Update" PARAMETERS = "ptbs_option var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'PTBSOptions
+						  SET
+							o_charges	= ?' }"
+			 FIELDS	= "l.ptbs_option:o_charges">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00038', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_PTBSProducts
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "PTBSProduct_Read" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.product:method_id"	VALUE = "{ PTBSProducts.d.method_id }">
+	<MvASSIGN NAME = "l.product:product_id"	VALUE = "{ PTBSProducts.d.product_id }">
+	<MvASSIGN NAME = "l.product:rate"		VALUE = "{ PTBSProducts.d.rate }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSProduct_Load" PARAMETERS = "method_id, product_id, product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "PTBSProducts"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'PTBSProducts WHERE method_id = ? AND product_id = ?' }"
+				FIELDS	= "l.method_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00027', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PTBSProducts.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSProducts">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-PTB-00047' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ PTBSProduct_Read( l.product ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PTBSProducts">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSProduct_Insert" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PTBSProducts
+						  ( method_id, product_id, rate )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.product:method_id, l.product:product_id, l.product:rate">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00028', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSProduct_Update" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'PTBSProducts
+						  SET
+							rate		= ?
+						  WHERE
+							method_id	= ? AND
+							product_id	= ?' }"
+			 FIELDS	= "l.product:rate, l.product:method_id, l.product:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00029', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSProduct_Delete" PARAMETERS = "method_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PTBSProducts
+						  WHERE
+							method_id	= ? AND
+							product_id	= ?' }"
+			 FIELDS	= "l.method_id, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00030', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSProduct_Delete_All_Method" PARAMETERS = "method_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PTBSProducts
+						  WHERE
+							method_id	= ?' }"
+			 FIELDS	= "l.method_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00031', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBSProduct_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'PTBSProducts
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-PTB-00032', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Max_Number" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Max_NUMBER( 10, 2 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBS_Calculate_Basket_SubTotal" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basket_subtotal" VALUE = "{ [ g.Module_Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ PTBSOptions_Load( l.ptbs_options ) AND l.ptbs_options:o_charges }">
+		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ [ g.Module_Library_DB ].BasketChargeList_Load_Basket( l.basket_id, l.basketcharges ) }">
+			<MvIF EXPR = "{ l.basketcharge:type EQ 'SHIPPING' }">	<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.basketcharge:type EQ 'TAX' }">	<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basket_subtotal" VALUE = "{ l.basket_subtotal + l.basketcharge:amount }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.basket_subtotal }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PTBS_Calculate_Basket" PARAMETERS = "method var, price, shipping_total var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PTBSBreak_Load_Price( l.method:id, l.price, l.break ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.break:percent }">	<MvASSIGN NAME = "l.shipping_total" VALUE = "{ miva_ieee754_normalize( 2, l.method:handling + ( l.break:rate / 100 * l.price ) ) }">
+	<MvELSE>							<MvASSIGN NAME = "l.shipping_total" VALUE = "{ l.break:rate + l.method:handling }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ PTBSProduct_Load( l.method:id, l.basketitem:product_id, l.ptbs_product ) }">
+			<MvASSIGN NAME = "l.shipping_total" VALUE = "{ miva_ieee754_normalize( 2, l.shipping_total + ( l.ptbs_product:rate * l.basketitem:quantity ) ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/shipping/ptbship/functions.mv">
+<MvINCLUDE FILE = "modules/shipping/ptbship/list.mv">
+<MvINCLUDE FILE = "modules/shipping/ptbship/chargelist.mv">

@@ -1,0 +1,96 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2019 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-CPL-
+| Next Error Code: 5   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CachedProductList_Recalculate_ProductCount" PARAMETERS = "cachedproductlist var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CachedProductListXProduct"
+				QUERY	= "{ 'SELECT
+								ips.out_hide	AS out_hide,
+								COUNT( * )		AS prodcount
+							  FROM
+								' $ g.Store_Table_Prefix $ 'CachedProductListXProduct cpxp
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = cpxp.product_id AND ips.active = 1 AND ips.out_hide = \'y\'
+							  WHERE
+								cpxp.cache_id = ?
+							  GROUP BY
+								ips.out_hide' }"
+				FIELDS	= "l.cachedproductlist:id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CPL-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.out_hide"			VALUE = 0>
+	<MvASSIGN NAME = "l.prodcount"			VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT CachedProductListXProduct.d.EOF }">
+		<MvASSIGN NAME = "l.prodcount"		VALUE = "{ l.prodcount + CachedPRoductListXProduct.d.prodcount }">
+
+		<MvIF EXPR = "{ CachedProductListXProduct.d.out_hide EQ 'y' }">
+			<MvASSIGN NAME = "l.out_hide"	VALUE = 1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "CachedProductListXProduct" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CachedProductListXProduct">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CachedProductLists SET populated = 1, out_hide = ?, prodcount = ? WHERE id = ?' }"
+			 FIELDS	= "l.out_hide, l.prodcount, l.cachedproductlist:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CPL-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Load_ID( l.cachedproductlist:id, l.cachedproductlist ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CachedProductList_Set_OutHide_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CachedProductLists SET out_hide = 1 WHERE id IN ( SELECT cache_id FROM ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct WHERE product_id = ? )' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CPL-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CachedProductList_Decrement_ProductCount_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CachedProductLists SET prodcount = prodcount - 1 WHERE id IN ( SELECT cache_id FROM ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct WHERE product_id = ? )' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-CPL-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CachedProductList_Delete" PARAMETERS = "cachedproductlist var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CachedProductList_Delete_LowLevel( l.cachedproductlist:id ) OR
+					NOT CachedProductListXProduct_Delete_All_Cache( l.cachedproductlist:id ) OR
+					NOT [ g.Module_Feature_FCT_DB ].CachedProductListFacet_Delete_All_Cache( l.cachedproductlist:id ) OR
+					NOT [ g.Module_Feature_FCT_DB ].CachedProductListFacetValue_Delete_All_Cache( l.cachedproductlist:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

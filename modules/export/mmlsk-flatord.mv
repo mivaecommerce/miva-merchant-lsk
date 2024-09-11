@@ -1,0 +1,655 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-FOD-
+| Next Error Code: 21   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-flatord">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Orders to Flat File">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0803">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.FlatOrder_File" VALUE = "{ trim( g.FlatOrder_File ) }">
+
+	<MvIF EXPR = "{ len( g.FlatOrder_Batch ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select a batch' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ '/' IN g.FlatOrder_File }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatOrder_File', 'Please do not include a path in the file name' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ len( g.FlatOrder_File ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatOrder_File', 'Please specify a file' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatOrder_Email" VALUE = "{ trim( g.FlatOrder_Email ) }">
+
+	<MvIF EXPR = "{ g.FlatOrder_SendEmail AND len( g.FlatOrder_Email ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatOrder_Email', 'Please specify a valid email address' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.FlatOrder_Email ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatOrder_Email', 'Please specify a valid email address' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( len( g.FlatOrder_Delimiter ) EQ 0 ) AND ( NOT g.FlatOrder_Delimiter_Tab ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatOrder_Delimiter', 'Please specify a delimiter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatOrder_Delimiter_Tab }">
+		<MvASSIGN NAME = "g.FlatOrder_Delimiter" VALUE = "{ asciichar( 9 ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Export" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.directory"						VALUE = "{ g.MerchantPath $ 's' $ padl( g.Store:id, 2, '0' ) $ '/export/' }">
+	<MvASSIGN NAME = "l.output"							VALUE = "{ l.directory $ g.FlatOrder_File }">
+	<MvASSIGN NAME = "g.FlatOrder_Export_Time_Start" 	VALUE = "{ s.time_t }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Start( 'Flat Order Export Progress', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Show() }">
+
+	<MvIF EXPR = "{ NOT FlatOrderExport_Initialize_Export( l.directory, l.output ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ FlatOrderExport_Finalize_Export( l.directory, l.output ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+		<MvASSIGN NAME = "l.end_time" VALUE = "20">
+	<MvELSE>
+		<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+	</MvIF>
+
+	<MvASSIGN NAME = "l.exported_customfield_count" VALUE = "{ [ g.Module_Library_Utilities ].CustomFieldSelect_Selected_WithModules( g.FlatOrder_CustomFields, 'fields_ordr', l.exported_customfields ) }">
+
+	<MvIF EXPR = "{ g.FlatOrder_Header }">
+		<MvIF EXPR = "{ NOT FlatOrderExport_OrderHeader( l.output, l.exported_customfields, l.exported_customfield_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FlatOrder_Export_Orders( l.output, l.exported_customfields, l.exported_customfield_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatOrder_Export_Count EQ g.FlatOrder_Total_Count }">
+		<MvASSIGN NAME = "g.FlatOrder_Export_NeedRefresh" VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.FlatOrder_Export_NeedRefresh }">
+		<MvASSIGN NAME = "g.FlatOrder_Append" 	VALUE = 1>
+		<MvASSIGN NAME = "g.FlatOrder_Header"	VALUE = 0>
+
+		<MvHIDE FIELDS = "g.Order_Count, g.FlatOrder_Batch, FlatOrderExport_Initialized, g.FlatOrder_Delimiter_Tab, g.FlatOrder_Delimiter, 
+				  		  g.FlatOrder_Export_LastOrder, g.FlatOrder_Export_LastOrderItem, g.FlatOrder_Export_Count, g.FlatOrder_CustomFields,
+				  		  g.FlatOrder_File, g.FlatOrder_Append, g.FlatOrder_Export_Time_Start, 
+				  		  g.Module_Code, g.FlatOrder_Total_Count, g.FlatOrder_Email, g.FlatOrder_SendEmail, g.FlatOrder_Header">
+
+		<script type="text/javascript">
+			function exp_continue()
+			{
+				document.forms[ Screen ].submit();
+			}
+			window.onload = exp_continue;
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_End() }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Load_Fields }">
+		<MvASSIGN NAME = "g.FlatOrder_Batch" 			VALUE = 0>
+
+		<MvIF EXPR = "{ s.miva_language EQ 'en-US' }">
+			<MvASSIGN NAME = "g.FlatOrder_File" 		VALUE = "orders.csv">
+		<MvELSE>
+			<MvASSIGN NAME = "g.FlatOrder_File" 		VALUE = "bestellungen.csv">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.FlatOrder_Append" 			VALUE = 1>
+		<MvASSIGN NAME = "g.FlatOrder_Delimiter_Tab" 	VALUE = 1>
+		<MvASSIGN NAME = "g.FlatOrder_Delimiter" 		VALUE = ",">
+		<MvASSIGN NAME = "g.FlatOrder_Header"			VALUE = "">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].InitializeCustomFieldSelect( l.null, g.FlatOrder_CustomFields ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( 'Export Orders To Flat File', 'EXPT', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_JavaScript( 'Exporting Orders to Flat File', 'EXPT', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_CSS() }">
+
+	<script language="JavaScript">
+		HaveCustomReset = 1;
+
+		function CustomReset()
+		{
+			document.EXPT.Reset.value = 'Yes';
+		}
+	</script>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( 'Export Orders To Flat File', 'EXPT', '' ) }">
+
+	<input type="hidden" name="Reset" value="No">
+	<MvHIDE FIELDS = "g.Module_Code">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginContent() }">
+	<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Destination', 110 ) }">
+				<tr><td nowrap>
+					<b>Export Orders to File:</b>
+				</td><td width="100%">
+					<input type="text" name="FlatOrder_File" size=40 value = "{ encodeentities( g.FlatOrder_File ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>If File Exists:</b>
+				</td><td width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatOrder_Append', '1',	g.FlatOrder_Append,	'Append To File' ) }"><br>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatOrder_Append', '',		g.FlatOrder_Append,	'Replace File' ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					Email File To:
+				</td><td width="100%" nowrap>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatOrder_SendEmail', '0',	g.FlatOrder_SendEmail,	'Do Not Email' ) }"><br>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatOrder_SendEmail', '1',	g.FlatOrder_SendEmail,	'' ) }">
+
+					<input type="text" size=40 name="FlatOrder_Email" value="{ encodeentities( g.Store:email ) }">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td><td width = "100%">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Format', 110 ) }">
+				<tr><td valign="top" nowrap>
+					<b>Delimiter:</b>
+				</td><td width="100%">
+					<table border=0 cellpadding = 0 cellspacing = 0>
+					<tr><td>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatOrder_Delimiter_Tab', '1',	g.FlatOrder_Delimiter_Tab,	'Tab' ) }">
+					</td><td align="left" valign="middle">
+						&nbsp;
+					</td></tr>
+
+					<tr><td>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio( 'FlatOrder_Delimiter_Tab', '',	g.FlatOrder_Delimiter_Tab,	'Other:' ) }">
+					</td><td align="left" valign="middle">
+						<input type="text" name="FlatOrder_Delimiter" value="{ encodeentities( g.FlatOrder_Delimiter ) }" size=10>
+					</td></tr>
+					</table>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					&nbsp;
+				</td><td width="100%">
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.FlatOrder_Header, 'FlatOrder_Header', 'Yes', 'Export Field Names as Header' ) }">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+
+		<MvASSIGN NAME = "l.customfield_count" VALUE = "{ [ g.Module_Library_Utilities ].OrderCustomFieldList_Load( l.customfields ) }">
+		
+		<tr>
+		<MvIF EXPR = "{ l.customfield_count }">
+			<td nowrap>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Fields', 130 ) }">
+					<tr><td valign="top" nowrap>
+						Custom Fields:
+					</td><td width="100%">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCustomFieldSelect( 'FlatOrder_CustomFields', g.FlatOrder_CustomFields, l.customfields, l.customfield_count ) }">
+					</td></tr>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+			</td>
+		</MvIF>
+
+		<td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Settings', 130 ) }">
+				<tr><td nowrap>
+					<b>Batch to Export:</b>
+				</td><td width="100%">
+					<select name="FlatOrder_Batch">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption_SelectOne() }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( -1, g.FlatOrder_Batch, 'All Orders' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 0, g.FlatOrder_Batch, 'All Unbatched Orders' ) }">
+
+						<MvFOREACH ITERATOR = "l.batch" ARRAY = "l.batches" COUNT = "{ [ g.Module_Library_DB ].BatchList_Load_All( l.batches ) }">
+							<MvASSIGN NAME = "l.option_text" VALUE = "{ padl( time_t_month( l.batch:batchdate, g.Merchant_Local_Timezone ), 2, '0' )$ '/' $ padl( time_t_dayofmonth( l.batch:batchdate, g.Merchant_Local_Timezone ), 2, '0' ) $ '/' $ time_t_year( l.batch:batchdate, g.Merchant_Local_Timezone ) $ ':' $ l.batch:name }">
+
+							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( l.batch:id, g.FlatOrder_Batch, l.option_text ) }">
+						</MvFOREACH>
+					</select>
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td>
+		<MvIF EXPR = "{ l.customfield_count EQ 0 }">
+			<td>&nbsp;</td>
+		</MvIF>
+		</tr>
+	</table>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Buttons( 'Export', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatOrder_Export_Orders" PARAMETERS = "output, customfields var, customfield_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.FlatOrder_Export_Count GE g.FlatOrder_Total_Count }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatOrder_Export_LastOrderItem }">	<MvASSIGN NAME = "l.where_sign" VALUE = ">=">
+	<MvELSE>												<MvASSIGN NAME = "l.where_sign" VALUE = ">">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatOrder_Batch GT 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Batch_Load_ID( g.FlatOrder_Batch, l.batch ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Orders"
+					QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Orders WHERE batch_id = ? AND id ' $ l.where_sign $ ' ? ORDER BY id' }"
+					FIELDS	= "l.batch:id, g.FlatOrder_Export_LastOrder">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00003', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.FlatOrder_Batch EQ 0 }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Orders"
+					QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Orders WHERE batch_id = 0 AND id ' $ l.where_sign $ ' ? ORDER BY id' }"
+					FIELDS	= "g.FlatOrder_Export_LastOrder">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00011', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Orders"
+					QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Orders WHERE id ' $ l.where_sign $ ' ? ORDER BY id' }"
+					FIELDS 	= "g.FlatOrder_Export_LastOrder">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00012', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Export_Order_CustomFields_BuildExecutionPlan( l.customfields, l.customfield_count, l.customfield_plan, l.customfield_struct, l.customfield_values ) }">
+
+	<MvWHILE EXPR = "{ NOT Orders.d.EOF AND NOT g.FlatOrder_Export_NeedRefresh }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.FlatOrder_Export_Count, g.FlatOrder_Total_Count ) }">
+		<MvEVAL EXPR = "{ Export_Order_CustomFields( l.customfield_plan, Orders.d.id, l.customfield_struct ) }">
+
+		<MvASSIGN NAME = "l.order_tax" 					VALUE = 0>
+		<MvASSIGN NAME = "l.order_shipping" 			VALUE = 0>
+
+		<MvASSIGN NAME = "l.order_date" 				VALUE = "{ padl( time_t_month( Orders.d.orderdate, g.Merchant_Local_Timezone ), 2, '0' ) $ '/' $
+																   padl( time_t_dayofmonth( Orders.d.orderdate, g.Merchant_Local_Timezone ), 2, '0' ) $ '/' $
+																   time_t_year( Orders.d.orderdate, g.Merchant_Local_Timezone ) }">
+		<MvASSIGN NAME = "l.order_time" 				VALUE = "{ padl( time_t_hour( Orders.d.orderdate, g.Merchant_Local_Timezone ), 2, '0' ) $ ':' $
+																   padl( time_t_min( Orders.d.orderdate, g.Merchant_Local_Timezone ), 2, '0' ) $ ':' $
+																   padl( time_t_sec( Orders.d.orderdate, g.Merchant_Local_Timezone ), 2, '0' ) }">
+
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Module_Load_ID( Orders.d.ship_id, l.ship_module ) }">
+			<MvASSIGN NAME = "l.shipping_method" 		VALUE = "{ l.ship_module:code $ ':' $ Orders.d.ship_data }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Type( Orders.d.id, 'TAX', l.ordercharges ) }">
+			<MvASSIGN NAME = "l.order_tax" 				VALUE = "{ l.order_tax + l.ordercharge:disp_amt }">
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.ordercharge" ARRAY = "l.ordercharges" COUNT = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Type( Orders.d.id, 'SHIPPING', l.ordercharges ) }">
+			<MvASSIGN NAME = "l.order_shipping" 		VALUE = "{ l.order_shipping + l.ordercharge:disp_amt }">
+		</MvFOREACH>
+
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "OrderItems"
+					QUERY	= "{ 'SELECT 
+									oi.*
+								  FROM 
+									' $ g.Store_Table_Prefix $ 'OrderItems oi
+								  WHERE
+									order_id 	= ? AND
+									line_id 	> ?
+								  ORDER BY
+								  	line_id' }"
+					FIELDS	= "Orders.d.id, g.FlatOrder_Export_LastOrderItem">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00004', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvWHILE EXPR = "{ NOT OrderItems.d.EOF AND NOT g.FlatOrder_Export_NeedRefresh }">
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "OrderOptions"
+						QUERY	= "{ 'SELECT
+										*
+									  FROM
+									  	' $ g.Store_Table_Prefix $ 'OrderOptions
+									  WHERE
+									  	line_id = ?' }"
+						FIELDS	= "OrderItems.d.line_id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00005', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvWHILE EXPR = "{ NOT OrderOptions.d.EOF }">
+				<MvIF EXPR = "{ len( OrderOptions.d.opt_code ) EQ 0 }">
+					<MvIF EXPR = "{ len( OrderOptions.d.data_long ) }">
+						<MvASSIGN NAME = "OrderOptions.d.opt_code" 	VALUE = "{ OrderOptions.d.data_long }">
+					<MvELSEIF EXPR = "{ len( OrderOptions.d.data ) }">
+						<MvASSIGN NAME = "OrderOptions.d.opt_code" 	VALUE = "{ OrderOptions.d.data }">
+					</MvIF>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.record"							VALUE = "">
+
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.id ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.processed ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_date ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_time ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_fname ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_lname ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_email ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_comp ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_phone ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_fax ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_addr ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_addr2 ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_city ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_state ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_zip ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_cntry ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_fname ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_lname ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_email ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_comp ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_phone ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_fax ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_addr ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_addr2 ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_city ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_state ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_zip ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_cntry ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.code ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.sku ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.name ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.upsold ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.price ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.quantity ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderOptions.d.attr_code ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderOptions.d.opt_code ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderOptions.d.price ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_tax ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_shipping ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.shipping_method ) }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.total ) }">
+
+				<MvIF EXPR = "{ NOT Miva_Fwriteln( l.output, l.record ) }">
+					<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptions">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+		
+				<MvSKIP NAME = "Merchant" VIEW = "OrderOptions" ROWS = 1>
+			</MvWHILE>
+
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptions">
+
+			<MvASSIGN NAME = "l.record" VALUE = "">
+
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.id ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.processed ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_date ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_time ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_fname ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_lname ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_email ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_comp ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_phone ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_fax ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_addr ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_addr2 ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_city ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_state ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_zip ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.ship_cntry ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_fname ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_lname ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_email ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_comp ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_phone ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_fax ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_addr ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_addr2 ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_city ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_state ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_zip ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.bill_cntry ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.code ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.sku ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.name ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.upsold ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.price ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, OrderItems.d.quantity ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, '' ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, '' ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, '' ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_tax ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.order_shipping ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.shipping_method ) }">
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, Orders.d.total ) }">
+
+			<MvFOREACH ITERATOR = "l.value" ARRAY = "l.customfield_values" COUNT = "{ l.customfield_count }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatOrder_Delimiter, l.value ) }">
+				<MvASSIGN NAME = "l.value" VALUE = "">
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT Miva_Fwriteln( l.output, l.record ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+				<MvASSIGN NAME = "l.end_time" 							VALUE = "20">
+			<MvELSE>
+				<MvASSIGN NAME = "l.end_time" 							VALUE = "{ s.globaltimeout / 3 }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatOrder_Export_Time_Start ) GT l.end_time }">
+				<MvASSIGN NAME = "g.FlatOrder_Export_LastOrder"			VALUE = "{ Orders.d.id }">
+				<MvASSIGN NAME = "g.FlatOrder_Export_LastOrderItem" 	VALUE = "{ OrderItems.d.line_id }">
+				<MvASSIGN NAME = "g.FlatOrder_Export_NeedRefresh" 		VALUE = 1>
+
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItems">
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvSKIP NAME = "Merchant" VIEW = "OrderItems" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItems">
+
+		<MvASSIGN NAME = "g.FlatOrder_Export_Count"						VALUE = "{ g.FlatOrder_Export_Count + 1 }">	
+
+		<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+			<MvASSIGN NAME = "l.end_time" 								VALUE = "20">
+		<MvELSE>
+			<MvASSIGN NAME = "l.end_time" 								VALUE = "{ s.globaltimeout / 3 }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatOrder_Export_Time_Start ) GT l.end_time }">
+			<MvASSIGN NAME = "g.FlatOrder_Export_LastOrder"				VALUE = "{ Orders.d.id }">
+			<MvASSIGN NAME = "g.FlatOrder_Export_NeedRefresh" 			VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.FlatOrder_Export_LastOrderItem" 			VALUE = 0>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ g.FlatOrder_Export_NeedRefresh AND Orders.d.EOF }">
+		<MvASSIGN NAME = "g.FlatOrder_Export_NeedRefresh" 				VALUE = 0>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatOrderExport_OrderHeader" PARAMETERS = "output, customfields var, customfield_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.header" VALUE = "">
+
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'ORDER_ID'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROCESSED' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'ORDER_DATE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'ORDER_TIME' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_FNAME' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_LNAME' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_EMAIL' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_COMP' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_PHONE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_FAX'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_ADDR' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_ADDR2' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_CITY' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_STATE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_ZIP'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_CNTRY' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_FNAME' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_LNAME' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_EMAIL' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_COMP' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_PHONE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_FAX'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_ADDR' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_ADDR2' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_CITY' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_STATE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_ZIP'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'BILL_CNTRY' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_CODE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_SKU'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_NAME' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_UPSLD' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_PRICE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_QUANT' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_ATTR' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'PROD_OPT'  ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'OPT_PRICE' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'ORDER_TAX' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'ORDER_SHIP' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'SHIP_METHOD' ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, 'ORDER_TOTL' ) }">
+
+	<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ l.customfield_count }">
+		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatOrder_Delimiter, toupper( glosub( [ g.Module_Root $ l.customfield:module:module ].Module_Order_Field_Name( l.customfield:module, l.customfield:code ), ' ', '_' ) ) ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.header ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatOrderExport_Initialize_Export" PARAMETERS = "directory, output" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.FlatOrderExport_Initialized }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatOrder_Export_LastOrder" 		VALUE = 0>
+	<MvASSIGN NAME = "g.FlatOrder_Export_LastOrderItem" 	VALUE = 0>
+	<MvASSIGN NAME = "g.FlatOrder_Total_Count" 				VALUE = 0>
+	<MvASSIGN NAME = "g.FlatOrder_Export_Count" 			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'data', l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ fexists( l.output ) }">
+		<MvIF EXPR = "{ NOT g.FlatOrder_Append }">
+			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.output ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatOrder_Batch GT 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Batch_Load_ID( g.FlatOrder_Batch, l.batch ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Orders"
+					QUERY	= "{ 'SELECT COUNT(*) as order_count FROM ' $ g.Store_Table_Prefix $ 'Orders WHERE batch_id = ?' }"
+					FIELDS	= "l.batch:id">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00008', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.FlatOrder_Batch EQ 0 }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Orders"
+					QUERY	= "{ 'SELECT COUNT(*) as order_count FROM ' $ g.Store_Table_Prefix $ 'Orders WHERE batch_id = 0' }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00009', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "Orders"
+					QUERY	= "{ 'SELECT COUNT(*) as order_count FROM ' $ g.Store_Table_Prefix $ 'Orders' }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-FOD-00010', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatOrderExport_Initialized" 	VALUE = 1>
+	<MvASSIGN NAME = "g.FlatOrder_Total_Count" 			VALUE = "{ Orders.d.order_count }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatOrderExport_Finalize_Export" PARAMETERS = "directory, output var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.FlatOrder_Export_Count GE g.FlatOrder_Total_Count }">
+		<MvIF EXPR = "{ g.FlatOrder_Total_Count EQ 1 }">	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( '1 order exported to \'' $ l.output $ '\'' ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( g.FlatOrder_Total_Count $ ' orders exported to \'' $ l.output $ '\'' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-EXP-FOD-00020', 'Orders exported' ) }">
+
+		<MvIF EXPR = "{ g.FlatOrder_SendEmail }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Send_Email_Attachment( g.Store:email, g.FlatOrder_Email, '', 'Miva Merchant Order Export', g.FlatOrder_File, l.directory, 'data' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-EXP-FOD-00014', 'FlatOrder Email Sent' ) }">
+		</MvIF>		
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/export/export_include.mv">

@@ -1,0 +1,365 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-MOD-BSKI-
+| Next Error Code: 140  
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-baskinv">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Basket Inventory">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.72">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Basket Inventory allows you to track how much inventory is in customer baskets.  You must be tracking inventory at the store and product level to use Basket Inventory.  Once enabled, you can see Current Stock (not in baskets), Stock in Baskets and Total Overall Stock when you edit the Product record.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_product, fields_prod, fields_prod_map">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+	|
+	|BEGIN HELPER FUNCTIONS
+	|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "InventoryProductCount_Update_IncludeBaskets" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Lock_Table( g.Store_Table_Prefix $ 'InventoryProductCounts', g.Store_Table_Prefix $ 'BasketItems, ' $ g.Store_Table_Prefix $ 'ProductVariantParts' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Basket_Calculate_InventoryProductCount_LowLevel( l.product_id, l.quantity_in_baskets ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Unlock_Table( g.Store_Table_Prefix $ 'InventoryProductCounts' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT InventoryProductCount_Update_LowLevel( l.product_id, l.inventory - l.quantity_in_baskets ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Unlock_Table( g.Store_Table_Prefix $ 'InventoryProductCounts' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Unlock_Table( g.Store_Table_Prefix $ 'InventoryProductCounts' ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Update_LowLevel" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'InventoryProductCounts
+						  SET
+							inventory	= ?
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.inventory,
+					   l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-MOD-BSKI-00137', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Calculate_InventoryProductCount_LowLevel" PARAMETERS = "product_id, quantity var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Count non-attribute inventory allocations
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT SUM( quantity ) AS quantity FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-MOD-BSKI-00138', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketItems.d.EOF }">	<MvASSIGN NAME = "l.quantity" VALUE = 0>
+	<MvELSE>								<MvASSIGN NAME = "l.quantity" VALUE = "{ BasketItems.d.quantity }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.quantity }">	<MvASSIGN NAME = "l.quantity" VALUE = 0>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvCOMMENT>
+	|
+	| Count attribute inventory allocations
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts.quantity AS pvp_quantity, SUM( ' $ g.Store_Table_Prefix $ 'BasketItems.quantity ) AS bi_quantity
+							  FROM
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts,
+								' $ g.Store_Table_Prefix $ 'BasketItems
+							  WHERE
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts.part_id	= ?																AND
+								' $ g.Store_Table_Prefix $ 'BasketItems.product_id		= ' $ g.Store_Table_Prefix $ 'ProductVariantParts.product_id	AND
+								' $ g.Store_Table_Prefix $ 'BasketItems.variant_id		= ' $ g.Store_Table_Prefix $ 'ProductVariantParts.variant_id
+							  GROUP BY
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts.product_id,
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts.variant_id,
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts.quantity' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-MOD-BSKI-00139', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT BasketItems.d.EOF }">
+		<MvASSIGN NAME = "l.quantity"	VALUE = "{ l.quantity + ( BasketItems.d.pvp_quantity * BasketItems.d.bi_quantity ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "BasketItems" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+	|
+	|END HELPER FUNCTIONS
+	|
+</MvCOMMENT>
+
+
+<MvFUNCTION NAME = "Module_Product_Fields" PARAMETERS = "module var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">	<MvFUNCTIONRETURN VALUE = 0>	</MvIF>
+	<MvIF EXPR = "{ NOT l.inventorysettings:active }">															<MvFUNCTIONRETURN VALUE = 0>	</MvIF>
+
+	<MvASSIGN NAME = "l.field_count"	VALUE = 0>
+	
+	<MvASSIGN NAME = "l.fields" INDEX = "{ ++l.field_count }"		MEMBER = "code"	VALUE = "basket_inv">
+	<MvASSIGN NAME = "l.fields" INDEX = "{ l.field_count }"			MEMBER = "name"	VALUE = "Basket Inventory">
+
+	<MvIF EXPR = "{ l.inventorysettings:mode EQ 'basket' }">
+		<MvASSIGN NAME = "l.fields" INDEX = "{ ++l.field_count }"	MEMBER = "code"	VALUE = "total_inv">
+		<MvASSIGN NAME = "l.fields" INDEX = "{ l.field_count }"		MEMBER = "name"	VALUE = "Total Inventory">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.field_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Field_Name" PARAMETERS = "module var, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code EQ 'basket_inv' }">		<MvFUNCTIONRETURN VALUE = "Basket Inventory">
+	<MvELSEIF EXPR = "{ l.code EQ 'total_inv' }">	<MvFUNCTIONRETURN VALUE = "Total Inventory">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.code }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Field_Value" PARAMETERS = "module var, product_id, code" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code EQ 'basket_inv' }">
+		<MvASSIGN NAME = "l.prod_inv_count"	VALUE = 0>
+	<MvELSEIF EXPR = "{ l.code EQ 'total_inv' }">
+		<MvASSIGN NAME = "l.prod_inv_count"	VALUE = "{ [ g.Module_Feature_INV_DB ].InventoryProductCount( l.product_id ) }">
+		<MvIF EXPR = "{ l.prod_inv_count EQ 0 }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Basket_Calculate_InventoryProductCount_LowLevel( l.product_id, l.bask_inv_count ) }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.prod_inv_count + l.bask_inv_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Fields_Mapped" PARAMETERS = "module var, product_id, field_map var, output_fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basket_inv_output"			VALUE = "{ l.field_map:basket_inv }">
+	<MvASSIGN NAME = "l.total_inv_output"			VALUE = "{ l.field_map:total_inv }">
+
+	<MvIF EXPR = "{ ( ISNULL l.basket_inv_output ) AND ( ISNULL l.total_inv_output ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.total_inv_output }">
+		<MvASSIGN NAME = "l.product_inventory"		VALUE = "{ [ g.Module_Feature_INV_DB ].InventoryProductCount( l.product_id ) }">
+
+		<MvIF EXPR = "{ l.product_inventory }">							<MvASSIGN NAME = "l.product_has_inventory"	VALUE = 1>
+		<MvELSEIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">	<MvASSIGN NAME = "l.product_has_inventory"	VALUE = 0>
+		<MvELSE>														<MvASSIGN NAME = "l.product_has_inventory"	VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT ISNULL l.basket_inv_output ) OR l.product_has_inventory }">
+		<MvIF EXPR = "{ NOT Basket_Calculate_InventoryProductCount_LowLevel( l.product_id, l.basket_inventory ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.basket_inv_output }">
+		<MvASSIGN NAME = "l.output_fields" MEMBER = "{ l.basket_inv_output }"		VALUE = "{ l.basket_inventory }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.total_inv_output }">
+		<MvIF EXPR = "{ l.product_has_inventory }">
+			<MvASSIGN NAME = "l.output_fields" MEMBER = "{ l.total_inv_output }"	VALUE = "{ l.product_inventory + l.basket_inventory }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.output_fields" MEMBER = "{ l.total_inv_output }"	VALUE = "">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Set_Field" PARAMETERS = "module var, product_id, code, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.code NE 'total_inv' }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ InventoryProductCount_Update_IncludeBaskets( l.product_id, int( l.value ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Action" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation"  PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Head" PARAMETERS = "module var, tab, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Tabs" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Content" PARAMETERS = "module var, tab, load_fields, product var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab EQ 'INVT' }">
+		<MvASSIGN NAME = "l.prod_inv_count"		VALUE = "{ [ g.Module_Feature_INV_DB ].InventoryProductCount( l.product:id ) }">
+		<MvASSIGN NAME = "l.ok"					VALUE = "{ Basket_Calculate_InventoryProductCount_LowLevel( l.product:id, l.bask_inv_count ) }">
+		<MvASSIGN NAME = "l.total_inv_count"	VALUE = "{ l.prod_inv_count + l.bask_inv_count }">
+		
+		<MvIF EXPR = "{ l.product:id }">
+			<MvASSIGN NAME = "l.settings_found"	VALUE = "{ [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.product:id, l.settings ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.settings_found"	VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.settings_found }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.settings ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+		
+		<div id="inv-levels-conatiner" style="position: absolute; right: 55px; float: right; width: auto; background: #F9F3F1; border: 1px solid #777;">
+			<div style="padding: 3px 5px;">Overall Inventory Levels:
+				<table border=0 cellpadding = 2 cellspacing = 0 width = "215">
+				
+				<MvIF EXPR = "{ ( l.settings:active ) }">
+					<tr><td valign="top" nowrap>
+						<b>Current Stock:</b>
+					</td><td align="right" width="100%">
+						<MvIF EXPR = "{ l.product:id EQ 0 }">
+								<i>n/a</i>
+						<MvELSE>
+							<MvIF EXPR = "{ l.prod_inv_count LE l.settings:out_level }">
+								<span style="color: #f00; font-weight:bold;">
+							<MvELSEIF EXPR = "{ l.prod_inv_count LE l.settings:low_level AND l.prod_inv_count GT l.settings:out_level }">
+								<span style="color: #f90; font-weight:bold;">
+							<MvELSE>
+								<span style="color: #000;">
+							</MvIF>
+							
+							<MvEVAL EXPR = "{ encodeentities( l.prod_inv_count ) }">
+							</span>
+						</MvIF>
+					</td></tr>
+				</MvIF>
+				
+				<tr><td valign="top" nowrap>
+					<b>Stock in Baskets:</b>
+				</td><td align="right" width="100%">
+					<MvIF EXPR = "{ l.product:id EQ 0 }">
+						<i>n/a</i>
+					<MvELSE>
+						<MvIF EXPR = "{ l.bask_inv_count NE 0 }">
+							<span style="font-weight:bold;">
+						<MvELSE>
+							<span>
+						</MvIF>
+						
+						<MvEVAL EXPR = "{ encodeentities( l.bask_inv_count ) }">
+						</span>
+					</MvIF>
+				</td></tr>
+				
+				<MvIF EXPR = "{ ( l.inventorysettings:mode EQ 'basket' ) AND l.settings:active }">
+					<tr><td valign="top" nowrap>
+						<b>Total Overall Stock:&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;</b>
+					</td><td align="right" width="100%" style="border-top: 1px solid #434343;">
+						<MvIF EXPR = "{ l.product:id EQ 0 }">
+							<i>n/a</i>
+						<MvELSE>
+							<b><MvEVAL EXPR = "{ encodeentities( l.total_inv_count ) }"></b>
+						</MvIF>
+					</td></tr>
+				</MvIF>
+				
+				</table>
+			</div>
+		</div>
+	</MvIF>
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

@@ -1,0 +1,278 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-STA-
+| Next Error Code: 16   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_StateList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+		<MvFOREACH ITERATOR = "l.state" ARRAY = "l.states" COUNT = "{ [ g.Library_DB ].StateList_Load_All( l.states ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.count ) }">
+			"code":			"<MvEVAL EXPR = "{ JSON_Encode( l.state:code ) }">",
+			"name":			"<MvEVAL EXPR = "{ JSON_Encode( l.state:name ) }">",
+			"disp_order":	<MvEVAL EXPR = "{ int( l.state:disp_order ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+		</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'STAT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'code', '' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'name', '' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'States', '' ) }">
+	
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, 'code,name,disp_order', 'disp_order' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'States', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-STA-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT States.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.state_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].State_Read( l.state ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.state_count ) }">
+				"code":			"<MvEVAL EXPR = "{ JSON_Encode( l.state:code ) }">",
+				"name":			"<MvEVAL EXPR = "{ JSON_Encode( l.state:name ) }">",
+				"disp_order":	<MvEVAL EXPR = "{ int( l.state:disp_order ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "States" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateIndex_Load_Code" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'STAT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.query"				VALUE = "">
+	<MvASSIGN NAME = "l.record"				VALUE = "">
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.state_code"			VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'code', '' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'name', '' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Retrieve( 'State_Code', l.state_code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Error( 'State_Code', 'Missing required parameter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter ) OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].State_Load_Code( l.state_code, l.record ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-STA-00014', 'State \'' $ l.state_code $ '\' not found' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'States', '' ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.query, l.sort, 'code,name,disp_order', 'disp_order' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Index( l.query, l.record, l.index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"index": <MvEVAL EXPR = "{ int( l.index ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_StateList_DisplayOrder_Update" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'STAT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.state_order" ARRAY = "g.State_Order" INDEX = "l.pos">
+		<MvASSIGN NAME = "l.state_order:id"							VALUE = "{ trim( l.state_order:id ) }">
+		<MvASSIGN NAME = "l.state_order:offset"						VALUE = "{ int( l.state_order:offset ) }">
+		<MvASSIGN NAME = "l.state_order:original_offset"			VALUE = "{ int( l.state_order:original_offset ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Filename_Admin ].Validate_WholeNumber_Positive_Required( l.state_order:offset ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Order[' $ l.pos $ ']', g.Validation_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.change_count"								VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.state_order" ARRAY = "g.State_Order">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ ++l.change_count }"	MEMBER = "code"				VALUE = "{ l.state_order:id }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }"	MEMBER = "offset"			VALUE = "{ l.state_order:offset }">
+		<MvASSIGN NAME = "l.changes" INDEX = "{ l.change_count }"	MEMBER = "original_offset"	VALUE = "{ l.state_order:original_offset }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.change_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].StateList_Update_Offsets( l.changes ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-STA-00015', 'State sort order updated' ) }">
+	
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_State_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'STAT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Original_State_Code"	VALUE = "{ JSON_Decode( g.Original_State_Code ) }">
+	<MvASSIGN NAME = "g.State_Code" 			VALUE = "{ JSON_Decode( g.State_Code ) }">
+	<MvASSIGN NAME = "g.State_Name"				VALUE = "{ JSON_Decode( g.State_Name ) }">
+
+	<MvIF EXPR = "{ ISNULL g.State_Name }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Name', 'Please specify a state name' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( toupper( g.State_Code ) NE toupper( g.Original_State_Code ) ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code_NonBlank_Optional( g.State_Code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Code', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Library_DB ].State_Load_Code( g.State_Code, l.existing_state ) }">
+			<MvIF EXPR = "{ NOT ISNULL g.State_Code }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Code', 'A state with code \'' $ l.existing_state:code $ '\' already exists' ) }">
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Code', 'A state with a blank code already exists' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+	
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].State_Update( g.Original_State_Code, g.State_Code, g.State_Name ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-STA-00013', 'State \'' $ g.Original_State_Code $ '\' Updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_State_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'STAT', 0, 0, 0, 1 ) }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.State_Code" VALUE = "{ JSON_Decode( g.State_Code ) }">
+	<MvASSIGN NAME = "g.State_Name" VALUE = "{ JSON_Decode( g.State_Name ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( g.State_Code, l.state ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-STA-00002', 'Failed to load state \'' $ g.State_Name $ '\'' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Delete( l.state:code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-STA-00003', 'State \'' $ l.state:name $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_State_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'STAT', 0, 1, 0, 0 ) }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.State_Code"	VALUE = "{ JSON_Decode( g.State_Code ) }">
+	<MvASSIGN NAME = "g.State_Name"	VALUE = "{ JSON_Decode( g.State_Name ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code_NonBlank_Optional( g.State_Code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Code', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.State_Name }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Name', 'Please specify a state name' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Library_DB ].State_Load_Code( g.State_Code, l.existing_state ) }">
+		<MvIF EXPR = "{ NOT ISNULL g.State_Code }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Code', 'A state with code \'' $ l.existing_state:code $ '\' already exists' ) }">
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_FieldError( 'State_Code', 'A state with a blank code already exists' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].State_Insert( g.State_Code, g.State_Name ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-JSN-STA-00012', 'State \'' $ g.State_Name $ '\' inserted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>

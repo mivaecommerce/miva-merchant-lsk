@@ -1,0 +1,327 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-RTN-
+| Next Error Code: 5
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_OrderReturn" PARAMETERS = "orderreturn var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_OrderReturn_OnDemandColumns( l.orderreturn, l.ondemandcolumns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderReturn_OnDemandColumns" PARAMETERS = "orderreturn var, ondemandcolumns var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ int( l.orderreturn:id ) }">,
+	"order_id":		<MvEVAL EXPR = "{ int( l.orderreturn:order_id ) }">,
+	"code":			"<MvEVAL EXPR = "{ JSON_Encode( l.orderreturn:code ) }">",
+	"status":		<MvEVAL EXPR = "{ int( l.orderreturn:status ) }">,
+	"dt_issued":	<MvEVAL EXPR = "{ int( l.orderreturn:dt_issued ) }">,
+	"dt_recvd":		<MvEVAL EXPR = "{ int( l.orderreturn:dt_recvd ) }">
+
+	<MvIF EXPR = "{ l.ondemandcolumns:items }">
+		, "items":
+		[
+			<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Library_DB ].OrderItemList_Load_Return( l.orderreturn:id, l.orderitems ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.item_count ) }">
+				<MvEVAL EXPR = "{ JSON_OrderItem( l.orderitem ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		]
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderReturnList" PARAMETERS = "query, fields, offset, count, include_order" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'OrderReturns', l.query, l.fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTN-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderreturn_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ ( ( l.count EQ 0 ) OR ( l.orderreturn_count LT l.count ) ) AND ( NOT OrderReturns.d.EOF ) }">
+		<MvCOMMENT>
+		|
+		| Get the method description from the shipping module
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ OrderReturns.d.order_ship_id EQ 0 }">
+			<MvASSIGN NAME = "l.method"	VALUE = "Unknown">
+		<MvELSE>
+			<MvIF EXPR = "{ l.cached_modules[ OrderReturns.d.order_ship_id ]:loaded EQ 0 }">
+				<MvIF EXPR = "{ [ g.Library_DB ].Module_Load_ID( OrderReturns.d.order_ship_id, l.cached_modules[ OrderReturns.d.order_ship_id ] ) }">
+					<MvASSIGN NAME = "l.cached_modules" INDEX = "{ OrderReturns.d.order_ship_id }" MEMBER = "loaded" VALUE = 1>
+				<MvELSE>
+					<MvASSIGN NAME = "l.cached_modules" INDEX = "{ OrderReturns.d.order_ship_id }" MEMBER = "loaded" VALUE = -1>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.cached_modules[ OrderReturns.d.order_ship_id ]:loaded EQ -1 }">
+				<MvASSIGN NAME = "l.method" VALUE = "Unknown">
+			<MvELSE>
+				<MvDO FILE = "{ g.Module_Root $ l.cached_modules[ OrderReturns.d.order_ship_id ]:module }" NAME = "l.method" VALUE = "{ ShippingModule_Description( l.cached_modules[ OrderReturns.d.order_ship_id ], OrderReturns.d.order_ship_data ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.orderreturn_count ) }">
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].OrderReturn_Read( l.orderreturn ) }">
+		<MvEVAL EXPR = "{ JSON_OrderReturn( l.orderreturn ) }">
+
+		<MvIF EXPR = "{ l.include_order }">
+			,"order":
+			{
+				"id":			<MvEVAL EXPR = "{ OrderReturns.d.order_id }">,
+				"status":		<MvEVAL EXPR = "{ OrderReturns.d.order_status }">,
+				"pay_status":	<MvEVAL EXPR = "{ OrderReturns.d.order_pay_status }">,
+				"stk_status":	<MvEVAL EXPR = "{ OrderReturns.d.order_stk_status }">,
+				"dt_instock":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_dt_instock ) }">",
+				"orderdate":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_orderdate ) }">",
+				"cust_id":		<MvEVAL EXPR = "{ OrderReturns.d.order_cust_id }">,
+				"ship_fname":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_fname ) }">",
+				"ship_lname":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_lname ) }">",
+				"ship_email":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_email ) }">",
+				"ship_comp":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_comp ) }">",
+				"ship_phone":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_phone ) }">",
+				"ship_fax":		"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_fax ) }">",
+				"ship_addr1":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_addr ) }">",
+				"ship_addr2":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_addr2 ) }">",
+				"ship_city":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_city ) }">",
+				"ship_state":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_state ) }">",
+				"ship_zip":		"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_zip ) }">",
+				"ship_cntry":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_ship_cntry ) }">",
+				"bill_fname":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_fname ) }">",
+				"bill_lname":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_lname ) }">",
+				"bill_email":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_email ) }">",
+				"bill_comp":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_comp ) }">",
+				"bill_phone":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_phone ) }">",
+				"bill_fax":		"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_fax ) }">",
+				"bill_addr1":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_addr ) }">",
+				"bill_addr2":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_addr2 ) }">",
+				"bill_city":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_city ) }">",
+				"bill_state":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_state ) }">",
+				"bill_zip":		"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_zip ) }">",
+				"bill_cntry":	"<MvEVAL EXPR = "{ JSON_Encode( OrderReturns.d.order_bill_cntry ) }">",
+				"total":		<MvEVAL EXPR = "{ OrderReturns.d.order_total ROUND 2 }">
+			}
+		</MvIF>
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "OrderReturns" ROWS = 1>
+	</MvWHILE>
+	]
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderReturns">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderReturnList_Load" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Count"	VALUE = "{ int( g.Count ) }">
+	<MvASSIGN NAME = "g.Offset"	VALUE = "{ int( g.Offset ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_OrderReturnList( 'SELECT
+															ret.*,
+															ord.id			AS order_id,
+															ord.status		AS order_status,
+															ord.pay_status	AS order_pay_status,
+															ord.stk_status	AS order_stk_status,
+															ord.dt_instock	AS order_dt_instock,
+															ord.orderdate	AS order_orderdate,
+															ord.cust_id		AS order_cust_id,
+															ord.ship_fname	AS order_ship_fname,
+															ord.ship_lname	AS order_ship_lname,
+															ord.ship_email	AS order_ship_email,
+															ord.ship_comp	AS order_ship_comp,
+															ord.ship_phone	AS order_ship_phone,
+															ord.ship_fax	AS order_ship_fax,
+															ord.ship_addr	AS order_ship_addr,
+															ord.ship_addr2	AS order_ship_addr2,
+															ord.ship_city	AS order_ship_city,
+															ord.ship_state	AS order_ship_state,
+															ord.ship_zip	AS order_ship_zip,
+															ord.ship_cntry	AS order_ship_cntry,
+															ord.bill_fname	AS order_bill_fname,
+															ord.bill_lname	AS order_bill_lname,
+															ord.bill_email	AS order_bill_email,
+															ord.bill_comp	AS order_bill_comp,
+															ord.bill_phone	AS order_bill_phone,
+															ord.bill_fax	AS order_bill_fax,
+															ord.bill_addr	AS order_bill_addr,
+															ord.bill_addr2	AS order_bill_addr2,
+															ord.bill_city	AS order_bill_city,
+															ord.bill_state	AS order_bill_state,
+															ord.bill_zip	AS order_bill_zip,
+															ord.bill_cntry	AS order_bill_cntry,
+															ord.ship_id		AS order_ship_id,
+															ord.ship_data	AS order_ship_data,
+															ord.total		AS order_total
+														FROM
+															' $ g.Store_Table_Prefix $ 'OrderReturns ret,
+															' $ g.Store_Table_Prefix $ 'Orders ord
+														WHERE
+															ord.id		= ret.order_id
+														ORDER BY
+															ret.id',
+													   '',
+													   g.Offset, g.Count,
+													   1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderReturnList_Load_Order" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Order_ID"	VALUE = "{ int( g.Order_ID ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_OrderReturnList( 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'OrderReturns WHERE order_id = ?',
+													   'g.Order_ID', 0, 0, 0 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderReturnList_Received" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvASSIGN NAME = "l.return_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.returns"			VALUE = "">
+
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Returns' ) }">
+		<MvFOREACH ITERATOR = "l.input_return" ARRAY = "l.input_returns" COUNT = "{ JSON_Input_Array( 'Returns', l.input_returns ) }">
+			<MvASSIGN NAME = "l.return"						VALUE = "">
+			<MvASSIGN NAME = "l.return:return_id"			VALUE = 0>
+			<MvASSIGN NAME = "l.return:adjust_inventory"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_return, 'R', 'return_id',			l.return:return_id ) OR
+							NOT JSON_Input_Element_Integer( l.input_return, 'R', 'adjust_inventory',	l.return:adjust_inventory ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.return_count"				VALUE = "{ miva_array_insert_var( l.returns, l.return, -1 ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve_Raw( 'Return_IDs',				l.return_ids )				OR
+						JSON_Input_Retrieve_Raw( 'Inventory_Adjustments',	l.inventory_adjustments ) }">
+		<MvASSIGN NAME = "l.return_count"	VALUE = "{ JSON_Array_Coalesce_Integer( l.return_ids,				l.returns, 'return_id' ) }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ JSON_Array_Coalesce_Integer( l.inventory_adjustments,	l.returns, 'adjust_inventory' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.update_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.order_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.return" ARRAY = "l.returns" COUNT = "{ l.return_count }">
+		<MvIF EXPR = "{ [ g.Library_DB ].OrderReturn_Load_ID( l.return:return_id, l.original_return ) AND
+						( l.original_return:status NE 600 ) }">
+			<MvIF EXPR = "{ NOT l.order_loaded[ l.original_return:order_id ] }">
+				<MvIF EXPR = "{ [ g.Library_DB ].Order_Load_ID( l.original_return:order_id, l.order ) }">
+					<MvASSIGN NAME = "l.update_orders"	INDEX = "{ ++l.order_count }"							VALUE = "{ l.order }">
+					<MvASSIGN NAME = "l.update_orders"	INDEX = "{ l.order_count }"	MEMBER = "previous_total"	VALUE = "{ [ g.Library_DB ].Order_Total( l.order:id ) }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.order_loaded"		INDEX = "{ l.original_return:order_id }"				VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.original_returns"		INDEX = "{ ++l.update_count }"							VALUE = "{ l.original_return }">
+			<MvASSIGN NAME = "l.update_returns"			INDEX = "{ l.update_count }"							VALUE = "{ l.original_return }">
+			<MvASSIGN NAME = "l.update_returns"			INDEX = "{ l.update_count }" MEMBER = "status"			VALUE = 600>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.return" ARRAY = "l.returns" COUNT = "{ l.return_count }">
+		<MvIF EXPR = "{ NOT l.return:adjust_inventory }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Library_DB ].OrderItemList_Load_Return( l.return:return_id, l.orderitems ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Product_Load_ID_WithRuntimeInventory( l.orderitem:product_id, l.product ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.option_count"	VALUE = "{ [ g.Library_DB ].OrderOptionList_Load_Line( l.orderitem:line_id, l.options ) }">
+
+			<MvIF EXPR = "{ NOT JSON_OrderItem_DetermineVariant_LowLevel( l.product, l.options, l.option_count, l.variant_id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_Variant( l.product, l.variant_id, l.orderitem:quantity ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Feature_STA_DB ].ProdStats_Add_Counts( l.product:id, l.product:name, 0 - l.orderitem:quantity ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderReturnList_Update_Status( l.original_returns, l.update_returns, l.update_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.return" ARRAY = "l.update_returns" COUNT = "{ l.update_count }">
+		<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-RTN-00001', 'Return \'' $ l.return:code $ '\' marked as received' ) }">
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.order" ARRAY = "l.update_orders" COUNT = "{ l.order_count }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_Status( l.order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.order_count }">
+		<MvIF EXPR = "{ [ g.Feature_PGR_DB ].DiscountOptions_Load( l.discountoptions ) AND ( l.discountoptions:repricerma EQ 'received' ) }">
+			<MvFOREACH ITERATOR = "l.order" ARRAY = "l.update_orders" COUNT = "{ l.order_count }">
+				<MvIF EXPR = "{ NOT [ g.Feature_PGR_UT ].Discount_Order( l.order, l.order:previous_total ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_OrderReturn_Cancel" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Return_ID"		VALUE = "{ int( g.Return_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderReturn_Load_ID( g.Return_ID, l.return ) }">
+		<MvIF EXPR = "{ [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTN-00002', 'Return ' $ g.Return_ID $ ' not found' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.return:status EQ 600 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTN-00003', 'Return ' $ l.return:code $ ' has been marked as received and may not be cancelled' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderReturn_Cancel( l.return ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Library_DB ].Order_Load_ID( l.return:order_id, l.order ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_Status( l.order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>

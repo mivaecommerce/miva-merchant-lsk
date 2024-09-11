@@ -1,0 +1,149 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2015 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-USP-
+| Next Error Code: 9    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "UserPreference_Read" PARAMETERS = "userpreference var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.userpreference:store_id"	VALUE = "{ UserPreferences.d.store_id }">
+	<MvASSIGN NAME = "l.userpreference:user_id"		VALUE = "{ UserPreferences.d.user_id }">
+	<MvASSIGN NAME = "l.userpreference:key"			VALUE = "{ UserPreferences.d.mm_key }">
+	<MvASSIGN NAME = "l.userpreference:keymd5"		VALUE = "{ UserPreferences.d.mm_keymd5 }">
+	<MvASSIGN NAME = "l.userpreference:value"		VALUE = "{ UserPreferences.d.mm_value }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UserPreference_Load_Key" PARAMETERS = "store_id, user_id, key, userpreference var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.keymd5"	VALUE = "{ crypto_md5( l.key ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "UserPreferences"
+				QUERY	= "{ 'SELECT * FROM UserPreferences
+							  WHERE
+								store_id	= ? AND
+								user_id		= ? AND
+								mm_keymd5	= ?' }"
+				FIELDS	= "l.store_id, l.user_id, l.keymd5">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-USP-00006', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ UserPreferences.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "UserPreferences">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-USP-00007' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ UserPreference_Read( l.userpreference ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "UserPreferences">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UserPreferenceList_Load_Heirarchy" PARAMETERS = "store_id, user_id, key_prefix, userpreferencelist var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.mm_key" VALUE = "{ l.key_prefix $ '.%' }">
+	<MvASSIGN NAME = "l.keymd5"	VALUE = "{ crypto_md5( l.key_prefix ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "UserPreferences"
+				QUERY	= "{ 'SELECT * FROM UserPreferences
+							  WHERE
+								store_id		= ? AND
+								user_id			= ? AND
+								(
+									mm_key		LIKE ? OR
+									mm_keymd5	= ?
+								)
+							  ORDER BY mm_key ASC' }"
+				FIELDS	= "l.store_id, l.user_id, l.mm_key, l.keymd5">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-USP-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.userpreference_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT UserPreferences.d.EOF }">
+		<MvASSIGN NAME = "l.userpreference_count" VALUE = "{ l.userpreference_count + 1 }">
+		<MvEVAL EXPR = "{ UserPreference_Read( l.userpreferencelist[ l.userpreference_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "UserPreferences" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "UserPreferences">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-USP-00004', l.userpreference_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UserPreference_Insert" PARAMETERS = "userpreference var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.userpreference:keymd5" VALUE = "{ crypto_md5( l.userpreference:key ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO UserPreferences
+							( store_id, user_id, mm_key, mm_keymd5, mm_value )
+						  VALUES
+							( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.userpreference:store_id, l.userpreference:user_id, l.userpreference:key, l.userpreference:keymd5, l.userpreference:value">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-USP-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UserPreference_Update" PARAMETERS = "userpreference var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE UserPreferences
+						  SET
+							mm_value	= ?
+						  WHERE
+							store_id	= ? AND
+							user_id		= ? AND
+							mm_keymd5	= ?' }"
+			 FIELDS	= "l.userpreference:value,
+					   l.userpreference:store_id, l.userpreference:user_id, l.userpreference:keymd5">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-USP-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UserPreference_Delete" PARAMETERS = "store_id, user_id, key" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.keymd5"	VALUE = "{ crypto_md5( l.key ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM UserPreferences
+						  WHERE
+							store_id	= ? AND
+							user_id		= ? AND
+							mm_keymd5	= ?' }"
+			 FIELDS	= "l.store_id, l.user_id, l.keymd5">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-USP-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "UserPreference_Delete_All_User_ID" PARAMETERS = "user_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM UserPreferences WHERE user_id = ?' }"
+			 FIELDS	= "l.user_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-USP-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

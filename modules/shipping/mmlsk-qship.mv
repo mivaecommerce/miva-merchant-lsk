@@ -1,0 +1,1261 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-SHP-QSP-
+| Next Error Code: 65   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-qship">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Quantity Based Shipping">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0900">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.61">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to generate shipping charges based on the number of items in the customer's basket.  Quantity based shipping has two modes: Standard and Progressive.  In both modes, you create a set of ranges for the number of items in the customer's basket and each range has a shipping charge.  In standard mode, the per item shipping charge is based on the total number of items in the basket.  In progressive mode, the per item shipping charge can vary based on the Floor and Ceiling values.  For example, if there is a total of 5 items, 3 items might be in Range 1 and 2 items in Range 2.  In this case, the per item charge for the first three items would be the Range 1 Amount/Unit and the per item charge for the remaining two items would be the Range 2 Amount/Unit.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "shipping, vis_shipping, provision_store, data_store, json, clientside, clientside_sri">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'QShipMethods
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )	$ ',
+							method	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )	$ ',
+							prog	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'QShipMethods_1 ON ' $ g.Store_Table_Prefix $ 'QShipMethods ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'QShipMethods_2 ON ' $ g.Store_Table_Prefix $ 'QShipMethods ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'QShipQuantities
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							method_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							floor		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							ceiling		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							unit_rate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'QShipQuantities_1 ON ' $ g.Store_Table_Prefix $ 'QShipQuantities ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'QShipQuantities_2 ON ' $ g.Store_Table_Prefix $ 'QShipQuantities ( method_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'QShipMethods', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'QShipQuantities', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.module:version EQ l.version }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00057', 'Module \'' $ l.module:name $ '\' does not support manual upgrade.  New versions may only be obtained through the streaming update system.' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'QShipMethods' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'QShipQuantities' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'QShipMethods' }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'QShipQuantities' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Calculation Feature (shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ShippingModule_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ QShipMethod_Load_Code( l.data, l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.method:method ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Fields" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "method">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Label" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "Shipping Method:">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Report_Value" PARAMETERS = "module var, field_id, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'method' }">
+		<MvFUNCTIONRETURN VALUE = "{ ShippingModule_Description( l.module, l.data ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Shipping_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.quantity"		VALUE = "{ [ g.Module_Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) }">
+
+	<MvFOREACH ITERATOR = "l.qshipmethod" ARRAY = "l.qshipmethods" COUNT = "{ QShipMethodList_Load( l.qshipmethods ) }">
+		<MvIF EXPR = "{ QShip_Calculate_Method_Rate( l.qshipmethod, l.quantity, l.shipping_total ) }">
+			<MvASSIGN NAME = "l.method"			VALUE = "">
+			<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.qshipmethod:code }">
+			<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.qshipmethod:method }">
+			<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.shipping_total }">
+			<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Enabled_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.methods"		VALUE = "">
+	<MvASSIGN NAME = "l.method_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.qshipmethod" ARRAY = "l.qshipmethods" COUNT = "{ QShipMethodList_Load( l.qshipmethods ) }">
+		<MvASSIGN NAME = "l.method"			VALUE = "">
+		<MvASSIGN NAME = "l.method:code"	VALUE = "{ l.qshipmethod:code }">
+		<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.qshipmethod:method }">
+
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ miva_array_insert_var( l.methods, l.method, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.method_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Calculate_Basket" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT QShipMethod_Load_Code( l.data, l.method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.quantity" VALUE = "{ [ g.Module_Library_DB ].Basket_Quantity_All( g.Basket:basket_id ) }">
+
+	<MvIF EXPR = "{ NOT QShip_Calculate_Method_Rate( l.method, l.quantity, l.shipping_total ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_ShippingMethod_Invalid() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_charge"				VALUE = "">
+	<MvASSIGN NAME = "l.basket_charge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basket_charge:module_id" 	VALUE = "{ l.module:id }">
+	<MvASSIGN NAME = "l.basket_charge:type" 		VALUE = "SHIPPING">
+	<MvASSIGN NAME = "l.basket_charge:descrip" 		VALUE = "{ 'Shipping: ' $ l.method:method }">
+	<MvASSIGN NAME = "l.basket_charge:amount" 		VALUE = "{ l.shipping_total ROUND 2 }">
+	<MvASSIGN NAME = "l.basket_charge:disp_amt" 	VALUE = "{ l.basket_charge:amount }">
+	<MvASSIGN NAME = "l.basket_charge:tax_exempt" 	VALUE = 0>
+	<MvASSIGN NAME = "l.basket_charge:tax"			VALUE = 0.00>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Insert( l.basket_charge ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingModule_Order_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Shipping Settings Screen Feature (vis_shipping)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Shipping_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "QSHIP:Quantity Based Shipping">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Shipping_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab EQ 'QSHIP' }">
+		<MvEVAL EXPR = "{ Element_QuantityBasedShippingList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_QuantityBasedShipping_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_QuantityBasedShippingList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_QuantityBasedShipping_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new QuantityBasedShippingList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+		<MvEVAL EXPR = "{ Element_QuantityBasedShippingList_HTML( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'method_delete' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Delete( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'method_add' }">	<MvEVAL EXPR = "{ Module_Provision_Store_Method_Add( l.module, l.child_xml ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Delete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'method', l.method ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Load_Code( l.method, l.qship_method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Method \'' $ l.method $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Delete( l.qship_method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00037', 'QBSM Method \'' $ l.method $ '\' deleted' ) }">
+
+	<MvIF EXPR = "{ NOT QShipQuantity_Delete_All_Method( l.qship_method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00038', 'QBSM Method \'' $ l.method $ '\', Quantity records deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.ranges"			VALUE = "">
+	<MvASSIGN NAME = "l.range_count"	VALUE = 0>
+
+	<MvASSIGN NAME = "l.method"			VALUE = "">
+	<MvASSIGN NAME = "l.method:code"	VALUE = "">
+	<MvASSIGN NAME = "l.method:method"	VALUE = "">
+	<MvASSIGN NAME = "l.method:prog"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'O:100',	l.provide_xml, 'Code',			l.method:code )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'R:100',	l.provide_xml, 'Method',		l.method:method )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml, 'Progressive',	l.method:prog ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipMethod_Load_Code( l.method:code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A shipping method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'range' }">
+			<MvASSIGN NAME = "l.range" VALUE = "">
+
+			<MvIF EXPR = "{ NOT Module_Provision_Store_Method_Range( l.module, l.child_xml, l.range ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.range_count" VALUE = "{ miva_array_insert_var( l.ranges, l.range, -1 ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOR INDEX = "l.range_pos" FIRST = 2 LAST = "{ miva_array_sort( l.ranges, 'QShipQuantities_SortFloor', l.null ) }">
+		<MvREFERENCEARRAY NAME = "l.range1" VARIABLE = "l.ranges">
+			<MvDIMENSION INDEX = "{ l.range_pos - 1 }">
+		</MvREFERENCEARRAY>
+
+		<MvREFERENCEARRAY NAME = "l.range2" VARIABLE = "l.ranges">
+			<MvDIMENSION INDEX = "{ l.range_pos }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ( l.range1:ceiling EQ 0 ) OR ( l.range1:ceiling GE l.range2:floor ) }">
+			<MvASSIGN NAME = "l.range1_description" VALUE = "{ QShip_Quantity_Description( l.range1 ) }">
+			<MvASSIGN NAME = "l.range2_description" VALUE = "{ QShip_Quantity_Description( l.range2 ) }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Range \'' $ l.range1_description $ '\' overlaps with range \'' $ l.range2_description $ '\'' ) }">
+		</MvIF>
+	</MvFOR>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00039', 'QBSM Method \'' $ l.method:code $ '\' created' ) }">
+
+	<MvFOREACH ITERATOR = "l.range" ARRAY = "l.ranges" COUNT = "{ l.range_count }">
+		<MvASSIGN NAME = "l.range:method_id" VALUE = "{ l.method:id }">
+
+		<MvIF EXPR = "{ NOT QShipQuantity_Insert( l.range ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00040', 'QBSM Method \'' $ l.method:code $ '\', Quantity \'' $ l.range:id $ '\' created' ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Method_Range" PARAMETERS = "module var, provide_xml var, range var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'R', l.provide_xml, 'Ceiling',	l.range:ceiling )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer(	'R', l.provide_xml, 'Floor',	l.range:floor )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(		'R', l.provide_xml, 'Rate',		l.range:unit_rate, 10, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.range:ceiling EQ '+' }">
+		<MvASSIGN NAME = "l.range:ceiling" VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Required( l.range:ceiling ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid value for Ceiling: ' $ g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.range:floor LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Floor must be greater than 0' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.range:floor GT l.range:ceiling AND l.range:ceiling NE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Ceiling must be greater than or equal to the floor' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingMethodList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingMethodList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingMethod_Insert' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingMethod_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingMethod_Update' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingMethod_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingMethod_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingMethod_Delete( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingQuantity_Insert' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingQuantity_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingQuantity_Update' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingQuantity_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'QuantityBasedShippingQuantity_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_QuantityBasedShippingQuantity_Delete( l.module ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Filter_Ceiling" PARAMETERS = "query var, field_count var, filter_name, filter_operator, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'ceiling' }">
+		<MvIF EXPR = "{ l.filter_operator EQ 'LIKE' OR l.filter_operator EQ 'NOTLIKE' }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ [ g.Module_Library_Utilities ].Value_In_List( l.filter_operator, 'EQ,GT,GE,LT,LE,NE' ) }">
+			<MvASSIGN NAME = "l.where" VALUE = "">
+			<MvASSIGN NAME = "l.value" VALUE = "{ l.filter_value }">
+
+			<MvIF EXPR = "{ l.value EQ '+' }">
+				<MvASSIGN NAME = "l.value" VALUE = 0>
+
+				<MvIF EXPR = "{ l.filter_operator EQ 'EQ' }">			<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'GT' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LT( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'GE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LE( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'LT' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_GT( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'LE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_GE( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'NE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'LIKE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ( 'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE( 'INTEGER', 'q.ceiling', l.value ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ l.filter_operator EQ 'EQ' }">			<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ(		'INTEGER', 'q.ceiling', l.value ) $ ' AND q.ceiling <> 0' }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'GT' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_GT(		'INTEGER', 'q.ceiling', l.value ) $ ' OR q.ceiling = 0' }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'GE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_GE(		'INTEGER', 'q.ceiling', l.value ) $ ' OR q.ceiling = 0' }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'LT' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LT(		'INTEGER', 'q.ceiling', l.value ) $ ' AND q.ceiling <> 0' }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'LE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LE(		'INTEGER', 'q.ceiling', l.value ) $ ' AND q.ceiling <> 0' }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'NE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE(		'INTEGER', 'q.ceiling', l.value ) $ ' OR q.ceiling = 0' }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'LIKE' }">		<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_LIKE(		'INTEGER', 'q.ceiling', l.value ) }">
+				<MvELSEIF EXPR = "{ l.filter_operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NOTLIKE(	'INTEGER', 'q.ceiling', l.value ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.where }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( ' $ l.where $ ' )', [ g.Module_Library_DB ].SQL_Query_Field( l.value ) ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ [ g.Module_Library_Utilities ].Value_In_List( l.filter_operator, 'IN,NOT_IN' ) }">
+			<MvIF EXPR = "{ l.filter_operator EQ 'IN' }">			<MvASSIGN NAME = "l.subwhere_operator" VALUE = "OR">
+			<MvELSEIF EXPR = "{ l.filter_operator EQ 'NOT_IN' }">	<MvASSIGN NAME = "l.subwhere_operator" VALUE = "AND">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+			<MvFOREACH ITERATOR = "l.value" ARRAY = "l.filter_values" COUNT = "{ miva_splitstring( l.filter_value, ',', l.filter_values, 'trim,noempty' ) }">
+				<MvASSIGN NAME = "l.where" VALUE = "">
+
+				<MvIF EXPR = "{ l.value EQ '+' }">
+					<MvASSIGN NAME = "l.value" VALUE = 0>
+
+					<MvIF EXPR = "{ l.filter_operator EQ 'IN' }">			<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ( 'INTEGER', 'q.ceiling', l.value ) }">
+					<MvELSEIF EXPR = "{ l.filter_operator EQ 'NOT_IN' }">	<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE( 'INTEGER', 'q.ceiling', l.value ) }">
+					</MvIF>
+				<MvELSE>
+					<MvIF EXPR = "{ l.filter_operator EQ 'IN' }">			<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ( 'INTEGER', 'q.ceiling', l.value ) $ ' AND q.ceiling <> 0' }">
+					<MvELSEIF EXPR = "{ l.filter_operator EQ 'NOT_IN' }">	<MvASSIGN NAME = "l.where" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE( 'INTEGER', 'q.ceiling', l.value ) $ ' OR q.ceiling = 0' }">
+					</MvIF>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT ISNULL l.where }">
+					<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( ' $ l.where $ ' )', [ g.Module_Library_DB ].SQL_Query_Field( l.value ) ) }">
+				</MvIF>
+			</MvFOREACH>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, l.subwhere_operator ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Method_Load" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Method_ID', l.method_id ) }">
+		<MvIF EXPR = "{ NOT QShipMethod_Load_ID( l.method_id, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00058', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_Method', l.code ) }">
+		<MvIF EXPR = "{ NOT QShipMethod_Load_Code( l.code, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00059', 'Method not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Method_Code', l.code ) }">
+		<MvIF EXPR = "{ NOT QShipMethod_Load_Code( l.code, l.method ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00060', 'Method not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00061', 'Unable to load method: One of Method_ID, Edit_Method, or Method_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Quantity_Load" PARAMETERS = "quantity var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Quantity_ID', l.quantity_id ) }">
+		<MvIF EXPR = "{ NOT QShipQuantity_Load_ID( g.Quantity_ID, l.quantity ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00042', 'Quantity not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00062', 'Unable to load quantity: Quantity_ID must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Quantity_Validate" PARAMETERS = "method var, quantity_id, quantity var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer(	'R:positive',	'Floor',		l.floor )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R',			'Ceiling',		l.ceiling )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Currency(	'R',			'Unit_Rate',	l.unit_rate ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.ceiling NE '+' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Required( l.ceiling ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', g.Validation_Message ) }">
+		<MvELSEIF EXPR = "{ l.floor GT l.ceiling }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', 'Please enter a number larger than ' $ l.floor ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.new_quantity"		VALUE = "">
+	<MvASSIGN NAME = "l.new_quantity:floor"	VALUE = "{ l.floor }">
+
+	<MvIF EXPR = "{ l.ceiling EQ '+' }">	<MvASSIGN NAME = "l.new_quantity:ceiling" VALUE = 0>
+	<MvELSE>								<MvASSIGN NAME = "l.new_quantity:ceiling" VALUE = "{ l.ceiling }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.existing_quantity" ARRAY = "l.quantities" COUNT = "{ QShipQuantityList_Load_Method( l.method:id, l.quantities ) }">
+		<MvIF EXPR = "{ l.quantity_id AND ( l.existing_quantity:id EQ l.quantity_id ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ QShip_Quantity_StartsWithin( l.new_quantity, l.existing_quantity ) }">
+			<MvASSIGN NAME = "l.message"	VALUE = "{ 'Range \'' $ QShip_Quantity_Description( l.new_quantity ) $ '\' overlaps with range \'' $ QShip_Quantity_Description( l.existing_quantity ) $ '\'' }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Floor', l.message ) }">
+		<MvELSEIF EXPR = "{ QShip_Quantity_StartsWithin( l.existing_quantity, l.new_quantity ) }">
+			<MvASSIGN NAME = "l.message"	VALUE = "{ 'Range \'' $ QShip_Quantity_Description( l.new_quantity ) $ '\' overlaps with range \'' $ QShip_Quantity_Description( l.existing_quantity ) $ '\'' }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Ceiling', l.message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.quantity:method_id" 	VALUE = "{ l.method:id }">
+	<MvASSIGN NAME = "l.quantity:floor" 		VALUE = "{ l.floor }">
+	<MvASSIGN NAME = "l.quantity:unit_rate" 	VALUE = "{ l.unit_rate }">
+
+	<MvIF EXPR = "{ l.ceiling EQ '+' }">	<MvASSIGN NAME = "l.quantity:ceiling" VALUE = 0>
+	<MvELSE>								<MvASSIGN NAME = "l.quantity:ceiling" VALUE = "{ l.ceiling }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingMethodList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'm.code',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'm.method',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'm.prog',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'q.floor',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'q.ceiling',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'q.unit_rate',	'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'm.id 		AS method_id,
+																				 m.code		AS method_code,
+																				 m.method	AS method_method,
+																				 m.prog		AS method_prog' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER(	l.search_query, 'q.id',			'quantity_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER(	l.search_query, 'q.method_id',	'quantity_method_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER(	l.search_query, 'q.floor',		'quantity_floor' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_INTEGER(	l.search_query, 'q.ceiling',	'quantity_ceiling' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_NUMBER(		l.search_query, 'q.unit_rate',	'quantity_unit_rate' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'QShipMethods', 'm' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'm', g.Store_Table_Prefix $ 'QShipQuantities', 'q', 'q.method_id = m.id', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.search_query, l.filter, l.available_filters, g.Module_Root $ l.module:module, '', 'JSON_Filter_Ceiling', l.null ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, l.sort, 'code:m.code,method:m.method,prog:m.prog', 'm.method' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.search_query, 'quantity_floor', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipMethods"
+				QUERY	= "{ l.search_sql }"
+				FIELDS	= "{ l.search_fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-SHP-QSP-00043', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total_count" 		VALUE = 0>
+	<MvASSIGN NAME = "l.method_count" 		VALUE = 0>
+	<MvASSIGN NAME = "l.quantity_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.last_method_id" 	VALUE = 0>
+	<MvASSIGN NAME = "l.last_quantity_id" 	VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvWHILE EXPR = "{ NOT QShipMethods.d.EOF }">
+			<MvIF EXPR = "{ l.last_method_id NE QShipMethods.d.method_id }">
+				<MvIF EXPR = "{ l.quantity_count }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+					]
+				</MvIF>
+
+				<MvIF EXPR = "{ l.method_count }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.method_count ) }">
+				"id": 		<MvEVAL EXPR = "{ int( QShipMethods.d.method_id ) }">,
+				"code": 	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( QShipMethods.d.method_code ) }">",
+				"method": 	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( QShipMethods.d.method_method ) }">",
+				"prog":		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( QShipMethods.d.method_prog ) }">
+
+				<MvASSIGN NAME = "l.total_count"		VALUE = "{ l.total_count + 1 }">
+				<MvASSIGN NAME = "l.last_method_id" 	VALUE = "{ QShipMethods.d.method_id }">
+				<MvASSIGN NAME = "l.last_quantity_id" 	VALUE = 0>
+				<MvASSIGN NAME = "l.quantity_count" 	VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.last_quantity_id NE QShipMethods.d.quantity_id }">
+				<MvIF EXPR = "{ l.quantity_count }">
+					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT l.quantity_count }">
+					, "quantities":
+					[
+				</MvIF>
+
+				<MvIF EXPR = "{ QShipMethods.d.quantity_ceiling EQ 0 }">	<MvASSIGN NAME = "l.ceiling" VALUE = "+">
+				<MvELSE>													<MvASSIGN NAME = "l.ceiling" VALUE = "{ QShipMethods.d.quantity_ceiling }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.quantity_count ) }">
+				"id":			<MvEVAL EXPR = "{ int( QShipMethods.d.quantity_id ) }">,
+				"method_id":	<MvEVAL EXPR = "{ int( QShipMethods.d.quantity_method_id ) }">,
+				"floor":		<MvEVAL EXPR = "{ int( QShipMethods.d.quantity_floor ) }">,
+				"ceiling":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.ceiling ) }">",
+				"unit_rate":	<MvEVAL EXPR = "{ QShipMethods.d.quantity_unit_rate ROUND 2 }">
+
+				<MvASSIGN NAME = "l.total_count" 		VALUE = "{ l.total_count + 1 }">
+				<MvASSIGN NAME = "l.last_quantity_id"	VALUE = "{ QShipMethods.d.quantity_id }">
+			</MvIF>
+
+			<MvSKIP NAME = "Merchant" VIEW = "QShipMethods" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+
+		<MvIF EXPR = "{ l.quantity_count }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			]
+		</MvIF>
+
+		<MvIF EXPR = "{ l.method_count }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+		</MvIF>
+		],
+		"start_offset": 0,
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingMethod_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.method"			VALUE = "">
+	<MvASSIGN NAME = "l.method:code"	VALUE = "">
+	<MvASSIGN NAME = "l.method:method"	VALUE = "">
+	<MvASSIGN NAME = "l.method:prog"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Code',			l.method:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'Method',		l.method:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Progressive',	l.method:prog ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.method:code }">
+		<MvASSIGN NAME = "l.method:code" VALUE = "{ l.method:method }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipMethod_Load_Code( l.method:code, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Insert( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00044', 'QBSM Method \'' $ l.method:code $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingMethod_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_method" VALUE = "{ l.method }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Code',			l.method:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:100',	'Method',		l.method:method )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Progressive',	l.method:prog ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipMethod_Load_Code( l.method:code, l.existing_method ) AND l.method:id NE l.existing_method:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'A method with the code \'' $ l.method:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Update( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcmp( l.original_method:code, l.method:code ) NE 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_UT ].ShippingMethod_Update_References( l.module, l.original_method:code, l.method:code ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00045', 'QBSM Method \'' $ l.method:code $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingMethod_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Delete( l.method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00046', 'QBSM Method \'' $ l.method:method $ '\' deleted' ) }">
+
+	<MvIF EXPR = "{ NOT QShipQuantity_Delete_All_Method( l.method:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00047', 'QBSM Method \'' $ l.method:code $ '\', Quantity records deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingQuantity_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Method_Load( l.method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Quantity_Validate( l.method, 0, l.quantity ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipQuantity_Insert( l.quantity ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00048', 'QBSM Method \'' $ l.method:code $ '\', Quantity \'' $ l.quantity:id $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingQuantity_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Quantity_Load( l.quantity ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipMethod_Load_ID( l.quantity:method_id, l.method ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-SHP-QSP-00049', 'Failed to load method' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Quantity_Validate( l.method, l.quantity:id, l.quantity ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipQuantity_Update( l.quantity ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00050', 'QBSM Method \'' $ l.method:code $ '\', Quantity \'' $ l.quantity:id $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_QuantityBasedShippingQuantity_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SHIP', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Quantity_Load( l.quantity ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT QShipQuantity_Delete( l.quantity:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-SHP-QSP-00051', 'QBSM Quantity \'' $ l.quantity:id $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/shipping/qship/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_QuantityBasedShipping_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/qship/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/qship/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/shipping/qship/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_QShipMethods
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "QShipMethod_Read" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"		VALUE = "{ QShipMethods.d.id }">
+	<MvASSIGN NAME = "l.method:code"	VALUE = "{ QShipMethods.d.code }">
+	<MvASSIGN NAME = "l.method:method"	VALUE = "{ QShipMethods.d.method }">
+	<MvASSIGN NAME = "l.method:prog"	VALUE = "{ QShipMethods.d.prog }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethod_Load_ID" PARAMETERS = "id, method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipMethods WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-QSP-00022' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ QShipMethod_Read( l.method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethod_Load_Method" PARAMETERS = "method, qship_method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' ORDER BY id' }"
+				FIELDS	= "l.method">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-QSP-00023' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ QShipMethod_Read( l.qship_method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethod_Load_Code" PARAMETERS = "code, method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipMethods WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00063', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipMethods.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-QSP-00064' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ QShipMethod_Read( l.method ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethodList_Load" PARAMETERS = "methods var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipMethods"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipMethods ORDER BY ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'method' ) }"
+				FIELDS	= "">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.method_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT QShipMethods.d.EOF }">
+		<MvASSIGN NAME = "l.method_count"	VALUE = "{ l.method_count + 1 }">
+
+		<MvEVAL EXPR = "{ QShipMethod_Read( l.methods[ l.method_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "QShipMethods" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipMethods">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-QSP-00024', l.method_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethod_Insert" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.method:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'QShipMethods' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'QShipMethods
+						  ( id, code, method, prog )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.method:id, l.method:code, l.method:method, l.method:prog">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethod_Update" PARAMETERS = "method var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'QShipMethods
+						  SET
+							code	= ?,
+							method	= ?,
+							prog	= ?
+						  WHERE
+							id		= ?' }"
+			 FIELDS	= "l.method:code, l.method:method, l.method:prog,
+					   l.method:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipMethod_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'QShipMethods
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_QShipQuantities
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "QShipQuantity_Read" PARAMETERS = "quant var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.quant:id"			VALUE = "{ QShipQuantities.d.id }">
+	<MvASSIGN NAME = "l.quant:method_id"	VALUE = "{ QShipQuantities.d.method_id }">
+	<MvASSIGN NAME = "l.quant:floor"		VALUE = "{ QShipQuantities.d.floor }">
+	<MvASSIGN NAME = "l.quant:ceiling"		VALUE = "{ QShipQuantities.d.ceiling }">
+	<MvASSIGN NAME = "l.quant:unit_rate"	VALUE = "{ QShipQuantities.d.unit_rate }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantity_Load_ID" PARAMETERS = "id, quant var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipQuantities"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipQuantities WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipQuantities.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipQuantities">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-QSP-00025' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ QShipQuantity_Read( l.quant ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipQuantities">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantity_Load_Floor" PARAMETERS = "method_id, floor, quant var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipQuantities"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipQuantities
+							  WHERE
+								method_id	= ? AND
+								floor		= ?' }"
+				FIELDS	= "l.method_id, l.floor">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00016', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ QShipQuantities.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipQuantities">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SHP-QSP-00026' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ QShipQuantity_Read( l.quant ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipQuantities">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantityList_Load_Method" PARAMETERS = "method_id, quants var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "QShipQuantities"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'QShipQuantities WHERE method_id = ? ORDER BY floor' }"
+				FIELDS	= "l.method_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.quant_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT QShipQuantities.d.EOF }">
+		<MvASSIGN NAME = "l.quant_count"	VALUE = "{ l.quant_count + 1 }">
+
+		<MvEVAL EXPR = "{ QShipQuantity_Read( l.quants[ l.quant_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "QShipQuantities" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QShipQuantities">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-SHP-QSP-00027', l.quant_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantity_Insert" PARAMETERS = "quant var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.quant:id"	VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'QShipQuantities' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'QShipQuantities
+						  ( id, method_id, floor, ceiling, unit_rate )
+						  VALUES
+						  ( ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.quant:id, l.quant:method_id, l.quant:floor, l.quant:ceiling, l.quant:unit_rate">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantity_Update" PARAMETERS = "quant var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'QShipQuantities
+						  SET
+							floor		= ?,
+							ceiling		= ?,
+							unit_rate	= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.quant:floor, l.quant:ceiling, l.quant:unit_rate, l.quant:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00019', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantity_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'QShipQuantities
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00020', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShipQuantity_Delete_All_Method" PARAMETERS = "method_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'QShipQuantities
+						  WHERE
+							method_id	= ?' }"
+			 FIELDS	= "l.method_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SHP-QSP-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "QShipQuantities_SortFloor" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:floor LT l.right:floor }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:floor GT l.right:floor }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShip_Quantity_Description" PARAMETERS = "quantity var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.quantity:ceiling EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ l.quantity:floor $ '+' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.quantity:floor $ '-' $ l.quantity:ceiling }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShip_Quantity_StartsWithin" PARAMETERS = "quantity1 var, quantity2 var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ ( l.quantity1:floor GE l.quantity2:floor ) AND ( ( l.quantity2:ceiling EQ 0 ) OR ( l.quantity2:ceiling GE l.quantity1:floor ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "QShip_Calculate_Method_Rate" PARAMETERS = "method var, basket_quantity, shipping_total var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.total_priced" 	VALUE = 0>
+	<MvASSIGN NAME = "l.left_to_price" 	VALUE = "{ l.basket_quantity }">
+	<MvASSIGN NAME = "l.shipping_total" VALUE = 0.00>
+
+	<MvFOREACH ITERATOR = "l.quantity" ARRAY = "l.quantities" COUNT = "{ QShipQuantityList_Load_Method( l.method:id, l.quantities ) }">
+		<MvIF EXPR = "{ NOT l.method:prog }">
+			<MvIF EXPR = "{ ( l.basket_quantity GE l.quantity:floor ) AND ( ( l.quantity:ceiling EQ 0 ) OR ( l.basket_quantity LE l.quantity:ceiling ) ) }">
+				<MvASSIGN NAME = "l.shipping_total"	VALUE = "{ l.basket_quantity * l.quantity:unit_rate }">
+				<MvASSIGN NAME = "l.left_to_price" 	VALUE = 0>
+
+				<MvFOREACHSTOP>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ l.left_to_price EQ 0 }">							<MvFOREACHSTOP>
+			<MvELSEIF EXPR = "{ l.quantity:floor GT ( l.total_priced + 1 ) }">	<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.quantity:ceiling EQ 0 }">
+				<MvASSIGN NAME = "l.this_priced" 	VALUE = "{ l.left_to_price }">
+				<MvASSIGN NAME = "l.left_to_price" 	VALUE = 0>
+			<MvELSEIF EXPR = "{ ( l.quantity:ceiling - l.quantity:floor + 1 ) GT l.left_to_price }">
+				<MvASSIGN NAME = "l.this_priced" 	VALUE = "{ l.left_to_price }">
+				<MvASSIGN NAME = "l.left_to_price" 	VALUE = 0>
+			<MvELSE>
+				<MvASSIGN NAME = "l.this_priced" 	VALUE = "{ l.quantity:ceiling - l.quantity:floor + 1 }">
+				<MvASSIGN NAME = "l.left_to_price" 	VALUE = "{ l.left_to_price - l.this_priced }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.shipping_total" VALUE = "{ miva_ieee754_normalize( 2, l.shipping_total + ( l.quantity:unit_rate * l.this_priced ) ) }">
+			<MvASSIGN NAME = "l.total_priced"	VALUE = "{ l.total_priced + l.this_priced }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.left_to_price EQ 0 }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/shipping/qship/functions.mv">
+<MvINCLUDE FILE = "modules/shipping/qship/list.mv">

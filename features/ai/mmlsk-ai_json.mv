@@ -1,0 +1,82 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-AI-JSON-
+| Next Error Code: 5   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_AIGenerateText" PARAMETERS = "" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'Prompt',			l.prompt )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Content',			l.content )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'GenerateAsHTML',	l.generate_as_html ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_AI_DB ].AISettings_Load( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT l.aisettings:enabled }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00001', 'AI generation is disabled' ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.data">
+	{
+		"model": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.aisettings:engine ) }">",
+		"messages":
+		[
+			{
+				"role":		"user",
+				"content":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.prompt ) }">"
+			},
+			{
+				"role":		"user",
+				"content":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.content ) }">"
+			}
+
+			<MvIF EXPR = "{ l.generate_as_html }">
+				,
+				{
+					"role":		"user",
+					"content":	"The generated result should be returned in HTML format"
+				}
+			</MvIF>
+		]
+	}
+	</MvCAPTURE>
+
+	<MIVA MvCALL_Error = "nonfatal, nodisplay">
+	<MvCALL METHOD			= "RAW"
+			CONTENT-TYPE	= "application/json"
+			ACTION			= "https://api.openai.com/v1/chat/completions"
+			HEADERS			= "{ 'Authorization: Bearer ' $ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.aisettings:token ) $ asciichar( 13 ) $ asciichar( 10 ) }"
+			FIELDS			= "l.data"
+			FLAGS			= "force_verify, noparse">
+		<MvASSIGN NAME = "l.http_response_status"	VALUE = "{ gettoken( s.callreturnheader[ 1 ], ' ', 2 ) }">
+		<MvASSIGN NAME = "l.response_json"			VALUE = "{ s.callvalue }">
+	</MvCALL>
+	<MIVA MvCALL_Error = "fatal, display">
+
+	<MvIF EXPR = "{ g.MvCALL_ERROR }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00002', g.MvCALL_ERROR ) }">
+	<MvELSEIF EXPR = "{ NOT miva_json_decode( l.response_json, l.response ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00003', miva_json_decode_last_error() ) }">
+	<MvELSEIF EXPR = "{ NOT ISNULL l.response:error:message }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00004', l.response:error:message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"content": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.response:choices[ 1 ]:message:content ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>

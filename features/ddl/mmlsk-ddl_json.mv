@@ -1,0 +1,518 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DDL-JSON-
+| Next Error Code: 13   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_DigitalDownload" PARAMETERS = "dl var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "l.download_url" 		VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Generate_DownloadURL( l.dl:code ) }">
+	<MvASSIGN NAME = "l.null" 				VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Expiration_DateTime( l.dl, l.expiration_configured ) }">
+	<MvASSIGN NAME = "l.null" 				VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_MaxDownloads( l.dl, l.max_configured ) }">
+	<MvASSIGN NAME = "l.total_bw_formatted" VALUE = "{ Format_Total_Bandwidth( l.dl:total_bw ) }">
+
+	"id":					<MvEVAL EXPR = "{ int( l.dl:id ) }">,
+	"code":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.dl:code ) }">",
+	"product_id":			<MvEVAL EXPR = "{ int( l.dl:product_id ) }">,
+	"order_id":				<MvEVAL EXPR = "{ int( l.dl:order_id ) }">,
+	"total_dl":				<MvEVAL EXPR = "{ int( l.dl:total_dl ) }">,
+	"total_bw":				<MvEVAL EXPR = "{ l.dl:total_bw ROUND 0 }">,
+	"create_dt":			<MvEVAL EXPR = "{ int( l.dl:create_dt ) }">,
+	"expiration":			<MvEVAL EXPR = "{ int( l.dl:expiration ) }">,
+	"max_dl":				<MvEVAL EXPR = "{ int( l.dl:max_dl ) }">,
+	"total_bw_formatted":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.total_bw_formatted ) }">",
+	"expiration_dt": 		<MvEVAL EXPR = "{ int( l.expiration_configured ) }">,
+	"max_downloads":		<MvEVAL EXPR = "{ int( l.max_configured ) }">,
+	"download_url":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.download_url ) }">"
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductDigitalDownloadList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'code',		'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'order_id',	'order_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'total_dl',	'total_dl' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'create_dt',	'create_dt' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'DigitalDownloads', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'code,order_id,total_dl,create_dt,total_bw_formatted:total_bw', 'create_dt' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'DigitalDownloads', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT DigitalDownloads.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.dl_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_DB ].DigitalDownload_Read( l.dl ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.dl_count ) }">
+				<MvEVAL EXPR = "{ JSON_DigitalDownload( l.dl ) }">
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			<MvSKIP NAME = "Merchant" VIEW = "DigitalDownloads" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductDigitalDownload_Validate_Common" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Max_Downloads"	VALUE = "{ int( g.Max_Downloads ) }">
+	<MvASSIGN NAME = "g.Expiration" 	VALUE = "{ int( g.Expiration ) }">
+
+	<MvIF EXPR = "{ g.Max_Downloads LT -1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00002', 'Invalid Max Downloads value' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Expiration LT -1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00003', 'Invalid Link Expiration value' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductDigitalDownload_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.Product_ID" VALUE = "{ int( g.Product_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( g.Product_ID, l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00004', 'Failed to load product' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_ProductDigitalDownload_Validate_Common() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl:product_id"					VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.dl:expiration"					VALUE = "{ g.Expiration }">
+	<MvASSIGN NAME = "l.dl:max_dl" 						VALUE = "{ g.Max_Downloads }">
+
+	<MvASSIGN NAME = "l.created_digitaldownloads"		VALUE = "">
+	<MvASSIGN NAME = "l.created_digitaldownload_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Insert( l.dl ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.created_digitaldownload_count" VALUE = "{ miva_array_insert_var( l.created_digitaldownloads, l.dl, -1 ) }">
+
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_UT ].Notify_DigitalDownloads_Created( l.created_digitaldownloads, l.created_digitaldownload_count ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductDigitalDownload_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.DigitalDownload_ID" VALUE = "{ int( g.DigitalDownload_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Load_ID( g.DigitalDownload_ID, l.dl ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00005', 'Failed to load Digital Download' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_ProductDigitalDownload_Validate_Common() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl:max_dl" 		VALUE = "{ g.Max_Downloads }">
+	<MvASSIGN NAME = "l.dl:expiration" 	VALUE = "{ g.Expiration }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Update( l.dl ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductDigitalDownloadList_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+
+	<MvFOREACH ITERATOR = "l.dl_id" ARRAY = "l.dl_ids" COUNT = "{ [ g.Module_JSON ].JSON_Array_Integer( g.DigitalDownload_IDs, l.dl_ids ) }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Load_ID( l.dl_id, l.dl ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Delete( l.dl ) }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.dl_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			<MvELSE>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-DDL-JSON-00006', 'Digital Download \'' $ l.dl:code $ '\' deleted' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_DigitalDownloadCDNList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'name',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'cdn',	'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'DigitalDownloadCDNs', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'name,cdn', 'name' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'DigitalDownloadCDNs', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_cdn_count"		VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT DigitalDownloadCDNs.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.dl_cdn_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.dl_cdn_count ) }">
+			<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Read( l.dl_cdn ) }">
+
+			"id":	<MvEVAL EXPR = "{ int( l.dl_cdn:id ) }">,
+			"name":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.dl_cdn:name ) }">",
+			"cdn":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( toupper( l.dl_cdn:cdn ) ) }">",
+			"data":
+			{
+				<MvFOREACH ITERATOR = "l.member" ARRAY = "l.members" INDEX = "l.pos" COUNT = "{ miva_struct_members( l.dl_cdn:data, l.members ) }">
+					<MvIF EXPR = "{ l.pos GT 1 }">
+						<MvEVAL EXPR = "{ ',' }">
+					</MvIF>
+
+					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.member ) }">": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( miva_variable_value( 'l.dl_cdn:data:' $ l.member ) ) }">"
+				</MvFOREACH>
+			}
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			<MvSKIP NAME = "Merchant" VIEW = "DigitalDownloadCDNs" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadCDNs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_DigitalDownloadCDN_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_DigitalDownloadCDN_Validate_Common( 1, l.dl_cdn ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Insert( l.dl_cdn ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_DigitalDownloadCDN_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.DigitalDownloadCDN_ID" VALUE = "{ int( g.DigitalDownloadCDN_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Load_ID( g.DigitalDownloadCDN_ID, l.dl_cdn ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00008', 'Failed to load CDN' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_DigitalDownloadCDN_Validate_Common( 0, l.dl_cdn ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Update( l.dl_cdn ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_DigitalDownloadCDNList_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+
+	<MvFOREACH ITERATOR = "l.dl_cdn_id" ARRAY = "l.dl_cdn_ids" COUNT = "{ [ g.Module_JSON ].JSON_Array_Integer( g.DigitalDownloadCDN_IDs, l.dl_cdn_ids ) }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Load_ID( l.dl_cdn_id, l.dl_cdn ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Delete( l.dl_cdn ) }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.dl_cdn_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			<MvELSE>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-DDL-JSON-00009', 'Digital Download CDN \'' $ l.dl_cdn:name $ '\' deleted' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_DigitalDownloadCDN_Validate_Common" PARAMETERS = "insert, dl_cdn var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Name"				VALUE = "{ trim( g.Name ) }">
+	<MvASSIGN NAME = "g.CDN"				VALUE = "{ trim( toupper( g.CDN ) ) }">
+	<MvASSIGN NAME = "g.Access_Key" 		VALUE = "{ trim( g.Access_Key ) }">
+	<MvASSIGN NAME = "g.Secret_Key" 		VALUE = "{ trim( g.Secret_Key ) }">
+	<MvASSIGN NAME = "g.Secret_Key_Confirm" VALUE = "{ trim( g.Secret_Key_Confirm ) }">
+
+	<MvIF EXPR = "{ ISNULL g.Name }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Name', 'Name cannot be blank' ) }">
+	<MvELSEIF EXPR = "{ len_var( g.Name ) GT 100 }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Name', 'Name must be 100 characters or less' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.exists" VALUE = "{ [ g.Feature_Filename_DDL_DB ].DigitalDownloadCDN_Load_Name( g.Name, l.existing_cdn ) }">
+
+		<MvIF EXPR = "{ ( ISNULL l.dl_cdn AND l.exists ) OR ( l.exists AND l.dl_cdn:id NE l.existing_cdn:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Name', 'Name already exists' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_cdn:name"	VALUE = "{ g.Name }">
+	<MvASSIGN NAME = "l.dl_cdn:cdn"		VALUE = "{ g.CDN }">
+
+	<MvIF EXPR = "{ g.CDN EQ 'A' }">
+		<MvIF EXPR = "{ ISNULL g.Access_Key }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Amazon_Access_Key', 'Access Key cannot be blank' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL g.Secret_Key AND ( g.Secret_Key NE g.Secret_Key_Confirm ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Amazon_Secret_Key', 'Secret Keys do not match' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ISNULL g.Secret_Key }">
+			<MvASSIGN NAME = "l.dl_cdn:data:secret_key" VALUE = "{ [ g.Module_Library_Crypto ].Encrypt_Payment_Password( g.Secret_Key ) }">
+		<MvELSEIF EXPR = "{ l.insert }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Amazon_Secret_Key', 'Secret Key cannot be blank' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.dl_cdn:data:access_key" VALUE = "{ g.Access_Key }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00010', 'Invalid CDN' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CatalogDigitalDownloadList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"				VALUE = "">
+	<MvASSIGN NAME = "l.filter"							VALUE = "">
+	<MvASSIGN NAME = "l.sort"							VALUE = "">
+	<MvASSIGN NAME = "l.offset"							VALUE = 0>
+	<MvASSIGN NAME = "l.count"							VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'p.code', 'product_code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'p.name', 'product_name' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.search_query"					VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'p.code AS product_code,
+																				 p.name AS product_name,
+																				 dl.product_id AS product_id,
+																				 SUM( dl.total_dl ) AS sum_total_dl,
+																				 SUM( dl.total_bw ) AS sum_total_bw' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'DigitalDownloads', 'dl' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Products', 'p' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'dl.product_id = p.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_GROUP_BY( l.search_query, 'dl.product_id, p.code, p.name' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'product_code,product_name,total_dl:sum_total_dl,total_bw:sum_total_bw', 'product_code' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"						VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+	<MvASSIGN NAME = "l.search_query:select_distinct"	VALUE = 1>
+	<MvASSIGN NAME = "l.search_query:select"			VALUE = "dl.product_id, 1 AS total_count">
+	<MvASSIGN NAME = "l.search_query:orderby_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.count_sql"						VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.count_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Count( l.count_sql, l.count_fields, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'DigitalDownloads', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT DigitalDownloads.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.dl_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.dl_count ) }">
+
+			<MvASSIGN NAME = "l.total_bw_formatted" VALUE = "{ Format_Total_Bandwidth( DigitalDownloads.d.sum_total_bw ) }">
+
+			"product_id":			<MvEVAL EXPR = "{ int( DigitalDownloads.d.product_id ) }">,
+			"product_code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( DigitalDownloads.d.product_code ) }">",
+			"product_name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( DigitalDownloads.d.product_name ) }">",
+			"total_dl":				<MvEVAL EXPR = "{ int( DigitalDownloads.d.sum_total_dl ) }">,
+			"total_bw":				<MvEVAL EXPR = "{ DigitalDownloads.d.sum_total_bw ROUND 2 }">,
+			"total_bw_formatted":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.total_bw_formatted ) }">"
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			<MvSKIP NAME = "Merchant" VIEW = "DigitalDownloads" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_DigitalDownload_Load_Code" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'DDLS', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "g.Code" VALUE = "{ trim( g.Code ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_DB ].DigitalDownload_Load_Code( g.Code, l.dl ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DDL-JSON-00012', 'Digital Download does not exist' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_DigitalDownload( l.dl ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Format_Total_Bandwidth" PARAMETERS = "total_bw" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.total_bw LT power( 1024, 1 ) }">		<MvFUNCTIONRETURN VALUE = "{ ( ( l.total_bw / power( 1024, 0 ) ) ROUND 2 ) $ ' B' }">
+	<MvELSEIF EXPR = "{ l.total_bw LT power( 1024, 2 ) }">	<MvFUNCTIONRETURN VALUE = "{ ( ( l.total_bw / power( 1024, 1 ) ) ROUND 2 ) $ ' KiB' }">
+	<MvELSEIF EXPR = "{ l.total_bw LT power( 1024, 3 ) }">	<MvFUNCTIONRETURN VALUE = "{ ( ( l.total_bw / power( 1024, 2 ) ) ROUND 2 ) $ ' MiB' }">
+	<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ ( ( l.total_bw / power( 1024, 3 ) ) ROUND 2 ) $ ' GiB' }">
+	</MvIF>
+</MvFUNCTION>

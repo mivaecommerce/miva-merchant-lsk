@@ -1,0 +1,630 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-CUS-
+| Next Error Code: 8    
+|
+</MvCOMMENT>
+
+<MvCOMMENT>
+|
+| API Functions for Feature "import"
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customerimport">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Customer Import">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "import">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:screen"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:persistent"            VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:format"				VALUE = "delimited">
+	<MvASSIGN NAME = "l.capabilities:persistent_provision"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+    <MvFUNCTIONRETURN VALUE = "{ Build_Column_Info( l.import, l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.fields"    VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed', 'Records Processed:', 0 ) }">
+
+    <MvIF EXPR = "{ l.import:config:customers EQ 'add' }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'update' }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'addupdate' }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'replace' }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'addreplace' }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+        <MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+    </MvIF>
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped', 'Records Skipped:', 0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 1 }">
+        <MvCOMMENT> Validate columns when automatically mapped </MvCOMMENT>
+        <MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present, l.error_code, l.error_msg ) }">
+            <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, l.error_msg ) }">
+        </MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.run_data:columns_present:password }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].CustomerSettings_Load( l.run_data:customersettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+    <MvASSIGN NAME = "l.list_pos"   VALUE = 0>
+    <MvASSIGN NAME = "l.cf_pos"     VALUE = 0>
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ Build_Column_Info( l.import, l.run_data:columns_all ) }">
+        <MvIF EXPR = "{ miva_variable_value( 'l.run_data:columns_present:' $ l.column:field ) }">
+            <MvASSIGN NAME = "l.column:present"                 VALUE = 1>
+            <MvASSIGN NAME = "l.list_pos"                       VALUE = "{ l.list_pos + 1 }">
+            <MvREFERENCE NAME = "l.run_data:columns_list"       INDEX = "{ l.list_pos }"        VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+            <MvREFERENCE NAME = "l.run_data:columns_present"    MEMBER = "{ l.column:field }"   VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+            <MvIF EXPR = "{ NOT ( ISNULL l.column:module ) }">
+                <MvASSIGN NAME = "l.cf_pos"                     VALUE = "{ l.cf_pos + 1 }">
+                <MvREFERENCE NAME = "l.run_data:custom_fields"  INDEX = "{ l.cf_pos }"          VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+            </MvIF>
+        </MvIF>
+    </MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+    <MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.run_data:columns_present:login, 1 ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+    <MvASSIGN NAME = "l.ignore" VALUE = "{ [ g.Module_Feature_CUS_DB ].Customer_Load_Login( l.record:login, l.existing_customer ) }">
+
+    <MvIF EXPR = "{ l.import:config:customers EQ 'add' }">
+        <MvIF EXPR = "{ NOT Import_Add_Only( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'update' }">
+        <MvIF EXPR = "{ NOT Import_Update_Only( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'addupdate' }">
+        <MvIF EXPR = "{ NOT Import_Add_And_Update( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'replace' }">
+        <MvIF EXPR = "{ NOT Import_Replace_Only( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    <MvELSEIF EXPR = "{ l.import:config:customers EQ 'addreplace' }">
+        <MvIF EXPR = "{ NOT Import_Add_And_Replace( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:id }">
+		<MvASSIGN NAME = "g.Import_Customer_Customers"			VALUE = "{ l.import:config:customers }">
+		<MvASSIGN NAME = "g.Import_Customer_CustomFields"		VALUE = "{ l.import:config:custom }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Import_Customer_Customers"			VALUE = "addupdate">
+		<MvASSIGN NAME = "g.Import_Customer_CustomFields"		VALUE = "retain">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "customers,custom">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'customers' }">	<MvFUNCTIONRETURN VALUE = "{ g.Import_Customer_Customers_Invalid }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">	<MvFUNCTIONRETURN VALUE = "{ g.Import_Customer_CustomFields_Invalid }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'customers' }">	<MvFUNCTIONRETURN VALUE = "<b>Customers:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">	<MvFUNCTIONRETURN VALUE = "<b>Custom Fields:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'customers' }">
+		<select name="Import_Customer_Customers">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'add',			g.Import_Customer_Customers,	'Add New Customers Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'update',		g.Import_Customer_Customers,	'Update Existing Customers Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addupdate',	g.Import_Customer_Customers,	'Add New and Update Existing Customers' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',		g.Import_Customer_Customers,	'Replace Existing Customers Only' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addreplace',	g.Import_Customer_Customers,	'Add New and Replace Existing Customers' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'custom' }">
+		<select name="Import_Customer_CustomFields">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'retain',	g.Import_Customer_CustomFields,	'Retain Existing Data When Imported Data Is Empty' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'delete',	g.Import_Customer_CustomFields,	'Delete Existing Data When Imported Data Is Empty' ) }">
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.valid"												VALUE = 1>
+
+	<MvASSIGN NAME = "g.Import_Customer_Customers_Invalid"				    VALUE = 0>
+	<MvASSIGN NAME = "g.Import_Customer_CustomFields_Invalid"				VALUE = 0>
+
+	<MvASSIGN NAME = "g.Import_Customer_Customers"						    VALUE = "{ trim( g.Import_Customer_Customers ) }">
+	<MvASSIGN NAME = "g.Import_Customer_CustomFields"						VALUE = "{ trim( g.Import_Customer_CustomFields ) }">
+
+	<MvIF EXPR = "{ ( g.Import_Customer_Customers NE 'add' ) AND
+					( g.Import_Customer_Customers NE 'update' ) AND
+					( g.Import_Customer_Customers NE 'addupdate' ) AND
+					( g.Import_Customer_Customers NE 'replace' ) AND
+					( g.Import_Customer_Customers NE 'addreplace' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Customer_Customers_Invalid"			    VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.Import_Customer_CustomFields NE 'retain' ) AND
+					( g.Import_Customer_CustomFields NE 'delete' ) }">
+		<MvASSIGN NAME = "l.valid"											VALUE = 0>
+		<MvASSIGN NAME = "g.Import_Customer_CustomFields_Invalid"			VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+        <MvCOMMENT> Validate columns when manually mapped </MvCOMMENT>
+        <MvEVAL EXPR = "{ Store_Config( l.import:config ) }">
+        <MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+        <MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present, l.error_code, l.error_msg ) }">
+            <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductImport_File', l.error_msg ) }">
+        </MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Store_Config( l.import:config ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Customers',	l.import:config:customers,	'add,update,addupdate,replace,addreplace',
+																																	'add,update,addupdate,replace,addreplace' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'CustomFields',	l.import:config:custom,		'retain,delete',
+																																	'retain,delete' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+    <MvIF EXPR = "{ l.import:automap EQ 0 }">
+        <MvCOMMENT> Validate columns when manually mapped </MvCOMMENT>
+        <MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+        <MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present, l.error_code, l.error_msg ) }">
+            <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, l.error_msg ) }">
+        </MvIF>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Mode Specific Single Record Import Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Add_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ l.existing_customer:id }">
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' already exists.' ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT Import_Create_Customer( l.import, l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT l.existing_customer:id }">
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' does not exist.' ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT Import_Update_Customer( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Update" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT l.existing_customer:id }">
+        <MvIF EXPR = "{ NOT Import_Create_Customer( l.import, l.session, l.record, l.run_data ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+
+    <MvELSE>
+        <MvIF EXPR = "{ NOT Import_Update_Customer( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT l.existing_customer:id }">
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' does not exist.' ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT Import_Replace_Customer( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Replace" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT l.existing_customer:id }">
+        <MvIF EXPR = "{ NOT Import_Create_Customer( l.import, l.session, l.record, l.run_data ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+
+    <MvELSE>
+        <MvIF EXPR = "{ NOT Import_Replace_Customer( l.import, l.session, l.record, l.run_data, l.existing_customer ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Functions To Actually Import a Single Record
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Create_Customer" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+    <MvASSIGN NAME = "l.record:account_id"  VALUE = 0>
+    <MvASSIGN NAME = "l.record:pgrpcount"   VALUE = 0>
+
+    <MvIF EXPR = "{ NOT ISNULL l.record:business_title }">
+        <MvIF EXPR = "{ [ g.Module_Feature_CUS_DB ].BusinessAccount_Load_Title( l.record:business_title, l.businessaccount ) }">
+            <MvASSIGN NAME = "l.record:account_id" VALUE = "{ l.businessaccount:id }">
+        <MvELSEIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+            <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Business account \'' $ l.record:business_title $ '\' does not exist' ) }">
+        <MvELSE>
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvIF>
+
+    <MvIF EXPR = "{ [ g.Module_Feature_CUS_DB ].Customer_Insert( l.record ) }">
+        <MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00003', 'CustomerImport Customer \'' $ l.record:login $ '\' created' ) }">
+        <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
+    <MvELSE>
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' failed to create: ' $ g.Error_Message ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Customer" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT Validate_Fields_Update( l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+	<MvASSIGN NAME = "l.existing_customer:ship_addr"			VALUE = "">
+	<MvASSIGN NAME = "l.existing_customer:bill_addr"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:login }">				<MvASSIGN NAME = "l.existing_customer:login"		VALUE = "{ l.record:login }">		</MvIF>
+
+	<MvASSIGN NAME = "l.password_changed"						VALUE = 0>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:password }">
+		<MvIF EXPR = "{ [ g.Module_Feature_CUS_UT ].Customer_Password_Encrypted( l.record:password ) }">
+			<MvASSIGN NAME = "l.existing_customer:password"		VALUE = "{ l.record:password }">
+			<MvASSIGN NAME = "l.password_changed"				VALUE = 1>
+		<MvELSEIF EXPR = "{ [ g.Module_Admin ].Validate_Password( l.run_data:customersettings, l.record:password ) }">
+			<MvASSIGN NAME = "l.existing_customer:password"		VALUE = "{ l.record:password }">
+			<MvASSIGN NAME = "l.password_changed"				VALUE = 1>
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Invalid Customer Password field.  ' $ g.Validation_Message $ '.  The existing password was retained.' ) }">
+		</MvIF>
+	</MvIF>
+
+    <MvIF EXPR = "{ l.run_data:columns_present:business_title }">
+        <MvIF EXPR = "{ ISNULL l.record:business_title }">
+            <MvASSIGN NAME = "l.existing_customer:account_id" VALUE = 0>
+        <MvELSEIF EXPR = "{ [ g.Module_Feature_CUS_DB ].BusinessAccount_Load_Title( l.record:business_title, l.businessaccount ) }">
+            <MvASSIGN NAME = "l.existing_customer:account_id" VALUE = "{ l.businessaccount:id }">
+        <MvELSEIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+            <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Business account \'' $ l.record:business_title $ '\' does not exist.  The existing business account was retained.' ) }">
+        <MvELSE>
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:pw_email }">			<MvASSIGN NAME = "l.existing_customer:pw_email"		VALUE = "{ l.record:pw_email }">	</MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:tax_exempt }">   <MvASSIGN NAME = "l.existing_customer:tax_exempt"   VALUE = "{ l.record:tax_exempt }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_fname }">   <MvASSIGN NAME = "l.existing_customer:ship_fname"   VALUE = "{ l.record:ship_fname }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_lname }">   <MvASSIGN NAME = "l.existing_customer:ship_lname"   VALUE = "{ l.record:ship_lname }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_addr1 }">   <MvASSIGN NAME = "l.existing_customer:ship_addr1"   VALUE = "{ l.record:ship_addr1 }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_addr2 }">   <MvASSIGN NAME = "l.existing_customer:ship_addr2"   VALUE = "{ l.record:ship_addr2 }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_city }">    <MvASSIGN NAME = "l.existing_customer:ship_city"    VALUE = "{ l.record:ship_city }">   </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_state }">   <MvASSIGN NAME = "l.existing_customer:ship_state"   VALUE = "{ l.record:ship_state }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_zip }">     <MvASSIGN NAME = "l.existing_customer:ship_zip"     VALUE = "{ l.record:ship_zip }">    </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_cntry }">   <MvASSIGN NAME = "l.existing_customer:ship_cntry"   VALUE = "{ l.record:ship_cntry }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_email }">   <MvASSIGN NAME = "l.existing_customer:ship_email"   VALUE = "{ l.record:ship_email }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_phone }">   <MvASSIGN NAME = "l.existing_customer:ship_phone"   VALUE = "{ l.record:ship_phone }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_fax }">     <MvASSIGN NAME = "l.existing_customer:ship_fax"     VALUE = "{ l.record:ship_fax }">    </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:ship_comp }">    <MvASSIGN NAME = "l.existing_customer:ship_comp"    VALUE = "{ l.record:ship_comp }">   </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_fname }">   <MvASSIGN NAME = "l.existing_customer:bill_fname"   VALUE = "{ l.record:bill_fname }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_lname }">   <MvASSIGN NAME = "l.existing_customer:bill_lname"   VALUE = "{ l.record:bill_lname }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_addr1 }">   <MvASSIGN NAME = "l.existing_customer:bill_addr1"   VALUE = "{ l.record:bill_addr1 }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_addr2 }">   <MvASSIGN NAME = "l.existing_customer:bill_addr2"   VALUE = "{ l.record:bill_addr2 }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_city }">    <MvASSIGN NAME = "l.existing_customer:bill_city"    VALUE = "{ l.record:bill_city }">   </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_state }">   <MvASSIGN NAME = "l.existing_customer:bill_state"   VALUE = "{ l.record:bill_state }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_zip }">     <MvASSIGN NAME = "l.existing_customer:bill_zip"     VALUE = "{ l.record:bill_zip }">    </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_cntry }">   <MvASSIGN NAME = "l.existing_customer:bill_cntry"   VALUE = "{ l.record:bill_cntry }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_email }">   <MvASSIGN NAME = "l.existing_customer:bill_email"   VALUE = "{ l.record:bill_email }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_phone }">   <MvASSIGN NAME = "l.existing_customer:bill_phone"   VALUE = "{ l.record:bill_phone }">  </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_fax }">     <MvASSIGN NAME = "l.existing_customer:bill_fax"     VALUE = "{ l.record:bill_fax }">    </MvIF>
+    <MvIF EXPR = "{ l.run_data:columns_present:bill_comp }">    <MvASSIGN NAME = "l.existing_customer:bill_comp"    VALUE = "{ l.record:bill_comp }">   </MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_CUS_DB ].Customer_Update( l.existing_customer ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00004', 'CustomerImport Customer \'' $ l.existing_customer:login $ '\' updated' ) }">
+        <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_updated', 1 ) }">
+	<MvELSE>
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' failed to update: ' $ g.Error_Message ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.password_changed }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Expire_All_Customer( l.existing_customer:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+    <MvASSIGN NAME = "l.record:id"	                    VALUE = "{ l.existing_customer:id }">
+    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Customer" PARAMETERS = "import var, session var, record var, run_data var, existing_customer var" STANDARDOUTPUTLEVEL = "">
+    <MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 1>
+    </MvIF>
+
+    <MvASSIGN NAME = "l.record:account_id"  VALUE = 0>
+    <MvASSIGN NAME = "l.record:pgrpcount"   VALUE = 0>
+
+    <MvIF EXPR = "{ NOT ISNULL l.record:business_title }">
+        <MvIF EXPR = "{ [ g.Module_Feature_CUS_DB ].BusinessAccount_Load_Title( l.record:business_title, l.businessaccount ) }">
+            <MvASSIGN NAME = "l.record:account_id" VALUE = "{ l.businessaccount:id }">
+        <MvELSEIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+            <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Business account \'' $ l.record:business_title $ '\' does not exist' ) }">
+        <MvELSE>
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Delete( l.existing_customer ) }">
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' failed to replace: ' $ g.Error_Message ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00005', 'CustomerImport Customer \'' $ l.existing_customer:login $ '\' deleted' ) }">
+        <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Insert( l.record ) }">
+            <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+
+        <MvELSE>
+            <MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00006', 'CustomerImport Customer \'' $ l.customer:login $ '\' created' ) }">
+            <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
+        </MvIF>
+	</MvIF>
+
+    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Custom_Fields" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:custom_fields">
+        <MvREFERENCE    NAME = "l.field"    VARIABLE = "{ 'l.record:' $ l.column:field }">
+
+        <MvIF EXPR = "{ l.import:config:custom EQ 'delete' }">
+            <MvDO   FILE = "{ g.Module_Root $ l.column:module:module }"
+                    NAME = "l.set_var"
+                    VALUE = "{ Module_Customer_Set_Field( l.column:module, l.record:id, l.column:code, l.field ) }">
+        <MvELSE>
+            <MvIF EXPR = "{ len( l.field ) GT 0 }">
+                <MvDO   FILE = "{ g.Module_Root $ l.column:module:module }"
+                        NAME = "l.set_var"
+                        VALUE = "{ Module_Customer_Set_Field( l.column:module, l.record:id, l.column:code, l.field ) }">
+            </MvIF>
+        </MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Validation Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var, error_code var, error_msg var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.columns_present:login }">
+		<MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-CUS-00007">
+		<MvASSIGN NAME = "l.error_msg" VALUE = "The Customer Login field must be assigned to an import file column">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:customers NE 'update' }">
+        <MvIF EXPR = "{ NOT l.columns_present:password }">
+            <MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-CUS-00001">
+            <MvASSIGN NAME = "l.error_msg" VALUE = "The Customer Password field must be assigned to an import file column">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+
+        <MvIF EXPR = "{ NOT l.columns_present:pw_email }">
+            <MvASSIGN NAME = "l.error_code" VALUE = "MER-IMP-CUS-00002">
+            <MvASSIGN NAME = "l.error_msg" VALUE = "The Customer Lost Password Email field must be assigned to an import file column">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Create" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvCOMMENT> Validate the contents of the fields that are present. </MvCOMMENT>
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+        <MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, l.column:required ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvFOREACH>
+
+    <MvCOMMENT> Apply defaults (when appropriate) to all fields, present or not. </MvCOMMENT>
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+        <MvEVAL EXPR = "{ Set_Field_Default( l.session, l.record, l.run_data, l.column ) }">
+    </MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].Customer_Password_Encrypted( l.record:password ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Password( l.run_data:customersettings, l.record:password ) }">
+			<MvEVAL EXPR = "{ Record_Skip( l.session, 'invalid Customer Password field.  ' $ g.Validation_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Update" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+        <MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, 0 ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Miscellaneous Utility Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Build_Column_Info" PARAMETERS = "import var, columns var" STANDARDOUTPUTLEVEL = "">
+    <MvASSIGN NAME = "l.columns"    VALUE = "">
+
+    <MvCOMMENT>                                       field                name                            header                             required    default     validation       </MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'login',             'Customer Login',               'CUSTOMER_LOGIN',                  1,          '',         'login' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'password',          'Customer Password',            'CUSTOMER_PASSWORD',               1,          '',         'string' ) }">
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'pw_email',          'Customer Lost Password Email', 'CUSTOMER_LOST_PASSWORD_EMAIL',    1,          '',         'email' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'business_title',    'Customer Business Account',    'CUSTOMER_BUSINESS_ACCOUNT',       0,          '',         'string' ) }">
+    <MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'tax_exempt',        'Customer Tax Exempt',          'CUSTOMER_TAX_EXEMPT',             0,          0,          'bool' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_fname',        'Customer Shipping First Name', 'CUSTOMER_SHIPPING_FIRST_NAME',    0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_lname',        'Customer Shipping Last Name',  'CUSTOMER_SHIPPING_LAST_NAME',     0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_addr1',        'Customer Shipping Address',    'CUSTOMER_SHIPPING_ADDRESS',       0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_addr2',        'Customer Shipping Address2',   'CUSTOMER_SHIPPING_ADDRESS2',      0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_city',         'Customer Shipping City',       'CUSTOMER_SHIPPING_CITY',          0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_state',        'Customer Shipping State',      'CUSTOMER_SHIPPING_STATE',         0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_zip',          'Customer Shipping Zip',        'CUSTOMER_SHIPPING_ZIP',           0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_cntry',        'Customer Shipping Country',    'CUSTOMER_SHIPPING_COUNTRY',       0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_email',        'Customer Shipping Email',      'CUSTOMER_SHIPPING_EMAIL',         0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_phone',        'Customer Shipping Phone',      'CUSTOMER_SHIPPING_PHONE',         0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_fax',          'Customer Shipping Fax',        'CUSTOMER_SHIPPING_FAX',           0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'ship_comp',         'Customer Shipping Company',    'CUSTOMER_SHIPPING_COMPANY',       0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_fname',        'Customer Billing First Name',  'CUSTOMER_BILLING_FIRST_NAME',     0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_lname',        'Customer Billing Last Name',   'CUSTOMER_BILLING_LAST_NAME',      0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_addr1',        'Customer Billing Address',     'CUSTOMER_BILLING_ADDRESS',        0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_addr2',        'Customer Billing Address2',    'CUSTOMER_BILLING_ADDRESS2',       0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_city',         'Customer Billing City',        'CUSTOMER_BILLING_CITY',           0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_state',        'Customer Billing State',       'CUSTOMER_BILLING_STATE',          0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_zip',          'Customer Billing Zip',         'CUSTOMER_BILLING_ZIP',            0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_cntry',        'Customer Billing Country',     'CUSTOMER_BILLING_COUNTRY',        0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_email',        'Customer Billing Email',       'CUSTOMER_BILLING_EMAIL',          0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_phone',        'Customer Billing Phone',       'CUSTOMER_BILLING_PHONE',          0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_fax',          'Customer Billing Fax',         'CUSTOMER_BILLING_FAX',            0,          '',         'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns, 'bill_comp',         'Customer Billing Company',     'CUSTOMER_BILLING_COMPANY',        0,          '',         'string' ) }">
+
+	<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ [ g.Module_Library_Utilities ].CustomerCustomFieldList_Load( l.customfields ) }">
+		<MvEVAL EXPR = "{ Add_Custom_Field_Column( l.columns, l.customfield, l.customfield:module ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Store_Config" PARAMETERS = "config var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.config:customers"	VALUE = "{ g.Import_Customer_Customers }">
+	<MvASSIGN NAME = "l.config:custom"	    VALUE = "{ g.Import_Customer_CustomFields }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

@@ -1,0 +1,2310 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-PVT-
+| Next Error Code: 67
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_ProductVariantList_Load_Product" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.limit_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.limits"								VALUE = "">
+	<MvASSIGN NAME = "l.exclusion_count"					VALUE = 0>
+	<MvASSIGN NAME = "l.exclusions"							VALUE = "">
+	<MvASSIGN NAME = "l.include_default_variant"			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Boolean( 'O', 'Include_Default_Variant', l.include_default_variant ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Attribute_Limits( l.product, l.limits, l.limit_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Attribute_Exclusions( l.product, l.exclusions, l.exclusion_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.fields"								VALUE = "l.product:id">
+
+	<MvIF EXPR = "{ l.limit_count EQ 0 }">
+		<MvASSIGN NAME = "l.limit_attribute_joins"			VALUE = "">
+		<MvASSIGN NAME = "l.limit_attribute_where"			VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.limit_attribute_joins"			VALUE = "{ g.Store_Table_Prefix $ 'ProductVariants pvl1, ' }">
+		<MvASSIGN NAME = "l.limit_attribute_where"			VALUE = "{ '( pvl1.product_id = ? AND pvl1.attr_id = ? AND pvl1.attmpat_id = ? AND pvl1.option_id = ? ) AND ' $
+																	   '( pv.product_id = pvl1.product_id AND pv.variant_id = pvl1.variant_id ) AND' }">
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.fields $ ', l.product:id, l.limits[ 1 ]:attr_id, l.limits[ 1 ]:attmpat_id, l.limits[ 1 ]:option_id' }">
+
+		<MvASSIGN NAME = "l.limit_attribute_pos"			VALUE = 2>
+		<MvWHILE EXPR = "{ l.limit_attribute_pos LE l.limit_count }">
+			<MvASSIGN NAME = "l.limit_attribute_joins"		VALUE = "{ l.limit_attribute_joins $ g.Store_Table_Prefix $ 'ProductVariants pvl' $ l.limit_attribute_pos $ ', ' }">
+			<MvASSIGN NAME = "l.limit_attribute_where"		VALUE = "{ l.limit_attribute_where $ '( pvl' $ l.limit_attribute_pos $ '.product_id = ? AND pvl' $ l.limit_attribute_pos $ '.variant_id = pvl' $ ( l.limit_attribute_pos - 1 ) $ '.variant_id AND pvl' $ l.limit_attribute_pos $ '.attr_id = ? AND pvl' $ l.limit_attribute_pos $ '.attmpat_id = ? AND pvl' $ l.limit_attribute_pos $ '.option_id = ? ) AND' }">
+			<MvASSIGN NAME = "l.fields"						VALUE = "{ l.fields $ ', l.product:id, l.limits[ ' $ l.limit_attribute_pos $ ' ]:attr_id, l.limits[ ' $ l.limit_attribute_pos $ ' ]:attmpat_id, l.limits[ ' $ l.limit_attribute_pos $ ' ]:option_id' }">
+
+			<MvASSIGN NAME = "l.limit_attribute_pos"		VALUE = "{ l.limit_attribute_pos + 1 }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.exclusion_count EQ 0 }">
+		<MvASSIGN NAME = "l.exclude_attribute_joins"		VALUE = "">
+		<MvASSIGN NAME = "l.exclude_attribute_where"		VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.exclude_attribute_joins"		VALUE = "{ 'LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductVariants pve1 ON ( pve1.product_id = pv.product_id AND pve1.variant_id = pv.variant_id AND pve1.attr_id = ? AND pve1.attmpat_id = ? )' }">
+		<MvASSIGN NAME = "l.exclude_attribute_where"		VALUE = "pve1.variant_id IS NULL AND">
+		<MvASSIGN NAME = "l.exclude_fields"					VALUE = "{ 'l.exclusions[ 1 ]:attr_id, l.exclusions[ 1 ]:attmpat_id' }">
+
+		<MvASSIGN NAME = "l.exclude_attribute_pos"			VALUE = 2>
+		<MvWHILE EXPR = "{ l.exclude_attribute_pos LE l.exclusion_count }">
+			<MvASSIGN NAME = "l.exclude_attribute_joins"	VALUE = "{ l.exclude_attribute_joins $ ' LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductVariants pve' $ l.exclude_attribute_pos $ ' ON ( pve' $ l.exclude_attribute_pos $ '.product_id = pv.product_id AND pve' $ l.exclude_attribute_pos $ '.variant_id = pv.variant_id AND pve' $ l.exclude_attribute_pos $ '.attr_id = ? AND pve' $ l.exclude_attribute_pos $ '.attmpat_id = ? )' }">
+			<MvASSIGN NAME = "l.exclude_attribute_where"	VALUE = "{ l.exclude_attribute_where $ ' pve' $ l.exclude_attribute_pos $ '.variant_id IS NULL AND' }">
+			<MvASSIGN NAME = "l.exclude_fields"				VALUE = "{ l.exclude_fields $ ', l.exclusions[ ' $ l.exclude_attribute_pos $ ' ]:attr_id, l.exclusions[ ' $ l.exclude_attribute_pos $ ' ]:attmpat_id' }">
+
+			<MvASSIGN NAME = "l.exclude_attribute_pos"		VALUE = "{ l.exclude_attribute_pos + 1 }">
+		</MvWHILE>
+
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.exclude_fields $ ', ' $ l.fields }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.include_default_variant }">
+		<MvASSIGN NAME = "l.default_variant_query"			VALUE = "{ 'UNION ALL
+																		SELECT
+																			pvp.product_id	AS product_id,
+																			0				AS variant_id,
+																			0				AS attr_id,
+																			0				AS attmpat_id,
+																			0				AS option_id,
+																			\'\'			AS option_code,
+																			\'\'			AS att_option_code,
+																			pvp.part_id		AS part_id,
+																			p.code			AS product_code,
+																			p.name			AS product_name,
+																			p.disp_order	AS disp_order,
+																			pvp.quantity	AS quantity
+																		FROM
+																			' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+																			' $ g.Store_Table_Prefix $ 'Products p
+																		WHERE
+																			pvp.product_id	= ?				AND
+																			pvp.variant_id	= 0				AND
+																			p.id			= pvp.part_id' }">
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.fields $ ', l.product:id' }">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductVariants"
+				QUERY	= "{ 'SELECT
+								pv.product_id	AS product_id,
+								pv.variant_id	AS variant_id,
+								pv.attr_id		AS attr_id,
+								pv.attmpat_id	AS attmpat_id,
+								pv.option_id	AS option_id,
+								o.code			AS option_code,
+								ato.code		AS att_option_code,
+								pvp.part_id		AS part_id,
+								p.code			AS product_code,
+								p.name			AS product_name,
+								p.disp_order	AS disp_order,
+								pvp.quantity	AS quantity
+							  FROM
+								' $ l.limit_attribute_joins $ '
+								' $ g.Store_Table_Prefix $ 'ProductVariants pv
+								' $ l.exclude_attribute_joins $ '
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Options o ON o.attr_id = pv.attr_id AND o.id = pv.option_id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AttributeTemplateOptions ato ON ato.attmpat_id = pv.attmpat_id AND ato.id = pv.option_id,
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+								' $ g.Store_Table_Prefix $ 'Products p
+							  WHERE
+							    pv.product_id	= ?				AND
+								' $ l.limit_attribute_where $ '
+								' $ l.exclude_attribute_where $ '
+								pvp.product_id	= pv.product_id	AND
+								pvp.variant_id	= pv.variant_id	AND
+								p.id			= pvp.part_id
+							  ' $ l.default_variant_query $ '
+							  ORDER BY
+								variant_id, attr_id, attmpat_id, option_id, disp_order' }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productvariant_count"		VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ NOT ProductVariants.d.EOF }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.productvariant_count ) }">
+		"product_id":	<MvEVAL EXPR = "{ ProductVariants.d.product_id }">,
+		"variant_id":	<MvEVAL EXPR = "{ ProductVariants.d.variant_id }">,
+
+		<MvCOMMENT>
+		|
+		| Grab the parts from the first attribute.  Save these values as we are going to skip
+		| past them while outputting the parts.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.variant_id"					VALUE = "{ ProductVariants.d.variant_id }">
+		<MvASSIGN NAME = "l.dimension_attr_id"			VALUE = "{ ProductVariants.d.attr_id }">
+		<MvASSIGN NAME = "l.dimension_attmpat_id"		VALUE = "{ ProductVariants.d.attmpat_id }">
+		<MvASSIGN NAME = "l.dimension_option_id"		VALUE = "{ ProductVariants.d.option_id }">
+
+		<MvIF EXPR = "{ ProductVariants.d.attmpat_id }">
+			<MvASSIGN NAME = "l.dimension_option_code"	VALUE = "{ ProductVariants.d.att_option_code }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.dimension_option_code"	VALUE = "{ ProductVariants.d.option_code }">
+		</MvIF>
+
+		"parts":
+		[
+			<MvASSIGN NAME = "l.part_count"			VALUE = 0>
+
+			<MvWHILE EXPR = "{ ( NOT ProductVariants.d.EOF ) AND
+							   ( ProductVariants.d.variant_id EQ l.variant_id ) AND
+							   ( ProductVariants.d.attr_id EQ l.dimension_attr_id ) AND
+							   ( ProductVariants.d.attmpat_id EQ l.dimension_attmpat_id ) AND
+							   ( ProductVariants.d.option_id EQ l.dimension_option_id ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.part_count ) }">
+				"product_id":		<MvEVAL EXPR = "{ ProductVariants.d.part_id }">,
+				"product_code":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.product_code ) }">",
+				"product_name":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.product_name ) }">",
+				"quantity":			<MvEVAL EXPR = "{ ProductVariants.d.quantity }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+				<MvSKIP NAME = "Merchant" VIEW = "ProductVariants" ROWS = 1>
+			</MvWHILE>
+		],
+
+		"dimensions":
+		[
+			<MvASSIGN NAME = "l.dimension_count"	VALUE = 1>
+
+			{
+				"attr_id":		<MvEVAL EXPR = "{ l.dimension_attr_id }">,
+				"attmpat_id":	<MvEVAL EXPR = "{ l.dimension_attmpat_id }">,
+				"option_id":	<MvEVAL EXPR = "{ l.dimension_option_id }">,
+				"option_code":	"<MvEVAL EXPR = "{ JSON_Encode( l.dimension_option_code ) }">"
+			}
+
+			<MvWHILE EXPR = "{ ( NOT ProductVariants.d.EOF ) AND
+							   ( ProductVariants.d.variant_id EQ l.variant_id ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.dimension_count ) }">
+				"attr_id":			<MvEVAL EXPR = "{ ProductVariants.d.attr_id }">,
+				"attmpat_id":		<MvEVAL EXPR = "{ ProductVariants.d.attmpat_id }">,
+				"option_id":		<MvEVAL EXPR = "{ ProductVariants.d.option_id }">,
+
+				<MvIF EXPR = "{ ProductVariants.d.attmpat_id }">
+					"option_code":	"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.att_option_code ) }">"
+				<MvELSE>
+					"option_code":	"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.option_code ) }">"
+				</MvIF>
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+				<MvSKIP NAME = "Merchant" VIEW = "ProductVariants" ROWS = "{ l.part_count }">
+			</MvWHILE>
+		]
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+	</MvWHILE>
+	]
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter ) OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset ) OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ [ g.Library_DB ].AttributeIdentifierList_Load_Product_Inventory( l.product:id, g.Session:cache:json_productvariantlist_load_query:attributes ) }">
+
+	<MvCOMMENT>
+	|
+	| Base query, without SELECT
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.base_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+
+	<MvFOREACH INDEX = "l.pos" ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix"					VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.base_query, 'pvp', g.Store_Table_Prefix $ 'ProductVariants', 'pv' $ l.suffix,
+																	  'pv' $ l.suffix $ '.product_id	= pvp.product_id	AND
+																	   pv' $ l.suffix $ '.variant_id	= pvp.variant_id	AND
+																	   pv' $ l.suffix $ '.attr_id		= ?					AND
+																	   pv' $ l.suffix $ '.attmpat_id	= ?',
+																	  'g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attr_id,
+																	   g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attmpat_id' ) }">
+
+		<MvIF EXPR = "{ l.attribute:attmpat_id EQ 0 }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.base_query, 'pvp', g.Store_Table_Prefix $ 'Options', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attr_id	= ?								AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  'g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attr_id' ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.base_query, 'pvp', g.Store_Table_Prefix $ 'AttributeTemplateOptions', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attmpat_id	= ?								AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  'g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attmpat_id' ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.base_query, g.Store_Table_Prefix $ 'Products', 'p' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.base_query,
+														'pvp.product_id	= ?				AND
+														 p.id			= pvp.part_id',
+														[ g.Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvCOMMENT>
+	|
+	| Dynamically build and apply Filter
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'p.code',	'product_code' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'p.name',	'product_name' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'p.sku',	'product_sku' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix"	VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'pv'	$ l.suffix $ '.option_id',	'option_id'		$ l.suffix ) }">
+		<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'o'	$ l.suffix $ '.code',		'option_code'	$ l.suffix ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.base_query, l.filter, l.available_filters ) }">
+
+	<MvCOMMENT>
+	|
+	| Search query
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.search_query"				VALUE = "{ l.base_query }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query,
+														 'pvp.product_id	AS product_id,
+														  pvp.variant_id	AS variant_id' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix"					VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query,
+															 'pv' $ l.suffix $ '.option_id	AS option_id' $ l.suffix $ ',
+															  o' $ l.suffix $ '.code		AS option_code' $ l.suffix ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query,
+														 'pvp.part_id	AS part_id,
+														  p.code		AS part_code,
+														  p.sku			AS part_sku,
+														  p.name		AS part_name,
+														  p.disp_order	AS part_disp_order,
+														  pvp.quantity	AS part_quantity' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY( l.search_query, 'variant_id', 'ASC' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY( l.search_query, 'part_disp_order', 'ASC' ) }">
+
+	<MvCOMMENT>
+	|
+	| Count query
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.count_query"				VALUE = "{ l.base_query }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.count_query, 'COUNT( * ) + 1 AS total_count' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_GROUP_BY( l.count_query, 'pvp.product_id, pvp.variant_id' ) }">
+
+	<MvCOMMENT>
+	|
+	| Execute queries and process results
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.count_sql"			VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.count_query, l.count_fields ) }">
+	<MvASSIGN NAME = "l.search_sql"			VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ l.offset GT 0 }">
+		<MvASSIGN NAME = "l.query_offset"	VALUE = "{ l.offset - 1 }">
+		<MvASSIGN NAME = "l.query_count"	VALUE = "{ l.count + 1 }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.query_offset"	VALUE = "{ l.offset }">
+		<MvASSIGN NAME = "l.query_count"	VALUE = "{ l.count }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Count( l.count_sql, l.count_fields, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ProductVariants', l.search_sql, l.search_fields, l.query_offset, l.query_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00021', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.parent_record_offset_invalid"				VALUE = 0>
+	<MvIF EXPR = "{ l.offset GT 0 }">
+		<MvASSIGN NAME = "l.variant_id"								VALUE = "{ ProductVariants.d.variant_id }">
+		<MvSKIP NAME = "Merchant" VIEW = "ProductVariants" ROWS = 1>
+
+		<MvASSIGN NAME = "l.parent_record_offset_invalid"			VALUE = "{ ProductVariants.d.EOF OR ( l.variant_id EQ ProductVariants.d.variant_id ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productvariant_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.records_output"								VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ l.offset }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT ProductVariants.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.records_output LT l.count ) ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.productvariant_count ) }">
+			<MvIF EXPR = "{ l.parent_record_offset_invalid }">
+				"offset":	-1,
+				<MvASSIGN NAME = "l.parent_record_offset_invalid"	VALUE = 0>
+			<MvELSE>
+				"offset":	<MvEVAL EXPR = "{ l.offset }">,
+			</MvIF>
+
+			"product_id":	<MvEVAL EXPR = "{ ProductVariants.d.product_id }">,
+			"variant_id":	<MvEVAL EXPR = "{ ProductVariants.d.variant_id }">,
+
+			<MvFOREACH ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+				<MvASSIGN NAME = "l.suffix"				VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+				<MvASSIGN NAME = "l.option_id"			VALUE = "{ miva_variable_value( 'ProductVariants.d.option_id' $ l.suffix ) }">
+				<MvASSIGN NAME = "l.option_code"		VALUE = "{ miva_variable_value( 'ProductVariants.d.option_code' $ l.suffix ) }">
+
+				"option_id<MvEVAL EXPR = "{ l.suffix }">":		<MvIF EXPR = "{ ISNULL l.option_id }">null<MvELSE><MvEVAL EXPR = "{ int( l.option_id ) }"></MvIF>,
+				"option_code<MvEVAL EXPR = "{ l.suffix }">":	"<MvEVAL EXPR = "{ JSON_Encode( l.option_code ) }">",
+			</MvFOREACH>
+
+			"attributes":
+			[
+				<MvASSIGN NAME = "l.output_attribute_count"	VALUE = 0>
+				<MvFOREACH ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+					<MvASSIGN NAME = "l.suffix"				VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_attribute_count ) }">
+						"attr_id": 			<MvEVAL EXPR = "{ int( l.attribute:attr_id ) }">,
+						"attr_code": 		"<MvEVAL EXPR = "{ JSON_Encode( ternary( l.attribute:attmpat_id GT 0, l.attribute:attmpat_code, l.attribute:attr_code ) ) }">",
+						"attmpat_id": 		<MvEVAL EXPR = "{ int( l.attribute:attmpat_id ) }">,
+						"option_id": 		<MvEVAL EXPR = "{ int( miva_variable_value( 'ProductVariants.d.option_id' $ l.suffix ) ) }">,
+						"option_code": 		"<MvEVAL EXPR = "{ JSON_Encode( miva_variable_value( 'ProductVariants.d.option_code' $ l.suffix ) ) }">"
+					<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+				</MvFOREACH>
+			],			
+
+			"parts":
+			[
+				<MvASSIGN NAME = "l.output_part_count"	VALUE = 0>
+				<MvASSIGN NAME = "l.variant_id"			VALUE = "{ ProductVariants.d.variant_id }">
+
+				<MvWHILE EXPR = "{ ( NOT ProductVariants.d.EOF ) AND ( ProductVariants.d.variant_id EQ l.variant_id ) AND ( ( l.count EQ 0 ) OR ( l.records_output LT l.count ) ) }">
+					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_part_count ) }">
+					"offset":			<MvEVAL EXPR = "{ l.offset++ }">,
+					"product_id":		<MvEVAL EXPR = "{ ProductVariants.d.part_id }">,
+					"product_code":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.part_code ) }">",
+					"product_sku":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.part_sku ) }">",
+					"product_name":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariants.d.part_name ) }">",
+					"quantity":			<MvEVAL EXPR = "{ ProductVariants.d.part_quantity }">
+					<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+					<MvASSIGN NAME = "l.records_output"	VALUE = "{ l.records_output + 1 }">
+					<MvSKIP NAME = "Merchant" VIEW = "ProductVariants" ROWS = 1>
+				</MvWHILE>
+			]
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantInventoryIndex_Load_ID" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 )	OR
+					NOT [ g.Filename_Admin ].CanI( 'INVT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.query"				VALUE = "">
+	<MvASSIGN NAME = "l.record"				VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.master_product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'Part_ID', l.part_id )	OR
+					NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ [ g.Library_DB ].AttributeIDList_Load_Product_Inventory( l.master_product:id, l.attributes ) }">
+
+	<MvCOMMENT>
+	|
+	| Adding product_code, product_sku, and product_name to handle filters coming from the Product Variant List
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'prod.code',	'product_code' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'prod.sku',	'product_sku' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'prod.name',	'product_name' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix" VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'pv' $ l.suffix $ '.option_id',	'option_id' $ l.suffix ) }">
+		<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'o' $ l.suffix $ '.code',			'option_code' $ l.suffix ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Product_Load_ID( l.part_id, l.record:prod ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00023', 'Part product not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_BaseProductIndex_Load_ID_LowLevel( l.filter, l.sort,
+																JSON_BaseProductList_Filters() $ ',' $ l.available_filters,
+																JSON_BaseProductList_OrderBy(),
+																'prod.disp_order',
+																g.Module_JSON, 'JSON_ProductList_Load_Query_Filter', 'JSON_ProductList_Load_Query_Search_Filter', 'JSON_Product_CustomFields_Query_Filter',
+																l.query, l.record ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_DISTINCT_With_COUNT_SELECT( l.query, 'prod.id' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix" VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'option_id' $ l.suffix, l.null ) }">		<MvASSIGN NAME = "l.join_needed" VALUE = 1>
+		<MvELSEIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'option_code' $ l.suffix, l.null ) }">	<MvASSIGN NAME = "l.join_needed" VALUE = 1>
+		<MvELSE>																								<MvASSIGN NAME = "l.join_needed" VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.join_needed }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pvp', g.Store_Table_Prefix $ 'ProductVariants', 'pv' $ l.suffix,
+																	  'pv' $ l.suffix $ '.product_id	= pvp.product_id	AND
+																	   pv' $ l.suffix $ '.variant_id	= pvp.variant_id	AND
+																	   pv' $ l.suffix $ '.attr_id		= ?					AND
+																	   pv' $ l.suffix $ '.attmpat_id	= ?',
+																	  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attr_id ) $ ',' $
+																	  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+
+		<MvIF EXPR = "{ l.attribute:attmpat_id EQ 0 }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pvp', g.Store_Table_Prefix $ 'Options', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attr_id	= ? AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attr_id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pvp', g.Store_Table_Prefix $ 'AttributeTemplateOptions', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attmpat_id	= ? AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query,
+														'pvp.product_id	= ?	AND
+														 prod.id		= pvp.part_id', [ g.Module_Library_DB ].SQL_Query_Field( l.master_product:id ) ) }">
+
+	<MvIF EXPR = "{ NOT JSON_SQL_Query_Index_With_CustomFields( l.query, l.record, l.index, l.record:prod:id, g.Module_JSON, 'JSON_Product_CustomFields_Query_Index' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"index":	<MvEVAL EXPR = "{ int( l.index ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantInventoryList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 )	OR
+					NOT [ g.Filename_Admin ].CanI( 'INVT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+	<MvASSIGN NAME = "l.count_query"		VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ [ g.Library_DB ].AttributeIDList_Load_Product_Inventory( l.product:id, l.attributes ) }">
+
+	<MvCOMMENT>
+	|
+	| Adding product_code, product_sku, and product_name to handle filters coming from the Product Variant List
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'prod.code',	'product_code' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'prod.sku',	'product_sku' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'prod.name',	'product_name' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix" VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER(	l.available_filters, 'pv' $ l.suffix $ '.option_id',	'option_id' $ l.suffix ) }">
+		<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'o' $ l.suffix $ '.code',			'option_code' $ l.suffix ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ JSON_BaseProductList_Load_Query_LowLevel( l.filter, l.sort,
+																JSON_BaseProductList_Filters() $ ',' $ l.available_filters,
+																JSON_BaseProductList_OrderBy(),
+																'disp_order',
+																g.Module_JSON, 'JSON_ProductList_Load_Query_Filter', 'JSON_ProductList_Load_Query_Search_Filter', 'JSON_Product_CustomFields_Query_Filter',
+																l.search_query, l.count_query, l.ondemandcolumns ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_DISTINCT( l.search_query ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.count_query,	g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix" VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'option_id' $ l.suffix, l.null ) }">		<MvASSIGN NAME = "l.join_needed" VALUE = 1>
+		<MvELSEIF EXPR = "{ JSON_Filter_Contains_Search_Field( l.filter, 'option_code' $ l.suffix, l.null ) }">	<MvASSIGN NAME = "l.join_needed" VALUE = 1>
+		<MvELSE>																								<MvASSIGN NAME = "l.join_needed" VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.join_needed }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pvp', g.Store_Table_Prefix $ 'ProductVariants', 'pv' $ l.suffix,
+																	  'pv' $ l.suffix $ '.product_id	= pvp.product_id	AND
+																	   pv' $ l.suffix $ '.variant_id	= pvp.variant_id	AND
+																	   pv' $ l.suffix $ '.attr_id		= ?					AND
+																	   pv' $ l.suffix $ '.attmpat_id	= ?',
+																	  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attr_id ) $ ',' $
+																	  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'pvp', g.Store_Table_Prefix $ 'ProductVariants', 'pv' $ l.suffix,
+																	  'pv' $ l.suffix $ '.product_id	= pvp.product_id	AND
+																	   pv' $ l.suffix $ '.variant_id	= pvp.variant_id	AND
+																	   pv' $ l.suffix $ '.attr_id		= ?					AND
+																	   pv' $ l.suffix $ '.attmpat_id	= ?',
+																	  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attr_id ) $ ',' $
+																	  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+
+		<MvIF EXPR = "{ l.attribute:attmpat_id EQ 0 }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pvp', g.Store_Table_Prefix $ 'Options', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attr_id	= ? AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attr_id ) ) }">
+
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'pvp', g.Store_Table_Prefix $ 'Options', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attr_id	= ? AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attr_id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pvp', g.Store_Table_Prefix $ 'AttributeTemplateOptions', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attmpat_id	= ? AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'pvp', g.Store_Table_Prefix $ 'AttributeTemplateOptions', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attmpat_id	= ? AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  [ g.Module_Library_DB ].SQL_Query_Field( l.attribute:attmpat_id ) ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'pvp.product_id	= ? AND
+																		 prod.id		= pvp.part_id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.count_query,  'pvp.product_id	= ? AND
+																		 prod.id		= pvp.part_id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_CLEAR( l.count_query ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_DISTINCT( l.count_query, 'prod.id' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.count_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_BaseProductList_Load_Query_QueryCustomFields( l.search_query, l.filter, l.count, l.total_count ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00024', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productvariant_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Product_CustomFields_Initialize( l.filter, l.customfield_state ) }">
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.productvariant_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ JSON_BaseProductList_Product_Read( l.product, l.ondemandcolumns ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.productvariant_count ) }">
+				<MvEVAL EXPR = "{ JSON_Product_OnDemandColumns( l.product, l.ondemandcolumns ) }">
+				<MvEVAL EXPR = "{ JSON_Product_CustomFields_With_Query( l.search_query, l.customfield_state, Products.d.id, 'Products' ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantPartList_Load_Variant" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Product_ID"			VALUE = "{ int( g.Product_ID ) }">
+	<MvASSIGN NAME = "g.Variant_ID"			VALUE = "{ int( g.Variant_ID ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductVariantParts"
+				QUERY	= "{ 'SELECT
+								pvp.part_id		AS part_id,
+								p.code			AS part_code,
+								p.sku			AS part_sku,
+								p.name			AS part_name,
+								pvp.quantity	AS quantity
+							  FROM
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+								' $ g.Store_Table_Prefix $ 'Products p
+							  WHERE
+							    pvp.product_id	= ?				AND
+								pvp.variant_id	= ?				AND
+								p.id			= pvp.part_id
+							  ORDER BY
+								p.disp_order' }"
+				FIELDS	= "g.Product_ID, g.Variant_ID">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ NOT ProductVariantParts.d.EOF }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.part_count ) }">
+		"product_id":		<MvEVAL EXPR = "{ ProductVariantParts.d.part_id }">,
+		"product_code":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariantParts.d.part_code ) }">",
+		"product_sku":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariantParts.d.part_sku ) }">",
+		"product_name":		"<MvEVAL EXPR = "{ JSON_Encode( ProductVariantParts.d.part_name ) }">",
+		"quantity":			<MvEVAL EXPR = "{ ProductVariantParts.d.quantity }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductVariantParts" ROWS = 1>
+	</MvWHILE>
+	]
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariantParts">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantList_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer_Array( 'R', 'ProductVariant_IDs', l.variant_ids, l.variant_id_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+	<MvASSIGN NAME = "l.module_count"	VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+
+	<MvFOREACH ITERATOR = "l.variant_id" ARRAY = "l.variant_ids" COUNT = "{ l.variant_id_count }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Delete( l.module, l.product, l.variant_id ) }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ProductVariant_Delete( l.product:id, l.variant_id ) }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ JSON_Response_ListProcessed_Error( l.variant_id, g.Error_Code, g.Error_Message, l.errors ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00009', 'Variant ' $ l.variant_id $ ' deleted from product ' $ l.product:id ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Generate_Count_LowLevel" PARAMETERS = "variants var, has_boolean var, has_required var" STANDARDOUTPUTLEVEL = "">
+	<MvWHILE EXPR = "{ NOT ProductVariants.d.EOF }">
+		<MvIF EXPR = "{ ( ProductVariants.d.type EQ 'text' ) OR ( ProductVariants.d.type EQ 'memo' ) OR ( ProductVariants.d.type EQ 'checkbox' ) }">
+			<MvASSIGN NAME = "l.has_boolean"		VALUE = 1>
+
+			<MvIF EXPR = "{ NOT ProductVariants.d.required }">
+				<MvASSIGN NAME = "l.variants"		VALUE = "{ l.variants * 2 }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT ProductVariants.d.required }">
+				<MvASSIGN NAME = "l.variants" VALUE = "{ l.variants * ( ProductVariants.d.option_count + 1 ) }">
+			<MvELSEIF EXPR = "{ ProductVariants.d.option_count }">
+				<MvASSIGN NAME = "l.variants"		VALUE = "{ l.variants * ProductVariants.d.option_count }">
+				<MvASSIGN NAME = "l.has_required"	VALUE = 1>
+			</MvIF>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "ProductVariants" ROWS = 1>
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Generate_Count" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Product_ID"		VALUE = "{ int( g.Product_ID ) }">
+
+	<MvASSIGN NAME = "l.variants"		VALUE = 1>
+	<MvASSIGN NAME = "l.has_required"	VALUE = 0>
+	<MvASSIGN NAME = "l.has_boolean"	VALUE = 0>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductVariants"
+				QUERY	= "{ 'SELECT
+								a.type			AS type,
+								a.required		AS required,
+								2				AS option_count
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a
+							  WHERE
+								a.product_id	= ? AND
+								a.inventory		= 1 AND
+								a.attemp_id		= 0 AND
+								( a.type = \'text\' OR a.type = \'memo\' OR a.type = \'checkbox\' )
+							  GROUP BY
+								a.id, a.type, a.required
+							  UNION ALL
+							  SELECT
+								a.type			AS type,
+								a.required		AS required,
+								COUNT( * )		AS option_count
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a,
+								' $ g.Store_Table_Prefix $ 'Options o
+							  WHERE
+								a.product_id	= ?								AND
+								a.inventory		= 1								AND
+								a.attemp_id		= 0								AND
+								( a.type = \'radio\'			OR
+								  a.type = \'select\'			OR
+								  a.type = \'swatch-select\' )					AND
+								o.product_id	= a.product_id					AND
+								o.attr_id		= a.id
+							  GROUP BY
+								a.id, a.type, a.required
+							  UNION ALL
+							  SELECT
+								ata.type		AS type,
+								ata.required	AS required,
+								2				AS option_count
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a,
+								' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata
+							  WHERE
+								a.product_id	= ?				AND
+								a.attemp_id		<> 0			AND
+								ata.attemp_id	= a.attemp_id	AND
+								ata.inventory	= 1				AND
+								( ata.type = \'text\' OR ata.type = \'memo\' OR ata.type = \'checkbox\' )
+							  GROUP BY
+								ata.id, ata.type, ata.required
+							  UNION ALL
+							  SELECT
+								ata.type		AS type,
+								ata.required	AS required,
+								COUNT( * )		AS option_count
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Attributes a,
+								' $ g.Store_Table_Prefix $ 'AttributeTemplateAttrs ata,
+								' $ g.Store_Table_Prefix $ 'AttributeTemplateOptions ato
+							  WHERE
+								a.product_id	= ?									AND
+								a.attemp_id		<> 0								AND
+								ata.attemp_id	= a.attemp_id						AND
+								ata.inventory	= 1									AND
+								( ata.type = \'radio\'				OR
+								  ata.type = \'select\'				OR
+								  ata.type = \'swatch-select\' )					AND
+								ato.attemp_id	= ata.attemp_id						AND
+								ato.attmpat_id	= ata.id
+							  GROUP BY
+								ata.id, ata.type, ata.required' }"
+				FIELDS	= "g.Product_ID, g.Product_ID, g.Product_ID, g.Product_ID">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_ProductVariant_Generate_Count_LowLevel( l.variants, l.has_boolean, l.has_required ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+
+	<MvIF EXPR = "{ ( NOT l.has_required ) AND ( NOT l.has_boolean ) }">
+		<MvASSIGN NAME = "l.variants"	VALUE = "{ l.variants - 1 }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"variants":			<MvEVAL EXPR = "{ l.variants }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Generate" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 1, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvASSIGN NAME = "l.product" 		VALUE = "">
+	<MvASSIGN NAME = "l.pricing_method" VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_List( 'R', 'Pricing_Method',	l.pricing_method, 'master,specific,sum,0,1,2', '0,1,2,0,1,2' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Generate( l.product, l.pricing_method ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00010', 'Variants generated for product ' $ l.product:id ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Generate( l.module, l.product ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Generate_Delimiter" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 1, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvASSIGN NAME = "l.product" 		VALUE = "">
+	<MvASSIGN NAME = "l.pricing_method" VALUE = 0>
+	<MvASSIGN NAME = "l.delimiter" 		VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_List( 'R', 'Pricing_Method',	l.pricing_method, 'master,specific,sum,0,1,2', '0,1,2,0,1,2' ) OR
+					NOT JSON_Input_Text( 'o', 'Delimiter', 		l.delimiter ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.delimiter }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code( l.delimiter ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00014', g.Validation_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Generate_Delimiter( l.product, l.pricing_method, l.delimiter ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00017', 'Variants generated for product ' $ l.product:id ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Generate( l.module, l.product ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductInventoryList_Load_ProductVariants" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) OR
+					NOT [ g.Filename_Admin ].CanI( 'INVT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.limit_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.limits"								VALUE = "">
+	<MvASSIGN NAME = "l.exclusion_count"					VALUE = 0>
+	<MvASSIGN NAME = "l.exclusions"							VALUE = "">
+	<MvASSIGN NAME = "l.include_default_variant"			VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Boolean( 'O', 'Include_Default_Variant', l.include_default_variant ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Attribute_Limits( l.product, l.limits, l.limit_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Attribute_Exclusions( l.product, l.exclusions, l.exclusion_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.fields"								VALUE = "l.product:id">
+
+	<MvIF EXPR = "{ l.limit_count EQ 0 }">
+		<MvASSIGN NAME = "l.limit_attribute_joins"			VALUE = "">
+		<MvASSIGN NAME = "l.limit_attribute_where"			VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.limit_attribute_joins"			VALUE = "{ g.Store_Table_Prefix $ 'ProductVariants pvl1, ' }">
+		<MvASSIGN NAME = "l.limit_attribute_where"			VALUE = "{ '( pvl1.product_id = ? AND pvl1.attr_id = ? AND pvl1.attmpat_id = ? AND pvl1.option_id = ? ) AND ' $
+																	   '( pv.product_id = pvl1.product_id AND pv.variant_id = pvl1.variant_id ) AND' }">
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.fields $ ', l.product:id, l.limits[ 1 ]:attr_id, l.limits[ 1 ]:attmpat_id, l.limits[ 1 ]:option_id' }">
+
+		<MvASSIGN NAME = "l.limit_attribute_pos"			VALUE = 2>
+		<MvWHILE EXPR = "{ l.limit_attribute_pos LE l.limit_count }">
+			<MvASSIGN NAME = "l.limit_attribute_joins"		VALUE = "{ l.limit_attribute_joins $ g.Store_Table_Prefix $ 'ProductVariants pvl' $ l.limit_attribute_pos $ ', ' }">
+			<MvASSIGN NAME = "l.limit_attribute_where"		VALUE = "{ l.limit_attribute_where $ '( pvl' $ l.limit_attribute_pos $ '.product_id = ? AND pvl' $ l.limit_attribute_pos $ '.variant_id = pvl' $ ( l.limit_attribute_pos - 1 ) $ '.variant_id AND pvl' $ l.limit_attribute_pos $ '.attr_id = ? AND pvl' $ l.limit_attribute_pos $ '.attmpat_id = ? AND pvl' $ l.limit_attribute_pos $ '.option_id = ? ) AND' }">
+			<MvASSIGN NAME = "l.fields"						VALUE = "{ l.fields $ ', l.product:id, l.limits[ ' $ l.limit_attribute_pos $ ' ]:attr_id, l.limits[ ' $ l.limit_attribute_pos $ ' ]:attmpat_id, l.limits[ ' $ l.limit_attribute_pos $ ' ]:option_id' }">
+
+			<MvASSIGN NAME = "l.limit_attribute_pos"		VALUE = "{ l.limit_attribute_pos + 1 }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.exclusion_count EQ 0 }">
+		<MvASSIGN NAME = "l.exclude_attribute_joins"		VALUE = "">
+		<MvASSIGN NAME = "l.exclude_attribute_where"		VALUE = "">
+	<MvELSE>
+		<MvASSIGN NAME = "l.exclude_attribute_joins"		VALUE = "{ 'LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductVariants pve1 ON ( pve1.product_id = pv.product_id AND pve1.variant_id = pv.variant_id AND pve1.attr_id = ? AND pve1.attmpat_id = ? )' }">
+		<MvASSIGN NAME = "l.exclude_attribute_where"		VALUE = "pve1.variant_id IS NULL AND">
+		<MvASSIGN NAME = "l.exclude_fields"					VALUE = "{ 'l.exclusions[ 1 ]:attr_id, l.exclusions[ 1 ]:attmpat_id' }">
+
+		<MvASSIGN NAME = "l.exclude_attribute_pos"			VALUE = 2>
+		<MvWHILE EXPR = "{ l.exclude_attribute_pos LE l.exclusion_count }">
+			<MvASSIGN NAME = "l.exclude_attribute_joins"	VALUE = "{ l.exclude_attribute_joins $ ' LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductVariants pve' $ l.exclude_attribute_pos $ ' ON ( pve' $ l.exclude_attribute_pos $ '.product_id = pv.product_id AND pve' $ l.exclude_attribute_pos $ '.variant_id = pv.variant_id AND pve' $ l.exclude_attribute_pos $ '.attr_id = ? AND pve' $ l.exclude_attribute_pos $ '.attmpat_id = ? )' }">
+			<MvASSIGN NAME = "l.exclude_attribute_where"	VALUE = "{ l.exclude_attribute_where $ ' pve' $ l.exclude_attribute_pos $ '.variant_id IS NULL AND' }">
+			<MvASSIGN NAME = "l.exclude_fields"				VALUE = "{ l.exclude_fields $ ', l.exclusions[ ' $ l.exclude_attribute_pos $ ' ]:attr_id, l.exclusions[ ' $ l.exclude_attribute_pos $ ' ]:attmpat_id' }">
+
+			<MvASSIGN NAME = "l.exclude_attribute_pos"		VALUE = "{ l.exclude_attribute_pos + 1 }">
+		</MvWHILE>
+
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.exclude_fields $ ', ' $ l.fields }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.include_default_variant }">
+		<MvASSIGN NAME = "l.default_variant_query"			VALUE = "{ 'UNION
+																		SELECT DISTINCT
+																			prod.*,
+																			ips.active		AS inv_active,
+																			ipc.inventory
+																		FROM
+																			' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+																			' $ g.Store_Table_Prefix $ 'Products prod
+																			LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+																			LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+																		WHERE
+																			pvp.product_id	= ?				AND
+																			pvp.variant_id	= 0				AND
+																			prod.id			= pvp.part_id' }">
+		<MvASSIGN NAME = "l.fields"							VALUE = "{ l.fields $ ', l.product:id' }">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ 'SELECT DISTINCT
+								prod.*,
+								ips.active		AS inv_active,
+								ipc.inventory
+							  FROM
+								' $ l.limit_attribute_joins $ '
+								' $ g.Store_Table_Prefix $ 'ProductVariants pv
+								' $ l.exclude_attribute_joins $ ',
+								' $ g.Store_Table_Prefix $ 'ProductVariantParts pvp,
+								' $ g.Store_Table_Prefix $ 'Products prod
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+							  WHERE
+								pv.product_id	= ?				AND
+								' $ l.limit_attribute_where $ '
+								' $ l.exclude_attribute_where $ '
+								pvp.product_id	= pv.product_id AND
+								pvp.variant_id	= pv.variant_id	AND
+								prod.id			= pvp.part_id
+							  ' $ l.default_variant_query $ '
+							  ORDER BY
+								disp_order' }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.product_count ) }">
+		"id":				<MvEVAL EXPR = "{ Products.d.id }">,
+		"code":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.code ) }">",
+		"sku":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.sku ) }">",
+		"name":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.name ) }">",
+		"thumbnail":		"<MvEVAL EXPR = "{ JSON_Encode( Products.d.thumbnail ) }">",
+		"image":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.image ) }">",
+		"price":			<MvEVAL EXPR = "{ Products.d.price ROUND 2 }">,
+		"formatted_price":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.price ) ) }">",
+		"cost":				<MvEVAL EXPR = "{ Products.d.cost ROUND 2 }">,
+		"formatted_cost":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.cost ) ) }">",
+		"descrip":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.descrip ) }">",
+		"weight":			<MvEVAL EXPR = "{ Products.d.weight ROUND 2 }">,
+		"taxable":			<MvEVAL EXPR = "{ Products.d.taxable }">,
+		"active":			<MvEVAL EXPR = "{ Products.d.active }">,
+		"dt_created":		<MvEVAL EXPR = "{ Products.d.dt_created }">,
+		"dt_updated":		<MvEVAL EXPR = "{ Products.d.dt_updated }">,
+		"inv_active":		<MvEVAL EXPR = "{ Products.d.inv_active ROUND 0 }">,
+		"inventory":		<MvEVAL EXPR = "{ Products.d.inventory ROUND 0 }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+	]
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductInventoryList_Load_ProductVariants_Filter" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvASSIGN NAME = "g.Product_ID"					VALUE = "{ int( g.Product_ID ) }">
+	<MvASSIGN NAME = "g.Filter"						VALUE = "{ trim( g.Filter ) }">
+
+	<MvASSIGN NAME = "l.attribute_count"			VALUE = "{ [ g.Library_DB ].AttributeIDList_Load_Product_Inventory( g.Product_ID, g.Session:cache:json_productvariantlist_load_query:attributes ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_DISTINCT( l.query, 'p.*,
+																			ips.active		AS inv_active,
+																			ipc.inventory' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+
+	<MvFOREACH INDEX = "l.pos" ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix"					VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pvp', g.Store_Table_Prefix $ 'ProductVariants', 'pv' $ l.suffix,
+																	  'pv' $ l.suffix $ '.product_id	= pvp.product_id	AND
+																	   pv' $ l.suffix $ '.variant_id	= pvp.variant_id	AND
+																	   pv' $ l.suffix $ '.attr_id		= ?					AND
+																	   pv' $ l.suffix $ '.attmpat_id	= ?',
+																	  'g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attr_id,
+																	   g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attmpat_id' ) }">
+
+		<MvIF EXPR = "{ l.attribute:attmpat_id EQ 0 }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pvp', g.Store_Table_Prefix $ 'Options', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attr_id	= ?								AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  'g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attr_id' ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pvp', g.Store_Table_Prefix $ 'AttributeTemplateOptions', 'o' $ l.suffix,
+																		  'o' $ l.suffix $ '.attmpat_id	= ?								AND
+																		   o' $ l.suffix $ '.id			= pv' $ l.suffix $ '.option_id',
+																		  'g.Session:cache:json_productvariantlist_load_query:attributes[' $ l.pos $ ']:attmpat_id' ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Products', 'p' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'p', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = p.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'p', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc', 'ipc.product_id = p.id', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query,
+														'pvp.product_id	= ?				AND
+														 p.id			= pvp.part_id',
+														'g.Product_ID' ) }">
+
+	<MvCOMMENT>
+	|
+	| Dynamically build and apply Filter
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"		VALUE = "{ miva_array_insert( l.filter_fields, 'product_code:p.code,product_sku:p.sku,product_name:p.name', -1 ) }">
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "g.Session:cache:json_productvariantlist_load_query:attributes" COUNT = "{ l.attribute_count }">
+		<MvASSIGN NAME = "l.suffix"	VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_array_insert( l.filter_fields, 'option_id' $ l.suffix $ ':pv' $ l.suffix $ '.option_id', -1 ) }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ miva_array_insert( l.filter_fields, 'option_code' $ l.suffix $ ':o' $ l.suffix $ '.code', -1 ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.query, g.Filter, l.filter_fields ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY( l.query, 'disp_order', 'ASC' ) }">
+
+	<MvCOMMENT>
+	|
+	| Execute query and output results
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.query_sql"	VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ l.query_sql }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"	VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.product_count ) }">
+		"id":				<MvEVAL EXPR = "{ Products.d.id }">,
+		"code":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.code ) }">",
+		"sku":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.sku ) }">",
+		"name":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.name ) }">",
+		"thumbnail":		"<MvEVAL EXPR = "{ JSON_Encode( Products.d.thumbnail ) }">",
+		"image":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.image ) }">",
+		"price":			<MvEVAL EXPR = "{ Products.d.price ROUND 2 }">,
+		"formatted_price":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.price ) ) }">",
+		"cost":				<MvEVAL EXPR = "{ Products.d.cost ROUND 2 }">,
+		"formatted_cost":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.cost ) ) }">",
+		"descrip":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.descrip ) }">",
+		"weight":			<MvEVAL EXPR = "{ Products.d.weight ROUND 2 }">,
+		"taxable":			<MvEVAL EXPR = "{ Products.d.taxable }">,
+		"active":			<MvEVAL EXPR = "{ Products.d.active }">,
+		"dt_created":		<MvEVAL EXPR = "{ Products.d.dt_created }">,
+		"dt_updated":		<MvEVAL EXPR = "{ Products.d.dt_updated }">,
+		"inv_active":		<MvEVAL EXPR = "{ Products.d.inv_active ROUND 0 }">,
+		"inventory":		<MvEVAL EXPR = "{ Products.d.inventory ROUND 0 }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+	]
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.attributes"						VALUE = "">
+	<MvASSIGN NAME = "l.part_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.parts"							VALUE = "">
+	<MvASSIGN NAME = "l.pricing"						VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Attributes( l.product, l.attributes, l.attribute_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Parts( l.parts, l.part_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Pricing( l.pricing ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.attribute_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00042', 'At least one attribute must be specified' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.part_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00043', 'At least one part product must be specified' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If an existing variant with these attributes exists, delete it.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Load_Attributes( l.product:id, l.attributes, l.attribute_count, l.existing_variant ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Delete( l.product:id, l.existing_variant:variant_id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Insert this variant
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Insert_Attributes( l.product:id, 0, l.part_count, l.attributes, l.attribute_count, l.variant ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Insert the parts
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.part" ARRAY = "l.parts" COUNT = "{ l.part_count }">
+		<MvASSIGN NAME = "l.part:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.part:variant_id"	VALUE = "{ l.variant:variant_id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPart_Insert( l.part ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Insert the pricing
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pricing:method NE 0 }">
+		<MvASSIGN NAME = "l.pricing:product_id" VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.pricing:variant_id" VALUE = "{ l.variant:variant_id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Insert( l.pricing ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00011', 'Variant ' $ l.variant:variant_id $ ' created for product ' $ l.variant:product_id ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Insert( l.module, l.product, l.variant:variant_id ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"product_id":	<MvEVAL EXPR = "{ int( l.variant:product_id ) }">,
+		"variant_id":	<MvEVAL EXPR = "{ int( l.variant:variant_id ) }">,
+
+		<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+			<MvASSIGN NAME = "l.suffix" VALUE = "{ '_' $ l.attribute:attr_id $ '_' $ l.attribute:attmpat_id }">
+
+			"option_id<MvEVAL EXPR = "{ l.suffix }">":		<MvIF EXPR = "{ ISNULL l.attribute:option_id }">null<MvELSE><MvEVAL EXPR = "{ int( l.attribute:option_id ) }"></MvIF>,
+			"option_code<MvEVAL EXPR = "{ l.suffix }">":	"<MvEVAL EXPR = "{ JSON_Encode( l.attribute:option_code ) }">",
+		</MvFOREACH>
+
+		"attributes":
+		[
+			<MvASSIGN NAME = "l.output_attribute_count" VALUE = 0>
+			<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_attribute_count ) }">
+					"attr_id": 			<MvEVAL EXPR = "{ int( l.attribute:attr_id ) }">,
+					"attr_code": 		"<MvEVAL EXPR = "{ JSON_Encode( l.attribute:attr_code ) }">",
+					"attmpat_id": 		<MvEVAL EXPR = "{ int( l.attribute:attmpat_id ) }">,
+					"option_id": 		<MvEVAL EXPR = "{ int( l.attribute:option_id ) }">,
+					"option_code": 		"<MvEVAL EXPR = "{ JSON_Encode( l.attribute:option_code ) }">"
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		],
+
+		"parts":
+		[
+			<MvASSIGN NAME = "l.output_part_count"		VALUE = 0>
+			<MvFOREACH ITERATOR = "l.part" ARRAY = "l.parts" COUNT = "{ l.part_count }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Product_Load_ID_Cached( l.part:part_id, l.product ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_part_count ) }">
+					"product_id":	<MvEVAL EXPR = "{ int( l.product:id ) }">,
+					"product_code":	"<MvEVAL EXPR = "{ JSON_Encode( l.product:code ) }">",
+					"product_sku":	"<MvEVAL EXPR = "{ JSON_Encode( l.product:sku ) }">",
+					"product_name":	"<MvEVAL EXPR = "{ JSON_Encode( l.product:name ) }">",
+					"quantity":		<MvEVAL EXPR = "{ int( l.part:quantity ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		]
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.variant_id"						VALUE = 0>
+	<MvASSIGN NAME = "l.attribute_count"				VALUE = 0>
+	<MvASSIGN NAME = "l.attributes"						VALUE = "">
+	<MvASSIGN NAME = "l.part_count"						VALUE = 0>
+	<MvASSIGN NAME = "l.parts"							VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'R', 'Variant_ID', l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Attributes( l.product, l.attributes, l.attribute_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Parts( l.parts, l.part_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Delete the variant being replaced
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Delete( l.product:id, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ 0 }">
+		<MvASSIGN NAME = "l.variant:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.variant:variant_id"	VALUE = 0>
+	<MvELSE>
+		<MvCOMMENT>
+		|
+		| If an existing variant with these attributes exists, delete it.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Load_Attributes( l.product:id, l.attributes, l.attribute_count, l.existing_variant ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Delete( l.product:id, l.existing_variant:variant_id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Insert this variant
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariant_Insert_Attributes( l.product:id, l.variant_id, l.part_count, l.attributes, l.attribute_count, l.variant ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Insert the parts
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.part" ARRAY = "l.parts" COUNT = "{ l.part_count }">
+		<MvASSIGN NAME = "l.part:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.part:variant_id"	VALUE = "{ l.variant:variant_id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPart_Insert( l.part ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00012', 'Variant ' $ l.variant:variant_id $ ' updated for product ' $ l.variant:product_id ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Update( l.module, l.product, l.variant:variant_id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Input_Element_ProductVariant_Attributes" PARAMETERS = "product var, attributes var, attribute_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Attributes' ) }">
+		<MvFOREACH ITERATOR = "l.input_attribute" ARRAY = "l.input_attributes" COUNT = "{ JSON_Input_Array( 'Attributes', l.input_attributes ) }">
+			<MvASSIGN NAME = "l.attr_id_exists"					VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attr_id' ) }">
+			<MvASSIGN NAME = "l.attr_code_exists"				VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attr_code' ) }">
+			<MvASSIGN NAME = "l.attmpat_id_exists"				VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attmpat_id' ) }">
+			<MvASSIGN NAME = "l.attmpat_code_exists"			VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attmpat_code' ) }">
+			<MvASSIGN NAME = "l.option_id_exists"				VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'option_id' ) }">
+			<MvASSIGN NAME = "l.option_code_exists"				VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'option_code' ) }">
+
+			<MvCOMMENT>
+			|
+			| Validate overlaps
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.attr_id_exists AND l.attr_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of attr_id or attr_code may be specified' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.attmpat_id_exists AND l.attmpat_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of attmpat_id or attmpat_code may be specified' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.option_id_exists AND l.option_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of option_id or option_code may be specified' ) }">
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Read Inputs
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.input_fields"			VALUE = "">
+			<MvASSIGN NAME = "l.validated_attribute"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_attribute, 'O', 'attr_id',		l.input_fields:attr_id )		OR
+							NOT JSON_Input_Element_Code( 	l.input_attribute, 'O', 'attr_code',	l.input_fields:attr_code )		OR
+							NOT JSON_Input_Element_Integer( l.input_attribute, 'O', 'attmpat_id',	l.input_fields:attmpat_id )		OR
+							NOT JSON_Input_Element_Code( 	l.input_attribute, 'O', 'attmpat_code',	l.input_fields:attmpat_code )	OR
+							NOT JSON_Input_Element_Integer( l.input_attribute, 'O', 'option_id',	l.input_fields:option_id )		OR
+							NOT JSON_Input_Element_Code( 	l.input_attribute, 'O', 'option_code',	l.input_fields:option_code ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_AttributeAndOption_Validate_Input( l.product, l.input_attribute, l.input_fields, l.validated_attribute ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attribute_count"		VALUE = "{ miva_array_insert_var( l.attributes, l.validated_attribute, -1 ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve_Raw( 'Attribute_IDs',					l.attribute_ids )						OR
+						JSON_Input_Retrieve_Raw( 'AttributeTemplateAttribute_IDs',	l.attributetemplateattribute_ids )		OR
+						JSON_Input_Retrieve_Raw( 'Option_IDs',						l.option_ids ) }">
+		<MvASSIGN NAME = "l.input_count"		VALUE = "{ JSON_Array_Coalesce_Integer(	l.attribute_ids,					l.input, 'attr_id' ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_Integer(	l.attributetemplateattribute_ids,	l.input, 'attmpat_id' ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_Integer( l.option_ids,						l.input, 'option_id' ) }">
+
+		<MvFOREACH ITERATOR = "l.input_fields" ARRAY = "l.input" COUNT = "{ l.input_count }">
+			<MvASSIGN NAME = "l.validated_attribute"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_AttributeAndOption_Validate_Input( l.product, l.null_element, l.input_fields, l.validated_attribute ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attribute_count"		VALUE = "{ miva_array_insert_var( l.attributes, l.validated_attribute, -1 ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Input_Element_ProductVariant_Parts" PARAMETERS = "parts var, part_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Parts' ) }">
+		<MvFOREACH ITERATOR = "l.input_part" ARRAY = "l.input_parts" COUNT = "{ JSON_Input_Array( 'Parts', l.input_parts ) }">
+			<MvASSIGN NAME = "l.part_id_exists"			VALUE = "{ JSON_Input_Element_Exists( l.input_part, 'part_id' ) }">
+			<MvASSIGN NAME = "l.part_code_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_part, 'part_code' ) }">
+
+			<MvIF EXPR = "{ l.part_id_exists AND l.part_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_part, '', 'Only one of part_id or part_code may be specified' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.input_fields"			VALUE = "">
+			<MvASSIGN NAME = "l.validated_part"			VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_part, 'O', 'part_id',	l.input_fields:part_id )	OR
+							NOT JSON_Input_Element_Code( 	l.input_part, 'O', 'part_code',	l.input_fields:part_code )	OR
+							NOT JSON_Input_Element_Integer( l.input_part, 'R', 'quantity',	l.input_fields:quantity ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_Part_Validate_Input( l.input_part, l.input_fields, l.validated_part ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.part_count"				VALUE = "{ miva_array_insert_var( l.parts, l.validated_part, -1 ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve_Raw( 'Part_IDs',	l.part_ids ) OR
+						JSON_Input_Retrieve_Raw( 'Quantities',	l.quantities ) }">
+		<MvASSIGN NAME = "l.input_count"				VALUE = "{ JSON_Array_Coalesce_Integer( l.part_ids,		l.input, 'part_id' ) }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ JSON_Array_Coalesce_Integer( l.quantities,	l.input, 'quantity' ) }">
+
+		<MvFOREACH ITERATOR = "l.input_fields" ARRAY = "l.input" COUNT = "{ l.input_count }">
+			<MvASSIGN NAME = "l.validated_part"			VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_Part_Validate_Input( l.null_element, l.input_fields, l.validated_part ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.part_count"				VALUE = "{ miva_array_insert_var( l.parts, l.validated_part, -1 ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Input_Element_ProductVariant_Pricing" PARAMETERS = "pricing var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Pricing' ) }">
+		<MvASSIGN NAME = "l.pricing:price"	VALUE = 0.00>
+		<MvASSIGN NAME = "l.pricing:cost"	VALUE = 0.00>
+		<MvASSIGN NAME = "l.pricing:weight"	VALUE = 0.00>
+
+		<MvIF EXPR = "{ JSON_Input_Retrieve_Raw( 'Pricing', l.input_data ) }">
+			<MvIF EXPR = "{ NOT JSON_Input_Structure( 'R', 'Pricing', l.input_data ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_List(	l.input_data, 'R',			'method',	l.pricing:method,	'master,specific,sum,0,1,2', '0,1,2,0,1,2' )	OR
+							NOT JSON_Input_Element_Number(	l.input_data, 'O:nonneg',	'price',	l.pricing:price,	10, 2 )											OR
+							NOT JSON_Input_Element_Number(	l.input_data, 'O:nonneg',	'cost',		l.pricing:cost,		10, 2 )											OR
+							NOT JSON_Input_Element_Number(	l.input_data, 'O:nonneg',	'weight',	l.pricing:weight,	10, 2 ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Input_Element_ProductVariant_Attribute_Limits" PARAMETERS = "product var, limits var, limit_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Limits' ) }">
+		<MvFOREACH ITERATOR = "l.input_limit" ARRAY = "l.input_limits" COUNT = "{ JSON_Input_Array( 'Limits', l.input_limits ) }">
+			<MvASSIGN NAME = "l.attr_id_exists"			VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attr_id' ) }">
+			<MvASSIGN NAME = "l.attr_code_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attr_code' ) }">
+			<MvASSIGN NAME = "l.attmpat_id_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attmpat_id' ) }">
+			<MvASSIGN NAME = "l.attmpat_code_exists"	VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attmpat_code' ) }">
+			<MvASSIGN NAME = "l.option_id_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'option_id' ) }">
+			<MvASSIGN NAME = "l.option_code_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'option_code' ) }">
+
+			<MvCOMMENT>
+			|
+			| Validate overlaps
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.attr_id_exists AND l.attr_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of attr_id or attr_code may be specified' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.attmpat_id_exists AND l.attmpat_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of attmpat_id or attmpat_code may be specified' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.option_id_exists AND l.option_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of option_id or option_code may be specified' ) }">
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Read Inputs
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.input_fields"			VALUE = "">
+			<MvASSIGN NAME = "l.validated_limit"		VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_limit, 'O', 'attr_id',		l.input_fields:attr_id )		OR
+							NOT JSON_Input_Element_Code( 	l.input_limit, 'O', 'attr_code',	l.input_fields:attr_code )		OR
+							NOT JSON_Input_Element_Integer( l.input_limit, 'O', 'attmpat_id',	l.input_fields:attmpat_id )		OR
+							NOT JSON_Input_Element_Code( 	l.input_limit, 'O', 'attmpat_code',	l.input_fields:attmpat_code )	OR
+							NOT JSON_Input_Element_Integer( l.input_limit, 'O', 'option_id',	l.input_fields:option_id )		OR
+							NOT JSON_Input_Element_Code( 	l.input_limit, 'O', 'option_code',	l.input_fields:option_code ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_AttributeAndOption_Validate_Input( l.product, l.input_limit, l.input_fields, l.validated_limit ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.limit_count"			VALUE = "{ miva_array_insert_var( l.limits, l.validated_limit, -1 ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve_Raw( 'Limit_Attribute_IDs',						l.limit_attribute_ids )						OR
+						JSON_Input_Retrieve_Raw( 'Limit_AttributeTemplateAttribute_IDs',	l.limit_attributetemplateattribute_ids )	OR
+						JSON_Input_Retrieve_Raw( 'Limit_Option_IDs',						l.limit_option_ids ) }">
+		<MvASSIGN NAME = "l.input_count"				VALUE = "{ JSON_Array_Coalesce_Integer( l.limit_attribute_ids,						l.input, 'attr_id' ) }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ JSON_Array_Coalesce_Integer( l.limit_attributetemplateattribute_ids,		l.input, 'attmpat_id' ) }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ JSON_Array_Coalesce_Integer( l.limit_option_ids,							l.input, 'option_id' ) }">
+
+		<MvFOREACH ITERATOR = "l.input_fields" ARRAY = "l.input" COUNT = "{ l.input_count }">
+			<MvASSIGN NAME = "l.validated_limit"		VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_AttributeAndOption_Validate_Input( l.product, l.null_element, l.input_fields, l.validated_limit ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.limit_count"			VALUE = "{ miva_array_insert_var( l.limits, l.validated_limit, -1 ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Input_Element_ProductVariant_Attribute_Exclusions" PARAMETERS = "product var, exclusions var, exclusion_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Exclusions' ) }">
+		<MvFOREACH ITERATOR = "l.input_exclusion" ARRAY = "l.input_exclusions" COUNT = "{ JSON_Input_Array( 'Exclusions', l.input_exclusions ) }">
+			<MvASSIGN NAME = "l.attr_id_exists"			VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attr_id' ) }">
+			<MvASSIGN NAME = "l.attr_code_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attr_code' ) }">
+			<MvASSIGN NAME = "l.attmpat_id_exists"		VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attmpat_id' ) }">
+			<MvASSIGN NAME = "l.attmpat_code_exists"	VALUE = "{ JSON_Input_Element_Exists( l.input_attribute, 'attmpat_code' ) }">
+
+			<MvCOMMENT>
+			|
+			| Validate overlaps
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.attr_id_exists AND l.attr_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of attr_id or attr_code may be specified' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.attmpat_id_exists AND l.attmpat_code_exists }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_attribute, '', 'Only one of attmpat_id or attmpat_code may be specified' ) }">
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Read Inputs
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.input_fields"			VALUE = "">
+			<MvASSIGN NAME = "l.validated_exclusion"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_exclusion, 'O', 'attr_id',		l.input_fields:attr_id )	OR
+							NOT JSON_Input_Element_Code( 	l.input_exclusion, 'O', 'attr_code',	l.input_fields:attr_code ) 	OR
+							NOT JSON_Input_Element_Integer( l.input_exclusion, 'O', 'attmpat_id',	l.input_fields:attmpat_id )	OR
+							NOT JSON_Input_Element_Code( 	l.input_exclusion, 'O', 'attmpat_code',	l.input_fields:attmpat_code ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_Attribute_Validate_Input( l.product, l.input_exclusion, l.input_fields, l.validated_exclusion ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.exclusion_count"		VALUE = "{ miva_array_insert_var( l.exclusions, l.validated_exclusion, -1 ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve_Raw( 'Exclude_Attribute_IDs',						l.exclude_attribute_ids )		OR
+						JSON_Input_Retrieve_Raw( 'Exclude_AttributeTemplateAttribute_IDs',		l.exclude_attributetemplateattribute_ids ) }">
+		<MvASSIGN NAME = "l.input_count"				VALUE = "{ JSON_Array_Coalesce_Integer( l.exclude_attribute_ids,					l.input, 'attr_id' ) }">
+		<MvASSIGN NAME = "l.null"						VALUE = "{ JSON_Array_Coalesce_Integer( l.exclude_attributetemplateattribute_ids,	l.input, 'attmpat_id' ) }">
+
+		<MvFOREACH ITERATOR = "l.input_fields" ARRAY = "l.input" COUNT = "{ l.input_count }">
+			<MvASSIGN NAME = "l.validated_exclusion"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_Attribute_Validate_Input( l.product, l.null_element, l.input_fields, l.validated_exclusion ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.exclusion_count"		VALUE = "{ miva_array_insert_var( l.exclusions, l.validated_exclusion, -1 ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Part_Validate_Input" PARAMETERS = "input_element var, input_fields var, validated_part var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.input_fields:quantity LE 0 }">
+		<MvIF EXPR = "{ ISNULL l.input_element }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00015', 'All part quantities must be 1 or greater' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'quantity', 'Quantity must be 1 or greater' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.input_fields:part_id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID( l.input_fields:part_id, l.loaded_product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00028', 'Product ' $ l.input_fields:part_id $ ' not found' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'part_id', 'Product not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT ISNULL l.input_fields:part_code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.input_fields:part_code, l.loaded_product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00029', 'Product \'' $ l.input_fields:part_code $ '\' not found' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'part_code', 'Product not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ ISNULL l.input_element }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00066', 'Empty part specification' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, '', 'One of part_id or part_code must be specified' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.validated_part"				VALUE = "">
+	<MvASSIGN NAME = "l.validated_part:part_id"		VALUE = "{ l.loaded_product:id }">
+	<MvASSIGN NAME = "l.validated_part:part_code"	VALUE = "{ l.loaded_product:code }">
+	<MvASSIGN NAME = "l.validated_part:quantity"	VALUE = "{ int( l.input_fields:quantity ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Attribute_Validate_Input" PARAMETERS = "product var, input_element var, input_fields var, validated_attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Load attribute
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.input_fields:attr_id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Attribute_Load_ID( l.input_fields:attr_id, l.loaded_attribute ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00031', 'Attribute ' $ l.input_fields:attr_id $ ' not found' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attr_id', 'Attribute not found' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.loaded_attribute:product_id NE l.product:id }">
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00054', 'Specified attribute ' $ l.loaded_attribute:id $ ' is not assigned to the specified product' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attr_id', 'Specified attribute is not assigned to the specified product' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT ISNULL l.input_fields:attr_code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Attribute_Load_Code( l.product:id, l.input_fields:attr_code, l.loaded_attribute ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00032', 'Attribute \'' $ l.input_fields:attr_code $ '\' not found' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attr_code', 'Attribute not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ ISNULL l.input_element }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00055', 'Empty attribute specification' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, '', 'One of attr_id or attr_code must be specified' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load attribute template if necessary
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.loaded_attribute:attemp_id EQ 0 }">
+		<MvCOMMENT>
+		|
+		| Regular attribute/option
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.input_fields:attmpat_id }">
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00033', 'Specified attribute ' $ l.loaded_attribute:id $ ' does not reference an attribute template' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attmpat_id', 'Specified attribute does not reference an attribute template' ) }">
+		<MvELSEIF EXPR = "{ NOT ISNULL l.input_fields:attmpat_code }">
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00035', 'Specified attribute ' $ l.loaded_attribute:id $ ' does not reference an attribute template' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attmpat_code', 'Specified attribute does not reference an attribute template' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT ISNULL l.input_fields:attmpat_id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplateAttr_Load_ID( l.input_fields:attmpat_id, l.loaded_attributetemplateattr ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00034', 'Attribute template attribute ' $ l.input_fields:attmpat_id $ ' not found' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attmpat_id', 'Attribute template attribute not found' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.loaded_attributetemplateattr:attemp_id NE l.loaded_attribute:attemp_id }">
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00056', 'Specified attribute template attribute ' $ l.loaded_attributetemplateattr:id $ ' is not a child of the referenced attribute template' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attmpat_id', 'Specified attribute template attribute is not a child of the referenced attribute template' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT ISNULL l.input_fields:attmpat_code }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplateAttr_Load_Code( l.loaded_attribute:attemp_id, l.input_fields:attmpat_code, l.loaded_attributetemplateattr ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00036', 'Attribute template attribute \'' $ l.input_fields:attmpat_code $ '\' not found' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'attmpat_code', 'Attribute template attribute not found' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00057', 'Empty attribute template attribute specification' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, '', 'One of attmpat_id or attmpat_code must be specified' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.validated_attribute:attr_id"			VALUE = "{ l.loaded_attribute:id }">
+	<MvASSIGN NAME = "l.validated_attribute:attr_code"			VALUE = "{ l.loaded_attribute:code }">
+
+	<MvIF EXPR = "{ NOT l.loaded_attribute:attemp_id }">
+		<MvASSIGN NAME = "l.validated_attribute:attmpat_id"		VALUE = 0>
+		<MvASSIGN NAME = "l.validated_attribute:attmpat_code"	VALUE = "">
+		<MvASSIGN NAME = "l.validated_attribute:type"			VALUE = "{ l.loaded_attribute:type }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.validated_attribute:attmpat_id"		VALUE = "{ l.loaded_attributetemplateattr:id }">
+		<MvASSIGN NAME = "l.validated_attribute:attmpat_code"	VALUE = "{ l.loaded_attributetemplateattr:code }">
+		<MvASSIGN NAME = "l.validated_attribute:type"			VALUE = "{ l.loaded_attributetemplateattr:type }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Option_Validate_Input" PARAMETERS = "product var, input_element var, input_fields var, validated_attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.validated_attribute:type EQ 'text' ) OR ( l.validated_attribute:type EQ 'memo' ) OR ( l.validated_attribute:type EQ 'checkbox' ) }">
+		<MvIF EXPR = "{ ISNULL l.input_fields:option_id }">
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvIF EXPR = "{ l.validated_attribute:attmpat_id }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00058', 'option_id must be specified for boolean attribute template attribute ' $ l.validated_attribute:attmpat_id ) }">
+				<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00059', 'option_id must be specified for boolean attribute ' $ l.validated_attribute:attr_id ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, '', 'option_id must be specified for boolean attributes' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( l.input_fields:option_id NE 0 ) AND ( l.input_fields:option_id NE 1 ) }">
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvIF EXPR = "{ l.validated_attribute:attmpat_id }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00060', 'option_id must be 0 or 1 for boolean attribute template attribute ' $ l.validated_attribute:attmpat_id ) }">
+				<MvELSE>												<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00061', 'option_id must be 0 or 1 for boolean attribute ' $ l.validated_attribute:attr_id ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_id', 'option_id must be 0 or 1 for boolean attributes' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.validated_attribute:option_id"		VALUE = "{ l.input_fields:option_id }">
+		<MvASSIGN NAME = "l.validated_attribute:option_code"	VALUE = "">
+	<MvELSEIF EXPR = "{ l.validated_attribute:attmpat_id EQ 0 }">
+		<MvIF EXPR = "{ NOT ISNULL l.input_fields:option_id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Option_Load_ID( l.input_fields:option_id, l.loaded_option ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00039', 'Option ' $ l.input_fields:option_id $ ' not found' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_id', 'Option not found' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.loaded_option:attr_id NE l.validated_attribute:attr_id }">
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00062', 'Option ' $ l.loaded_option:id $ ' is not a child of the specified attribute' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_id', 'Specified option is not a child of the specified attribute' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT ISNULL l.input_fields:option_code }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Option_Load_Code( l.validated_attribute:attr_id, l.input_fields:option_code, l.loaded_option ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00041', 'Option \'' $ l.input_fields:option_code $ '\' not found' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_code', 'Option not found' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00063', 'Empty option specification' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, '', 'One of option_id or option_code must be specified' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.validated_attribute:option_id"		VALUE = "{ l.loaded_option:id }">
+		<MvASSIGN NAME = "l.validated_attribute:option_code"	VALUE = "{ l.loaded_option:code }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT ISNULL l.input_fields:option_id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplateOption_Load_ID( l.input_fields:option_id, l.loaded_attributetemplateoption ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00038', 'Attribute template option ' $ l.input_fields:option_id $ ' not found' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_id', 'Attribute template option not found' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.loaded_attributetemplateoption:attmpat_id NE l.validated_attribute:attmpat_id }">
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00064', 'Attribute template option ' $ l.loaded_attributetemplateoption:id $ ' is not a child of the specified attribute template attribute' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_id', 'Specified attribute template option is not a child of the specified attribute template attribute' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT ISNULL l.input_fields:option_code }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_ATT_DB ].AttributeTemplateOption_Load_Code( l.validated_attribute:attmpat_id, l.input_fields:option_code, l.loaded_attributetemplateoption ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ ISNULL l.input_element }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00040', 'Attribute template option \'' $ l.input_fields:option_code $ '\' not found' ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, 'option_code', 'Attribute template option not found' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ ISNULL l.input_element }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00065', 'Empty option specification' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Element_FieldError( l.input_element, '', 'One of option_id or option_code must be specified' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.validated_attribute:option_id"		VALUE = "{ l.loaded_attributetemplateoption:id }">
+		<MvASSIGN NAME = "l.validated_attribute:option_code"	VALUE = "{ l.loaded_attributetemplateoption:code }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_AttributeAndOption_Validate_Input" PARAMETERS = "product var, input_element var, input_fields var, validated_attribute var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_ProductVariant_Attribute_Validate_Input( l.product, l.input_element, l.input_fields, l.validated_attribute ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_ProductVariant_Option_Validate_Input( l.product, l.input_element, l.input_fields, l.validated_attribute ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantPricing_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'R', 'Product_ID', l.product_id ) OR
+	 				NOT JSON_Input_Integer( 'R', 'Variant_ID', l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Load_Variant( l.product_id, l.variant_id, l.pricing ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ JSON_Response_Start() }">
+		{
+			"product_id":	<MvEVAL EXPR = "{ int( l.product_id ) }">,
+			"variant_id":	<MvEVAL EXPR = "{ int( l.variant_id ) }">,
+			"method":		0,
+			"price":		0.00,
+			"cost":			0.00,
+			"weight":		0.00
+		}
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"product_id":	<MvEVAL EXPR = "{ int( l.pricing:product_id ) }">,
+		"variant_id":	<MvEVAL EXPR = "{ int( l.pricing:variant_id ) }">,
+		"method":		<MvEVAL EXPR = "{ int( l.pricing:method ) }">,
+		"price":		<MvEVAL EXPR = "{ l.pricing:price ROUND 2 }">,
+		"cost":			<MvEVAL EXPR = "{ l.pricing:cost ROUND 2 }">,
+		"weight":		<MvEVAL EXPR = "{ l.pricing:weight ROUND 2 }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariantPricing_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.price"	VALUE = 0.00>
+	<MvASSIGN NAME = "l.cost"	VALUE = 0.00>
+	<MvASSIGN NAME = "l.weight"	VALUE = 0.00>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R',		'Variant_ID',	l.variant_id )												OR
+					NOT JSON_Input_List(	'R',		'Method',		l.method,	'master,specific,sum,0,1,2', '0,1,2,0,1,2' )	OR
+					NOT JSON_Input_Number(	'O:nonneg', 'Price',		l.price,	10, 2 )											OR
+					NOT JSON_Input_Number(	'O:nonneg',	'Cost',			l.cost,		10, 2 )											OR
+					NOT JSON_Input_Number(	'O:nonneg',	'Weight',		l.weight,	10, 2 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Delete_Variant( l.product:id, l.variant_id ) OR
+					NOT [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Variant( l.product:id, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.method EQ 1 ) OR ( l.method EQ 2 ) }">
+		<MvASSIGN NAME = "l.pricing"			VALUE = "">
+		<MvASSIGN NAME = "l.pricing:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.pricing:variant_id"	VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.pricing:method"		VALUE = "{ l.method }">
+		<MvASSIGN NAME = "l.pricing:price"		VALUE = "{ l.price }">
+		<MvASSIGN NAME = "l.pricing:cost"		VALUE = "{ l.cost }">
+		<MvASSIGN NAME = "l.pricing:weight"		VALUE = "{ l.weight }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Insert( l.pricing ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00013', 'Pricing for variant ' $ l.variant_id $ ' of product ' $ l.product:code $ ' updated' ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Update( l.module, l.product, l.variant_id ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Reprice" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 1, 1, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.module_count" VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_variant', l.modules ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.master_product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_List( 'R', 'Pricing_Method',	l.pricing_method, 'master,specific,sum,0,1,2', '0,1,2,0,1,2' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.pricing_method EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Delete_All_Product_NotDefault( l.master_product:id ) OR
+						NOT [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Product( l.master_product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Delete_All_Product( l.module, l.master_product ) }">
+		</MvFOREACH>
+	<MvELSE>
+		<MvASSIGN NAME = "l.productvariant_data" VALUE = "">
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.query, 'pv.*,
+																	   attr.price	AS attr_price,
+																	   attr.cost	AS attr_cost,
+																	   attr.weight	AS attr_weight,
+																	   opt.price	AS opt_price,
+																	   opt.cost		AS opt_cost,
+																	   opt.weight	AS opt_weight,
+																	   ata.price	AS ata_price,
+																	   ata.cost		AS ata_cost,
+																	   ata.weight	AS ata_weight,
+																	   ato.price	AS ato_price,
+																	   ato.cost		AS ato_cost,
+																	   ato.weight	AS ato_weight' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductVariants', 'pv' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'Attributes',				'attr',	'pv.attr_id = attr.id',									'' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'Options',					'opt',	'pv.option_id = opt.id AND attr.id = opt.attr_id',		'' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'AttributeTemplateAttrs',	'ata',	'pv.attmpat_id = ata.id',								'' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'pv', g.Store_Table_Prefix $ 'AttributeTemplateOptions',	'ato',	'pv.option_id = ato.id AND ata.id = ato.attmpat_id',	'' ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'pv.product_id = ?', [ g.Library_DB ].SQL_Query_Field( l.master_product:id ) ) }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY( l.query,	'pv.variant_id', 'ASC' ) }">
+
+		<MvIF EXPR = "{ l.pricing_method EQ 2 }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'pv.part_count = 1', '' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'ProductVariants', l.sql, l.fields, 0, 0 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PVT-00025', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvWHILE EXPR = "{ NOT ProductVariants.d.EOF }">
+			<MvIF EXPR = "{ l.productvariant_data:product_id NE ProductVariants.d.product_id OR
+							l.productvariant_data:variant_id NE ProductVariants.d.variant_id }">
+				<MvIF EXPR = "{ NOT ISNULL l.productvariant_data }">
+					<MvIF EXPR = "{ NOT JSON_ProductVariant_Reprice_AdjustPricing( l.productvariant_data:product_id, l.productvariant_data:variant_id, l.pricing_method, l.productvariant_data:price, l.productvariant_data:cost, l.productvariant_data:weight ) }">
+						<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+						<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+					</MvIF>
+
+					<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Update( l.module, l.master_product, l.productvariant_data:variant_id ) }">
+					</MvFOREACH>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.productvariant_data"			 	VALUE = "">
+				<MvASSIGN NAME = "l.productvariant_data:product_id" 	VALUE = "{ ProductVariants.d.product_id }">
+				<MvASSIGN NAME = "l.productvariant_data:variant_id" 	VALUE = "{ ProductVariants.d.variant_id }">
+				<MvASSIGN NAME = "l.productvariant_data:price" 			VALUE = "{ l.master_product:price }">
+				<MvASSIGN NAME = "l.productvariant_data:cost" 			VALUE = "{ l.master_product:cost }">
+				<MvASSIGN NAME = "l.productvariant_data:weight" 		VALUE = "{ l.master_product:weight }">
+			</MvIF>
+
+			<MvIF EXPR = "{ ProductVariants.d.option_id NE 0 }">
+				<MvIF EXPR = "{ NOT ISNULL ProductVariants.d.ato_price }">
+					<MvASSIGN NAME = "l.productvariant_data:price"		VALUE = "{ l.productvariant_data:price	+ ProductVariants.d.ato_price }">
+					<MvASSIGN NAME = "l.productvariant_data:cost"		VALUE = "{ l.productvariant_data:cost	+ ProductVariants.d.ato_cost }">
+					<MvASSIGN NAME = "l.productvariant_data:weight"		VALUE = "{ l.productvariant_data:weight	+ ProductVariants.d.ato_weight }">
+				<MvELSEIF EXPR = "{ NOT ISNULL ProductVariants.d.opt_price }">
+					<MvASSIGN NAME = "l.productvariant_data:price"		VALUE = "{ l.productvariant_data:price	+ ProductVariants.d.opt_price }">
+					<MvASSIGN NAME = "l.productvariant_data:cost"		VALUE = "{ l.productvariant_data:cost	+ ProductVariants.d.opt_cost }">
+					<MvASSIGN NAME = "l.productvariant_data:weight"		VALUE = "{ l.productvariant_data:weight	+ ProductVariants.d.opt_weight }">
+				<MvELSEIF EXPR = "{ NOT ISNULL ProductVariants.d.ata_price }">
+					<MvASSIGN NAME = "l.productvariant_data:price"		VALUE = "{ l.productvariant_data:price	+ ProductVariants.d.ata_price }">
+					<MvASSIGN NAME = "l.productvariant_data:cost"		VALUE = "{ l.productvariant_data:cost	+ ProductVariants.d.ata_cost }">
+					<MvASSIGN NAME = "l.productvariant_data:weight"		VALUE = "{ l.productvariant_data:weight	+ ProductVariants.d.ata_weight }">
+				<MvELSEIF EXPR = "{ NOT ISNULL ProductVariants.d.attr_price }">
+					<MvASSIGN NAME = "l.productvariant_data:price"		VALUE = "{ l.productvariant_data:price	+ ProductVariants.d.attr_price }">
+					<MvASSIGN NAME = "l.productvariant_data:cost"		VALUE = "{ l.productvariant_data:cost	+ ProductVariants.d.attr_cost }">
+					<MvASSIGN NAME = "l.productvariant_data:weight"		VALUE = "{ l.productvariant_data:weight	+ ProductVariants.d.attr_weight }">					
+				</MvIF>
+			</MvIF>
+
+			<MvSKIP NAME = "Merchant" VIEW = "ProductVariants" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductVariants">
+
+		<MvIF EXPR = "{ NOT ISNULL l.productvariant_data }">
+			<MvIF EXPR = "{ NOT JSON_ProductVariant_Reprice_AdjustPricing( l.productvariant_data:product_id, l.productvariant_data:variant_id, l.pricing_method, l.productvariant_data:price, l.productvariant_data:cost, l.productvariant_data:weight ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_ProductVariant_Update( l.module, l.master_product, l.productvariant_data:variant_id ) }">
+			</MvFOREACH>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductVariant_Reprice_AdjustPricing" PARAMETERS = "product_id, variant_id, method, price, cost, weight" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Delete_All_Variant( l.product_id, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.productvariantpricing"			 	VALUE = "">
+	<MvASSIGN NAME = "l.productvariantpricing:product_id" 	VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "l.productvariantpricing:variant_id" 	VALUE = "{ l.variant_id }">
+	<MvASSIGN NAME = "l.productvariantpricing:method"		VALUE = "{ l.method }">
+
+	<MvIF EXPR = "{ l.method EQ 2 }">
+		<MvASSIGN NAME = "l.productvariantpricing:price" 	VALUE = 0.00>
+		<MvASSIGN NAME = "l.productvariantpricing:cost" 	VALUE = 0.00>
+		<MvASSIGN NAME = "l.productvariantpricing:weight" 	VALUE = 0.00>
+	<MvELSE>
+		<MvASSIGN NAME = "l.productvariantpricing:price" 	VALUE = "{ l.price }">
+		<MvASSIGN NAME = "l.productvariantpricing:cost" 	VALUE = "{ l.cost }">
+		<MvASSIGN NAME = "l.productvariantpricing:weight" 	VALUE = "{ l.weight }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Insert( l.productvariantpricing ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Update( l.productvariantpricing ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.method EQ 2 }">
+		<MvFOREACH ITERATOR = "l.productvariantpart" ARRAY = "l.productvariantparts" COUNT = "{ [ g.Library_DB ].ProductVariantPartList_Load_Variant( l.product_id, l.variant_id, l.productvariantparts ) }">
+			<MvQUERY NAME 	= "Merchant"
+					 QUERY 	= "{ 'UPDATE
+					 				' $ g.Store_Table_Prefix $ 'Products
+					 			  SET
+					 			  	price	= ?,
+					 			  	cost	= ?,
+					 			  	weight	= ?
+					 			  WHERE
+					 			  	id		= ?' }"
+					 FIELDS = "l.price, l.cost, l.weight,
+					 		   l.productvariantpart:part_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-JSN-PVT-00026', g.MvQUERY_Error ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

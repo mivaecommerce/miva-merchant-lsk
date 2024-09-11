@@ -1,0 +1,1069 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DSC-CSP-
+| Next Error Code: 25
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-discount_customerspecific">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Customer Specific Pricing">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "This module allows the ability to configure customer specific pricing for products.">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, discount, not_prod, vis_product, not_cust, vis_cust, json, json_api, provision_store, clientside, clientside_sri, copy_prod">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Store-level Module Data Support Feature (data_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing
+						  (
+							pgrp_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							cust_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							price		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing_1 ON ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing ( pgrp_id, cust_id, product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing_2 ON ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing ( pgrp_id, product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing_3 ON ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing ( pgrp_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Discounting Subsystem Feature (discount)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DiscountModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:items"					VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:basket"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:shipping"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:tax"					VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:provision_settings"	VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:eligibility"			VALUE = "module">
+	<MvASSIGN NAME = "l.capabilities:precalc"				VALUE = "exclude">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Fields" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Validate" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Update" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Item_Eligible" PARAMETERS = "module var, pricegroup var, discount_state var, item var, eligible var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.eligible" 			VALUE = 0>
+	<MvASSIGN NAME = "l.customer" 			VALUE = "{ [ g.Module_Feature_PGR_UT ].DiscountState_CustomerInformation( l.discount_state ) }">
+
+	<MvIF EXPR = "{ NOT l.item:product_id OR NOT l.customer:cust_id }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.item:variant_id AND miva_array_elements( l.item:part_products ) EQ 1 }">
+		<MvIF EXPR = "{ CustomerSpecificPricing_Load( l.pricegroup:id, l.customer:cust_id, l.item:part_products[ 1 ]:id, l.item:customerspecificpricing ) }">
+			<MvASSIGN NAME = "l.eligible" VALUE = 1>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ CustomerSpecificPricing_Load( l.pricegroup:id, l.customer:cust_id, l.item:product_id, l.item:customerspecificpricing ) }">
+		<MvASSIGN NAME = "l.eligible" VALUE = 1>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Discount_Items" PARAMETERS = "module var, pricegroup var, discount_state var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.customer" VALUE = "{ [ g.Module_Feature_PGR_UT ].DiscountState_CustomerInformation( l.discount_state ) }">
+
+	<MvIF EXPR = "{ l.customer:cust_id }">
+		<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Eligible_Items( l.discount_state, l.items ) }">
+			<MvIF EXPR = "{ l.item:price GT l.item:customerspecificpricing:price }">
+				<MvASSIGN NAME = "l.discount_amount" VALUE = "{ l.item:price - l.item:customerspecificpricing:price }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.discount_amount" VALUE = "{ 0 - ( l.item:customerspecificpricing:price - l.item:price ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.item, l.item:quantity, l.discount_amount ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_Provision_Settings" PARAMETERS = "module var, pricegroup var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_PriceGroup_Copy" PARAMETERS = "module var, source_pricegroup var, dest_pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete_All_PriceGroup( l.dest_pricegroup:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ CustomerSpecificPricing_Copy_All_PriceGroup( l.source_pricegroup:id, l.dest_pricegroup:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DiscountModule_PriceGroup_Delete" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ CustomerSpecificPricing_Delete_All_PriceGroup( l.pricegroup:id ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Configuration Change Notification Feature (not_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ CustomerSpecificPricing_Delete_All_Product( l.product:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_LowStock" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Product_OutOfStock" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Add/Edit Screen Feature (vis_product)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Product_Tabs" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.product:id }">									<MvFUNCTIONRETURN VALUE = "">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "">	</MvIF>
+
+	<MvASSIGN NAME = "l.tabs" 		VALUE = "">
+	<MvASSIGN NAME = "l.tab_count" 	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.pricegroup" ARRAY = "l.pricegroups" COUNT = "{ [ g.Module_Feature_PGR_DB ].PriceGroupList_Load_Module( l.module:id, l.pricegroups ) }">
+		<MvASSIGN NAME = "l.tab_count" VALUE = "{ miva_array_insert( l.tabs, l.module:code $ '_' $ l.pricegroup:id $ ':Customer Specific Pricing: ' $ l.pricegroup:name , -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_joinstring( l.tabs, ',', '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Head" PARAMETERS = "module var, tab, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ indexof( l.module:code, l.tab, 1 ) EQ 1 }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_AdminUI_CSS() }">
+
+		<MvEVAL EXPR = "{ Element_Product_CustomerPriceList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{  Element_CustomerSpecific_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_Product_CustomerPriceList_JavaScript( l.module ) }">
+
+			<MvEVAL EXPR = "{  Element_CustomerSpecific_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Content" PARAMETERS = "module var, tab, load_fields, product var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ indexof( l.module:code, l.tab, 1 ) EQ 1 }">
+		<MvASSIGN NAME = "l.pricegroup_id" VALUE = "{ int( glosub( l.tab, l.module:code $ '_', '' ) ) }">
+
+		<MvIF EXPR = "{ NOT l.pricegroup_id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00005', 'Invalid Price Group' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroup_Load_ID( l.pricegroup_id, l.pricegroup ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ l.pricegroup:module_id NE l.module:id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00006', 'Invalid Price Group' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ Element_Product_CustomerPriceList_HTML( l.module ) }">
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new Product_CustomerPriceList( <MvEVAL EXPR = "{ int( l.pricegroup_id ) }">, <MvEVAL EXPR = "{ int( l.product:id ) }"> ); } );
+		</script>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Insert" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Delete" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Update" PARAMETERS = "module var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Customer Configuration Change Notification Feature (not_cust)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Notify_Customer_Insert" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Customer_Update" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Notify_Customer_Delete" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ CustomerSpecificPricing_Delete_All_Customer( l.customer:id ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Customer Add/Edit Screen Feature (vis_cust)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Customer_Tabs" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.customer:id }"> 									<MvFUNCTIONRETURN VALUE = "">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "">	</MvIF>
+
+	<MvASSIGN NAME = "l.tabs" 		VALUE = "">
+	<MvASSIGN NAME = "l.tab_count" 	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.pricegroup" ARRAY = "l.pricegroups" COUNT = "{ [ g.Module_Feature_PGR_DB ].PriceGroupList_Load_Module( l.module:id, l.pricegroups ) }">
+		<MvASSIGN NAME = "l.tab_count" VALUE = "{ miva_array_insert( l.tabs, l.module:code $ '_' $ l.pricegroup:id $ ':Customer Specific Pricing: ' $ l.pricegroup:name , -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_joinstring( l.tabs, ',', '' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Customer_Head" PARAMETERS = "module var, tab, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ indexof( l.module:code, l.tab, 1 ) EQ 1 }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_AdminUI_CSS() }">
+
+		<MvEVAL EXPR = "{ Element_Customer_ProductPriceList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{  Element_CustomerSpecific_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_Customer_ProductPriceList_JavaScript( l.module ) }">
+
+			<MvEVAL EXPR = "{  Element_CustomerSpecific_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Customer_Content" PARAMETERS = "module var, tab, load_fields, customer var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ indexof( l.module:code, l.tab, 1 ) EQ 1 }">
+		<MvASSIGN NAME = "l.pricegroup_id" VALUE = "{ int( glosub( l.tab, l.module:code $ '_', '' ) ) }">
+
+		<MvIF EXPR = "{ NOT l.pricegroup_id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00007', 'Invalid Price Group' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroup_Load_ID( l.pricegroup_id, l.pricegroup ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ l.pricegroup:module_id NE l.module:id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00008', 'Invalid Price Group' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ Element_Customer_ProductPriceList_HTML( l.module ) }">
+
+		<script type="text/javascript">
+			MMScreen_LoadFinished( function() { new Customer_ProductPriceList( <MvEVAL EXPR = "{ int( l.pricegroup_id ) }">, <MvEVAL EXPR = "{ int( l.customer:id ) }"> ); } );
+		</script>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Customer_Insert" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Customer_Delete" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Customer_Update" PARAMETERS = "module var, customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Customer_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'Product_CustomerPriceList_Load_Query' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_Product_CustomerPriceList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'Customer_ProductPriceList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Customer_ProductPriceList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CustomerSpecificPricing_Update' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_CustomerSpecificPricing_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'CustomerSpecificPricing_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_CustomerSpecificPricing_Delete( l.module ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON API Feature (json_api)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_JSON_API" PARAMETERS = "module var, function" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.function EQ 'SetPricing' }">									<MvFUNCTIONRETURN VALUE = "{ JSON_SetPricing( l.module ) }">
+	<MvELSEIF EXPR = "{ l.function EQ 'ClearPricing' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_ClearPricing( l.module ) }">
+	<MvELSEIF EXPR = "{ l.function EQ 'Customer_ProductPriceList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Customer_ProductPriceList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ l.function EQ 'Product_CustomerPriceList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Product_CustomerPriceList_Load_Query( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DSC-CSP-00011', 'Invalid function' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Product_CustomerPriceList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ ( g.Session_Type NE 'admin' ) AND
+					( g.Session_Type NE 'api' ) }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup_Load( l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "{ [ g.Module_Feature_CUS_JSON ].JSON_BaseCustomerList_Filters() }">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.query"				VALUE = "">
+	<MvASSIGN NAME = "l.fields"				VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Field( l.pricegroup:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) }">
+	<MvASSIGN NAME = "l.orderby_columns"	VALUE = "{ [ g.Module_Feature_CUS_JSON ].JSON_BaseCustomerList_OrderBy() $ ',discounted_price:csp.price:null_number' }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NULL_NUMBER( l.available_filters, 'csp.price', 'discounted_price' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',			l.filter )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',			l.sort )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',			l.offset )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',			l.count )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Discounted',		l.discounted )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Undiscounted',	l.undiscounted ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'cust.*,
+																		  csp.product_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_CHAR(	l.query, 'ba.title',	'business_title' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_NUMBER(	l.query, 'csp.price',	'discounted_price' ) }">
+
+	<MvIF EXPR = "{ l.discounted AND ( NOT l.undiscounted ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query,	g.Store_Table_Prefix $ 'CustomerSpecificPricing',	'csp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query,	g.Store_Table_Prefix $ 'Customers',					'cust' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query,	'csp.pgrp_id = ? AND cust.id = csp.cust_id AND csp.product_id = ?', l.fields ) }">
+	<MvELSEIF EXPR = "{ l.discounted OR l.undiscounted }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query,	g.Store_Table_Prefix $ 'Customers',	'cust' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'cust', g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp', 'csp.pgrp_id = ? AND cust.id = csp.cust_id AND csp.product_id = ?', l.fields ) }">
+
+		<MvIF EXPR = "{ NOT l.discounted }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query,	'csp.cust_id IS NULL', '' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'cust', g.Store_Table_Prefix $ 'BusinessAccounts', 'ba', 'cust.account_id = ba.id', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback_With_CustomFields( l.query, l.filter, l.available_filters, g.Module_Feature_CUS_JSON, '', '', 'JSON_Customer_CustomFields_Query_Filter', l.null ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Query_Callback_With_CustomFields( l.query, l.filter, g.Module_Feature_CUS_JSON, 'JSON_Customer_CustomFields_Query' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy_Callback_With_CustomFields( l.query, l.sort, l.orderby_columns, 'cust.login', g.Module_Feature_CUS_JSON, 'JSON_Customer_CustomFields_Query_OrderBy' ) }">
+
+	<MvASSIGN NAME = "l.sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Customers', l.sql, l.fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DSC-CSP-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.output_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_Feature_CUS_JSON ].JSON_Customer_CustomFields_Initialize( l.filter, l.customfield_state ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Customers.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.output_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_CUS_DB ].Customer_Read( l.customer ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_count ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_CUS_JSON ].JSON_Customer( l.customer ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_CUS_JSON ].JSON_Customer_CustomFields_With_Query( l.query, l.customfield_state, Customers.d.id, 'Customers' ) }">,
+				"business_title": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( Customers.d.business_title ) }">"
+				<MvIF EXPR = "{ NOT ISNULL Customers.d.product_id }">
+					,"discounted_price":	<MvEVAL EXPR = "{ Customers.d.discounted_price ROUND 2 }">
+				</MvIF>
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Customers" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Customers">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Customer_ProductPriceList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ ( g.Session_Type NE 'admin' ) AND
+					( g.Session_Type NE 'api' ) }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup_Load( l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_JSON ].JSON_Customer_Load( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+	<MvASSIGN NAME = "l.count_query"		VALUE = "">
+	<MvASSIGN NAME = "l.fields"				VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Field( l.pricegroup:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( l.customer:id ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NULL_NUMBER( l.available_filters, 'csp.price', 'discounted_price' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',			l.filter )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',			l.sort )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',			l.offset )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',			l.count ) 		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Discounted',		l.discounted )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'Undiscounted',	l.undiscounted ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.joins_customerspecificpricing" VALUE = "{ [ g.Module_JSON ].JSON_Filter_Contains_Search_Field( l.filter, 'discounted_price', l.null ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Load_Query_LowLevel( l.filter, l.sort,
+																				  [ g.Module_JSON ].JSON_BaseProductList_Filters() $ ',' $ l.available_filters,
+																				  [ g.Module_JSON ].JSON_BaseProductList_OrderBy() $ ',discounted_price:csp.price:null_number',
+																				  'prod.disp_order',
+																				  g.Module_JSON, 'JSON_ProductList_Load_Query_Filter', 'JSON_ProductList_Load_Query_Search_Filter', 'JSON_Product_CustomFields_Query_Filter',
+																				  l.search_query, l.count_query, l.ondemandcolumns ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, 'csp.product_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_NUMBER(	l.search_query, 'csp.price', 'discounted_price' ) }">
+
+	<MvIF EXPR = "{ l.discounted AND l.undiscounted }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp', 'csp.pgrp_id = ? AND csp.cust_id = ? AND prod.id = csp.product_id', l.fields ) }">
+		
+		<MvIF EXPR = "{ l.joins_customerspecificpricing }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'prod', g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp', 'csp.pgrp_id = ? AND csp.cust_id = ? AND prod.id = csp.product_id', l.fields ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.undiscounted }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp', 'csp.pgrp_id = ? AND csp.cust_id = ? AND prod.id = csp.product_id', l.fields ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'csp.product_id IS NULL', '' ) }">
+
+		<MvIF EXPR = "{ l.joins_customerspecificpricing }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.count_query, 'prod', g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp', 'csp.pgrp_id = ? AND csp.cust_id = ? AND prod.id = csp.product_id', l.fields ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query,	'csp.product_id IS NULL', '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.discounted }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'csp.pgrp_id = ? AND csp.cust_id = ? AND prod.id = csp.product_id', l.fields ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.count_query, g.Store_Table_Prefix $ 'CustomerSpecificPricing', 'csp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.count_query, 'csp.pgrp_id = ? AND csp.cust_id = ? AND prod.id = csp.product_id', l.fields ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.count_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Load_Query_QueryCustomFields( l.search_query, l.filter, l.count, l.total_count ) }">
+
+	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products', l.sql, l.fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-DSC-CSP-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.output_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_CustomFields_Initialize( l.filter, l.customfield_state ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.output_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_BaseProductList_Product_Read( l.product, l.ondemandcolumns ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_count ) }">
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_OnDemandColumns( l.product, l.ondemandcolumns ) }">
+
+				<MvIF EXPR = "{ NOT ISNULL Products.d.product_id }">
+					,"discounted_price":	<MvEVAL EXPR = "{ Products.d.discounted_price ROUND 2 }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_CustomFields_With_Query( l.search_query, l.customfield_state, Products.d.id, 'Products' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CustomerSpecificPricing_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( g.Session_Type NE 'admin' ) AND
+					( g.Session_Type NE 'api' ) }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 0, 0, 1, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup_Load( l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_CUS_JSON ].JSON_Customer_Load( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Currency(	'R', 'Price',	l.price ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.customerspecificpricing:pgrp_id" 	VALUE = "{ l.pricegroup:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:cust_id" 	VALUE = "{ l.customer:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:product_id" VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:price" 		VALUE = "{ l.price }">
+
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_InsertOrUpdate( l.customerspecificpricing ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CustomerSpecificPricing_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( g.Session_Type NE 'admin' ) AND
+					( g.Session_Type NE 'api' ) }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 0, 0, 1, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }"> 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup_Load( l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_CUS_JSON ].JSON_Customer_Load( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete( l.pricegroup:id, l.customer:id, l.product:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_SetPricing" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( g.Session_Type NE 'admin' ) AND
+					( g.Session_Type NE 'api' ) }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 0, 0, 1, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup_Load( l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_CUS_JSON ].JSON_Customer_Load( l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Currency( 'R', 'Price', l.price ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.customerspecificpricing:pgrp_id" 	VALUE = "{ l.pricegroup:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:cust_id" 	VALUE = "{ l.customer:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:product_id" VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:price" 		VALUE = "{ l.price }">
+
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_InsertOrUpdate( l.customerspecificpricing ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ClearPricing" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( g.Session_Type NE 'admin' ) AND
+					( g.Session_Type NE 'api' ) }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 0, 0, 1, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup_Load( l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.has_customer" 	VALUE = "{ [ g.Module_Feature_CUS_JSON ].JSON_Customer_Load( l.customer ) }">
+	<MvASSIGN NAME = "l.has_product" 	VALUE = "{ [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+
+	<MvIF EXPR = "{ l.has_customer AND l.has_product }">
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete( l.pricegroup:id, l.customer:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.has_customer }">
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete_All_PriceGroup_Customer( l.pricegroup:id, l.customer:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.has_product }">
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete_All_PriceGroup_Product( l.pricegroup:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Provisioning Feature (provision_store)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'customerspecificpricing_set' }">			<MvEVAL EXPR = "{ Module_Provision_CustomerSpecificPricing_Set( l.module, l.child_xml ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'customerspecificpricing_clear' }">	<MvEVAL EXPR = "{ Module_Provision_CustomerSpecificPricing_Clear( l.module, l.child_xml ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child_xml, 'Unknown tag' ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_CustomerSpecificPricing_Set" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'group_name', 		l.group_name )  	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'customer_login', 	l.customer_login )  OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'product_code', 		l.product_code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.provide_xml:value }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'No price specified' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroup_Load_Name( l.group_name, l.pricegroup ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Login( l.customer_login, l.customer ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.product_code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.customerspecificpricing:pgrp_id" 	VALUE = "{ l.pricegroup:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:cust_id" 	VALUE = "{ l.customer:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:product_id" VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:price" 		VALUE = "{ l.provide_xml:value ROUND 2 }">
+
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_InsertOrUpdate( l.customerspecificpricing ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_CustomerSpecificPricing_Clear" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'group_name', l.group_name ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroup_Load_Name( l.group_name, l.pricegroup ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Attribute_Exists( l.provide_xml, 'customer_login' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'customer_login', l.customer_login ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Login( l.customer_login, l.customer ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Attribute_Exists( l.provide_xml, 'product_code' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'product_code', l.product_code ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.product_code, l.product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:id AND l.customer:id }">
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete( l.pricegroup:id, l.customer:id, l.product:id ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.customer:id }">
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete_All_PriceGroup_Customer( l.pricegroup:id, l.customer:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.product:id }">
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete_All_PriceGroup_Product( l.pricegroup:id, l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| clientside
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/discount/customerspecific/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_CustomerSpecific_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/discount/customerspecific/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/discount/customerspecific/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/discount/customerspecific/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Product Copy Feature (copy_prod)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Copy_Product" PARAMETERS = "module var, source_product var, dest_product var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_Delete_All_Product( l.dest_product:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing ( pgrp_id, cust_id, product_id, price )
+			 			  SELECT
+			 			  	pgrp_id, cust_id, ?, price
+			 			  FROM ' $ 
+			 				g.Store_Table_Prefix $ 'CustomerSpecificPricing
+			 			  WHERE
+			 				product_id = ?' }"
+			 FIELDS = "l.dest_product:id,
+					   l.source_product:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Database Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Read" PARAMETERS = "customerspecificpricing var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.customerspecificpricing:pgrp_id" 	VALUE = "{ CustomerSpecificPricing.d.pgrp_id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:cust_id" 	VALUE = "{ CustomerSpecificPricing.d.cust_id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:product_id" VALUE = "{ CustomerSpecificPricing.d.product_id }">
+	<MvASSIGN NAME = "l.customerspecificpricing:price" 		VALUE = "{ CustomerSpecificPricing.d.price }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Load" PARAMETERS = "pgrp_id, cust_id, product_id, customerspecificpricing var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CustomerSpecificPricing"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE pgrp_id = ? AND cust_id = ? AND product_id = ?' }"
+				FIELDS	= "l.pgrp_id, l.cust_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CustomerSpecificPricing.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "CustomerSpecificPricing">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DSC-CSP-00013' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ CustomerSpecificPricing_Read( l.customerspecificpricing ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CustomerSpecificPricing">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_InsertOrUpdate" PARAMETERS = "customerspecificpricing var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CustomerSpecificPricing_Insert_LowLevel( l.customerspecificpricing ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT CustomerSpecificPricing_Update( l.customerspecificpricing ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Load( l.customerspecificpricing:pgrp_id, l.customerspecificpricing:product_id, l.pricegroupxproduct ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroupXProduct_Insert( l.customerspecificpricing:pgrp_id, l.customerspecificpricing:product_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroupXCustomer_Load( l.customerspecificpricing:pgrp_id, l.customerspecificpricing:cust_id, l.pricegroupxcustomer ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroupXCustomer_Insert( l.customerspecificpricing:pgrp_id, l.customerspecificpricing:cust_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Insert_LowLevel" PARAMETERS = "customerspecificpricing var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing
+						  ( pgrp_id, cust_id, product_id, price )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.customerspecificpricing:pgrp_id, l.customerspecificpricing:cust_id, l.customerspecificpricing:product_id, l.customerspecificpricing:price">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Update" PARAMETERS = "customerspecificpricing var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing
+						  SET
+							price		= ?
+						  WHERE
+						  	pgrp_id 	= ? AND
+						  	cust_id 	= ? AND
+						  	product_id 	= ?' }"
+			 FIELDS	= "l.customerspecificpricing:price, l.customerspecificpricing:pgrp_id, l.customerspecificpricing:cust_id, l.customerspecificpricing:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Delete" PARAMETERS = "pgrp_id, cust_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE pgrp_id	= ? AND cust_id = ? AND product_id = ?' }"
+			 FIELDS	= "l.pgrp_id, l.cust_id, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Delete_All_PriceGroup_Product" PARAMETERS = "pgrp_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE pgrp_id	= ? AND product_id = ?' }"
+			 FIELDS	= "l.pgrp_id, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Delete_All_PriceGroup_Customer" PARAMETERS = "pgrp_id, cust_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE pgrp_id	= ? AND cust_id = ?' }"
+			 FIELDS	= "l.pgrp_id, l.cust_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Delete_All_PriceGroup" PARAMETERS = "pgrp_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE pgrp_id	= ?' }"
+			 FIELDS	= "l.pgrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00019', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Delete_All_Customer" PARAMETERS = "cust_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE cust_id	= ?' }"
+			 FIELDS	= "l.cust_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00020', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE product_id	= ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00021', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomerSpecificPricing_Copy_All_PriceGroup" PARAMETERS = "source_pgrp_id, dest_pgrp_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing ( pgrp_id, cust_id, product_id, price )
+			 			  SELECT ?, cust_id, product_id, price FROM ' $ g.Store_Table_Prefix $ 'CustomerSpecificPricing WHERE pgrp_id = ?' }"
+			 FIELDS = "l.dest_pgrp_id, l.source_pgrp_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-CSP-00023', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/discount/customerspecific/functions.mv">
+<MvINCLUDE FILE = "modules/discount/customerspecific/customer_productpricelist.mv">
+<MvINCLUDE FILE = "modules/discount/customerspecific/product_customerpricelist.mv">

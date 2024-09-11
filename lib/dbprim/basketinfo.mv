@@ -1,0 +1,178 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-BIN-
+| Next Error Code: 13    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "BasketInfo_Read" PARAMETERS = "basketinfo var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketinfo:basket_id"	VALUE = "{ BasketInfo.d.basket_id }">
+	<MvASSIGN NAME = "l.basketinfo:module_id"	VALUE = "{ BasketInfo.d.module_id }">
+	<MvASSIGN NAME = "l.basketinfo:type"		VALUE = "{ BasketInfo.d.type }">
+	<MvASSIGN NAME = "l.basketinfo:clronmod"	VALUE = "{ BasketInfo.d.clronmod }">
+	<MvASSIGN NAME = "l.basketinfo:orderinfo"	VALUE = "{ BasketInfo.d.orderinfo }">
+	<MvASSIGN NAME = "l.basketinfo:info"		VALUE = "{ miva_array_deserialize( BasketInfo.d.info ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Insert" PARAMETERS = "basketinfo var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basketinfo:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00009', 'Basket is provisional' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.basketinfo:orderinfo }">	<MvASSIGN NAME = "l.basketinfo:orderinfo"	VALUE = 0>	</MvIF>
+
+	<MvASSIGN NAME = "l.info"					VALUE = "{ miva_array_serialize( l.basketinfo:info ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'BasketInfo
+					      ( basket_id, module_id, type, clronmod, orderinfo, info )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.basketinfo:basket_id, l.basketinfo:module_id, l.basketinfo:type,
+					   l.basketinfo:clronmod, l.basketinfo:orderinfo, l.info">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Update" PARAMETERS = "basketinfo var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.info"					VALUE = "{ miva_array_serialize( l.basketinfo:info ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'BasketInfo
+						  SET
+							clronmod	= ?,
+							orderinfo	= ?,
+							info		= ?
+						  WHERE
+							basket_id	= ? AND
+							module_id	= ? AND
+							type		= ?' }"
+			 FIELDS	= "l.basketinfo:clronmod, l.basketinfo:orderinfo, l.info,
+					   l.basketinfo:basket_id, l.basketinfo:module_id, l.basketinfo:type">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Load" PARAMETERS = "basket_id, module_id, type, basketinfo var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-BIN-00010' ) }">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketInfo"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BasketInfo WHERE basket_id = ? AND module_id = ? AND type = ?' }"
+				FIELDS	= "l.basket_id, l.module_id, l.type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketInfo.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketInfo">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-BIN-00004' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ BasketInfo_Read( l.basketinfo ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketInfo">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfoList_Load_Basket" PARAMETERS = "basket_id, basketinfos var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "BasketInfo"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'BasketInfo WHERE basket_id = ? ORDER BY basket_id, module_id, type' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBP-BIN-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketinfo_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT BasketInfo.d.EOF }">
+		<MvEVAL EXPR = "{ BasketInfo_Read( l.basketinfos[ ++l.basketinfo_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "BasketInfo" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketInfo">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-BIN-00012', l.basketinfo_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Delete" PARAMETERS = "basket_id, module_id, type" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketInfo WHERE basket_id = ? AND module_id = ? AND type = ?' }"
+			 FIELDS	= "l.basket_id, l.module_id, l.type">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Clear_Basket" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketInfo WHERE basket_id = ? AND clronmod = 1' }"
+			 FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Delete_All_Basket" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketInfo WHERE basket_id = ?' }"
+			 FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_Delete_ClearOnMod_Basket" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketInfo WHERE basket_id = ? AND clronmod = 1' }"
+			 FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-BIN-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

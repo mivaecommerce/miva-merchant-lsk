@@ -1,0 +1,628 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-INV-DTB-
+| Next Error Code: 21   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "INV_Create_Data_Files" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].DomainPrivilege_Insert( 'INVT', 'Inventory' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "INV_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'InventorySettings
+						  (
+							active		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							mode		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 20 )	$ ',
+							ex_page		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							in_short	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							in_long		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							low_track	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							low_level	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							low_short	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							low_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							out_track	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							out_level	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							out_hide	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							out_short	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							out_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							ltd_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							eml_low		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							eml_out		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							eml_from	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							eml_to		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							eml_cc		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							eml_sub		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							eml_msg		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.inventory_settings"				VALUE = "">
+	<MvASSIGN NAME = "l.inventory_settings:active"		VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:mode"		VALUE = "basket">
+	<MvASSIGN NAME = "l.inventory_settings:ex_page"		VALUE = "BASK">
+	<MvASSIGN NAME = "l.inventory_settings:in_short" 	VALUE = "In Stock">
+	<MvASSIGN NAME = "l.inventory_settings:in_long" 	VALUE = "%inv_instock% available for immediate delivery">
+	<MvASSIGN NAME = "l.inventory_settings:low_track" 	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:low_level" 	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:low_short" 	VALUE = "Backordered">
+	<MvASSIGN NAME = "l.inventory_settings:low_long" 	VALUE = "Please Note: '%product_name%' is currently backordered. Please be aware that there may be a delay in shipping.">
+	<MvASSIGN NAME = "l.inventory_settings:out_track"	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:out_level" 	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:out_hide" 	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:out_short" 	VALUE = "Sold Out">
+	<MvASSIGN NAME = "l.inventory_settings:out_long" 	VALUE = "Sorry, we are currently sold out of '%product_name%'. Please check back later.">
+	<MvASSIGN NAME = "l.inventory_settings:ltd_long" 	VALUE = "Sorry, we do not have enough '%product_name%' to fill your order. Please adjust the quantity and try again. Quantity Available: %inv_available%">
+	<MvASSIGN NAME = "l.inventory_settings:eml_low"		VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:eml_out" 	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_settings:eml_from" 	VALUE = "{ g.Domain:email }">
+	<MvASSIGN NAME = "l.inventory_settings:eml_to" 		VALUE = "{ g.Domain:email }">
+	<MvASSIGN NAME = "l.inventory_settings:eml_cc" 		VALUE = "">
+	<MvASSIGN NAME = "l.inventory_settings:eml_sub" 	VALUE = "%product_name% %inv_level%">
+	<MvASSIGN NAME = "l.inventory_settings:eml_msg" 	VALUE = "%product_name% %inv_level%">
+
+	<MvIF EXPR = "{ NOT InventorySettings_Insert( l.inventory_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'InventoryProductSettings
+								(
+									product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+									active		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+									in_short	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+									in_long		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+									low_track	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )		$ ',
+									low_lvl_d	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+									low_level	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+									low_short	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+									low_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+									out_track	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )		$ ',
+									out_lvl_d	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+									out_level	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+									out_hide	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )		$ ',
+									out_short	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+									out_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+									ltd_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ '
+								) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'InventoryProductSettings_1 ON ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ( product_id ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'InventoryProductCounts
+								(
+									product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+									inventory	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+								) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY	NAME = "Merchant"
+				QUERY = "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'InventoryProductCounts_1 ON ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ( product_id ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "INV_Store_Delete" PARAMETERS = "" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'InventorySettings' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'InventoryProductSettings' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $  g.Store_Table_Prefix $ 'InventoryProductCounts' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventorySettings_Read" PARAMETERS = "inventorysettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.inventorysettings:active"		VALUE = "{ InventorySettings.d.active }">
+	<MvASSIGN NAME = "l.inventorysettings:mode"			VALUE = "{ InventorySettings.d.mode }">
+	<MvASSIGN NAME = "l.inventorysettings:ex_page"		VALUE = "{ InventorySettings.d.ex_page }">
+	<MvASSIGN NAME = "l.inventorysettings:in_short"		VALUE = "{ InventorySettings.d.in_short }">
+	<MvASSIGN NAME = "l.inventorysettings:in_long"		VALUE = "{ InventorySettings.d.in_long }">
+	<MvASSIGN NAME = "l.inventorysettings:low_track"	VALUE = "{ InventorySettings.d.low_track }">
+	<MvASSIGN NAME = "l.inventorysettings:low_level"	VALUE = "{ InventorySettings.d.low_level }">
+	<MvASSIGN NAME = "l.inventorysettings:low_short"	VALUE = "{ InventorySettings.d.low_short }">
+	<MvASSIGN NAME = "l.inventorysettings:low_long"		VALUE = "{ InventorySettings.d.low_long }">
+	<MvASSIGN NAME = "l.inventorysettings:out_track"	VALUE = "{ InventorySettings.d.out_track }">
+	<MvASSIGN NAME = "l.inventorysettings:out_level"	VALUE = "{ InventorySettings.d.out_level }">
+	<MvASSIGN NAME = "l.inventorysettings:out_hide"		VALUE = "{ InventorySettings.d.out_hide }">
+	<MvASSIGN NAME = "l.inventorysettings:out_short"	VALUE = "{ InventorySettings.d.out_short }">
+	<MvASSIGN NAME = "l.inventorysettings:out_long"		VALUE = "{ InventorySettings.d.out_long }">
+	<MvASSIGN NAME = "l.inventorysettings:ltd_long"		VALUE = "{ InventorySettings.d.ltd_long }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_low"		VALUE = "{ InventorySettings.d.eml_low }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_out"		VALUE = "{ InventorySettings.d.eml_out }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_from"		VALUE = "{ InventorySettings.d.eml_from }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_to"		VALUE = "{ InventorySettings.d.eml_to }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_cc"		VALUE = "{ InventorySettings.d.eml_cc }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_sub"		VALUE = "{ InventorySettings.d.eml_sub }">
+	<MvASSIGN NAME = "l.inventorysettings:eml_msg"		VALUE = "{ InventorySettings.d.eml_msg }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventorySettings_Insert" PARAMETERS = "inventorysettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'InventorySettings
+					      ( active, mode, ex_page, in_short, in_long, low_track, low_level, low_short, low_long, out_track, out_level,
+						    out_hide, out_short, out_long, ltd_long, eml_low, eml_out, eml_from, eml_to, eml_cc, eml_sub, eml_msg )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.inventorysettings:active, l.inventorysettings:mode,
+					   l.inventorysettings:ex_page, l.inventorysettings:in_short,
+					   l.inventorysettings:in_long, l.inventorysettings:low_track,
+					   l.inventorysettings:low_level, l.inventorysettings:low_short,
+					   l.inventorysettings:low_long, l.inventorysettings:out_track,
+					   l.inventorysettings:out_level, l.inventorysettings:out_hide,
+					   l.inventorysettings:out_short, l.inventorysettings:out_long,
+					   l.inventorysettings:ltd_long, l.inventorysettings:eml_low,
+					   l.inventorysettings:eml_out, l.inventorysettings:eml_from,
+					   l.inventorysettings:eml_to, l.inventorysettings:eml_cc, l.inventorysettings:eml_sub,
+					   l.inventorysettings:eml_msg">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:inventorysettings_load_cached"	VALUE = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventorySettings_Update" PARAMETERS = "inventorysettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventorySettings_Update_LowLevel( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventorySettings_Update( l.module, l.inventorysettings ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventorySettings_Update_LowLevel" PARAMETERS = "inventorysettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'InventorySettings
+					      SET
+							active		= ?,
+							mode		= ?,
+							ex_page		= ?,
+							in_short	= ?,
+							in_long		= ?,
+							low_track	= ?,
+							low_level	= ?,
+							low_short	= ?,
+							low_long	= ?,
+							out_track	= ?,
+							out_level	= ?,
+							out_hide	= ?,
+							out_short	= ?,
+							out_long	= ?,
+							ltd_long	= ?,
+							eml_low		= ?,
+							eml_out		= ?,
+							eml_from	= ?,
+							eml_to		= ?,
+							eml_cc		= ?,
+							eml_sub		= ?,
+							eml_msg		= ?' }"
+			 FIELDS	= "l.inventorysettings:active, l.inventorysettings:mode,
+					   l.inventorysettings:ex_page, l.inventorysettings:in_short,
+					   l.inventorysettings:in_long, l.inventorysettings:low_track,
+					   l.inventorysettings:low_level, l.inventorysettings:low_short,
+					   l.inventorysettings:low_long, l.inventorysettings:out_track,
+					   l.inventorysettings:out_level, l.inventorysettings:out_hide,
+					   l.inventorysettings:out_short, l.inventorysettings:out_long,
+					   l.inventorysettings:ltd_long, l.inventorysettings:eml_low,
+					   l.inventorysettings:eml_out, l.inventorysettings:eml_from,
+					   l.inventorysettings:eml_to, l.inventorysettings:eml_cc, l.inventorysettings:eml_sub,
+					   l.inventorysettings:eml_msg">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:inventorysettings_load_cached"	VALUE = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventorySettings_Load" PARAMETERS = "inventorysettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "InventorySettings"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'InventorySettings' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ InventorySettings_Read( l.inventorysettings ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "InventorySettings">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventorySettings_Load_Cached" PARAMETERS = "inventorysettings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:inventorysettings_load_cached">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ InventorySettings_Load( l.cache:inventorysettings ) }">
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+            <MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.inventorysettings"				VALUE = "{ l.cache:inventorysettings }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryDefaultProductSettings" PARAMETERS = "settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings:active"		VALUE = 0>
+	<MvASSIGN NAME = "l.settings:in_short"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:in_long"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:low_track"		VALUE = "d">
+	<MvASSIGN NAME = "l.settings:low_level"		VALUE = 0>
+	<MvASSIGN NAME = "l.settings:low_lvl_d"		VALUE = 1>
+	<MvASSIGN NAME = "l.settings:low_short"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:low_long"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:out_track"		VALUE = "d">
+	<MvASSIGN NAME = "l.settings:out_hide"		VALUE = "d">
+	<MvASSIGN NAME = "l.settings:out_level"		VALUE = 0>
+	<MvASSIGN NAME = "l.settings:out_lvl_d"		VALUE = 1>
+	<MvASSIGN NAME = "l.settings:out_short"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:out_long"		VALUE = "">
+	<MvASSIGN NAME = "l.settings:ltd_long"		VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Read" PARAMETERS = "inventoryproductsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.inventoryproductsettings:product_id"	VALUE = "{ InventoryProductSettings.d.product_id }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:active"		VALUE = "{ InventoryProductSettings.d.active }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:in_short"		VALUE = "{ InventoryProductSettings.d.in_short }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:in_long"		VALUE = "{ InventoryProductSettings.d.in_long }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:low_track"		VALUE = "{ InventoryProductSettings.d.low_track }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:low_lvl_d"		VALUE = "{ InventoryProductSettings.d.low_lvl_d }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:low_level"		VALUE = "{ InventoryProductSettings.d.low_level }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:low_short"		VALUE = "{ InventoryProductSettings.d.low_short }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:low_long"		VALUE = "{ InventoryProductSettings.d.low_long }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:out_track"		VALUE = "{ InventoryProductSettings.d.out_track }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:out_lvl_d"		VALUE = "{ InventoryProductSettings.d.out_lvl_d }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:out_level"		VALUE = "{ InventoryProductSettings.d.out_level }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:out_hide"		VALUE = "{ InventoryProductSettings.d.out_hide }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:out_short"		VALUE = "{ InventoryProductSettings.d.out_short }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:out_long"		VALUE = "{ InventoryProductSettings.d.out_long }">
+	<MvASSIGN NAME = "l.inventoryproductsettings:ltd_long"		VALUE = "{ InventoryProductSettings.d.ltd_long }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Insert" PARAMETERS = "inventoryproductsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventoryProductSettings_Insert_LowLevel( l.inventoryproductsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventoryProductSettings_Update( l.module, l.inventoryproductsettings:product_id, l.inventoryproductsettings ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Insert_LowLevel" PARAMETERS = "inventoryproductsettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'InventoryProductSettings
+					      ( product_id, active, in_short, in_long, low_track, low_lvl_d, low_level, low_short, low_long,
+						    out_track, out_lvl_d, out_level, out_hide, out_short, out_long, ltd_long )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.inventoryproductsettings:product_id, l.inventoryproductsettings:active,
+					   l.inventoryproductsettings:in_short, l.inventoryproductsettings:in_long,
+					   l.inventoryproductsettings:low_track, l.inventoryproductsettings:low_lvl_d,
+					   l.inventoryproductsettings:low_level, l.inventoryproductsettings:low_short,
+					   l.inventoryproductsettings:low_long, l.inventoryproductsettings:out_track,
+					   l.inventoryproductsettings:out_lvl_d, l.inventoryproductsettings:out_level,
+					   l.inventoryproductsettings:out_hide, l.inventoryproductsettings:out_short,
+					   l.inventoryproductsettings:out_long, l.inventoryproductsettings:ltd_long">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Update" PARAMETERS = "inventoryproductsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventoryProductSettings_Update_LowLevel( l.inventoryproductsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.inventoryproductsettings:active AND ( l.inventoryproductsettings:out_hide EQ 'y' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].CachedProductList_Set_OutHide_Product( l.inventoryproductsettings:product_id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventoryProductSettings_Update( l.module, l.inventoryproductsettings:product_id, l.inventoryproductsettings ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Update_LowLevel" PARAMETERS = "inventoryproductsettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'InventoryProductSettings
+					      SET
+							product_id	= ?,
+							active		= ?,
+							in_short	= ?,
+							in_long		= ?,
+							low_track	= ?,
+							low_lvl_d	= ?,
+							low_level	= ?,
+							low_short	= ?,
+							low_long	= ?,
+							out_track	= ?,
+							out_lvl_d	= ?,
+							out_level	= ?,
+							out_hide	= ?,
+							out_short	= ?,
+							out_long	= ?,
+							ltd_long	= ?
+					      WHERE
+						    product_id	= ?' }"
+			 FIELDS	= "l.inventoryproductsettings:product_id, l.inventoryproductsettings:active,
+					   l.inventoryproductsettings:in_short, l.inventoryproductsettings:in_long,
+					   l.inventoryproductsettings:low_track, l.inventoryproductsettings:low_lvl_d,
+					   l.inventoryproductsettings:low_level, l.inventoryproductsettings:low_short,
+					   l.inventoryproductsettings:low_long, l.inventoryproductsettings:out_track,
+					   l.inventoryproductsettings:out_lvl_d, l.inventoryproductsettings:out_level,
+					   l.inventoryproductsettings:out_hide, l.inventoryproductsettings:out_short,
+					   l.inventoryproductsettings:out_long, l.inventoryproductsettings:ltd_long,
+					   l.inventoryproductsettings:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Load" PARAMETERS = "product_id, inventoryproductsettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "InventoryProductSettings"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'InventoryProductSettings WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00011', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ InventoryProductSettings.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "InventoryProductSettings">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-INV-DTB-00018' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ InventoryProductSettings_Read( l.inventoryproductsettings ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "InventoryProductSettings">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Delete" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventoryProductSettings_Delete_LowLevel( l.product_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ InventoryDefaultProductSettings( l.inventoryproductsettings ) }">
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventoryProductSettings_Update( l.module, l.product_id, l.inventoryproductsettings ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductSettings_Delete_LowLevel" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'InventoryProductSettings WHERE product_id = ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Read" PARAMETERS = "inventoryproductcount var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.inventoryproductcount:product_id"	VALUE = "{ InventoryProductCounts.d.product_id }">
+	<MvASSIGN NAME = "l.inventoryproductcount:inventory"	VALUE = "{ InventoryProductCounts.d.inventory }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Insert" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventoryProductCount_Insert_LowLevel( l.product_id, l.inventory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventoryProductCount_Update( l.module, l.product_id, l.inventory ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Insert_LowLevel" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'InventoryProductCounts
+					      ( product_id, inventory )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.product_id, l.inventory">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Update" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventoryProductCount_Update_LowLevel( l.product_id, l.inventory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventoryProductCount_Update( l.module, l.product_id, l.inventory ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Update_LowLevel" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'InventoryProductCounts
+						  SET
+							inventory	= ?
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.inventory,
+					   l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Adjust" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT InventoryProductCount_Adjust_LowLevel( l.product_id, l.inventory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_inventory', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_InventoryProductCount_Adjust( l.module, l.product_id, l.inventory ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Adjust_LowLevel" PARAMETERS = "product_id, inventory" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'InventoryProductCounts
+						  SET
+							inventory	= inventory + ?
+						  WHERE
+							product_id	= ?' }"
+			 FIELDS	= "l.inventory,
+					   l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00014', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount_Delete" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'InventoryProductCounts WHERE product_id = ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryProductCount" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "InventoryProductCounts"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'InventoryProductCounts WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-INV-DTB-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ InventoryProductCounts.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "InventoryProductCounts">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-INV-DTB-00019' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count"	VALUE = "{ InventoryProductCounts.d.inventory }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "InventoryProductCounts">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].EOF_Return( l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryItemLookup_Load_Basket" PARAMETERS = "basket_id, inventory_items var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.inventory_items" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.product" ARRAY = "l.products" COUNT = "{ [ g.Module_Library_DB ].ProductAndBasketItemList_Load_Basket_WithRuntimeInventory( l.basket_id, l.products ) }">
+		<MvASSIGN NAME = "l.invprod_count" 	VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.product:basketitem:variant_id, l.invprods ) }">
+
+		<MvIF EXPR = "{ l.invprod_count EQ 0 }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.product:inv_active OR
+							NOT l.product:inv_out_track }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ InventoryItemLookup_Add( l.product, 1, l.product:basketitem, l.inventory_items ) }">
+		<MvELSE>
+			<MvFOREACH ITERATOR = "l.invprod" ARRAY = "l.invprods" COUNT = "{ l.invprod_count }">
+				<MvIF EXPR = "{ NOT l.invprod:inv_active OR
+								NOT l.invprod:inv_out_track }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvEVAL EXPR = "{ InventoryItemLookup_Add( l.invprod, l.invprod:quantity, l.product:basketitem, l.inventory_items ) }">
+			</MvFOREACH>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-INV-DTB-00020', miva_array_elements( l.inventory_items ) ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "InventoryItemLookup_Add" PARAMETERS = "product var, multiplier, basketitem var, inventory_items var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.inventory_item" VARIABLE = "l.inventory_items">
+		<MvDIMENSION INDEX = "{ l.product:id }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.inventory_item }">
+		<MvASSIGN NAME = "l.inventory_item:quantity" 		VALUE = 0>
+		<MvASSIGN NAME = "l.inventory_item:available" 		VALUE = "{ l.product:inv_available }">
+		<MvASSIGN NAME = "l.inventory_item:product"			VALUE = "{ l.product }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.inventory_item:quantity" 														VALUE = "{ l.inventory_item:quantity + ( l.basketitem:quantity * l.multiplier ) }">
+	<MvASSIGN NAME = "l.inventory_item:line" INDEX = "{ l.basketitem:line_id }" MEMBER = "multiplier" 	VALUE = "{ l.multiplier }">
+	<MvASSIGN NAME = "l.inventory_item:line" INDEX = "{ l.basketitem:line_id }" MEMBER = "quantity" 	VALUE = "{ l.basketitem:quantity }">
+</MvFUNCTION>

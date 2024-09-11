@@ -1,0 +1,128 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBP-STA-
+| Next Error Code: 10   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "State_Read" PARAMETERS = "state var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.state:code"			VALUE = "{ States.d.code }">
+	<MvASSIGN NAME = "l.state:name"			VALUE = "{ States.d.name }">
+	<MvASSIGN NAME = "l.state:disp_order"	VALUE = "{ States.d.disp_order }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "State_Insert" PARAMETERS = "code, name" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.disp_order"	VALUE = "{ StoreKey_Generate( 'StateDisplayOrder' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'States
+					      ( code, name, disp_order )
+						  VALUES
+						  ( ?, ?, ? )' }"
+			 FIELDS	= "l.code, l.name, l.disp_order">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-STA-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "State_Update" PARAMETERS = "orig_code, code, name" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'States
+						  SET
+							code	= ?,
+							name	= ?
+						  WHERE
+							code	= ?' }"
+			 FIELDS	= "l.code, l.name,
+					   l.orig_code">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-STA-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "State_Delete" PARAMETERS = "code" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'States WHERE code = ?' }"
+			 FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-STA-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "State_Load_Code" PARAMETERS = "code, state var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "States"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'States WHERE ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Library_Filename_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-STA-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ States.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBP-STA-00007' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ State_Read( l.state ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StateList_Load_All" PARAMETERS = "states var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "States"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'States ORDER BY disp_order' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-STA-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.state_count" VALUE = 0>
+	<MvWHILE EXPR = "{ NOT States.d.EOF }">
+		<MvASSIGN NAME = "l.state_count" VALUE = "{ l.state_count + 1 }">
+		<MvEVAL EXPR = "{ State_Read( l.states[ l.state_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "States" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-STA-00008', l.state_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "State_Count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "States"
+				QUERY	= "{ 'SELECT COUNT( * ) AS state_count FROM ' $ g.Store_Table_Prefix $ 'States' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBP-STA-00006', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ States.d.EOF }">
+		<MvASSIGN NAME = "l.state_count"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.state_count"	VALUE = "{ States.d.state_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "States">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBP-STA-00009', l.state_count ) }">
+</MvFUNCTION>

@@ -1,0 +1,466 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-GFT-
+| Next Error Code: 8    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-giftcertificateimport">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Gift Certificate Import">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "import">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: import
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:screen"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:persistent"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:format"				VALUE = "delimited">
+	<MvASSIGN NAME = "l.capabilities:persistent_provision"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>											field			name						header						required	default		validation		</MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'code',			'Gift Certificate Code',	'CODE',						1,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'amount',		'Amount',					'AMOUNT',					0,			'0.00',		'currency' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'active',		'Active',					'ACTIVE',					0,			'1',		'bool' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.fields"	VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed', 'Records Processed:', 0 ) }">
+
+	<MvIF EXPR = "{ l.import:config:giftcertificates EQ 'add' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'update' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'addupdate' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_updated', 'Records Updated:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'replace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'addreplace' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_created', 'Records Created:', 0 ) }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_replaced', 'Records Replaced:', 0 ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'delete' }">
+		<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_deleted', 'Records Deleted:', 0 ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped', 'Records Skipped:', 0 ) }">
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'record_problems', 'Record Problems:', 0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 1 }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+    <MvASSIGN NAME = "l.list_pos" VALUE = 0>
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ ImportModule_Delimited_Columns( l.module, l.import, l.run_data:columns_all ) }">
+        <MvIF EXPR = "{ miva_variable_value( 'l.run_data:columns_present:' $ l.column:field ) }">
+            <MvASSIGN NAME = "l.column:present"	VALUE = 1>
+
+            <MvREFERENCE NAME = "l.run_data:columns_list"		INDEX = "{ ++l.list_pos }"		VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+            <MvREFERENCE NAME = "l.run_data:columns_present"	MEMBER = "{ l.column:field }"	VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+        </MvIF>
+    </MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+	<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.run_data:columns_present:code, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Load_Code( l.record:code, l.existing_giftcertificate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:config:giftcertificates EQ 'add' }">				<MvFUNCTIONRETURN VALUE = "{ Import_Add_Only( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'update' }">		<MvFUNCTIONRETURN VALUE = "{ Import_Update_Only( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'addupdate' }">		<MvFUNCTIONRETURN VALUE = "{ Import_Add_And_Update( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'replace' }">		<MvFUNCTIONRETURN VALUE = "{ Import_Replace_Only( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'addreplace' }">	<MvFUNCTIONRETURN VALUE = "{ Import_Add_And_Replace( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+	<MvELSEIF EXPR = "{ l.import:config:giftcertificates EQ 'delete' }">		<MvFUNCTIONRETURN VALUE = "{ Import_Delete_Only( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-GFT-00001', 'Unsupported gift certificate mode' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:id }">
+		<MvASSIGN NAME = "g.Import_GiftCertificate_GiftCertificates" VALUE = "{ l.import:config:giftcertificates }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Import_GiftCertificate_GiftCertificates" VALUE = "addupdate">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "giftcertificates">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'giftcertificates' }">
+		<MvFUNCTIONRETURN VALUE = "<b>Gift Certificates:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'giftcertificates' }">
+		<select name="Import_GiftCertificate_GiftCertificates">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'add',			g.Import_GiftCertificate_GiftCertificates,	'Add New Gift Certificates Only' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'update',		g.Import_GiftCertificate_GiftCertificates,	'Update Existing Gift Certificates Only' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addupdate',	g.Import_GiftCertificate_GiftCertificates,	'Add New and Update Existing Gift Certificates' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',		g.Import_GiftCertificate_GiftCertificates,	'Replace Existing Gift Certificates Only' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'addreplace',	g.Import_GiftCertificate_GiftCertificates,	'Add New and Replace Existing Gift Certificates' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'delete',		g.Import_GiftCertificate_GiftCertificates,	'Delete Existing Gift Certificates Only' ) }">
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Import_GiftCertificate_GiftCertificates" VALUE = "{ trim( g.Import_GiftCertificate_GiftCertificates ) }">
+
+	<MvIF EXPR = "{ ( g.Import_GiftCertificate_GiftCertificates NE 'add' )			AND
+					( g.Import_GiftCertificate_GiftCertificates NE 'update' )		AND
+					( g.Import_GiftCertificate_GiftCertificates NE 'addupdate' )	AND
+					( g.Import_GiftCertificate_GiftCertificates NE 'replace' )		AND
+					( g.Import_GiftCertificate_GiftCertificates NE 'addreplace' )	AND
+					( g.Import_GiftCertificate_GiftCertificates NE 'delete' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select a gift certificate handling mode' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.import:config:giftcertificates"	VALUE = "{ g.Import_GiftCertificate_GiftCertificates }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'R', l.provide_xml, 'GiftCertificates', l.import:config:giftcertificates, 'add,update,addupdate,replace,addreplace,delete',
+																																			'add,update,addupdate,replace,addreplace,delete' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.columns_present:code }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-GFT-00002', 'The Gift Certificate Code field must be assigned to an import file column' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Problem" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Record Problem - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'record_problems', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Create" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvEVAL EXPR = "{ Set_Field_Default( l.session, l.record, l.run_data, l.column ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Update" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Delete" PARAMETERS = "session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.record, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Mode Specific Single Record Import Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Add_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.existing_giftcertificate:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' already exists.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Create_GiftCertificate( l.import, l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_giftcertificate:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Update_GiftCertificate( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Update" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_giftcertificate:id }">
+		<MvIF EXPR = "{ NOT Import_Create_GiftCertificate( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Update_GiftCertificate( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_giftcertificate:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Replace_GiftCertificate( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Add_And_Replace" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_giftcertificate:id }">
+		<MvIF EXPR = "{ NOT Import_Create_GiftCertificate( l.import, l.session, l.record, l.run_data ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT Import_Replace_GiftCertificate( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Delete_Only" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.existing_giftcertificate:id }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' does not exist.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Import_Delete_GiftCertificate( l.import, l.session, l.record, l.run_data, l.existing_giftcertificate ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Functions To Actually Import a Single Record
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Import_Create_GiftCertificate" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.record:order_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.record:line_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.record:cust_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.record:credit_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.record:redeem_dt"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Insert( l.record ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'failed to create gift certificate \'' $ l.record:code $ '\': ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.giftcertificates"			VALUE = "">
+	<MvASSIGN NAME = "l.giftcertificates" INDEX = 1	VALUE = "{ l.record }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Feature_GFT_UT ].Notify_GiftCertificates_Created( l.giftcertificates, 1 ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-GFT-00003', 'Gift Certificate \'' $ l.record:code $ '\' created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Update_GiftCertificate" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Update( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.existing_giftcertificate:code" VALUE = "{ l.record:code }">
+
+	<MvCOMMENT>
+	|
+	| Blank values are ignored for these fields, even when their columns are assigned
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.record:amount }">	<MvASSIGN NAME = "l.existing_giftcertificate:amount" VALUE = "{ l.record:amount }">	</MvIF>
+	<MvIF EXPR = "{ NOT ISNULL l.record:active }">	<MvASSIGN NAME = "l.existing_giftcertificate:active" VALUE = "{ l.record:active }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Update( l.existing_giftcertificate ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' failed to update: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-GFT-00004', 'Gift Certificate \'' $ l.existing_giftcertificate:code $ '\' updated' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_updated', 1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Replace_GiftCertificate" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Delete( l.existing_giftcertificate ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'failed to replace gift certificate \'' $ l.record:code $ '\': ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-GFT-00005', 'Gift Certificate \'' $ l.existing_giftcertificate:code $ '\' deleted' ) }">
+
+	<MvASSIGN NAME = "l.record:order_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.record:line_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.record:cust_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.record:credit_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.record:redeem_dt"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Insert( l.record ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.giftcertificates"			VALUE = "">
+	<MvASSIGN NAME = "l.giftcertificates" INDEX = 1	VALUE = "{ l.record }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Feature_GFT_UT ].Notify_GiftCertificates_Created( l.giftcertificates, 1 ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-GFT-00006', 'Gift Certificate \'' $ l.record:code $ '\' created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Delete_GiftCertificate" PARAMETERS = "import var, session var, record var, run_data var, existing_giftcertificate var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Delete( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_DB ].GiftCertificate_Delete( l.existing_giftcertificate ) }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'gift certificate \'' $ l.record:code $ '\' failed to delete: ' $ g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-GFT-00007', 'Gift Certificate \'' $ l.existing_giftcertificate:code $ '\' deleted' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_deleted', 1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

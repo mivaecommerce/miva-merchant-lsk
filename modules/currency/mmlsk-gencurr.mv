@@ -1,0 +1,911 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CUR-GEN-
+| Next Error Code: 7    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-gencurr">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Generic Currency Formatting">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.07">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "currency, vis_store, provision_store, data_store">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'GenCurrency
+						  (
+							symbol		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )		$ ',
+							positive	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )			$ ',
+							negative	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )			$ ',
+							groupsym	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 2 )			$ ',
+							groupsize	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 1, 0 )	$ ',
+							decim		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 2 )			$ ',
+							decimsize	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 1, 0 )	$ ',
+							userdef		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CUR-GEN-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Domain:country EQ 'DE' }">
+		<MvASSIGN NAME = "l.gencurr:symbol" 	VALUE = "&euro;">
+	<MvELSEIF EXPR = "{ g.Domain:country EQ 'GB' }">
+		<MvASSIGN NAME = "l.gencurr:symbol" 	VALUE = "&pound;">
+	<MvELSE>
+		<MvASSIGN NAME = "l.gencurr:symbol" 	VALUE = "$">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.gencurr:positive" 	VALUE = "A">
+	<MvASSIGN NAME = "l.gencurr:negative" 	VALUE = "A">
+	<MvASSIGN NAME = "l.gencurr:groupsym" 	VALUE = ",">
+	<MvASSIGN NAME = "l.gencurr:groupsize" 	VALUE = 3>
+	<MvASSIGN NAME = "l.gencurr:decim"		VALUE = ".">
+	<MvASSIGN NAME = "l.gencurr:decimsize" 	VALUE = 2>
+	<MvASSIGN NAME = "l.gencurr:userdef" 	VALUE = 0>
+
+	<MvFUNCTIONRETURN VALUE = "{ GenericCurrency_Insert( l.gencurr ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'GenCurrency' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CurrencyModule_AddFormatting" PARAMETERS = "module var, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.GenericCurrency_Loaded }">
+		<MvASSIGN NAME = "g.GenericCurrency_Loaded"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT GenericCurrency_Load( g.GenericCurrency ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( '-' IN l.value ) EQ 1 }">
+		<MvASSIGN NAME = "l.value" VALUE = "{ substring( l.value, 2, len( l.value ) - 1 ) }">
+		<MvASSIGN NAME = "l.negative" VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.negative" VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ l.value ROUND g.GenericCurrency:decimsize }">
+	<MvASSIGN NAME = "l.decimpos" VALUE = "{ '.' IN l.result }">
+	<MvIF EXPR = "{ l.decimpos }">
+		<MvASSIGN NAME = "l.whole" VALUE = "{ substring( l.result, 1, l.decimpos - 1 ) }">
+		<MvASSIGN NAME = "l.decim" VALUE = "{ substring( l.result, l.decimpos + 1, len( l.result ) - l.decimpos ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.whole" VALUE = "{ l.result }">
+		<MvASSIGN NAME = "l.decim" VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.comma" VALUE = "">
+	<MvASSIGN NAME = "l.wholelen" VALUE = "{ len( l.whole ) }">
+	<MvASSIGN NAME = "l.pos" VALUE = "{ l.wholelen }">
+	<MvIF EXPR = "{ g.GenericCurrency:groupsize }">
+		<MvWHILE EXPR = "{ l.pos GT g.GenericCurrency:groupsize }">
+			<MvASSIGN NAME = "l.comma" VALUE = "{ g.GenericCurrency:groupsym $ substring( l.whole, l.pos - ( g.GenericCurrency:groupsize - 1 ), g.GenericCurrency:groupsize ) $ l.comma }">
+			<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos - g.GenericCurrency:groupsize }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.comma" VALUE = "{ substring( l.whole, 1, l.pos ) $ l.comma }">
+
+	<MvIF EXPR = "{ g.GenericCurrency:decimsize NE 0 }">
+		<MvASSIGN NAME = "l.the_number" VALUE = "{ l.comma $ g.GenericCurrency:decim $ l.decim }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.the_number" VALUE = "{ l.comma }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.negative }">
+		<MvIF EXPR = "{ g.GenericCurrency:negative EQ 'A' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ g.GenericCurrency:symbol $ l.the_number $ ')' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'B' }">
+					<MvCOMMENT>"B">-&curren;1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ g.GenericCurrency:symbol $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'C' }">
+					<MvCOMMENT>"C">&curren;-1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ g.GenericCurrency:symbol $ '-' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'D' }">
+					<MvCOMMENT>"D">&curren;1.1-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ g.GenericCurrency:symbol $ l.the_number $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'E' }">
+					<MvCOMMENT>"E">(1.1&curren;)</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ l.the_number $ g.GenericCurrency:symbol $ ')' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'F' }">
+					<MvCOMMENT>"F">-1.1&curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ l.the_number $ g.GenericCurrency:symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'G' }">
+					<MvCOMMENT>"G">1.1-&curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ '-' $ g.GenericCurrency:symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'H' }">
+					<MvCOMMENT>"H">1.1&curren;-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ g.GenericCurrency:symbol $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'I' }">
+					<MvCOMMENT>"I">-1.1 &curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ l.the_number $ ' ' $ g.GenericCurrency:symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'J' }">
+					<MvCOMMENT>"J">-&curren; 1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ g.GenericCurrency:symbol $ ' ' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'K' }">
+					<MvCOMMENT>"K">1.1 &curren;-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ ' ' $ g.GenericCurrency:symbol $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'L' }">
+					<MvCOMMENT>"L">&curren; 1.1-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ g.GenericCurrency:symbol $ ' ' $ l.the_number $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'M' }">
+					<MvCOMMENT>"M">&curren; -1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ g.GenericCurrency:symbol $ ' ' $ '-' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'N' }">
+					<MvCOMMENT>"N">1.1- &curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ '-' $ ' ' $ g.GenericCurrency:symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'O' }">
+					<MvCOMMENT>"O">(&curren; 1.1)</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ g.GenericCurrency:symbol $ ' ' $ l.the_number $ ')' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'P' }">
+					<MvCOMMENT>"P">(1.1 &curren;)</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ l.the_number $ ' ' $ g.GenericCurrency:symbol $ ')' }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ g.GenericCurrency:positive EQ 'A' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ g.GenericCurrency:symbol $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:positive EQ 'B' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ g.GenericCurrency:symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:positive EQ 'C' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ g.GenericCurrency:symbol $ ' ' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:positive EQ 'D' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ ' ' $ g.GenericCurrency:symbol }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.formatted }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CurrencyModule_AddFormatPlainText" PARAMETERS = "module var, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.GenericCurrency_Loaded }">
+		<MvASSIGN NAME = "g.GenericCurrency_Loaded"	VALUE = 1>
+
+		<MvIF EXPR = "{ NOT GenericCurrency_Load( g.GenericCurrency ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.GenericCurrency:symbol EQ '&nbsp;' }">		<MvASSIGN NAME = "l.currency_symbol" VALUE = "">
+	<MvELSEIF EXPR = "{ g.GenericCurrency:symbol EQ '&yen;' }">
+		<MvIF EXPR = "{ g.Store:charset EQ 'utf-8' }">				<MvASSIGN NAME = "l.currency_symbol" VALUE = "{ asciichar( 194 ) $ asciichar( 165 ) }">
+		<MvELSE>													<MvASSIGN NAME = "l.currency_symbol" VALUE = "{ asciichar( 165 ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.GenericCurrency:symbol EQ '&pound;' }">
+		<MvIF EXPR = "{ g.Store:charset EQ 'utf-8' }">				<MvASSIGN NAME = "l.currency_symbol" VALUE = "{ asciichar( 194 ) $ asciichar( 163 ) }">
+		<MvELSE>													<MvASSIGN NAME = "l.currency_symbol" VALUE = "{ asciichar( 163 ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.GenericCurrency:symbol EQ '&euro;' }">
+		<MvIF EXPR = "{ g.Store:charset EQ 'utf-8' }">				<MvASSIGN NAME = "l.currency_symbol" VALUE = "{ asciichar( 226 ) $ asciichar( 130 ) $ asciichar( 172 ) }">
+		<MvELSE>													<MvASSIGN NAME = "l.currency_symbol" VALUE = "EURO">
+		</MvIF>
+	<MvELSE>														<MvASSIGN NAME = "l.currency_symbol" VALUE = "{ g.GenericCurrency:symbol }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( '-' IN l.value ) EQ 1 }">
+		<MvASSIGN NAME = "l.value" VALUE = "{ substring( l.value, 2, len( l.value ) - 1 ) }">
+		<MvASSIGN NAME = "l.negative" VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.negative" VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ l.value ROUND g.GenericCurrency:decimsize }">
+	<MvASSIGN NAME = "l.decimpos" VALUE = "{ '.' IN l.result }">
+	<MvIF EXPR = "{ l.decimpos }">
+		<MvASSIGN NAME = "l.whole" VALUE = "{ substring( l.result, 1, l.decimpos - 1 ) }">
+		<MvASSIGN NAME = "l.decim" VALUE = "{ substring( l.result, l.decimpos + 1, len( l.result ) - l.decimpos ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.whole" VALUE = "{ l.result }">
+		<MvASSIGN NAME = "l.decim" VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.comma" VALUE = "">
+	<MvASSIGN NAME = "l.wholelen" VALUE = "{ len( l.whole ) }">
+	<MvASSIGN NAME = "l.pos" VALUE = "{ l.wholelen }">
+	<MvIF EXPR = "{ g.GenericCurrency:groupsize }">
+		<MvWHILE EXPR = "{ l.pos GT g.GenericCurrency:groupsize }">
+			<MvASSIGN NAME = "l.comma" VALUE = "{ g.GenericCurrency:groupsym $ substring( l.whole, l.pos - ( g.GenericCurrency:groupsize - 1 ), g.GenericCurrency:groupsize ) $ l.comma }">
+			<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos - g.GenericCurrency:groupsize }">
+		</MvWHILE>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.comma" VALUE = "{ substring( l.whole, 1, l.pos ) $ l.comma }">
+
+	<MvIF EXPR = "{ g.GenericCurrency:decimsize NE 0 }">
+		<MvASSIGN NAME = "l.the_number" VALUE = "{ l.comma $ g.GenericCurrency:decim $ l.decim }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.the_number" VALUE = "{ l.comma }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.negative }">
+		<MvIF EXPR = "{ g.GenericCurrency:negative EQ 'A' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ l.currency_symbol $ l.the_number $ ')' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'B' }">
+					<MvCOMMENT>"B">-&curren;1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ l.currency_symbol $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'C' }">
+					<MvCOMMENT>"C">&curren;-1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.currency_symbol $ '-' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'D' }">
+					<MvCOMMENT>"D">&curren;1.1-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.currency_symbol $ l.the_number $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'E' }">
+					<MvCOMMENT>"E">(1.1&curren;)</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ l.the_number $ l.currency_symbol $ ')' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'F' }">
+					<MvCOMMENT>"F">-1.1&curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ l.the_number $ l.currency_symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'G' }">
+					<MvCOMMENT>"G">1.1-&curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ '-' $ l.currency_symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'H' }">
+					<MvCOMMENT>"H">1.1&curren;-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ l.currency_symbol $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'I' }">
+					<MvCOMMENT>"I">-1.1 &curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ l.the_number $ ' ' $ l.currency_symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'J' }">
+					<MvCOMMENT>"J">-&curren; 1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '-' $ l.currency_symbol $ ' ' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'K' }">
+					<MvCOMMENT>"K">1.1 &curren;-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ ' ' $ l.currency_symbol $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'L' }">
+					<MvCOMMENT>"L">&curren; 1.1-</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.currency_symbol $ ' ' $ l.the_number $ '-' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'M' }">
+					<MvCOMMENT>"M">&curren; -1.1</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.currency_symbol $ ' ' $ '-' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'N' }">
+					<MvCOMMENT>"N">1.1- &curren;</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ '-' $ ' ' $ l.currency_symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'O' }">
+					<MvCOMMENT>"O">(&curren; 1.1)</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ l.currency_symbol $ ' ' $ l.the_number $ ')' }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:negative EQ 'P' }">
+					<MvCOMMENT>"P">(1.1 &curren;)</MvCOMMENT>
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ '(' $ l.the_number $ ' ' $ l.currency_symbol $ ')' }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ g.GenericCurrency:positive EQ 'A' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.currency_symbol $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:positive EQ 'B' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ l.currency_symbol }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:positive EQ 'C' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.currency_symbol $ ' ' $ l.the_number }">
+		<MvELSEIF EXPR = "{ g.GenericCurrency:positive EQ 'D' }">
+			<MvASSIGN NAME = "l.formatted" VALUE = "{ l.the_number $ ' ' $ l.currency_symbol }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.formatted }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CurrencyModule_AddFormatPlainTextShort" PARAMETERS = "module var, value" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ CurrencyModule_AddFormatPlainText( l.module, l.value ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CurrencyModule_Output_CurrencyFormat_JavaScript" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT GenericCurrency_Load( l.generic_currency ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<script type="text/javascript">
+		function MMCurrencyFormatter( value, show_whole_numbers_only )
+		{
+			var i, decimal, groupsize, whole_number, currency_symbol, whole_separated, formatted_value;
+
+			value				= stod_def( value, 0 );
+			decimal				= ( value % 1 ).toFixed( <MvEVAL EXPR = "{ int( l.generic_currency:decimsize ) }"> ).toString().substr( 2 );
+			whole_number		= Math.abs( stoi( value ) ).toString();
+			currency_symbol		= '<MvEVAL EXPR = "{ encodejavascriptstring( l.generic_currency:symbol ) }">';
+			whole_separated		= '';
+
+			<MvIF EXPR = "{ l.generic_currency:groupsize }">
+				groupsize = <MvEVAL EXPR = "{ int( l.generic_currency:groupsize ) }">;
+
+				for ( i = whole_number.length; i > groupsize; i -= groupsize )
+				{
+					whole_separated = '<MvEVAL EXPR = "{ encodejavascriptstring( l.generic_currency:groupsym ) }">' + whole_number.substr( i - groupsize, groupsize ) + whole_separated;
+				}
+			</MvIF>
+
+			whole_separated = whole_number.substr( 0, i ) + whole_separated;
+
+			<MvIF EXPR = "{ l.generic_currency:decimsize NE 0 }">
+				if ( !show_whole_numbers_only )
+				{
+					whole_separated = whole_separated + '<MvEVAL EXPR = "{ encodejavascriptstring( l.generic_currency:decim ) }">' + decimal;
+				}
+			</MvIF>
+
+			if ( value < 0 )
+			{
+				<MvIF EXPR = "{ l.generic_currency:negative EQ 'A' }">		return ( '(' + currency_symbol + whole_separated + ')' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'B' }">	return ( '-' + currency_symbol + whole_separated );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'C' }">	return ( currency_symbol + '-' + whole_separated );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'D' }">	return ( currency_symbol + whole_separated + '-' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'E' }">	return ( '(' + whole_separated + currency_symbol + ')' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'F' }">	return ( '-' + whole_separated + currency_symbol );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'G' }">	return ( whole_separated + '-' + currency_symbol );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'H' }">	return ( whole_separated + currency_symbol + '-' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'I' }">	return ( '-' + whole_separated + ' ' + currency_symbol );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'J' }">	return ( '-' + currency_symbol + ' ' + whole_separated );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'K' }">	return ( whole_separated + ' ' + currency_symbol + '-' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'L' }">	return ( currency_symbol + ' ' + whole_separated + '-' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'M' }">	return ( currency_symbol + ' ' + '-' + whole_separated );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'N' }">	return ( whole_separated + '-' + ' ' + currency_symbol );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'O' }">	return ( '(' + currency_symbol + ' ' + whole_separated + ')' );
+				<MvELSEIF EXPR = "{ l.generic_currency:negative EQ 'P' }">	return ( '(' + whole_separated + ' ' + currency_symbol + ')' );
+				<MvELSE>													return value;
+				</MvIF>
+			}
+			else
+			{
+				<MvIF EXPR = "{ l.generic_currency:positive EQ 'A' }">		return ( currency_symbol + whole_separated );
+				<MvELSEIF EXPR = "{ l.generic_currency:positive EQ 'B' }">	return ( whole_separated + currency_symbol );
+				<MvELSEIF EXPR = "{ l.generic_currency:positive EQ 'C' }">	return ( currency_symbol + ' ' + whole_separated );
+				<MvELSEIF EXPR = "{ l.generic_currency:positive EQ 'D' }">	return ( whole_separated + ' ' + currency_symbol );
+				<MvELSE>													return value;
+				</MvIF>
+			}
+		}
+	</script>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.can_modify_currency" VALUE = "{ [ g.Module_Admin ].CanI( 'CURR', 0, 0, 1, 0 ) }">
+	
+	<MvIF EXPR = "{ l.can_modify_currency }">
+		<MvASSIGN NAME = "g.Store_GenericCurrency:userdef" 			VALUE = "{ trim( g.Store_GenericCurrency:userdef ) }">
+		<MvASSIGN NAME = "g.Store_UserGenericCurrency_Symbol" 		VALUE = "{ trim( g.Store_UserGenericCurrency_Symbol ) }">
+		<MvASSIGN NAME = "g.Store_GenericCurrency:symbol" 			VALUE = "{ trim( g.Store_GenericCurrency:symbol ) }">
+		<MvASSIGN NAME = "g.Store_Store_GenericCurrency:decim" 		VALUE = "{ trim( g.Store_GenericCurrency:decim ) }">
+		<MvASSIGN NAME = "g.Store_Store_GenericCurrency:groupsym" 	VALUE = "{ trim( g.Store_GenericCurrency:groupsym ) }">
+
+		<MvIF EXPR = "{ g.Store_GenericCurrency:userdef AND NOT len( g.Store_UserGenericCurrency_Symbol ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'GENCUR', 'Store_UserGenericCurrency_Symbol', 'Please specify a user defined currency symbol' ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT g.Store_GenericCurrency:symbol AND NOT len( g.Store_UserGenericCurrency_Symbol ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'GENCUR', 'Store_UserGenericCurrency_Symbol', 'Please specify a currency symbol.' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Store_GenericCurrency:userdef AND NOT len( g.Store_UserGenericCurrency_Symbol ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'GENCUR', 'Store_UserGenericCurrency_Symbol', 'Please specify a currency symbol.' ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT len( g.Store_GenericCurrency:symbol ) AND NOT len( g.Store_GenericCurrency:userdef ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'GENCUR', 'Store_UserGenericCurrency_Symbol', 'Please specify a currency symbol.' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT len( g.Store_GenericCurrency:groupsym ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'GENCUR', 'Store_GenericCurrency:groupsym', 'Please specify a digit grouping symbol.' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT len( g.Store_GenericCurrency:decim ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'GENCUR', 'Store_GenericCurrency:decim', 'Please specify a decimal symbol.' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Admin ].CanI( 'CURR', 0, 0, 1, 0 ) }">
+		<MvASSIGN NAME = "g.Store_UserGenericCurrency_Symbol" VALUE = "{ trim( g.Store_UserGenericCurrency_Symbol ) }">
+
+		<MvIF EXPR = "{ g.Store_GenericCurrency:userdef }">
+			<MvASSIGN NAME = "g.Store_GenericCurrency:symbol" VALUE = "{ g.Store_UserGenericCurrency_Symbol }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT GenericCurrency_Update( g.Store_GenericCurrency ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-CUR-GEN-00005', 'GenCurr Configuration updated' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.can_view_currency" VALUE = "{ [ g.Module_Admin ].CanI( 'CURR', 1, 0, 0, 0 ) }">
+	
+	<MvIF EXPR = "{ l.can_view_currency }">
+		<MvFUNCTIONRETURN VALUE = "GENCUR:Generic Currency Formatting">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Head" PARAMETERS = "module var, tab" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Store_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CURR', 1, 0, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvIF EXPR = "{ NOT GenericCurrency_Load( g.Store_GenericCurrency ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Store_GenericCurrency:userdef }">
+			<MvASSIGN NAME = "g.Store_UserGenericCurrency_Symbol" VALUE = "{ g.Store_GenericCurrency:symbol }">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Store_UserGenericCurrency_Symbol" VALUE = "">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'GENCUR' }">
+		<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
+		<tr><td nowrap align="left">
+			<b>Currency Symbol:</b>
+		</td><td width="100%" nowrap align="left">
+			<MvIF EXPR = "{ NOT g.Store_GenericCurrency:userdef }">
+				<input type="radio" name="Store_GenericCurrency:userdef" value=0 checked>
+			<MvELSE>
+				<input type="radio" name="Store_GenericCurrency:userdef" value=0>
+			</MvIF>
+
+			<select name="Store_GenericCurrency:symbol">
+				<MvIF EXPR = "{ g.Store_GenericCurrency:symbol EQ '&nbsp;' AND NOT g.Store_GenericCurrency:userdef }">
+					<option value="&amp;nbsp;" selected>&nbsp; - None</option>
+				<MvELSE>
+					<option value="&amp;nbsp;">&nbsp; - None</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:symbol EQ '$' AND NOT g.Store_GenericCurrency:userdef }">
+					<option value="$" selected>$ - Dollar Symbol</option>
+				<MvELSE>
+					<option value="$">$ - Dollar Symbol</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:symbol EQ '&euro;' AND NOT g.Store_GenericCurrency:userdef }">
+					<option value="&amp;euro;" selected>&euro; - Euro Symbol</option>
+				<MvELSE>
+					<option value="&amp;euro;">&euro; - Euro Symbol</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:symbol EQ '&pound;' AND NOT g.Store_GenericCurrency:userdef }">
+					<option value="&amp;pound;" selected>&pound; - Pound Symbol</option>
+				<MvELSE>
+					<option value="&amp;pound;">&pound; - Pound Symbol</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:symbol EQ '&yen;' AND NOT g.Store_GenericCurrency:userdef }">
+					<option value="&amp;yen;" selected>&yen; - Yen Symbol</option>
+				<MvELSE>
+					<option value="&amp;yen;">&yen; - Yen Symbol</option>
+				</MvIF>
+			</select>
+		</td></tr>
+
+		<tr><td nowrap valign="middle" align="left">
+			&nbsp;
+		</td><td valign="middle" align="left">
+			<MvIF EXPR = "{ g.Store_GenericCurrency:userdef }">
+				<input type="radio" name="Store_GenericCurrency:userdef" value=1 checked>
+			<MvELSE>
+				<input type="radio" name="Store_GenericCurrency:userdef" value=1>
+			</MvIF>
+			Other:
+			<input type="text" size=8 name="Store_UserGenericCurrency_Symbol" value="{ encodeentities( g.Store_UserGenericCurrency_Symbol ) }">
+		</td></tr>
+		<tr><td nowrap valign="middle" align="left">
+			<b>Positive Currency Format:</b>
+		</td><td valign="middle" align="left">
+			<select name="Store_GenericCurrency:positive">
+				<MvIF EXPR = "{ g.Store_GenericCurrency:positive EQ 'A' }">
+					<option value="A" selected>&curren;1.1</option>
+				<MvELSE>
+					<option value="A">&curren;1.1</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:positive EQ 'B' }">
+					<option value="B" selected>1.1&curren;</option>
+				<MvELSE>
+					<option value="B">1.1&curren;</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:positive EQ 'C' }">
+					<option value="C" selected>&curren;&nbsp;1.1</option>
+				<MvELSE>
+					<option value="C">&curren;&nbsp;1.1</option>
+				</MvIF>
+				<MvIF EXPR = "{ g.Store_GenericCurrency:positive EQ 'D' }">
+					<option value="D" selected>1.1&nbsp;&curren;</option>
+				<MvELSE>
+					<option value="D">1.1&nbsp;&curren;</option>
+				</MvIF>
+			</select>
+		</td></tr>
+
+		<tr><td nowrap valign="middle" align="left">
+			<b>Negative Currency Format:</b>
+		</td><td valign="middle" align="left">
+			<select name="Store_GenericCurrency:negative">
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'A' }">
+					<option value="A" selected>(&curren;1.1)</option>
+				<MvELSE>
+					<option value="A">(&curren;1.1)</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'B' }">
+					<option value="B" selected>-&curren;1.1</option>
+				<MvELSE>
+					<option value="B">-&curren;1.1</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'C' }">
+					<option value="C" selected>&curren;-1.1</option>
+				<MvELSE>
+					<option value="C">&curren;-1.1</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'D' }">
+					<option value="D" selected>&curren;1.1-</option>
+				<MvELSE>
+					<option value="D">&curren;1.1-</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'E' }">
+					<option value="E" selected>(1.1&curren;)</option>
+				<MvELSE>
+					<option value="E">(1.1&curren;)</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'F' }">
+					<option value="F" selected>-1.1&curren;</option>
+				<MvELSE>
+					<option value="F">-1.1&curren;</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'G' }">
+					<option value="G" selected>1.1-&curren;</option>
+				<MvELSE>
+					<option value="G">1.1-&curren;</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'H' }">
+					<option value="H" selected>1.1&curren;-</option>
+				<MvELSE>
+					<option value="H">1.1&curren;-</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'I' }">
+					<option value="I" selected>-1.1&nbsp;&curren;</option>
+				<MvELSE>
+					<option value="I">-1.1&nbsp;&curren;</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'J' }">
+					<option value="J" selected>-&curren;&nbsp;1.1</option>
+				<MvELSE>
+					<option value="J">-&curren;&nbsp;1.1</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'K' }">
+					<option value="K" selected>1.1&nbsp;&curren;-</option>
+				<MvELSE>
+					<option value="K">1.1&nbsp;&curren;-</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'L' }">
+					<option value="L" selected>&curren;&nbsp;1.1-</option>
+				<MvELSE>
+					<option value="L">&curren;&nbsp;1.1-</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'M' }">
+					<option value="M" selected>&curren;&nbsp;-1.1</option>
+				<MvELSE>
+					<option value="M">&curren;&nbsp;-1.1</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'N' }">
+					<option value="N" selected>1.1-&nbsp;&curren;</option>
+				<MvELSE>
+					<option value="N">1.1-&nbsp;&curren;</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'O' }">
+					<option value="O" selected>(&curren;&nbsp;1.1)</option>
+				<MvELSE>
+					<option value="O">(&curren;&nbsp;1.1)</option>
+				</MvIF>
+
+				<MvIF EXPR = "{ g.Store_GenericCurrency:negative EQ 'P' }">
+					<option value="P" selected>(1.1&nbsp;&curren;)</option>
+				<MvELSE>
+					<option value="P">(1.1&nbsp;&curren;)</option>
+				</MvIF>
+			</select>
+		</td></tr>
+
+		<tr><td nowrap align="left">
+			<b>Digit Grouping Symbol:</b>
+		</td><td width="100%" align="left">
+			<input type="text" size=10 name = "Store_GenericCurrency:groupsym" value="{ encodeentities( g.Store_GenericCurrency:groupsym ) }" onchange="SetCurrencyModified();">
+		</td></tr>
+		<tr><td nowrap valign="middle" align="left">
+			<b>Number of Digits in Group:</b>
+		</td><td width="100%" valign="middle" align="left">
+			<select name="Store_GenericCurrency:groupsize">
+			<MvASSIGN NAME = "l.i" VALUE = 0>
+			<MvWHILE EXPR = "{ l.i LE 9 }">
+				<MvIF EXPR = "{ l.i EQ g.Store_GenericCurrency:groupsize }">
+					<option value="{ encodeentities( l.i ) }" selected><MvEVAL EXPR = "{ l.i }"></option>
+				<MvELSE>
+					<option value="{ encodeentities( l.i ) }"><MvEVAL EXPR = "{ l.i }"></option>
+				</MvIF>
+				<MvASSIGN NAME = "l.i" VALUE = "{ l.i + 1 }">
+			</MvWHILE>
+			</select>
+		</td></tr>
+
+		<tr><td nowrap align="left">
+			<b>Decimal Symbol:</b>
+		</td><td width="100%" align="left">
+			<input type="text" size=10 name="Store_GenericCurrency:decim" value="{ encodeentities( g.Store_GenericCurrency:decim ) }" onchange="SetCurrencyModified();">
+		</td></tr>
+		<tr><td nowrap valign="middle" align="left">
+			<b>Number of Digits after Decimal:</b>
+		</td><td width="100%" valign="middle" align="left">
+			<select name="Store_GenericCurrency:decimsize">
+			<MvASSIGN NAME = "l.i" VALUE = 0> <MvWHILE EXPR = "{ l.i LE 9 }">
+				<MvIF EXPR = "{ l.i EQ g.Store_GenericCurrency:decimsize }">
+					<option value="{ encodeentities( l.i ) }" selected><MvEVAL EXPR = "{ l.i }"></option>
+				<MvELSE>
+					<option value="{ encodeentities( l.i ) }"><MvEVAL EXPR = "{ l.i }"></option>
+				</MvIF>
+				<MvASSIGN NAME = "l.i" VALUE = "{ l.i + 1 }">
+			</MvWHILE>
+			</select>
+		</td></tr>
+
+		</table>
+	<MvELSE>
+		<MvHIDE FIELDS = "g.Store_GenericCurrency, g.Store_UserGenericCurrency_Symbol">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT GenericCurrency_Load( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o', l.provide_xml,	'Symbol',				l.settings:symbol )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o', l.provide_xml,	'GroupingSymbol',		l.settings:groupsym )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer(	'O', l.provide_xml,	'SeparatedSize',		l.settings:groupsize )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o', l.provide_xml,	'DecimalSymbol',		l.settings:decim )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer(	'O', l.provide_xml,	'DigitsAfterDecimal',	l.settings:decimsize ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.settings:groupsize LT 0 ) OR ( l.settings:groupsize GT 9 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'SeparatedSize must be 0-9, inclusive' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.settings:symbol }">
+		<MvASSIGN NAME = "l.settings:symbol"	VALUE = "&nbsp;">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.settings:symbol EQ '&nbsp;' ) OR
+					( l.settings:symbol EQ '$' ) OR
+					( l.settings:symbol EQ '&euro;' ) OR
+					( l.settings:symbol EQ '&pound;' ) OR
+					( l.settings:symbol EQ '&yen;' ) }">
+		<MvASSIGN NAME = "l.settings:userdef"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.settings:userdef"	VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'positiveformat' }">		<MvIF EXPR = "{ NOT Module_Provision_Store_Settings_PositiveFormat( l.module, l.provide_xml:children[ l.child_pos ], l.settings ) }">	<MvFUNCTIONRETURN> </MvIF>
+		<MvELSEIF EXPR = "{ l.name EQ 'negativeformat' }">	<MvIF EXPR = "{ NOT Module_Provision_Store_Settings_NegativeFormat( l.module, l.provide_xml:children[ l.child_pos ], l.settings ) }">	<MvFUNCTIONRETURN> </MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+
+	<MvIF EXPR = "{ NOT GenericCurrency_Update( l.settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-CUR-GEN-00006', 'GenCurr Configuration updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings_PositiveFormat" PARAMETERS = "module var, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| SymbolAfterAmount	YesNo			B,D
+	| SpaceSeparate		YesNo			C,D
+	|
+	| See Module_Provision_Store_Settings_NegativeFormat for a description of why this is done this way
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.settings:positive IN 'BD' }">	<MvASSIGN NAME = "l.symbolafteramount"	VALUE = "1">
+	<MvELSE>										<MvASSIGN NAME = "l.symbolafteramount"	VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:positive IN 'CD' }">	<MvASSIGN NAME = "l.spaceseparate"		VALUE = "1">
+	<MvELSE>										<MvASSIGN NAME = "l.spaceseparate"		VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml, 'SymbolAfterAmount',	l.symbolafteramount ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml, 'SpaceSeparate',		l.spaceseparate ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF		EXPR = "{ NOT l.symbolafteramount AND NOT l.spaceseparate }">		<MvASSIGN NAME = "l.settings:positive" VALUE = "A">
+	<MvELSEIF	EXPR = "{     l.symbolafteramount AND NOT l.spaceseparate }">		<MvASSIGN NAME = "l.settings:positive" VALUE = "B">
+	<MvELSEIF	EXPR = "{ NOT l.symbolafteramount AND     l.spaceseparate }">		<MvASSIGN NAME = "l.settings:positive" VALUE = "C">
+	<MvELSE>																		<MvASSIGN NAME = "l.settings:positive" VALUE = "D">
+	</MvIF> 
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_Settings_NegativeFormat" PARAMETERS = "module var, provide_xml var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|									negative
+	| SymbolAfterAmount	YesNo			E-I,K,N,P
+	| SpaceSeparate		YesNo			I-P
+	| Enclose			Parenthesis		A,E,O,P			
+	| MinusAfterAmount	YesNo			DGHLN
+	| MinusAfterSymbol	YesNo			CHKM
+	|
+	| There is no consistency on the various format options to be able to map directly.  The comment below lists a
+	| an attribute of a format, and which formats have that attribute.
+	|
+	| The pattern is a bitmask that describes a set of attributes (in order:  symbol afteramount, spaceseparate, enclose, minusafteramount, minusaftersymbol), and the pattern_enclosed is if enclose is true (where the minus goes is moot in that case).
+	|
+	| We then compare those patterns to known format options (e.g., format D is 00010, the symbol goes before the amount,
+	| no space separator, not enclosed in parenthesis, the minus IS after the amount, the minus is not after the symbol), and
+	| we return the format code.  PositiveFormat is similar to this, but not as many options.
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ l.settings:negative IN 'EFGHIKNP' }">	<MvASSIGN NAME = "l.symbolafteramount"	VALUE = "1">
+	<MvELSE>												<MvASSIGN NAME = "l.symbolafteramount"	VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:negative IN 'IJKLMNOP' }">	<MvASSIGN NAME = "l.spaceseparate"		VALUE = "1">
+	<MvELSE>												<MvASSIGN NAME = "l.spaceseparate"		VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:negative IN 'AEOP' }">		<MvASSIGN NAME = "l.enclose"			VALUE = "1">
+	<MvELSE>												<MvASSIGN NAME = "l.enclose"			VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:negative IN 'DGHLN' }">		<MvASSIGN NAME = "l.minusafteramount"	VALUE = "1">
+	<MvELSE>												<MvASSIGN NAME = "l.minusafteramount"	VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:negative IN 'CHKM' }">		<MvASSIGN NAME = "l.minusaftersymbol"	VALUE = "1">
+	<MvELSE>												<MvASSIGN NAME = "l.minusaftersymbol"	VALUE = "0">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'SymbolAfterAmount',	l.symbolafteramount ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'SpaceSeparate',		l.spaceseparate ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'O', l.provide_xml,		'Enclose',				l.enclose, 'Parenthesis,No', '1,0' ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'MinusAfterAmount',		l.minusafteramount ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml,	'MinusAfterSymbol',		l.minusaftersymbol ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.pattern_enclosed"	VALUE = "{ l.symbolafteramount $ l.spaceseparate $ l.enclose }">
+	<MvASSIGN NAME = "l.pattern"			VALUE = "{ l.symbolafteramount $ l.spaceseparate $ l.enclose $ l.minusafteramount $ l.minusaftersymbol }">
+
+	<MvIF		EXPR = "{ l.pattern_enclosed EQ '001' }">	<MvASSIGN NAME = "l.settings:negative" VALUE = "A">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '00000' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "B">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '00001' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "C">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '00010' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "D">
+	<MvELSEIF	EXPR = "{ l.pattern_enclosed EQ '101' }">	<MvASSIGN NAME = "l.settings:negative" VALUE = "E">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '10000' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "F">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '10010' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "G">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '10011' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "H">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '11000' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "I">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '01000' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "J">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '11001' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "K">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '01010' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "L">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '01001' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "M">
+	<MvELSEIF	EXPR = "{ l.pattern EQ '11010' }">			<MvASSIGN NAME = "l.settings:negative" VALUE = "N">
+	<MvELSEIF	EXPR = "{ l.pattern_enclosed EQ '011' }">	<MvASSIGN NAME = "l.settings:negative" VALUE = "O">
+	<MvELSEIF	EXPR = "{ l.pattern_enclosed EQ '111' }">	<MvASSIGN NAME = "l.settings:negative" VALUE = "P">
+	<MvELSE> 
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Invalid format' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GenericCurrency_Load" PARAMETERS = "gencurr var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "GenericCurrency"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'GenCurrency' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CUR-GEN-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.gencurr:symbol" 	VALUE = "{ GenericCurrency.d.symbol }">
+	<MvASSIGN NAME = "l.gencurr:positive" 	VALUE = "{ GenericCurrency.d.positive }">
+	<MvASSIGN NAME = "l.gencurr:negative" 	VALUE = "{ GenericCurrency.d.negative }">
+	<MvASSIGN NAME = "l.gencurr:groupsym" 	VALUE = "{ GenericCurrency.d.groupsym }">
+	<MvASSIGN NAME = "l.gencurr:groupsize" 	VALUE = "{ GenericCurrency.d.groupsize }">
+	<MvASSIGN NAME = "l.gencurr:decim"		VALUE = "{ GenericCurrency.d.decim }">
+	<MvASSIGN NAME = "l.gencurr:decimsize" 	VALUE = "{ GenericCurrency.d.decimsize }">
+	<MvASSIGN NAME = "l.gencurr:userdef" 	VALUE = "{ GenericCurrency.d.userdef }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "GenericCurrency">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GenericCurrency_Insert" PARAMETERS = "gencurr var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'GenCurrency
+						  ( symbol, positive, negative, groupsym, groupsize, decim, decimsize, userdef )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.gencurr:symbol, l.gencurr:positive, l.gencurr:negative, l.gencurr:groupsym, l.gencurr:groupsize,
+					   l.gencurr:decim, l.gencurr:decimsize, l.gencurr:userdef">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CUR-GEN-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GenericCurrency_Update" PARAMETERS = "gencurr var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'GenCurrency
+						  SET
+							symbol		= ?,
+							positive	= ?,
+							negative	= ?,
+							groupsym	= ?,
+							groupsize	= ?,
+							decim		= ?,
+							decimsize	= ?,
+							userdef		= ?' }"
+			 FIELDS	= "l.gencurr:symbol, l.gencurr:positive, l.gencurr:negative, l.gencurr:groupsym, l.gencurr:groupsize,
+					   l.gencurr:decim, l.gencurr:decimsize, l.gencurr:userdef">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CUR-GEN-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

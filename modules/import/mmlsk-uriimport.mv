@@ -1,0 +1,664 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-IMP-URI-
+| Next Error Code: 19   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-uriimport">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "URI Import">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "import">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Module used to import URIs">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: import
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ImportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:screen"				VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:persistent"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:format"				VALUE = "delimited">
+	<MvASSIGN NAME = "l.capabilities:persistent_provision"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Columns" PARAMETERS = "module var, import var, columns var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>											field				name						header				required	default		validation		</MvCOMMENT>
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'page_code',		'Page Code',				'PAGE_CODE',		0,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'category_code',	'Category Code',			'CATEGORY_CODE',	0,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'product_code',		'Product Code',				'PRODUCT_CODE',		0,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'feed_code',		'Feed Code',				'FEED_CODE',		0,			'',			'code' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'uri',				'URI',						'URI',				1,			'',			'string' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'canonical',		'Canonical',				'CANONICAL',		0,			0,			'bool' ) }">
+	<MvEVAL EXPR = "{ Add_Standard_Column( l.columns,	'status',			'Status',					'STATUS',			0,			'200',		'list:200,301,302,303,307:200,301,302,303,307' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.columns ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_StatusFields" PARAMETERS = "module var, import var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.fields"	VALUE = "">
+
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_processed',	'Records Processed:',	0 ) }">
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'records_skipped',	'Records Skipped:',		0 ) }">
+	<MvEVAL EXPR = "{ Add_Status_Field( l.fields, 'record_problems',	'Record Problems:',		0 ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_max( l.fields ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 1 }">
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.run_data:columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+    <MvASSIGN NAME = "l.list_pos"				VALUE = 0>
+    <MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ ImportModule_Delimited_Columns( l.module, l.import, l.run_data:columns_all ) }">
+        <MvIF EXPR = "{ miva_variable_value( 'l.run_data:columns_present:' $ l.column:field ) }">
+            <MvASSIGN NAME = "l.column:present"	VALUE = 1>
+
+            <MvREFERENCE NAME = "l.run_data:columns_list"		INDEX = "{ ++l.list_pos }"		VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+            <MvREFERENCE NAME = "l.run_data:columns_present"	MEMBER = "{ l.column:field }"	VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
+        </MvIF>
+    </MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_Record" PARAMETERS = "module var, import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_processed', 1 ) }">
+
+	<MvIF EXPR = "{ ( NOT ISNULL l.record:page_code ) + ( NOT ISNULL l.record:category_code ) + ( NOT ISNULL l.record:product_code ) + ( NOT ISNULL l.record:feed_code ) NE 1 }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, 'Exactly one of page code, category code, product code, or feed code must be specified' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:page_code }">			<MvFUNCTIONRETURN VALUE = "{ Import_Page( l.import, l.session, l.record, l.run_data ) }">
+	<MvELSEIF EXPR = "{ l.record:category_code }">	<MvFUNCTIONRETURN VALUE = "{ Import_Category( l.import, l.session, l.record, l.run_data ) }">
+	<MvELSEIF EXPR = "{ l.record:product_code }">	<MvFUNCTIONRETURN VALUE = "{ Import_Product( l.import, l.session, l.record, l.run_data ) }">
+	<MvELSEIF EXPR = "{ l.record:feed_code }">		<MvFUNCTIONRETURN VALUE = "{ Import_Feed( l.import, l.session, l.record, l.run_data ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Import_End" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Fields" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:id }">
+		<MvASSIGN NAME = "g.Import_URI_Override_Page"			VALUE = "{ l.import:config:override_page }">
+		<MvASSIGN NAME = "g.Import_URI_Override_Category"		VALUE = "{ l.import:config:override_category }">
+		<MvASSIGN NAME = "g.Import_URI_Override_Product"		VALUE = "{ l.import:config:override_product }">
+		<MvASSIGN NAME = "g.Import_URI_Override_Feed"			VALUE = "{ l.import:config:override_feed }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Import_URI_Override_Page"			VALUE = "global">
+		<MvASSIGN NAME = "g.Import_URI_Override_Category"		VALUE = "global">
+		<MvASSIGN NAME = "g.Import_URI_Override_Product"		VALUE = "global">
+		<MvASSIGN NAME = "g.Import_URI_Override_Feed"			VALUE = 200>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "override_page,override_category,override_product,override_feed">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'override_page' }">			<MvFUNCTIONRETURN VALUE = "<b>Page Override:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'override_category' }">	<MvFUNCTIONRETURN VALUE = "<b>Category Override:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'override_product' }">	<MvFUNCTIONRETURN VALUE = "<b>Product Override:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'override_feed' }">		<MvFUNCTIONRETURN VALUE = "<b>Feed Override:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'override_page' }">
+		<select name="Import_URI_Override_Page">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'global',	g.Import_URI_Override_Page,	'Use Global Settings' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',	g.Import_URI_Override_Page,	'Replace All Existing URIs' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'override_category' }">
+		<select name="Import_URI_Override_Category">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'global',	g.Import_URI_Override_Category,	'Use Global Settings' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',	g.Import_URI_Override_Category,	'Replace All Existing URIs' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'override_product' }">
+		<select name="Import_URI_Override_Product">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'global',	g.Import_URI_Override_Product,	'Use Global Settings' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'replace',	g.Import_URI_Override_Product,	'Replace All Existing URIs' ) }">
+		</select>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'override_feed' }">
+		<select name="Import_URI_Override_Feed">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '200',		g.Import_URI_Override_Feed, 'Normal' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '301',		g.Import_URI_Override_Feed, '301 Redirect to Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '302',		g.Import_URI_Override_Feed, '302 Redirect to Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '303',		g.Import_URI_Override_Feed, '303 Redirect to Canonical' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '307',		g.Import_URI_Override_Feed, '307 Redirect to Canonical' ) }">
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Validate" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Import_URI_Delimiter"			VALUE = "{ trim( g.Import_URI_Delimiter ) }">
+
+	<MvASSIGN NAME = "g.Import_URI_Override_Page"		VALUE = "{ trim( g.Import_URI_Override_Page ) }">
+	<MvASSIGN NAME = "g.Import_URI_Override_Category"	VALUE = "{ trim( g.Import_URI_Override_Category ) }">
+	<MvASSIGN NAME = "g.Import_URI_Override_Product"	VALUE = "{ trim( g.Import_URI_Override_Product ) }">
+	<MvASSIGN NAME = "g.Import_URI_Override_Feed"		VALUE = "{ int( g.Import_URI_Override_Feed ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Update" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.import:config:override_page"		VALUE = "{ g.Import_URI_Override_Page }">
+	<MvASSIGN NAME = "l.import:config:override_category"	VALUE = "{ g.Import_URI_Override_Category }">
+	<MvASSIGN NAME = "l.import:config:override_product"		VALUE = "{ g.Import_URI_Override_Product }">
+	<MvASSIGN NAME = "l.import:config:override_feed"		VALUE = "{ g.Import_URI_Override_Feed }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.columns_present ) }">
+
+		<MvIF EXPR = "{ NOT Validate_Columns( l.import, l.columns_present ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'O', l.provide_xml, 'OverridePage', l.import:config:override_page, 'UseGlobalSettings,ReplaceAllExistingLinks', 'global,replace' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'O', l.provide_xml, 'OverrideCategory', l.import:config:override_category, 'UseGlobalSettings,ReplaceAllExistingLinks', 'global,replace' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'O', l.provide_xml, 'OverrideProduct', l.import:config:override_product, 'UseGlobalSettings,ReplaceAllExistingLinks', 'global,replace' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'O', l.provide_xml, 'OverrideFeed', l.import:config:override_feed, '200,301,302,303,307', '200,301,302,303,307' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Validate_Columns" PARAMETERS = "import var, columns_present var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ( l.columns_present:page_code OR l.columns_present:category_code OR l.columns_present:product_code OR l.columns_present:feed_code ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00002', 'At least one of PAGE_CODE, CATEGORY_CODE, PRODUCT_CODE, or FEED_CODE must be present' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Skipped - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_skipped', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Record_Problem" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_Delimited_Log( l.session, 'Record Problem - ' $ l.message ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'record_problems', 1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Create" PARAMETERS = "session var, product var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.product, l.run_data, l.column, l.column:required ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvEVAL EXPR = "{ Set_Field_Default( l.session, l.product, l.run_data, l.column ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Validate_Fields_Update" PARAMETERS = "session var, product var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_list">
+		<MvIF EXPR = "{ NOT Validate_Field( l.session, l.product, l.run_data, l.column, 0 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Functions To Actually Import a Single Record
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URI_Defaults" PARAMETERS = "session var, record var, run_data var, uri_record var, skip_message var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.uri_record"									VALUE = "">
+
+	<MvIF EXPR = "{ ISNULL l.record:uri }">			
+		<MvASSIGN NAME = "l.skip_message"							VALUE = "URI field must be specified">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Admin ].Validate_URI( l.record:uri ) }">
+		<MvASSIGN NAME = "l.skip_message"							VALUE = "{ g.Validation_Message }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all">
+		<MvEVAL EXPR = "{ Set_Field_Default( l.session, l.record, l.run_data, l.column ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.uri_record" MEMBER = "canonical"			VALUE = "{ l.record:canonical }">
+	<MvASSIGN NAME = "l.uri_record" MEMBER = "uri"					VALUE = "{ l.record:uri }">
+	<MvASSIGN NAME = "l.uri_record" MEMBER = "store_id"				VALUE = "{ g.Store:id }">
+	<MvASSIGN NAME = "l.uri_record" MEMBER = "status"				VALUE = "{ l.record:status }">
+
+	<MvIF EXPR = "{ ISNULL l.record:page_code }">
+		<MvASSIGN NAME = "l.uri_record" MEMBER = "page_code"		VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code( l.record:page_code, l.page ) }">
+			<MvASSIGN NAME = "l.uri_record" MEMBER = "page_code"	VALUE = "{ l.page:code }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.uri_record" MEMBER = "page_code"	VALUE = "">
+			<MvASSIGN NAME = "l.uri_record"	MEMBER = "screen"		VALUE = "{ l.record:page_code }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.record:category_code }">
+		<MvASSIGN NAME = "l.uri_record" MEMBER = "cat_id"			VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Category_Load_Code( l.record:category_code, l.category ) }">
+			<MvASSIGN NAME = "l.uri_record" MEMBER = "cat_id"		VALUE = "{ l.category:id }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.skip_message"						VALUE = "{ 'Category code \'' $ l.record:category_code $ '\' not found' }">
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.record:product_code }">
+		<MvASSIGN NAME = "l.uri_record" MEMBER = "product_id"		VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Load_Code( l.record:product_code, l.product ) }">
+			<MvASSIGN NAME = "l.uri_record" MEMBER = "product_id"	VALUE = "{ l.product:id }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.skip_message"						VALUE = "{ 'Product code \'' $ l.record:product_code $ '\' not found' }">
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.record:feed_code }">
+		<MvASSIGN NAME = "l.uri_record" MEMBER = "feed_id"			VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ [ g.Module_Feature_FDS_DB ].Feed_Load_Code( l.record:feed_code, l.feed ) }">
+			<MvIF EXPR = "{ NOT l.feed:uri_enbld }">
+				<MvASSIGN NAME = "l.skip_message" VALUE = "{ 'Feed code \'' $ l.record:feed_code $ '\' does not support URI access' }">
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.uri_record" MEMBER = "feed_id"		VALUE = "{ l.feed:id }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.skip_message" VALUE = "{ 'Feed code \'' $ l.record:feed_code $ '\' not found' }">
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Page" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT URI_Defaults( l.session, l.record, l.run_data, l.uri_record, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.skip_message }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical AND l.import:config:override_page EQ 'global' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Load_Item_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Insert( l.uri_record ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URI_Update( l.uri_record ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical }">
+		<MvIF EXPR = "{ l.import:config:override_page EQ 'global' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Manage_Existing_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.import:config:override_page EQ 'replace' }">
+			<MvIF EXPR = "{ NOT ISNULL l.uri_record:page_code }">
+				<MvIF EXPR = "{ NOT URI_Delete_All_Page_Except_ID( l.uri_record:page_code, l.uri_record:id ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT ISNULL l.uri_record:screen }">
+				<MvIF EXPR = "{ NOT URI_Delete_All_Screen_Except_ID( l.uri_record:screen, l.uri_record:id ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00014', 'A page code for an existing page or a screen code is required' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00011', 'Unknown override code \'' $ l.import:config:override_page $ '\'' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Category" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT URI_Defaults( l.session, l.record, l.run_data, l.uri_record, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.skip_message }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical AND l.import:config:override_category EQ 'global' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Load_Item_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Insert( l.uri_record ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URI_Update( l.uri_record ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical }">
+		<MvIF EXPR = "{ l.import:config:override_category EQ 'global' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Manage_Existing_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.import:config:override_category EQ 'replace' }">
+			<MvIF EXPR = "{ NOT URI_Delete_All_Category_Except_ID( l.uri_record:cat_id, l.uri_record:id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00012', 'Unknown override code \'' $ l.import:config:override_category $ '\'' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Product" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT URI_Defaults( l.session, l.record, l.run_data, l.uri_record, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.skip_message }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical AND l.import:config:override_product EQ 'global' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Load_Item_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Insert( l.uri_record ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URI_Update( l.uri_record ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical }">
+		<MvIF EXPR = "{ l.import:config:override_product EQ 'global' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Manage_Existing_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.import:config:override_product EQ 'replace' }">
+			<MvIF EXPR = "{ NOT URI_Delete_All_Product_Except_ID( l.uri_record:product_id, l.uri_record:id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00013', 'Unknown override code \'' $ l.import:config:override_product $ '\'' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Import_Feed" PARAMETERS = "import var, session var, record var, run_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Validate_Fields_Create( l.session, l.record, l.run_data ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT URI_Defaults( l.session, l.record, l.run_data, l.uri_record, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.skip_message }">
+		<MvEVAL EXPR = "{ Record_Skip( l.session, l.skip_message ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Load_Item_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Insert( l.uri_record ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvFUNCTIONRETURN VALUE = "{ URI_Update( l.uri_record ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.record:canonical AND l.existing_canonical_uri }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Value_In_List( l.import:config:override_feed, '200,301,302,303,307' ) }">	<MvASSIGN NAME = "l.status" VALUE = 200>
+		<MvELSE>																														<MvASSIGN NAME = "l.status" VALUE = "{ l.import:config:override_feed }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Manage_Existing_Decanonize( l.existing_canonical_uri, l.status ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+|	Database functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "URI_Update" PARAMETERS = "uri_record var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_DB ].URI_Load_URI( l.uri_record:uri, l.existing_uri ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.uri_record" MEMBER = "id" VALUE = "{ l.existing_uri:id }">
+
+	<MvIF EXPR = "{ NOT l.uri_record:canonical }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_URI_DB ].URI_Update( l.uri_record ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_URI_DB ].URI_Load_Item_Canonical( l.uri_record, l.existing_canonical_uri ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].URI_Manage_Existing_Decanonize( l.existing_canonical_uri, 200 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_URI_DB ].URI_Update( l.uri_record ) }"> 
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Product_Except_ID" PARAMETERS = "product_id, uri_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 			store_id	= ?		AND
+			 			screen		= ''	AND
+			 			page_code	= ''	AND
+			 			cat_id		= 0		AND
+			 			product_id 	= ?		AND
+			 			feed_id		= 0		AND
+			 			id			<> ?"
+			 FIELDS = "g.Store:id, l.product_id, l.uri_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00015', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Category_Except_ID" PARAMETERS = "cat_id, uri_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 			store_id	= ?		AND
+			 			screen		= ''	AND
+			 			page_code	= ''	AND
+			 			cat_id		= ?		AND
+			 			product_id 	= 0		AND
+			 			feed_id		= 0		AND
+			 			id			<> ?"
+			 FIELDS = "g.Store:id, l.cat_id, l.uri_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Page_Except_ID" PARAMETERS = "page_code, uri_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM URIs
+			 		   	  WHERE
+			 				store_id	= ?		AND
+			 				screen		= \'\'	AND
+			 				' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'page_code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( '?' ) $ ' AND
+			 				cat_id		= 0		AND
+			 				product_id 	= 0		AND
+			 				feed_id		= 0		AND
+			 				id			<> ?' }"
+			 FIELDS = "g.Store:id, l.page_code, l.uri_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "URI_Delete_All_Screen_Except_ID" PARAMETERS = "screen, uri_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "DELETE FROM URIs
+			 		   WHERE
+			 			store_id	= ?		AND
+			 			screen		= ?		AND
+			 			page_code	= ''	AND
+			 			cat_id		= 0		AND
+			 			product_id 	= 0		AND
+			 			feed_id		= 0		AND
+			 			id			<> ?"
+			 FIELDS = "g.Store:id, l.screen, l.uri_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-IMP-URI-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/import/import_include.mv">

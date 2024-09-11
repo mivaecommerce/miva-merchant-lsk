@@ -1,0 +1,1556 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-PRD-
+| Next Error Code: 14   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-prodexp">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Products to Flat File">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0803">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.FlatProduct_File"	VALUE = "{ trim( g.FlatProduct_File ) }">
+	<MvASSIGN NAME = "g.FlatProduct_Header"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.FlatProduct_Header ) }"> 
+
+	<MvIF EXPR = "{ len( g.FlatProduct_File ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_File', 'Please specify a file' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ '/' IN g.FlatProduct_File }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_File', 'Please do not include a path in the file name' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatProduct_Email" VALUE = "{ trim( g.FlatProduct_Email ) }">
+
+	<MvIF EXPR = "{ g.FlatProduct_SendEmail AND len( g.FlatProduct_Email ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Email', 'Please specify a valid email address' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Email( g.FlatProduct_Email ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Email', 'Please specify a valid email address' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.FlatProduct_Export_All }">
+		<MvIF EXPR = "{ g.FlatProduct_Export_First LT 1 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Export_First', 'Start of range must be greater than 0' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.FlatProduct_Export_Last LT g.FlatProduct_Export_First }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Export_Last', 'The end of the range must not be less than the start of the range' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'from' }">
+		<MvIF EXPR = "{ len( g.FlatProduct_Category_Code ) EQ 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Category_Code', 'You must enter a valid category code' ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( g.FlatProduct_Category_Code, l.category ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Category_Code', 'Category code \'' $ g.FlatProduct_Category_Code $ '\' does not exist' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatProduct_Format EQ 'productimport' OR g.FlatProduct_Format EQ 'legacy' }">
+		<MvIF EXPR = "{ ( len( g.FlatProduct_Delimiter_Other ) EQ 0 ) AND ( NOT g.FlatProduct_Delimiter_Tab ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Delimiter_Other', 'Please specify a delimiter' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.FlatProduct_Delimiter_Tab }">
+			<MvASSIGN NAME = "g.FlatProduct_Delimiter" VALUE = "{ asciichar( 9 ) }">
+		<MvELSE>
+			<MvASSIGN NAmE = "g.FlatProduct_Delimiter" VALUE = "{ g.FlatProduct_Delimiter_Other }">
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Export" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.directory"				VALUE = "{ g.MerchantPath $ 's' $ padl( g.Store:id, 2, '0' ) $ '/export/' }">
+	<MvASSIGN NAME = "l.output"					VALUE = "{ l.directory $ g.FlatProduct_File }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Start( 'Product Export Progress', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Show() }">
+
+	<MvIF EXPR = "{ NOT ProductExport_Initialize_Export( l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ ProductExport_Finalize_Export( l.directory, l.output ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.FlatProduct_Export_Time_Start"	VALUE = "{ s.time_t }">
+
+	<MvIF EXPR = "{ fexists( l.output ) }">
+		<MvIF EXPR = "{ g.FlatProduct_Working_Append }">
+			<MvASSIGN NAME = "l.header"	VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.output ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.exported_customfield_count"		VALUE = "{ [ g.Module_Library_Utilities ].CustomFieldSelect_Selected_WithModules( g.FlatProduct_CustomFields, 'fields_prod', l.exported_customfields ) }">
+
+	<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'from' }">
+		<MvASSIGN NAME = "l.fields"	VALUE = "l.category:id,g.FlatProduct_Export_LastProduct">
+
+		<MvASSIGN NAME = "l.query" 	VALUE = "{ ProductExport_BuildQuery_CategoryMode( l.category ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.fields"	VALUE = "g.FlatProduct_Export_LastProduct">
+		<MvASSIGN NAME = "l.query" 	VALUE = "{ ProductExport_BuildQuery_ProductMode() }">
+	</MvIF>
+	
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ l.query }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-PRD-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatProduct_Export_All }">
+		<MvASSIGN NAME = "l.count"	VALUE = "-1">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT g.FlatProduct_Export_LastProduct }">
+			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = "{ g.FlatProduct_Export_First - 1 }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.count"		VALUE = "{ g.Export_Total_Count - g.Export_Count }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.FlatProduct_Format EQ 'productimport' OR g.FlatProduct_Format EQ 'legacy' }">
+		<MvASSIGN NAME = "l.product_count"	VALUE = "{ FlatProduct_Export_ProductImport( l.output, l.count, l.exported_customfield_count, l.exported_customfields ) }">
+	<MvELSEIF EXPR = "{ g.FlatProduct_Format EQ 'provisioning' }">	
+		<MvASSIGN NAME = "l.product_count"	VALUE = "{ FlatProduct_Export_Provisioning( l.output, l.count, l.exported_customfield_count, l.exported_customfields ) }">
+	<MvELSE>
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvIF EXPR = "{ g.Export_Count EQ g.Export_Total_Count }">
+		<MvASSIGN NAME = "g.FlatProduct_Export_NeedRefresh" 	VALUE = 1>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductExport_Initialize_Export" PARAMETERS = "directory" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Export_Initialized }">
+		<MvASSIGN NAME = "l.null"											VALUE = "{ Product_Check_Fields_Build_Lookup( g.ProductPaymentRules_Fields ) }">
+		<MvASSIGN NAME = "l.null"											VALUE = "{ Product_Check_Fields_Build_Lookup( g.ProductShippingRules_Fields ) }">
+		<MvASSIGN NAME = "l.null"											VALUE = "{ Product_Check_Fields_Build_Lookup( g.FlatProduct_InventoryFields ) }">
+
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_active"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_active ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_count"					VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_count ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_adjust"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_adjust ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_in_short"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_in_short ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_in_long"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_in_long ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_track"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_low_track ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_level"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_low_level ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_short"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_low_short ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_long"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_low_long ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_track"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_out_track ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_level"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_out_level ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_hide"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_out_hide ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_short"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_out_short ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_long"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:inv_out_long ) }">
+
+		<MvASSIGN NAME = "g.Product_Check_Fields:payment_limitpayment"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:payment_limitpayment ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:payment_methods"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:payment_methods ) }">
+
+		<MvASSIGN NAME = "g.Product_Check_Fields:shipping_width"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:shipping_width ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:shipping_length"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:shipping_length ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:shipping_height"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:shipping_height ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:shipping_ownpackage"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:shipping_ownpackage ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:shipping_limitshipping"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:shipping_limitshipping ) }">
+		<MvASSIGN NAME = "g.Product_Check_Fields:shipping_methods"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Check_Fields:shipping_methods ) }">
+
+		<MvASSIGN NAME = "g.Export_Count"						VALUE = 0>
+		<MvASSIGN NAME = "g.FlatProduct_Export_LastProduct" 	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'data', l.directory ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.FlatProduct_Category_Mode NE 'from' }">
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "Prod_Temp"
+						QUERY	= "{ 'SELECT COUNT(*) as prod_count FROM ' $ g.Store_Table_Prefix $ 'Products' }"
+						FIELDS	= "">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-PRD-00003', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( g.FlatProduct_Category_Code, l.category ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "Prod_Temp"
+						QUERY	= "{ 'SELECT COUNT(*) as prod_count
+							FROM
+							' $ g.Store_Table_Prefix $ 'CategoryXProduct cxp,
+							' $ g.Store_Table_Prefix $ 'Products prod
+							WHERE cxp.cat_id = ? AND prod.id = cxp.product_id' }"
+						FIELDS	= "l.category:id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-PRD-00004', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Export_Total_Count" VALUE = "{ Prod_Temp.d.prod_count }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Prod_Temp">
+
+		<MvIF EXPR = "{ NOT g.FlatProduct_Export_All }">
+			<MvIF EXPR = "{ g.FlatProduct_Export_First GT g.Export_Total_Count }">
+				<MvASSIGN NAME = "l.error" VALUE = "{ [ g.Module_Admin ].FieldError( '', 'FlatProduct_Export_First', 'The Starting Range cannot be greater than the total number of products.' ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ g.Export_Total_Count LT g.FlatProduct_Export_Last }">
+				<MvASSIGN NAME = "g.Export_Total_Count" VALUE = "{ g.Export_Total_Count - g.FlatProduct_Export_First + 1 }">
+			<MvELSE>
+				<MvASSIGN NAME = "g.Export_Total_Count" VALUE = "{ ( g.FlatProduct_Export_Last - g.FlatProduct_Export_First ) + 1 }">
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.FlatProduct_Working_Append" VALUE = "{ g.FlatProduct_Append }">
+		<MvASSIGN NAME = "g.FlatProduct_Working_Header" VALUE = "{ g.FlatProduct_Header }">
+		
+		<MvASSIGN NAME = "g.Export_Initialized" VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductExport_Finalize_Export" PARAMETERS = "directory, output" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Export_Count EQ g.Export_Total_Count }">
+		<MvIF EXPR = "{ g.Export_Total_Count EQ 1 }">	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( '1 product exported to \'' $ l.output $ '\'' ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( g.Export_Count $ ' products exported to \'' $ l.output $ '\'' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-EXP-PRD-00013', 'Products exported' ) }">
+
+		<MvIF EXPR = "{ g.FlatProduct_SendEmail }">
+			<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.null" VALUE = "{ Send_Email_Attachment( g.Store:email, g.FlatProduct_Email, '', 'Miva Merchant Product Export', g.FlatProduct_File, l.directory, 'data' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-EXP-PRD-00006', 'ProductExport Email Sent' ) }">
+		</MvIF>		
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductExport_BuildQuery_CategoryMode" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( g.FlatProduct_Category_Code, l.category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query" VALUE = "{ 'SELECT
+												prod.*,
+												cat.code		AS cancat_code,
+												cxp.disp_order	AS restart_id' }">
+	<MvIF EXPR = "{ l.inventorysettings:active }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ',
+												iset.active		AS inv_feat_active,
+												ipc.inventory	AS ipc_inventory,
+												ips.active		AS inv_active,
+												ips.in_short 	AS inv_in_short,
+												ips.in_long 	AS inv_in_long,
+												ips.low_track 	AS inv_low_track,
+												ips.low_lvl_d 	AS inv_low_lvl_d,
+												ips.low_level 	AS inv_low_level,
+												ips.low_short 	AS inv_low_short,
+												ips.low_long 	AS inv_low_long,
+												ips.out_track 	AS inv_out_track,
+												ips.out_lvl_d 	AS inv_out_lvl_d,
+												ips.out_hide 	AS inv_out_hide,
+												ips.out_level 	AS inv_out_level,
+												ips.out_short 	AS inv_out_short,
+												ips.out_long 	AS inv_out_long,
+												ips.ltd_long 	AS inv_ltd_long' }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Export_ProductPaymentRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+												ppr.limitmeths	AS payment_limitpayment' }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Export_ProductShippingRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+												psr.width		AS shipping_width,
+												psr.length		AS shipping_length,
+												psr.height		AS shipping_height,
+												psr.ownpackage	AS shipping_ownpackage,
+												psr.limitmeths	AS shipping_limitshipping' }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+											FROM ' $
+												g.Store_Table_Prefix $ 'CategoryXProduct cxp' }">
+	<MvIF EXPR = "{ l.inventorysettings:active }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+												' $	g.Store_Table_Prefix $ 'InventorySettings iset' }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+												' $	g.Store_Table_Prefix $ 'Products prod 
+												LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Categories cat ON cat.id = prod.cancat_id' }">
+	<MvIF EXPR = "{ Export_ProductPaymentRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+												LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductPaymentRules ppr ON ppr.product_id = prod.id' }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Export_ProductShippingRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+												LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductShippingRules psr ON psr.product_id = prod.id' }">
+	</MvIF>
+	
+	<MvIF EXPR = "{ l.inventorysettings:active }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+												LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+												LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id' }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE cxp.cat_id = ? AND prod.id = cxp.product_id AND cxp.disp_order > ?' }">
+	<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' ORDER BY cxp.disp_order' }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.query }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductExport_BuildQuery_ProductMode" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"	VALUE = "{ 'SELECT 
+													prod.*,
+													cat.code		AS cancat_code,
+													prod.disp_order	AS restart_id' }">
+													
+	<MvIF EXPR = "{ l.inventorysettings:active }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+													iset.active		AS inv_feat_active,
+													ipc.inventory	AS ipc_inventory,
+													ips.active 		AS inv_active,
+													ips.in_short 	AS inv_in_short,
+													ips.in_long 	AS inv_in_long,
+													ips.low_track 	AS inv_low_track,
+													ips.low_lvl_d 	AS inv_low_lvl_d,
+													ips.low_level 	AS inv_low_level,
+													ips.low_short 	AS inv_low_short,
+													ips.low_long 	AS inv_low_long,
+													ips.out_track 	AS inv_out_track,
+													ips.out_lvl_d 	AS inv_out_lvl_d,
+													ips.out_hide 	AS inv_out_hide,
+													ips.out_level 	AS inv_out_level,
+													ips.out_short 	AS inv_out_short,
+													ips.out_long 	AS inv_out_long,
+													ips.ltd_long 	AS inv_ltd_long' }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Export_ProductPaymentRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+													ppr.limitmeths	AS payment_limitpayment' }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Export_ProductShippingRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ ',
+													psr.width		AS shipping_width,
+													psr.length		AS shipping_length,
+													psr.height		AS shipping_height,
+													psr.ownpackage	AS shipping_ownpackage,
+													psr.limitmeths	AS shipping_limitshipping' }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+												FROM ' $ 
+													g.Store_Table_Prefix $ 'Products prod
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Categories cat ON cat.id = prod.cancat_id' }">
+	<MvIF EXPR = "{ Export_ProductPaymentRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductPaymentRules ppr ON ppr.product_id = prod.id' }"> 
+	</MvIF>
+
+	<MvIF EXPR = "{ Export_ProductShippingRules_Fields() }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'ProductShippingRules psr ON psr.product_id = prod.id' }"> 
+	</MvIF>
+
+	<MvIF EXPR = "{ l.inventorysettings:active }">
+		<MvASSIGN NAME = "l.query" VALUE = "{ l.query $ '
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id 
+													LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id, ' $
+													g.Store_Table_Prefix $ 'InventorySettings iset' }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE prod.disp_order > ?' }">
+	<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' ORDER BY prod.disp_order' }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.query }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| NOTE WELL: Due to the way that MvEXPORT works, in order for this function
+| to work correctly the values parameter to this function must actually refer
+| to an array that is called l.values at the point of the MvEXPORT that uses
+| the fields parameter to this function.
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "FlatProduct_Export_SetField" PARAMETERS = "fields var, values var, value" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pos"    VALUE = "{ miva_array_max( l.fields ) + 1 }">
+
+	<MvIF EXPR = "{ g.FlatProduct_Format EQ 'legacy' }">
+        <MvREFERENCE NAME = "l.values" INDEX = "{ l.pos }"	VARIABLE = "l.value">
+        <MvASSIGN    NAME = "l.fields" INDEX = "{ l.pos }"	VALUE = "{ 'l.values[' $ l.pos $ ']' }">
+
+	<MvELSEIF EXPR = "{ g.FlatProduct_Format EQ 'productimport' }">
+        <MvASSIGN NAME = "l.values" INDEX = "{ l.pos }"	VALUE = "{ Field_Encode( l.value, g.FlatProduct_Delimiter ) }">
+        <MvASSIGN NAME = "l.fields" INDEX = "{ l.pos }"	VALUE = "{ 'l.values[' $ l.pos $ ']' }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatProduct_Export_ProductImport" PARAMETERS = "output, count, customfield_count, customfields var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>Export Header</MvCOMMENT>
+	<MvIF EXPR = "{ g.FlatProduct_Working_Header }">
+		<MvIF EXPR = "{ NOT FlatProduct_Export_Header( l.output, l.customfields ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ Export_Product_CustomFields_BuildExecutionPlan( l.customfields, l.customfield_count, l.customfield_plan, l.customfield_struct, l.customfield_values ) }">
+
+	<MvIF EXPR = "{ g.FlatProduct_Format EQ 'legacy' }">
+		<MvASSIGN NAME = "l.fields" VALUE = "{ Create_Fields_For_MvEXPORT( l.customfields ) }">
+	</MvIF>
+
+	<MvCOMMENT>Export Data</MvCOMMENT>
+	<MvASSIGN NAME = "l.time_good" VALUE = 1>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND l.count AND l.time_good }">
+		<MvASSIGN NAME = "g.Export_Count"	VALUE = "{ g.Export_Count + 1 }">
+		<MvASSIGN NAME = "l.count"			VALUE = "{ l.count - 1 }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.Export_Count, g.Export_Total_Count ) }">
+		<MvEVAL EXPR = "{ Export_Product_CustomFields( l.customfield_plan, Products.d.id, l.customfield_struct ) }">
+
+		<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'gather' }">
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "Categories"
+						QUERY	= "{ 'SELECT
+										cat.code
+									  FROM ' $
+										g.Store_Table_Prefix $ 'Categories cat, ' $ 
+										g.Store_Table_Prefix $ 'CategoryXProduct cxp
+									  WHERE
+										cxp.product_id	= ?				AND
+										cat.id			= cxp.cat_id' }"
+						FIELDS	= "Products.d.id">
+			<MvIF EXPR = "{ NOT g.MvOPENVIEW_Error }">
+				<MvIF EXPR = "{ Categories.d.EOF }">
+					<MvASSIGN NAME = "l.category_codes"	VALUE = "">
+				<MvELSE>
+					<MvASSIGN NAME = "l.category_codes"	VALUE = "{ Categories.d.code }">
+					<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+
+					<MvWHILE EXPR = "{ NOT Categories.d.EOF }">
+						<MvASSIGN NAME = "l.category_codes"	VALUE = "{ l.category_codes $ ',' $ Categories.d.code }">
+
+						<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+					</MvWHILE>
+				</MvIF>
+
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Product_Check_Fields:payment_methods }">		<MvASSIGN NAME = "l.payment_methods" 	VALUE = "{ ProductPaymentMethods_Load_Formatted( Products.d.id ) }">
+		<MvELSE>														<MvASSIGN NAME = "l.payment_methods" 	VALUE = "">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Product_Check_Fields:shipping_methods }">		<MvASSIGN NAME = "l.shipping_methods" 	VALUE = "{ ProductShippingMethods_Load_Formatted( Products.d.id ) }">
+		<MvELSE>														<MvASSIGN NAME = "l.shipping_methods" 	VALUE = "">
+		</MvIF>
+
+		<MvIF EXPR = "{ Products.d.inv_feat_active }">
+			<MvIF EXPR = "{ Products.d.inv_active }">
+				<MvASSIGN NAME = "l.track_inventory" 	VALUE = "Yes">
+				<MvASSIGN NAME = "l.adjusted_inventory"	VALUE = 0>
+
+				<MvIF EXPR = "{ Products.d.inv_low_lvl_d }">
+					<MvASSIGN NAME = "l.low_level" 		VALUE = "Default">
+				<MvELSE>
+					<MvASSIGN NAME = "l.low_level" 		VALUE = "{ Products.d.inv_low_level }">
+				</MvIF>
+
+				<MvIF EXPR = "{ Products.d.inv_out_lvl_d }">
+					<MvASSIGN NAME = "l.out_level" 		VALUE = "Default">
+				<MvELSE>
+					<MvASSIGN NAME = "l.out_level" 		VALUE = "{ Products.d.inv_out_level }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.low_track" 			VALUE = "{ FlatProduct_Export_Set_Inventory( Products.d.inv_low_track ) }">
+				<MvASSIGN NAME = "l.out_track" 			VALUE = "{ FlatProduct_Export_Set_Inventory( Products.d.inv_out_track ) }">
+				<MvASSIGN NAME = "l.out_hide" 			VALUE = "{ FlatProduct_Export_Set_Inventory( Products.d.inv_out_hide ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.track_inventory" 	VALUE = "No">
+				<MvASSIGN NAME = "l.adjusted_inventory"	VALUE = "">
+				<MvASSIGN NAME = "l.low_track"			VALUE = "">
+				<MvASSIGN NAME = "l.low_level"			VALUE = "">
+				<MvASSIGN NAME = "l.out_track"			VALUE = "">
+				<MvASSIGN NAME = "l.out_level"			VALUE = "">
+				<MvASSIGN NAME = "l.out_hide"			VALUE = "">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Product_Check_Fields:canonicaluri }">
+			<MvASSIGN NAME = "l.uri" 	VALUE = "">
+			<MvASSIGN NAME = "l.null" 	VALUE = "{ [ g.Module_Feature_URI_DB ].URI_Load_Product_Canonical( Products.d.id, l.uri ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Products.d.dt_created }">	<MvASSIGN NAME = "l.created_formatted" VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "l.created_formatted" VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Products.d.dt_created, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Products.d.dt_created, s.miva_language ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Products.d.dt_updated }">	<MvASSIGN NAME = "l.updated_formatted" VALUE = "N/A">
+		<MvELSE>										<MvASSIGN NAME = "l.updated_formatted" VALUE = "{ [ g.Module_Library_Utilities ].Format_Date( Products.d.dt_updated, s.miva_language ) $ ' ' $ [ g.Module_Library_Utilities ].Format_Time( Products.d.dt_updated, s.miva_language ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.FlatProduct_Format EQ 'legacy' }">
+			<MvEXPORT FILE = "{ l.output }" FIELDS = "{ l.fields }" DELIMITER = "{ g.FlatProduct_Delimiter }">
+			<MvIF EXPR = "{ g.MvEXPORT_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-PRD-00011', g.MvEXPORT_Error ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.value" ARRAY = "l.customfield_values" COUNT = "{ l.customfield_count }">
+				<MvASSIGN NAME = "l.value" VALUE = "">
+			</MvFOREACH>
+		<MvELSE>
+			<MvASSIGN NAME = "l.record" VALUE = "">
+
+			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.code ) }">
+			
+			<MvIF EXPR = "{ g.Product_Check_Fields:sku }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.sku ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:name }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.name ) }"></MvIF>
+																				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.category_codes ) }">
+			<MvIF EXPR = "{ g.Product_Check_Fields:canonical }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.cancat_code ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:altdisplay }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.page_code ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:price }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.price ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:cost }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.cost ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:weight }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.weight ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:descrip }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.descrip ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:taxable }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.taxable ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:active }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.active ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:dt_created }"> 				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.created_formatted ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:dt_updated }"> 				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.updated_formatted ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:thumbnail }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.thumbnail ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:image }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.image ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:page_title }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.page_title ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:canonicaluri }"> 			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.uri:uri ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:payment_limitpayment }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.payment_limitpayment ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:payment_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.payment_methods ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:shipping_width }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.shipping_width ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:shipping_length }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.shipping_length ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:shipping_height }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.shipping_height ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:shipping_ownpackage }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.shipping_ownpackage ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:shipping_limitshipping }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.shipping_limitshipping ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:shipping_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.shipping_methods ) }"></MvIF>
+
+			<MvIF EXPR = "{ Products.d.inv_feat_active }">
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_active }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.track_inventory ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_count }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.ipc_inventory ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_adjust }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.adjusted_inventory ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_in_short }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_in_short ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_in_long }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_in_long ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_track }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.low_track ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_level }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.low_level ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_short }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_low_short ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_long }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_low_long ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_track }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.out_track ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_level }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.out_level ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_hide }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.out_hide ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_short }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_out_short ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_long }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_out_long ) }"></MvIF>
+				<MvIF EXPR = "{ g.Product_Check_Fields:inv_ltd_stock_msg }"><MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, Products.d.inv_ltd_long ) }"></MvIF>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.value" ARRAY = "l.customfield_values" COUNT = "{ l.customfield_count }">
+				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.FlatProduct_Delimiter, l.value ) }">
+				<MvASSIGN NAME = "l.value" VALUE = "">
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT Miva_Fwriteln( l.output, l.record ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+			<MvASSIGN NAME = "l.end_time" VALUE = "20">
+		<MvELSE>
+			<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatProduct_Export_Time_Start ) GT l.end_time }">
+			<MvASSIGN NAME = "l.time_good" 						VALUE = 0>
+			<MvASSIGN NAME = "g.FlatProduct_Export_NeedRefresh" VALUE = 1>
+			<MvASSIGN NAME = "l.product_id" 					VALUE = "{ Products.d.restart_id }">
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+	
+	<MvIF EXPR = "{ g.FlatProduct_Export_NeedRefresh AND ( NOT Products.d.EOF ) AND l.count }">
+		<MvASSIGN NAME = "g.FlatProduct_Export_LastProduct" 		VALUE = "{ l.product_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.FlatProduct_Export_NeedRefresh" 		VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ g.Export_Count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatProduct_Export_Provisioning" PARAMETERS = "output, count, customfield_count, customfields var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Export_Product_CustomFields_BuildExecutionPlan( l.customfields, l.customfield_count, l.customfield_plan, l.customfield_struct, l.customfield_values ) }">
+
+	<MvASSIGN NAME = "l.time_good" 		VALUE = 1>
+	<MvWHILE EXPR = "{ ( NOT Products.d.EOF ) AND l.count AND l.time_good }">
+		<MvIF EXPR = "{ g.Product_Check_Fields:payment_methods }">		<MvASSIGN NAME = "l.payment_methods" 	VALUE = "{ ProductPaymentMethods_Load_Formatted( Products.d.id ) }">
+		<MvELSE>														<MvASSIGN NAME = "l.payment_methods" 	VALUE = "">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Product_Check_Fields:shipping_methods }">		<MvASSIGN NAME = "l.shipping_methods" 	VALUE = "{ ProductShippingMethods_Load_Formatted( Products.d.id ) }">
+		<MvELSE>														<MvASSIGN NAME = "l.shipping_methods" 	VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Export_Count"	VALUE = "{ g.Export_Count + 1 }">
+		<MvASSIGN NAME = "l.count"			VALUE = "{ l.count - 1 }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.Export_Count, g.Export_Total_Count ) }">
+
+		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<Product_Add>' ) }">
+		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Code>' $ Products.d.code $ '</Code>' ) }">
+		
+		<MvIF EXPR = "{ g.Product_Check_Fields:sku }">				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<SKU>'						$ miva_cdata_encode( Products.d.sku )			$ '</SKU>' ) }"></MvIF>
+		<MvIF EXPR = "{ ( g.Product_Check_Fields:canonical )	AND
+						( len( Products.d.cancat_code ) ) }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<CanonicalCategoryCode>'	$ miva_cdata_encode( Products.d.cancat_code )	$ '</CanonicalCategoryCode>' ) }"></MvIF>
+		<MvIF EXPR = "{ ( g.Product_Check_Fields:altdisplay )	AND 
+						( len( Products.d.page_code ) ) }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<AlternateDisplayPage>'		$ miva_cdata_encode( Products.d.page_code )		$ '</AlternateDisplayPage>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:name }">				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Name>'						$ miva_cdata_encode( Products.d.name )			$ '</Name>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:price }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Price>'					$ Products.d.price								$ '</Price>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:cost }">				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Cost>'						$ Products.d.cost								$ '</Cost>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:weight }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Weight>'					$ Products.d.weight								$ '</Weight>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:descrip }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Description>'				$ miva_cdata_encode( Products.d.descrip )		$ '</Description>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:taxable }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Taxable>'					$ FlatProduct_Boolean( Products.d.taxable )		$ '</Taxable>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:active }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Active>'					$ FlatProduct_Boolean( Products.d.active )		$ '</Active>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:thumbnail }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<ThumbnailImage>'			$ miva_cdata_encode( Products.d.thumbnail )		$ '</ThumbnailImage>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:image }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<FullSizeImage>'			$ miva_cdata_encode( Products.d.image )			$ '</FullSizeImage>' ) }"></MvIF>
+		<MvIF EXPR = "{ g.Product_Check_Fields:page_title }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<PageTitle>'				$ miva_cdata_encode( Products.d.page_title )	$ '</PageTitle>' ) }"></MvIF>
+		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '</Product_Add>' ) }">
+
+		<MvIF EXPR = "{ Export_ProductPaymentRules_Fields() }">
+			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<ProductPaymentRules_Update product_code="' $ Products.d.code $ '">' ) }">
+
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:payment_limitpayment )	AND ( len( Products.d.payment_limitpayment ) ) }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<LimitPaymentMethods>'	$ FlatProduct_Boolean( Products.d.payment_limitpayment )	$ '</LimitPaymentMethods>' ) }"></MvIF>
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:payment_methods ) }">
+				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<PaymentMethods>' ) }">
+
+				<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ [ g.Module_Library_Utilities ].SplitStringAndTrim( l.payment_methods, ',', l.methods ) }">
+					<MvASSIGN NAME = "l.module_code" VALUE = "{ gettoken( l.method, ':', 1 ) }">
+					<MvASSIGN NAME = "l.method_code" VALUE = "{ gettoken( l.method, ':', 2 ) }">
+
+					<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '		<PaymentMethod module_code="' $ l.module_code $ '" method_code="' $ l.method_code $ '" />' ) }">
+				</MvFOREACH>
+
+				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	</PaymentMethods>' ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '</ProductPaymentRules_Update>' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ Export_ProductShippingRules_Fields() }">
+			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<ProductShippingRules_Update product_code="' $ Products.d.code $ '">' ) }">
+
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:shipping_width )			AND ( len( Products.d.shipping_width ) ) }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Width>'				$ Products.d.shipping_width									$ '</Width>' ) }"></MvIF>
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:shipping_length )			AND ( len( Products.d.shipping_length ) ) }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Length>'				$ Products.d.shipping_length								$ '</Length>' ) }"></MvIF>
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:shipping_height )			AND ( len( Products.d.shipping_height ) ) }">			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<Height>'				$ Products.d.shipping_height								$ '</Height>' ) }"></MvIF>
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:shipping_ownpackage )		AND ( len( Products.d.shipping_ownpackage ) ) }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<ShipsInOwnPackaging>'	$ FlatProduct_Boolean( Products.d.shipping_ownpackage )		$ '</ShipsInOwnPackaging>' ) }"></MvIF>
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:shipping_limitshipping )	AND ( len( Products.d.shipping_limitshipping ) ) }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<LimitShippingMethods>'	$ FlatProduct_Boolean( Products.d.shipping_limitshipping )	$ '</LimitShippingMethods>' ) }"></MvIF>
+			<MvIF EXPR = "{ ( g.Product_Check_Fields:shipping_methods ) }">
+				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<ShippingMethods>' ) }">
+				
+				<MvASSIGN NAME = "l.method_pos" VALUE = 1>
+				<MvASSIGN NAME = "l.method"		VALUE = "{ gettoken( l.shipping_methods, ',', l.method_pos ) }">
+				
+				<MvWHILE EXPR = "{ NOT ISNULL l.method }">
+					<MvASSIGN NAME = "l.module_code" VALUE = "{ gettoken( l.method, ':', 1 ) }">
+					<MvASSIGN NAME = "l.method_code" VALUE = "{ gettoken( l.method, ':', 2 ) }">
+
+					<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '		<ShippingMethod module_code="' $ l.module_code $ '" method_code="' $ l.method_code $ '" />' ) }">
+
+					<MvASSIGN NAME = "l.method_pos" VALUE = "{ l.method_pos + 1 }">
+					<MvASSIGN NAME = "l.method"		VALUE = "{ gettoken( l.shipping_methods, ',', l.method_pos ) }">
+				</MvWHILE>
+				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	</ShippingMethods>' ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '</ProductShippingRules_Update>' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ Export_Product_CustomFields( l.customfield_plan, Products.d.id, l.customfield_struct ) }">
+
+		<MvFOREACH INDEX = "l.customfield_pos" ITERATOR = "l.customfield_value" ARRAY = "l.customfield_values" COUNT = "{ l.customfield_count }">
+			<MvIF EXPR = "{ NOT ISNULL l.customfield_value }">
+				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<Product_CustomField module="' $ l.customfields[ l.customfield_pos ]:module:code $ '" product="' $ Products.d.code $ '" field="' $ l.customfields[ l.customfield_pos ]:code $ '">' $ miva_cdata_encode( l.customfield_value ) $ '</Product_CustomField>' ) }">
+				<MvASSIGN NAME = "l.customfield_value"	VALUE = "">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'gather' }">
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW	= "Categories"
+						QUERY	= "{ 'SELECT
+										cat.code
+									  FROM ' $
+										g.Store_Table_Prefix $ 'Categories cat, ' $ 
+										g.Store_Table_Prefix $ 'CategoryXProduct cxp
+									  WHERE
+										cxp.product_id	= ?				AND
+										cat.id			= cxp.cat_id' }"
+						FIELDS	= "Products.d.id">
+			<MvIF EXPR = "{ NOT g.MvOPENVIEW_Error }">
+				<MvWHILE EXPR = "{ NOT Categories.d.EOF }">
+					<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<CategoryProduct_Assign category_code="' $ Categories.d.code $ '" product_code="' $ Products.d.code $ '" />' ) }">
+					<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+				</MvWHILE>
+
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Categories">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( Products.d.id, l.product_settings ) AND
+						Export_ProductInventory_Fields() }">
+			<MvIF EXPR = "{ l.product_settings:low_lvl_d }">
+				<MvASSIGN NAME = "l.low_level" 		VALUE = "Default">
+			<MvELSE>
+				<MvASSIGN NAME = "l.low_level" 		VALUE = "{ l.product_settings:low_level }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.product_settings:out_lvl_d }">
+				<MvASSIGN NAME = "l.out_level" 		VALUE = "Default">
+			<MvELSE>
+				<MvASSIGN NAME = "l.out_level" 		VALUE = "{ l.product_settings:out_level }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.low_track" 			VALUE = "{ FlatProduct_Export_Set_Inventory( l.product_settings:low_track ) }">
+			<MvASSIGN NAME = "l.out_track" 			VALUE = "{ FlatProduct_Export_Set_Inventory( l.product_settings:out_track ) }">
+			<MvASSIGN NAME = "l.out_hide" 			VALUE = "{ FlatProduct_Export_Set_Inventory( l.product_settings:out_hide ) }">
+
+			<MvDO FILE = "{ g.Module_Feature_INV_DB }" NAME = "l.inventory_adjust" VALUE = "{ InventoryProductCount( Products.d.id ) }">
+
+			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<InventoryProductSettings_Update product_code="' 	$ Products.d.code 				$ '">' ) }">
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_track }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<TrackLowStockLevel>'		$ l.low_track					$ '</TrackLowStockLevel>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_track }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<TrackOutOfStockLevel>'		$ l.out_track					$ '</TrackOutOfStockLevel>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_hide }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<HideOutOfStockProducts>'	$ l.out_hide					$ '</HideOutOfStockProducts>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_level }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<LowStockLevel>'			$ l.low_level					$ '</LowStockLevel>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_level }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<OutOfStockLevel>'			$ l.out_level					$ '</OutOfStockLevel>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_active }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<TrackProduct>'				$ l.product_settings:active		$ '</TrackProduct>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_in_short }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<InStockMessageShort>'		$ l.product_settings:in_short	$ '</InStockMessageShort>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_in_long }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<InStockMessageLong>'		$ l.product_settings:in_long	$ '</InStockMessageLong>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_short }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<LowStockMessageShort>'		$ l.product_settings:low_short	$ '</LowStockMessageShort>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_low_long }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<LowStockMessageLong>'		$ l.product_settings:low_long	$ '</LowStockMessageLong>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_short }">	<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<OutOfStockMessageShort>'	$ l.product_settings:out_short	$ '</OutOfStockMessageShort>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_out_long }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<OutOfStockMessageLong>'	$ l.product_settings:out_long	$ '</OutOfStockMessageLong>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_ltd_stock_msg }"><MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<LimitedStockMessage>'		$ l.product_settings:ltd_long	$ '</LimitedStockMessage>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_count }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<CurrentStock>'				$ l.inventory_adjust			$ '</CurrentStock>' ) }"></MvIF>
+			<MvIF EXPR = "{ g.Product_Check_Fields:inv_adjust }">		<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '	<AdjustStockBy>0</AdjustStockBy>' ) }"></MvIF>
+			<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '</InventoryProductSettings_Update>' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ g.Product_Check_Fields:canonicaluri }">
+			<MvFOREACH ITERATOR = "l.uri" ARRAY = "l.uris" COUNT = "{ [ g.Module_Feature_URI_DB ].URIList_Load_Product( Products.d.id, l.uris ) }">
+				<MvEVAL EXPR = "{ FlatProduct_Export_Line( l.output, '<URI_Add product_code="' $ Products.d.code $ '" canonical="' $ [ g.Module_Feature_PRV_AD ].PRV_Boolean_Encode( l.uri:canonical ) $ '" uri="' $ l.uri:uri $ '" />' ) }">
+			</MvFOREACH>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.globaltimeout EQ 0 ) OR ( s.globaltimeout GT 20 ) }">
+			<MvASSIGN NAME = "l.end_time" VALUE = "20">
+		<MvELSE>
+			<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - g.FlatProduct_Export_Time_Start ) GT l.end_time }">
+			<MvASSIGN NAME = "l.time_good" 							VALUE = 0>
+			<MvASSIGN NAME = "l.product_id" 						VALUE = "{ Products.d.restart_id }">
+			<MvASSIGN NAME = "g.FlatProduct_Export_NeedRefresh" 	VALUE = 1>
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ g.FlatProduct_Export_NeedRefresh AND ( NOT Products.d.EOF ) AND l.count }">
+		<MvASSIGN NAME = "g.FlatProduct_Export_LastProduct" VALUE = "{ l.product_id }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.FlatProduct_Export_NeedRefresh" VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ g.Export_Count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.FlatProduct_Export_NeedRefresh }">
+		<MvASSIGN NAME = "g.FlatProduct_Working_Append" VALUE = 1>
+		<MvASSIGN NAME = "g.FlatProduct_Working_Header" VALUE = 0>
+	
+		<MvHIDE FIELDS = "g.Export_Count, g.FlatProduct_Export_LastProduct, g.FlatProduct_File, g.FlatProduct_Append,
+						  g.FlatProduct_Export_All, g.FlatProduct_Export_First, g.FlatProduct_Export_Last, 
+						  g.FlatProduct_Category_Mode, g.FlatProduct_Category_Code, g.FlatProduct_Format, g.FlatProduct_Delimiter_Tab,
+						  g.FlatProduct_Delimiter, g.FlatProduct_Delimiter_Other, g.FlatProduct_Header, g.Module_Code, g.FlatProduct_CustomFields, 
+						  g.Progress_Bar, g.Export_Total_Count, g.FlatProduct_Email, g.FlatProduct_SendEmail, g.Export_Initialized, g.Product_Check_Fields, 
+						  g.Reset, g.FlatProduct_Working_Append, g.FlatProduct_Working_Header">
+
+		<script type="text/javascript">
+			function exp_continue()
+			{
+				document.forms[ Screen ].submit();
+			}
+			window.onload = exp_continue;
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_End() }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Load_Fields }">
+		<MvIF EXPR = "{ g.Reset NE 'No' }">
+			<MvASSIGN NAME = "g.FlatProduct_File"								VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Append"								VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_SendEmail"							VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Export_All"							VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Export_First"						VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Export_Last"						VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Category_Mode"						VALUE = "ignore">
+			<MvASSIGN NAME = "g.FlatProduct_Category_Code"						VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Format"								VALUE = "">
+			<MvASSIGN NAME = "g.FlatProduct_Header"								VALUE = 1>
+			<MvASSIGN NAME = "g.FlatProduct_Delimiter_Tab"						VALUE = "">
+
+			<MvASSIGN NAME = "g.Product_Check_Fields:name"						VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:sku"						VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:canonical"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:altdisplay"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:price"						VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:cost"						VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:weight"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:image"						VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:page_title"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:canonicaluri"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:thumbnail"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:descrip"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:taxable"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:active"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:dt_created"				VALUE = 0>
+			<MvASSIGN NAME = "g.Product_Check_Fields:dt_updated"				VALUE = 0>
+			<MvASSIGN NAME = "g.Product_Check_Fields:payment_limitpayment"		VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:payment_methods"			VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:shipping_width"			VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:shipping_length"			VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:shipping_height"			VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:shipping_ownpackage"		VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:shipping_limitshipping"	VALUE = "">
+			<MvASSIGN NAME = "g.Product_Check_Fields:shipping_methods"			VALUE = "">
+			
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_active"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_count"					VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_adjust"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_in_short"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_in_long"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_track"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_level"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_short"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_low_long"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_track"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_level"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_hide"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_short"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_out_long"				VALUE = 1>
+			<MvASSIGN NAME = "g.Product_Check_Fields:inv_ltd_stock_msg"			VALUE = 1>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].InitializeCustomFieldSelect( l.empty_customfield_list, g.FlatProduct_CustomFields ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_File }">			<MvASSIGN NAME = "g.FlatProduct_File"				VALUE = "products.csv">		</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Delimiter }">		<MvASSIGN NAME = "g.FlatProduct_Delimiter_Other" 	VALUE = ",">				</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_SendEmail }">		<MvASSIGN NAME = "g.FlatProduct_SendEmail"			VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Export_All }">		<MvASSIGN NAME = "g.FlatProduct_Export_All"			VALUE = 1>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Export_First }">	<MvASSIGN NAME = "g.FlatProduct_Export_First"		VALUE = 1>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Export_Last }">	<MvASSIGN NAME = "g.FlatProduct_Export_Last"		VALUE = 200>				</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Category_Mode }">	<MvASSIGN NAME = "g.FlatProduct_Category_Mode"		VALUE = "ignore">			</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Category_Code }">	<MvASSIGN NAME = "g.FlatProduct_Category_Code"		VALUE = "">					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Format }">			<MvASSIGN NAME = "g.FlatProduct_Format"				VALUE = "productimport">	</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Delimiter_Tab }">	<MvASSIGN NAME = "g.FlatProduct_Delimiter_Tab"		VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Append }">			<MvASSIGN NAME = "g.FlatProduct_Append"				VALUE = 0>					</MvIF>
+		<MvIF EXPR = "{ ISNULL g.FlatProduct_Header }">			<MvASSIGN NAME = "g.FlatProduct_Header"				VALUE = 1>					</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.title" VALUE = "Export Products To Flat File"> 
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( l.title, 'EXPT', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_UI_JavaScript() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_CategoryLookup_Dialog_CSS() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_CategoryLookup_Dialog_JavaScript() }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_JavaScript( 'Exporting Products to Flat File', 'EXPT', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_CSS() }">
+
+	<script language="JavaScript">
+<!--
+HaveCustomReset = 1;
+
+function CustomReset()
+{
+	document.EXPT.Reset.value = 'Yes';
+}
+
+function HideOptions( optval )
+{
+	if ( optval == 'provisioning' )	
+		{
+			document.getElementById( "flatexpt_options" ).style.visibility = "hidden";
+			document.getElementById( "flatexpt_options1" ).style.visibility = "hidden";
+			document.getElementById( "flatexpt_options2" ).style.visibility = "hidden";
+			document.getElementById( "flatexpt_options3" ).style.visibility = "hidden";
+			document.getElementById( "flatexpt_options4" ).style.visibility = "hidden";
+		}
+	else			
+		{
+			document.getElementById( "flatexpt_options" ).style.visibility = "visible";
+			document.getElementById( "flatexpt_options1" ).style.visibility = "visible";
+			document.getElementById( "flatexpt_options2" ).style.visibility = "visible";
+			document.getElementById( "flatexpt_options3" ).style.visibility = "visible";
+			document.getElementById( "flatexpt_options4" ).style.visibility = "visible";
+		}
+}
+//-->
+	</script>
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( l.title, 'EXPT', '' ) }">
+
+	<MvIF EXPR = "{ g.FlatProduct_Format EQ 'provisioning' }">
+		<style type="text/css">
+			#flatexpt_options,
+			#flatexpt_options1,
+			#flatexpt_options2,
+			#flatexpt_options3,
+			#flatexpt_options4
+			{
+				visibility: hidden;
+			}
+		</style>
+	</MvIF>
+
+	<input type="hidden" name="Reset" value="No">
+	<MvHIDE FIELDS = "g.Module_Code">
+
+	<MvDO FILE = "{ g.Module_Admin }" NAME = "l.ok" VALUE = "{ BeginContent() }">
+	<table border="0" cellpadding="2" cellspacing="0" width="100%">
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Destination', 110 ) }">
+				<tr><td valign="top" nowrap>
+					<b>Export Products to File:</b>
+				</td><td width="100%">
+					<input type="text" name="FlatProduct_File" size="40" value="{ encodeentities( g.FlatProduct_File ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<b>If File Exists:</b>
+				</td><td width="100%">
+					<MvIF EXPR = "{ g.FlatProduct_Append }">
+						<input type="radio" name="FlatProduct_Append" value="1" checked>Append To File<br>
+						<input type="radio" name="FlatProduct_Append" value="0">Replace File
+					<MvELSE>
+						<input type="radio" name="FlatProduct_Append" value="1">Append To File
+						<br>
+						<input type="radio" name="FlatProduct_Append" value="0" checked>Replace File
+					</MvIF>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					Email File To:
+				</td><td width="100%" nowrap>
+					<MvIF EXPR = "{ NOT g.FlatProduct_SendEmail }">
+						<input type="radio" name="FlatProduct_SendEmail" value="0" checked>Do Not Email<br>
+						<input type="radio" name="FlatProduct_SendEmail" value="1">
+					<MvELSE>
+						<input type="radio" name="FlatProduct_SendEmail" value="0">Do Not Email<br>
+						<input type="radio" name="FlatProduct_SendEmail" value="1" checked>
+					</MvIF>
+
+					<input type="text" name="FlatProduct_Email" value="{ encodeentities( g.Store:email ) }" size="40">
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td><td width="100%">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Format', 110 ) }">
+				<tr><td valign="top" nowrap>
+					<b>File Format:</b>
+				</td><td width="100%">
+					<select name="FlatProduct_Format" onchange="HideOptions(this.value);">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'productimport', g.FlatProduct_Format, 'Product Import' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'legacy',        g.FlatProduct_Format, 'Legacy Import Products From Flat File' ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'provisioning',  g.FlatProduct_Format, 'Miva Merchant XML Provisioning' ) }">
+					</select>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<div id="flatexpt_options">
+						<b>File Delimiter:</b>
+					</div>
+				</td><td width="100%">
+					<table border="0" cellpadding="0" cellspacing="0">
+					<tr><td valign="top" nowrap>
+						<div id="flatexpt_options1">
+							<MvIF EXPR = "{ g.FlatProduct_Delimiter_Tab }">
+								<input type="radio" name="FlatProduct_Delimiter_Tab" value="Yes" checked> Tab
+							<MvELSE>
+								<input type="radio" name="FlatProduct_Delimiter_Tab" value="Yes"> Tab
+							</MvIF>
+						</div>
+					</td><td align="left" valign="middle">
+						&nbsp;
+					</td></tr>
+
+					<tr><td valign="top" nowrap>
+						<div id="flatexpt_options2">
+							<MvIF EXPR = "{ g.FlatProduct_Delimiter_Tab }">
+								<input type="radio" name="FlatProduct_Delimiter_Tab" value=""> Other:
+							<MvELSE>
+								<input type="radio" name="FlatProduct_Delimiter_Tab" value="" checked> Other:
+							</MvIF>
+						</div>
+					</td><td align="left" valign="middle">
+						<div id="flatexpt_options3">
+							<input type="text" name="FlatProduct_Delimiter_Other" value="{ encodeentities( g.FlatProduct_Delimiter_Other ) }" size=10>
+						</div>
+					</td></tr>
+					</table>
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					&nbsp;
+				</td><td width="100%">
+					<div id="flatexpt_options4">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.FlatProduct_Header, 'FlatProduct_Header', 'Yes', 'Export Field Names as Header' ) }">
+					</div>
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+
+		<tr><td nowrap>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Product Settings', 65 ) }">
+				<tr><td valign="top" nowrap>
+					<b>Products To Export:</b>
+				</td><td width="100%">
+					<MvIF EXPR = "{ g.FlatProduct_Export_All }">
+						<input type="radio" name="FlatProduct_Export_All" value="1" checked>All<br>
+						<input type="radio" name="FlatProduct_Export_All" value="0">
+						<input type="text"  name="FlatProduct_Export_First" value="{ encodeentities( g.FlatProduct_Export_First ) }" size="10">
+						to
+						<input type="text"  name="FlatProduct_Export_Last" value="{ encodeentities( g.FlatProduct_Export_Last ) }" size="10">
+					<MvELSE>
+						<input type="radio" name="FlatProduct_Export_All" value="1">All<br>
+						<input type="radio" name="FlatProduct_Export_All" value="0" checked>
+						<input type="text"  name="FlatProduct_Export_First" value="{ encodeentities( g.FlatProduct_Export_First ) }" size="10">
+						to
+						<input type="text"  name="FlatProduct_Export_Last" value="{ encodeentities( g.FlatProduct_Export_Last ) }" size="10">
+					</MvIF>
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td><td width="100%">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Category Settings', 65 ) }">
+				<tr><td nowrap>
+				<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'ignore' }">
+					<input type="radio" name="FlatProduct_Category_Mode" value="from">Export Only Products In Category:
+					<input type="text"  name="FlatProduct_Category_Code" id="FlatProduct_Category_Code" value="{ encodeentities( g.FlatProduct_Category_Code ) }" size="20"><a href="JavaScript:CategoryLookupDialog( 'FlatProduct_Category_Code' );"><MvDO FILE = "{ g.Module_Admin }" NAME = "l.image" VALUE = "{ DrawImgButton_Lookup(0) }"><MvEVAL EXPR = "{ l.image }"></a><br>
+					<input type="radio" name="FlatProduct_Category_Mode" value="gather">Include Category List<br>
+					<input type="radio" name="FlatProduct_Category_Mode" value="ignore" checked>Ignore Categories
+				</MvIF>
+
+				<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'gather' }">
+					<input type="radio" name="FlatProduct_Category_Mode" value="from">Export Only Products In Category:
+					<input type="text"  name="FlatProduct_Category_Code" id="FlatProduct_Category_Code" value="{ encodeentities( g.FlatProduct_Category_Code ) }" size=20><a href="JavaScript:CategoryLookupDialog( 'FlatProduct_Category_Code' );"><MvDO FILE = "{ g.Module_Admin }" NAME = "l.image" VALUE = "{ DrawImgButton_Lookup(0) }"><MvEVAL EXPR = "{ l.image }"></a><br>
+					<input type="radio" name="FlatProduct_Category_Mode" value="gather" checked>Include Category List<br>
+					<input type="radio" name="FlatProduct_Category_Mode" value="ignore">Ignore Categories
+				</MvIF>
+
+				<MvIF EXPR = "{ g.FlatProduct_Category_Mode EQ 'from' }">
+					<input type="radio" name="FlatProduct_Category_Mode" value="from" checked>Export Only Products In Category:
+					<input type="text"  name="FlatProduct_Category_Code" id="FlatProduct_Category_Code" value="{ encodeentities( g.FlatProduct_Category_Code ) }" size=20><a href="JavaScript:CategoryLookupDialog( 'FlatProduct_Category_Code' );"><MvDO FILE = "{ g.Module_Admin }" NAME = "l.image" VALUE = "{ DrawImgButton_Lookup(0) }"><MvEVAL EXPR = "{ l.image }"></a><br>
+					<input type="radio" name="FlatProduct_Category_Mode" value="gather">Include Category List<br>
+					<input type="radio" name="FlatProduct_Category_Mode" value="ignore">Ignore Categories
+				</MvIF>
+				</td></tr>
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td></tr>
+
+		<tr>
+		<td nowrap width="100%">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Export Fields', 'auto' ) }">
+			<tr><td valign="top" colspan="2" nowrap style="padding: 10px 10px 10px 0;">
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawCheckUncheckAll_In( 'productexportfields' ) }">
+			</td></tr>
+			<tr><td valign="top" nowrap>
+				<b>Standard Fields:</b>
+			</td><td valign="top" nowrap>
+				<table id="productexportfields" border="0" cellpadding="2" cellspacing="0">
+					<tr><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:name, 'Product_Check_Fields:name', 'Yes', 'Name' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:sku, 'Product_Check_Fields:sku', 'Yes', 'SKU' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:canonical, 'Product_Check_Fields:canonical', 'Yes', 'Canonical Category' ) }">
+					</td></tr>
+
+					<tr><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:altdisplay, 'Product_Check_Fields:altdisplay', 'Yes', 'Alternate Display Page' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:price, 'Product_Check_Fields:price', 'Yes', 'Price' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:cost, 'Product_Check_Fields:cost', 'Yes', 'Cost' ) }">
+					</td></tr>
+
+					<tr><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:weight, 'Product_Check_Fields:weight', 'Yes', 'Weight' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:image, 'Product_Check_Fields:image', 'Yes', 'Full-sized Image' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:thumbnail, 'Product_Check_Fields:thumbnail', 'Yes', 'Thumbnail Image' ) }">
+					</td></tr>
+					
+					<tr><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:descrip, 'Product_Check_Fields:descrip', 'Yes', 'Description' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:taxable, 'Product_Check_Fields:taxable', 'Yes', 'Taxable' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:active, 'Product_Check_Fields:active', 'Yes', 'Active' ) }">
+					</td></tr>
+
+					<tr><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:dt_created, 'Product_Check_Fields:dt_created', 'Yes', 'Created Timestamp' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:dt_updated, 'Product_Check_Fields:dt_updated', 'Yes', 'Last Updated Timestamp' ) }">
+					</td><td align="left">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:page_title, 'Product_Check_Fields:page_title', 'Yes', 'Page Title' ) }">
+					</td></tr>	
+
+					<tr><td align="left" colspan="3">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Product_Check_Fields:canonicaluri, 'Product_Check_Fields:canonicaluri', 'Yes', 'Canonical URI' ) }">
+					</td></tr>						
+				</table>
+			</td></tr>
+			<MvIF EXPR = "{ ( [ g.Module_Feature_INV_DB ].InventorySettings_Load( l.settings ) ) AND
+							( l.settings:active ) }">
+				<tr><td valign="top" nowrap>
+					Inventory Fields:
+				</td><td width="100%" nowrap>
+					<select id="FlatProduct_InventoryFields" name="FlatProduct_InventoryFields" size="5" multiple>
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_active',		'Track Product Inventory',		g.Product_Check_Fields:inv_active ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_count',			'Current Product Inventory',	g.Product_Check_Fields:inv_count ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_adjust',		'Adjust Stock By',				g.Product_Check_Fields:inv_adjust ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_in_short',		'In Stock Message (short)',		g.Product_Check_Fields:inv_in_short ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_in_long',		'In Stock Message (long)',		g.Product_Check_Fields:inv_in_long ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_low_track',		'Track Low Stock Level',		g.Product_Check_Fields:inv_low_track ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_low_level',		'Low Stock Level',				g.Product_Check_Fields:inv_low_level ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_low_short',		'Low Stock Message (short)',	g.Product_Check_Fields:inv_low_short ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_low_long',		'Low Stock Message (long)',		g.Product_Check_Fields:inv_low_long ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_out_track',		'Track Out of Stock Level',		g.Product_Check_Fields:inv_out_track ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_out_level',		'Out of Stock Level',			g.Product_Check_Fields:inv_out_level ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_out_hide',		'Hide Out of Stock Products',	g.Product_Check_Fields:inv_out_hide ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_out_short',		'Out of Stock Message (short)', g.Product_Check_Fields:inv_out_short ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_out_long',		'Out of Stock Message (long)',	g.Product_Check_Fields:inv_out_long ) }">
+						<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'inv_ltd_stock_msg', 'Limited Stock Message',		g.Product_Check_Fields:inv_ltd_stock_msg ) }">
+					</select>
+					
+					<script type="text/javascript">
+						var multiselect_inventoryfields = new MultipleSelect( 'FlatProduct_InventoryFields' );
+					</script>
+				</td></tr>
+			</MvIF>
+			<tr><td valign="top" nowrap>
+				Payment Rules Fields:
+			</td><td width="100%" nowrap>
+				<select id="ProductPaymentRules_Fields" name="ProductPaymentRules_Fields" size="5" multiple>
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'payment_limitpayment',		'Limit Payment Methods',		g.Product_Check_Fields:payment_limitpayment ) }">
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'payment_methods',			'Permitted Payment Methods',	g.Product_Check_Fields:payment_methods ) }">
+				</select>
+
+				<script type="text/javascript">
+					var multiselect_shippingrulesfields = new MultipleSelect( 'ProductPaymentRules_Fields' );
+				</script>
+			</td></tr>
+			<tr><td valign="top" nowrap>
+				Shipping Rules Fields:
+			</td><td width="100%" nowrap>
+				<select id="ProductShippingRules_Fields" name="ProductShippingRules_Fields" size="5" multiple>
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'shipping_width',			'Width',						g.Product_Check_Fields:shipping_width ) }">
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'shipping_length',			'Length',						g.Product_Check_Fields:shipping_length ) }">
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'shipping_height',			'Height',						g.Product_Check_Fields:shipping_height ) }">
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'shipping_ownpackage',		'Ships in Separate Packaging',	g.Product_Check_Fields:shipping_ownpackage ) }">
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'shipping_limitshipping',	'Limit Shipping Methods',		g.Product_Check_Fields:shipping_limitshipping ) }">
+					<MvEVAL EXPR = "{ Product_Check_Fields_DrawOption( 'shipping_methods',			'Permitted Shipping Methods',	g.Product_Check_Fields:shipping_methods ) }">
+				</select>
+
+				<script type="text/javascript">
+					var multiselect_shippingrulesfields = new MultipleSelect( 'ProductShippingRules_Fields' );
+				</script>
+			</td></tr>
+
+			<MvASSIGN NAME = "l.customfield_count"	VALUE = "{ [ g.Module_Library_Utilities ].ProductCustomFieldList_Load( l.customfields ) }">
+
+			<MvIF EXPR = "{ l.customfield_count }">
+				<tr><td valign="top" nowrap>
+					Custom Fields:
+				</td><td width="100%" nowrap>
+					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCustomFieldSelect( 'FlatProduct_CustomFields', g.FlatProduct_CustomFields, l.customfields, l.customfield_count ) }">
+				</td></tr>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+		</td>
+		<td>&nbsp;</td>
+		</tr>
+	</table>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_CategoryLookup_Dialog_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Buttons( 'Export', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatProduct_Export_Line" PARAMETERS = "output, line" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ Miva_Fwriteln( l.output, l.line ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatProduct_Boolean" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.value }">
+		<MvFUNCTIONRETURN VALUE = "Yes">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "No">	
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatProduct_Export_Set_Inventory" PARAMETERS = "track" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.track EQ 'y' }">
+		<MvFUNCTIONRETURN VALUE = "Yes">
+	<MvELSEIF EXPR = "{ l.track EQ 'n' }">
+		<MvFUNCTIONRETURN VALUE = "No">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "Default">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlatProduct_Export_Header" PARAMETERS = "output, customfields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.FlatProduct_Format EQ 'legacy' }">
+        <MvIF EXPR = "{ NOT Build_Legacy_Header( l.output, l.customfields ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+
+	<MvELSEIF EXPR = "{ g.FlatProduct_Format EQ 'productimport' }">
+        <MvIF EXPR = "{ NOT Build_Modern_Header( l.output, l.customfields ) }">
+            <MvFUNCTIONRETURN VALUE = 0>
+        </MvIF>
+	</MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Build_Legacy_Header" PARAMETERS = "output, customfields" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_CODE' ) }">
+	
+	<MvIF EXPR = "{ g.Product_Check_Fields:sku }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_SKU' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:name }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_NAME' ) }"></MvIF>
+																		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'CATEGORY_CODES' ) }">
+	<MvIF EXPR = "{ g.Product_Check_Fields:canonical }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'CANONICAL_CATEGORY_CODE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:altdisplay }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'ALTERNATE_DISPLAY_PAGE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:price }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_PRICE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:cost }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_COST' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:weight }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_WEIGHT' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:descrip }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_DESC' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:taxable }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_TAXABLE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:active }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_ACTIVE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:dt_created }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_CREATED_TIMESTAMP' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:dt_updated }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_LAST_UPDATED_TIMESTAMP' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:thumbnail }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_THUMBNAIL' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:image }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_IMAGE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:page_title }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PRODUCT_PAGE_TITLE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:canonicaluri }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'CANONICAL_URI' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_limitpayment }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'LIMIT_PAYMENT_METHODS' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'PAYMENT_METHODS' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_width }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'SHIPPING_WIDTH' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_length }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'SHIPPING_LENGTH' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_height }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'SHIPPING_HEIGHT' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_ownpackage }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'SEPARATE_PACKAGE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_limitshipping }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'LIMIT_SHIPPING_METHODS' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'SHIPPING_METHODS' ) }"></MvIF>
+
+	<MvIF EXPR = "{ Products.d.inv_feat_active }">
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_active }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'TRACK_INVENTORY' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_count }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'CURRENT_STOCK' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_adjust }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'ADJUST_STOCK_BY' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_in_short }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'IN_STOCK_MESSAGE (SHORT)' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_in_long }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'IN_STOCK_MESSAGE (LONG)' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_track }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'TRACK_LOW_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_level }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'LOW_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_short }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'LOW_STOCK_MESSAGE (SHORT)' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_long }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'LOW_STOCK_MESSAGE (LONG)' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_track }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'TRACK_OUT_OF_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_level }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'OUT_OF_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_hide }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'HIDE_OUT_OF_STOCK_PRODUCTS' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_short }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'OUT_OF_STOCK_MESSAGE (SHORT)' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_long }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'OUT_OF_STOCK_MESSAGE (LONG)' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_ltd_stock_msg }"><MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, 'LIMITED STOCK MESSAGE' ) }"></MvIF>
+	</MvIF>
+
+    <MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields">
+        <MvEVAL EXPR = "{ Buffer_Add_Field( l.header, g.FlatProduct_Delimiter, l.customfield:code ) }">
+    </MvFOREACH>
+
+    <MvEXPORT FILE = "{ l.output }" FIELDS = "l.header" DELIMITER = "">
+    <MvIF EXPR = "{ g.MvEXPORT_Error }">
+        <MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-PRD-00010', g.MvEXPORT_Error ) }">
+    </MvIF>
+
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Build_Modern_Header" PARAMETERS = "output, customfields" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'PRODUCT_CODE' ) }">
+	
+	<MvIF EXPR = "{ g.Product_Check_Fields:sku }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'PRODUCT_SKU' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:name }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'PRODUCT_NAME' ) }"></MvIF>
+																		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'CATEGORY_CODES' ) }">
+	<MvIF EXPR = "{ g.Product_Check_Fields:canonical }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'CANONICAL_CATEGORY_CODE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:altdisplay }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'ALTERNATE_DISPLAY_PAGE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:price }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'PRICE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:cost }">						<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'COST' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:weight }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'WEIGHT' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:descrip }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'DESCRIPTION' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:taxable }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'TAXABLE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:active }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'ACTIVE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:dt_created }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'CREATED_TIMESTAMP' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:dt_updated }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LAST_UPDATED_TIMESTAMP' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:thumbnail }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'THUMBNAIL_URL' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:image }">					<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'IMAGE_URL' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:page_title }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'PAGE_TITLE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:canonicaluri }">				<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'CANONICAL_URI' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_limitpayment }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LIMIT_PAYMENT_METHODS' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'PAYMENT_METHODS' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_width }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'SHIPPING_WIDTH' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_length }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'SHIPPING_LENGTH' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_height }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'SHIPPING_HEIGHT' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_ownpackage }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'SEPARATE_PACKAGE' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_limitshipping }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LIMIT_SHIPPING_METHODS' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'SHIPPING_METHODS' ) }"></MvIF>
+
+	<MvIF EXPR = "{ Products.d.inv_feat_active }">
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_active }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'TRACK_PRODUCT_INVENTORY' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_count }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'CURRENT_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_adjust }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'ADJUST_STOCK_BY' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_in_short }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'IN_STOCK_MESSAGE_SHORT' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_in_long }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'IN_STOCK_MESSAGE_LONG' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_track }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'TRACK_LOW_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_level }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LOW_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_short }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LOW_STOCK_MESSAGE_SHORT' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_long }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LOW_STOCK_MESSAGE_LONG' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_track }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'TRACK_OUT_OF_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_level }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'OUT_OF_STOCK_LEVEL' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_hide }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'HIDE_OUT_OF_STOCK_PRODUCTS' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_short }">		<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'OUT_OF_STOCK_MESSAGE_SHORT' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_long }">			<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'OUT_OF_STOCK_MESSAGE_LONG' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_ltd_stock_msg }">	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, 'LIMITED STOCK MESSAGE' ) }"></MvIF>
+	</MvIF>
+
+    <MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields">
+        <MvEVAL EXPR = "{ Buffer_Add_Encoded( l.header, g.FlatProduct_Delimiter, toupper( glosub( [ g.Module_Root $ l.customfield:module:module ].Module_Product_Field_Name( l.customfield:module, l.customfield:code ), ' ', '_' ) ) ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.header ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Create_Fields_For_MvEXPORT" PARAMETERS = "customfields var" STANDARDOUTPUTLEVEL = "">
+    <MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.code' ) }">
+
+    <MvIF EXPR = "{ g.Product_Check_Fields:sku }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.sku' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:name }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.name' ) }"></MvIF>
+																		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.category_codes' ) }">
+    <MvIF EXPR = "{ g.Product_Check_Fields:canonical }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.cancat_code' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:altdisplay }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.page_code' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:price }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.price' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:cost }">						<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.cost' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:weight }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.weight' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:descrip }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.descrip' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:taxable }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.taxable' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:active }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.active' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:dt_created }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.created_formatted' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:dt_updated }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.updated_formatted' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:thumbnail }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.thumbnail' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:image }">					<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.image' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:page_title }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.page_title' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:canonicaluri }">				<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.uri:uri' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_limitpayment }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.payment_limitpayment' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.payment_methods' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_width }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.shipping_width' ) }"></MvIF>
+    <MvIF EXPR = "{ g.Product_Check_Fields:shipping_length }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.shipping_length' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_height }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.shipping_height' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_ownpackage }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.shipping_ownpackage' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_limitshipping }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.shipping_limitshipping' ) }"></MvIF>
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_methods }">			<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.shipping_methods' ) }"></MvIF>
+
+	<MvIF EXPR = "{ Products.d.inv_feat_active }">
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_active }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.track_inventory' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_count }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.ipc_inventory' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_adjust }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.adjusted_inventory' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_in_short }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_in_short' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_in_long }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_in_long' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_track }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.low_track' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_level }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.low_level' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_short }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_low_short' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_low_long }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_low_long' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_track }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.out_track' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_level }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.out_level' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_hide }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.out_hide' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_short }">	<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_out_short' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_out_long }">		<MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_out_long' ) }"></MvIF>
+        <MvIF EXPR = "{ g.Product_Check_Fields:inv_ltd_stock_msg }"><MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'Products.d.inv_ltd_long' ) }"></MvIF>
+    </MvIF>
+
+    <MvFOREACH ITERATOR = "l.field" INDEX = "l.pos" ARRAY = "l.customfields">
+        <MvEVAL EXPR = "{ Buffer_Add_Field( l.fields, ', ', 'l.customfield_values[' $ l.pos $ ']' ) }">
+    </MvFOREACH>
+
+    <MvFUNCTIONRETURN VALUE = "{ l.fields }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductPaymentMethods_Load_Formatted" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.payment_methods" VALUE = "">
+
+	<MvFOREACH INDEX = "l.method_pos" ITERATOR = "l.method" ARRAY = "l.productpayment_methods" COUNT = "{ [ g.Module_Feature_PAY_DB ].ProductPaymentMethodList_Load_Product( l.product_id, l.productpayment_methods ) }">
+		<MvIF EXPR = "{ NOT l.method:pctype_id }">
+			<MvASSIGN NAME = "l.payment_methods_count" VALUE = "{ miva_array_insert( l.payment_methods, l.method:mod_code $ ':' $ l.method:meth_code, -1 ) }">
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID_Cached( l.method:pctype_id, l.paymentcardtype ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.payment_methods_count" VALUE = "{ miva_array_insert( l.payment_methods, 'paymentcardtype:' $ l.paymentcardtype:type, -1 ) }">
+		</MvIF>
+
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.payment_methods $ '' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_ProductPaymentRules_Fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Product_Check_Fields:payment_limitpayment OR
+					g.Product_Check_Fields:payment_methods }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingMethods_Load_Formatted" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH INDEX = "l.method_pos" ITERATOR = "l.method" ARRAY = "l.productshipping_methods" COUNT = "{ [ g.Module_Feature_SHP_DB ].ProductShippingMethodList_Load_Product( l.product_id, l.productshipping_methods ) }">
+		<MvIF EXPR = "{ l.method_pos GT 1 }">
+			<MvASSIGN NAME = "l.shipping_methods" VALUE = "{ l.shipping_methods $ ',' }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.shipping_methods" VALUE = "{ l.shipping_methods $ l.method:mod_code $ ':' $ l.method:meth_code }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.shipping_methods }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_ProductShippingRules_Fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Product_Check_Fields:shipping_width			OR
+					g.Product_Check_Fields:shipping_length			OR
+					g.Product_Check_Fields:shipping_height			OR
+					g.Product_Check_Fields:shipping_ownpackage		OR
+					g.Product_Check_Fields:shipping_limitshipping	OR
+					g.Product_Check_Fields:shipping_methods }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Export_ProductInventory_Fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Product_Check_Fields:inv_active			OR
+					g.Product_Check_Fields:inv_count			OR
+					g.Product_Check_Fields:inv_adjust			OR
+					g.Product_Check_Fields:inv_in_short			OR
+					g.Product_Check_Fields:inv_in_long			OR
+					g.Product_Check_Fields:inv_low_track		OR
+					g.Product_Check_Fields:inv_low_level		OR
+					g.Product_Check_Fields:inv_low_short		OR
+					g.Product_Check_Fields:inv_low_long			OR
+					g.Product_Check_Fields:inv_out_track		OR
+					g.Product_Check_Fields:inv_out_level		OR
+					g.Product_Check_Fields:inv_out_hide			OR
+					g.Product_Check_Fields:inv_out_short		OR
+					g.Product_Check_Fields:inv_out_long			OR
+					g.Product_Check_Fields:inv_ltd_stock_msg }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Check_Fields_DrawOption" PARAMETERS = "value, text, selected" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.option" VALUE = "{ '<option value="' $ encodeentities( l.value ) $ '"' }">
+
+	<MvIF EXPR = "{ l.selected }">
+		<MvASSIGN NAME = "l.option" VALUE = "{ l.option $ ' selected' }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.option" VALUE = "{ l.option $ '>' $ l.text $ '</option>' }">
+	<MvEVAL EXPR = "{ l.option }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Product_Check_Fields_Build_Lookup" PARAMETERS = "parent_variable var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.field_pos"	VALUE = 1>
+	<MvASSIGN NAME = "l.field"		VALUE = "{ gettoken( l.parent_variable, ',', l.field_pos ) }">
+
+	<MvWHILE EXPR = "{ l.field }">
+		<MvASSIGN NAME = "g.Product_Check_Fields" MEMBER = "{ l.field }"	VALUE = "Yes">
+
+		<MvASSIGN NAME = "l.field_pos"										VALUE = "{ l.field_pos + 1 }">
+		<MvASSIGN NAME = "l.field"											VALUE = "{ gettoken( l.parent_variable, ',', l.field_pos ) }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/export/export_include.mv">

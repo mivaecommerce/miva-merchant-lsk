@@ -1,0 +1,104 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-ECY-
+| Next Error Code: 5    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "EncryptionList_Load_Offset" PARAMETERS = "offset, search, searchable_fields, max, nextoffset var, crypt_keys var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'Encryption' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' WHERE ' $ SQL_Search_Clause( l.search, g.Store_Table_Prefix $ 'Encryption', l.searchable_fields, l.fields ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY id' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Encryption',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ECY-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.crypt_key_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Encryption.d.EOF ) AND ( ( l.max EQ 0 ) OR ( l.crypt_key_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.crypt_key_count" VALUE = "{ l.crypt_key_count + 1 }">
+		<MvEVAL EXPR = "{ Encryption_Read( l.crypt_keys[ l.crypt_key_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Encryption" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Encryption.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.crypt_key_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Encryption">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-ECY-00003', l.crypt_key_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "EncryptionList_Load_Offset_Order" PARAMETERS = "crypt_id, offset, search, searchable_fields, max, nextoffset var, orders var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.EncryptionList_Load_Offset_Order_Crypt_ID"	VALUE = "{ l.crypt_id }">
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ 'SELECT DISTINCT o.* FROM ' $ g.Store_Table_Prefix $ 'Orders o, ' $ g.Store_Table_Prefix $ 'OrderPayments op WHERE op.pay_secid = ? AND o.id = op.order_id' }">
+
+	<MvIF EXPR = "{ len( l.search ) }">
+		<MvASSIGN NAME = "l.query"	VALUE = "{ l.query $ ' AND ' $ SQL_Search_Clause( l.search, 'o', l.searchable_fields, l.fields ) }">
+		<MvASSIGN NAME = "l.fields" VALUE = "{ 'g.EncryptionList_Load_Offset_Order_Crypt_ID, ' $ l.fields }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.fields" VALUE = "g.EncryptionList_Load_Offset_Order_Crypt_ID">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query"		VALUE = "{ l.query $ ' ORDER BY id' }">
+
+	<MvIF EXPR = "{ l.max EQ 0 }">	<MvASSIGN NAME = "l.limit" VALUE = 0>
+	<MvELSE>						<MvASSIGN NAME = "l.limit" VALUE = "{ l.max + 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Orders',
+																			   l.query, l.fields,
+																			   l.offset, l.limit ) }">
+		<MvFUNCTIONRETURN VALUE = "{  [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ECY-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.order_count" VALUE = 0>
+	<MvWHILE EXPR = "{ ( NOT Orders.d.EOF ) AND ( ( l.max EQ 0 ) OR (  l.order_count LT l.max ) ) }">
+		<MvASSIGN NAME = "l.order_count" VALUE = "{ l.order_count + 1 }">
+		<MvEVAL EXPR = "{ Order_Read( l.orders[ l.order_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Orders" ROWS = 1>
+	</MvWHILE>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.nextoffset"	VALUE = "{ l.offset + l.order_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-ECY-00004', l.order_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Encryption_Delete_ID" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Encryption_Delete_ID_LowLevel( l.id ) AND
+								 PrivateKey_Delete_ID( l.id ) }">
+</MvFUNCTION>

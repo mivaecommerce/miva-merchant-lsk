@@ -1,0 +1,993 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-RPT-SUB-STS-
+| Next Error Code: 15   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-report_subscription_stats">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Subscription Statistics">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.06">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, report">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: data_store
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm
+						  (
+							report_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
+							subterm_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm_1 ON ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm ( report_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Feature: report
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "ReportModule_Capabilities" PARAMETERS = "module var, capabilities var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.capabilities:date_range"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:date_interval"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:display"				VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:output_chart"			VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:output_tabular"		VALUE = 1>
+	<MvASSIGN NAME = "l.capabilities:output_custom"			VALUE = 0>
+	<MvASSIGN NAME = "l.capabilities:provision_settings"	VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Fields" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.report:id }">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Subscriptions"				VALUE = "{ l.report:config:subscriptions }">
+
+		<MvIF EXPR = "{ NOT SubscriptionStatsXTermIDList_Load_Report( l.report:id, g.Report_SubscriptionStats_SelectedSubscriptions ) }">
+			<MvASSIGN NAME = "g.Report_SubscriptionStats_SelectedSubscriptions"	VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Active"					VALUE = "{ l.report:config:active }">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_New"						VALUE = "{ l.report:config:new }">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Cancellations"				VALUE = "{ l.report:config:cancellations }">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_GrossRevenue"				VALUE = "{ l.report:config:gross_revenue }">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Age"						VALUE = "{ l.report:config:age }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Subscriptions"				VALUE = "all">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_SelectedSubscriptions"		VALUE = "">
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Active"					VALUE = 1>
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_New"						VALUE = 1>
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Cancellations"				VALUE = 1>
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_GrossRevenue"				VALUE = 1>
+		<MvASSIGN NAME = "g.Report_SubscriptionStats_Age"						VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "subscriptions,metrics">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'subscriptions' }">	<MvFUNCTIONRETURN VALUE = "<b>Subscriptions:</b>">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'metrics' }">		<MvFUNCTIONRETURN VALUE = "<b>Display:</b>">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'subscriptions' }">
+		<span style="white-space: nowrap;">
+			<select name="Report_SubscriptionStats_Subscriptions">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'all',			g.Report_SubscriptionStats_Subscriptions, 'All' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'selected',	g.Report_SubscriptionStats_Subscriptions, 'Selected' ) }">
+			</select>
+			<span style="position: relative; vertical-align: middle;">
+				<a href="#" onclick="var dialog = new ProductAndSubscriptionTerm_SelectDialog( document.getElementById( 'Report_SubscriptionStats_SelectedSubscriptions' ).value.length == 0 ? null : document.getElementById( 'Report_SubscriptionStats_SelectedSubscriptions' ).value.split( ',' ) ); dialog.onok = function() { document.getElementById( 'Report_SubscriptionStats_SelectedSubscriptions' ).value = this.SelectedProductSubscriptionTermIDs().join( ',' ); }; dialog.Show(); return false;"><MvEVAL EXPR = "{ [ g.Module_Admin ].DrawImgButton_Select( 0 ) }"></a>
+			</span>
+			<input type="hidden" id="Report_SubscriptionStats_SelectedSubscriptions" name="Report_SubscriptionStats_SelectedSubscriptions" value="{ encodeentities( g.Report_SubscriptionStats_SelectedSubscriptions ) }">
+		</span>
+	<MvELSEIF EXPR = "{ l.field_id EQ 'metrics' }">
+		<div><label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Report_SubscriptionStats_Active,			'Report_SubscriptionStats_Active',			'1', 'Active' ) }"></label></div>
+		<div><label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Report_SubscriptionStats_New,				'Report_SubscriptionStats_New',				'1', 'New' ) }"></label></div>
+		<div><label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Report_SubscriptionStats_Cancellations,	'Report_SubscriptionStats_Cancellations',	'1', 'Cancellations' ) }"></label></div>
+		<div><label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Report_SubscriptionStats_GrossRevenue,		'Report_SubscriptionStats_GrossRevenue',	'1', 'Gross Revenue' ) }"></label></div>
+		<div><label><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.Report_SubscriptionStats_Age,				'Report_SubscriptionStats_Age',				'1', 'Average Age' ) }"></label></div>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Validate" PARAMETERS = "modvar, report var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Report_SubscriptionStats_Subscriptions"		VALUE = "{ trim( g.Report_SubscriptionStats_Subscriptions ) }">
+	<MvASSIGN NAME = "g.Report_SubscriptionStats_Active"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Report_SubscriptionStats_Active ) }">
+	<MvASSIGN NAME = "g.Report_SubscriptionStats_New"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Report_SubscriptionStats_New ) }">
+	<MvASSIGN NAME = "g.Report_SubscriptionStats_Cancellations"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Report_SubscriptionStats_Cancellations ) }">
+	<MvASSIGN NAME = "g.Report_SubscriptionStats_GrossRevenue"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Report_SubscriptionStats_GrossRevenue ) }">
+	<MvASSIGN NAME = "g.Report_SubscriptionStats_Age"				VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Report_SubscriptionStats_Age ) }">
+
+	<MvIF EXPR = "{ g.Report_SubscriptionStats_Subscriptions NE 'all' AND
+					g.Report_SubscriptionStats_Subscriptions NE 'selected' }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select which subscriptions to include.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT g.Report_SubscriptionStats_Active AND
+					NOT g.Report_SubscriptionStats_New AND
+					NOT g.Report_SubscriptionStats_Cancellations AND
+					NOT g.Report_SubscriptionStats_GrossRevenue AND
+					NOT g.Report_SubscriptionStats_Age }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select at least one metric to display.' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Update" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT SubscriptionStatsXTerm_Delete_All_Report( l.report:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.subterm_id" ARRAY = "l.subterm_ids" COUNT = "{ miva_splitstring( g.Report_SubscriptionStats_SelectedSubscriptions, ',', l.subterm_ids, 'trim' ) }">
+		<MvASSIGN NAME = "l.subterm_id"					VALUE = "{ int( l.subterm_id ) }">
+		<MvIF EXPR = "{ l.subterm_id }">
+			<MvIF EXPR = "{ NOT SubscriptionStatsXTerm_Insert( l.report:id, l.subterm_id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.report:config:subscriptions"	VALUE = "{ g.Report_SubscriptionStats_Subscriptions }">
+	<MvASSIGN NAME = "l.report:config:active"			VALUE = "{ g.Report_SubscriptionStats_Active }">
+	<MvASSIGN NAME = "l.report:config:new"				VALUE = "{ g.Report_SubscriptionStats_New }">
+	<MvASSIGN NAME = "l.report:config:cancellations"	VALUE = "{ g.Report_SubscriptionStats_Cancellations }">
+	<MvASSIGN NAME = "l.report:config:gross_revenue"	VALUE = "{ g.Report_SubscriptionStats_GrossRevenue }">
+	<MvASSIGN NAME = "l.report:config:age"				VALUE = "{ g.Report_SubscriptionStats_Age }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Delete" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ SubscriptionStatsXTerm_Delete_All_Report( l.report:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Calculate_DateRange_All" PARAMETERS = "module var, report var, time_t_start var, time_t_end var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "SubscriptionDates"
+				QUERY	= "{ 'SELECT
+								MIN( firstdate ) AS min_subscriptiondate,
+								MAX( lastdate ) AS max_subscriptiondate
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Subscriptions' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ SubscriptionDates.d.EOF OR ( ( ISNULL SubscriptionDates.d.min_subscriptiondate ) AND ( ISNULL SubscriptionDates.d.max_subscriptiondate ) ) }">
+		<MvASSIGN NAME = "l.time_t_start"	VALUE = "{ s.time_t }">
+		<MvASSIGN NAME = "l.time_t_end"		VALUE = "{ s.time_t }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.time_t_start"	VALUE = "{ SubscriptionDates.d.min_subscriptiondate }">
+		<MvASSIGN NAME = "l.time_t_end"		VALUE = "{ SubscriptionDates.d.max_subscriptiondate + 1 }">	<MvCOMMENT> Compensate for < end </MvCOMMENT>
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionDates">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Run_Intervals" PARAMETERS = "module var, report var, time_t_start, time_t_end, intervals var, interval_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].ReportData_Delete_Report( l.report:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:active }">
+		<MvIF EXPR = "{ NOT SubscriptionStats_Run_Active( l.report, l.intervals, l.interval_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:new }">
+		<MvIF EXPR = "{ NOT SubscriptionStats_Run_New( l.report, l.intervals, l.interval_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:cancellations }">
+		<MvIF EXPR = "{ NOT SubscriptionStats_Run_Cancellations( l.report, l.intervals, l.interval_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:gross_revenue }">
+		<MvIF EXPR = "{ NOT SubscriptionStats_Run_GrossRevenue( l.report, l.intervals, l.interval_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:age }">
+		<MvIF EXPR = "{ NOT SubscriptionStats_Run_Age( l.report, l.intervals, l.interval_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:last_state:setsize"		VALUE = "{ l.interval_count }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Format_Vertical_Label" PARAMETERS = "module var, report var, set_id, label" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.set_id EQ 4 }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.label ) }">
+	<MvELSEIF EXPR = "{ l.set_id EQ 5 }">	<MvFUNCTIONRETURN VALUE = "{ ( l.label ROUND 1 ) $ ' Days' }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.label ROUND 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Display" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvASSIGN NAME = "l.color_count" VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_Palette( l.colors ) }">
+
+	<table style="border-collapse: collapse; font-size: small; font-family: Verdana, Arial, Helvetica, sans-serif;" cellspacing="0" cellpadding="0">
+		<thead style="font-weight: bold;">
+			<tr style="height: 20px;">
+				<td>&nbsp;</td>
+				<td align="center">
+					<MvIF EXPR = "{ l.report:last_state:setsize EQ 1 }">
+						<MvIF EXPR = "{ l.report:date_group EQ 'H' }">		1 Hour
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'D' }">	1 Day
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'W' }">	1 Week
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'M' }">	1 Month
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'Y' }">	1 Year
+						</MvIF>
+					<MvELSE>
+						<MvEVAL EXPR = "{ encodeentities( l.report:last_state:setsize ) }">
+						
+						<MvIF EXPR = "{ l.report:date_group EQ 'H' }">		Hours
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'D' }">	Days
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'W' }">	Weeks
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'M' }">	Months
+						<MvELSEIF EXPR = "{ l.report:date_group EQ 'Y' }">	Years
+						</MvIF>
+					</MvIF>
+				</td>
+				<td align="right">&nbsp;</td>
+			</tr>
+		</thead>
+
+		<tbody>
+		<MvIF EXPR = "{ l.report:config:active }">
+			<MvASSIGN NAME = "l.rgb_color"		VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_HexToRGB( l.colors[ 1 ] ) }">
+			<MvASSIGN NAME = "l.image_source"	VALUE = "{ g.json_nosessionurl									$
+														   'ST=admin'											$
+														   '&Store_Code='	$ encodeattribute( g.Store:code )	$
+														   '&Function=ReportData_Graph_Line'					$
+														   '&Report_ID='	$ encodeattribute( l.report:id )	$
+														   '&Smoothing=0'										$
+														   '&Width=100'											$ 
+														   '&Height=20'											$
+														   '&Set_IDs=1'											$
+														   '&Colors='		$ encodeattribute( l.rgb_color )	$
+														   '&Background=255,255,255' }">
+
+			<tr style="height: 20px;">
+				<td>Active</td>
+				<td align="center" style="padding-left: 5px; padding-right: 5px;">
+					<a href="#" onclick="{ 'Report_Display_Chart( \'' $ [ g.Module_Admin ].JavaScriptEncode( g.Store:code ) $ '\', ' $ int( l.report:id ) $ ', true, 1 ); return false' }">
+						<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].Report_Draw_DelayedImage( l.image_source, 100, 20, l.rgb_color ) }">
+					</a>
+				</td>
+				<td align="right">
+					<MvIF EXPR = "{ [ g.Module_Feature_RPT_DB ].ReportData_Load_Last( l.report:id, 1, l.reportdata ) }">
+						<MvEVAL EXPR = "{ ReportModule_Format_Vertical_Label( l.module, l.report, 1, l.reportdata:data ) }">
+					</MvIF>
+				</td>
+			</tr>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.report:config:new }">
+			<MvASSIGN NAME = "l.rgb_color"		VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_HexToRGB( l.colors[ 2 ] ) }">
+			<MvASSIGN NAME = "l.image_source"	VALUE = "{ g.json_nosessionurl									$
+														   'ST=admin'											$
+														   '&Store_Code='	$ encodeattribute( g.Store:code )	$
+														   '&Function=ReportData_Graph_Line'					$
+														   '&Report_ID='	$ encodeattribute( l.report:id )	$
+														   '&Smoothing=0'										$
+														   '&Width=100'											$ 
+														   '&Height=20'											$
+														   '&Set_IDs=2'											$
+														   '&Colors='		$ encodeattribute( l.rgb_color )	$
+														   '&Background=255,255,255' }">
+
+			<tr style="height: 20px;">
+				<td>New</td>
+				<td align="center" style="padding-left: 5px; padding-right: 5px;">
+					<a href="#" onclick="{ 'Report_Display_Chart( \'' $ [ g.Module_Admin ].JavaScriptEncode( g.Store:code ) $ '\', ' $ int( l.report:id ) $ ', true, 2 ); return false' }">
+						<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].Report_Draw_DelayedImage( l.image_source, 100, 20, l.rgb_color ) }">
+					</a>
+				</td>
+				<td align="right">
+					<MvIF EXPR = "{ [ g.Module_Feature_RPT_DB ].ReportData_Sum_Set( l.report:id, 2, l.total ) }">
+						<MvEVAL EXPR = "{ ReportModule_Format_Vertical_Label( l.module, l.report, 2, l.total ) }">
+					</MvIF>
+				</td>
+			</tr>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.report:config:cancellations }">
+			<MvASSIGN NAME = "l.rgb_color"		VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_HexToRGB( l.colors[ 3 ] ) }">
+			<MvASSIGN NAME = "l.image_source"	VALUE = "{ g.json_nosessionurl									$
+														   'ST=admin'											$
+														   '&Store_Code='	$ encodeattribute( g.Store:code )	$
+														   '&Function=ReportData_Graph_Line'					$
+														   '&Report_ID='	$ encodeattribute( l.report:id )	$
+														   '&Smoothing=0'										$
+														   '&Width=100'											$ 
+														   '&Height=20'											$
+														   '&Set_IDs=3'											$
+														   '&Colors='		$ encodeattribute( l.rgb_color )	$
+														   '&Background=255,255,255' }">
+
+			<tr style="height: 20px;">
+				<td>Cancellations</td>
+				<td align="center" style="padding-left: 5px; padding-right: 5px;">
+					<a href="#" onclick="{ 'Report_Display_Chart( \'' $ [ g.Module_Admin ].JavaScriptEncode( g.Store:code ) $ '\', ' $ int( l.report:id ) $ ', true, 3 ); return false' }">
+						<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].Report_Draw_DelayedImage( l.image_source, 100, 20, l.rgb_color ) }">
+					</a>
+				</td>
+				<td align="right">
+					<MvIF EXPR = "{ [ g.Module_Feature_RPT_DB ].ReportData_Sum_Set( l.report:id, 3, l.total ) }">
+						<MvEVAL EXPR = "{ ReportModule_Format_Vertical_Label( l.module, l.report, 3, l.total ) }">
+					</MvIF>
+				</td>
+			</tr>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.report:config:gross_revenue }">
+			<MvASSIGN NAME = "l.rgb_color"		VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_HexToRGB( l.colors[ 4 ] ) }">
+			<MvASSIGN NAME = "l.image_source"	VALUE = "{ g.json_nosessionurl									$
+														   'ST=admin'											$
+														   '&Store_Code='	$ encodeattribute( g.Store:code )	$
+														   '&Function=ReportData_Graph_Line'					$
+														   '&Report_ID='	$ encodeattribute( l.report:id )	$
+														   '&Smoothing=0'										$
+														   '&Width=100'											$ 
+														   '&Height=20'											$
+														   '&Set_IDs=4'											$
+														   '&Colors='		$ encodeattribute( l.rgb_color )	$
+														   '&Background=255,255,255' }">
+
+			<tr style="height: 20px;">
+				<td>Gross Revenue</td>
+				<td align="center" style="padding-left: 5px; padding-right: 5px;">
+					<a href="#" onclick="{ 'Report_Display_Chart( \'' $ [ g.Module_Admin ].JavaScriptEncode( g.Store:code ) $ '\', ' $ int( l.report:id ) $ ', true, 4 ); return false' }">
+						<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].Report_Draw_DelayedImage( l.image_source, 100, 20, l.rgb_color ) }">
+					</a>
+				</td>
+				<td align="right">
+					<MvIF EXPR = "{ [ g.Module_Feature_RPT_DB ].ReportData_Sum_Set( l.report:id, 4, l.total ) }">
+						<MvEVAL EXPR = "{ ReportModule_Format_Vertical_Label( l.module, l.report, 4, l.total ) }">
+					</MvIF>
+				</td>
+			</tr>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.report:config:age }">
+			<MvASSIGN NAME = "l.rgb_color"		VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_HexToRGB( l.colors[ 5 ] ) }">
+			<MvASSIGN NAME = "l.image_source"	VALUE = "{ g.json_nosessionurl									$
+														   'ST=admin'											$
+														   '&Store_Code='	$ encodeattribute( g.Store:code )	$
+														   '&Function=ReportData_Graph_Line'					$
+														   '&Report_ID='	$ encodeattribute( l.report:id )	$
+														   '&Smoothing=0'										$
+														   '&Width=100'											$ 
+														   '&Height=20'											$
+														   '&Set_IDs=5'											$
+														   '&Colors='		$ encodeattribute( l.rgb_color )	$
+														   '&Background=255,255,255' }">
+
+			<tr style="height: 20px;">
+				<td>Average Age</td>
+				<td align="center" style="padding-left: 5px; padding-right: 5px;">
+					<a href="#" onclick="{ 'Report_Display_Chart( \'' $ [ g.Module_Admin ].JavaScriptEncode( g.Store:code ) $ '\', ' $ int( l.report:id ) $ ', true, 5 ); return false' }">
+						<MvEVAL EXPR = "{ [ g.Module_Feature_RPT_UT ].Report_Draw_DelayedImage( l.image_source, 100, 20, l.rgb_color ) }">
+					</a>
+				</td>
+				<td align="right">
+					<MvIF EXPR = "{ [ g.Module_Feature_RPT_DB ].ReportData_Average_Set( l.report:id, 5, l.average ) }">
+						<MvEVAL EXPR = "{ ReportModule_Format_Vertical_Label( l.module, l.report, 5, l.average ) }">
+					</MvIF>
+				</td>
+			</tr>
+		</MvIF>
+		</tbody>
+	</table>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Chart_Type" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "canvas_chart">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Canvas_Chart_Definition" PARAMETERS = "module var, report var, chart var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.color_count"											VALUE = "{ [ g.Module_Feature_RPT_UT ].Chart_Color_Palette( l.colors ) }">
+
+	<MvIF EXPR = "{ l.report:config:active }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 1 MEMBER = "set_id"			VALUE = 1>
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 1 MEMBER = "color"			VALUE = "{ l.colors[ 1 ] }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 1 MEMBER = "name"			VALUE = "Active">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 1 MEMBER = "data_type"		VALUE = "numeric">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 1 MEMBER = "force_visible"	VALUE = "{ g.Report_Chart_Param EQ 1 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:new }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 2 MEMBER = "set_id"			VALUE = 2>
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 2 MEMBER = "color"			VALUE = "{ l.colors[ 2 ] }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 2 MEMBER = "name"			VALUE = "New">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 2 MEMBER = "data_type"		VALUE = "numeric">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 2 MEMBER = "force_visible"	VALUE = "{ g.Report_Chart_Param EQ 2 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:cancellations }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 3 MEMBER = "set_id"			VALUE = 3>
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 3 MEMBER = "color"			VALUE = "{ l.colors[ 3 ] }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 3 MEMBER = "name"			VALUE = "Cancellations">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 3 MEMBER = "data_type"		VALUE = "numeric">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 3 MEMBER = "force_visible"	VALUE = "{ g.Report_Chart_Param EQ 3 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:gross_revenue }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 4 MEMBER = "set_id"			VALUE = 4>
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 4 MEMBER = "color"			VALUE = "{ l.colors[ 4 ] }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 4 MEMBER = "name"			VALUE = "Gross Revenue">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 4 MEMBER = "data_type"		VALUE = "currency">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 4 MEMBER = "force_visible"	VALUE = "{ g.Report_Chart_Param EQ 4 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:age }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 5 MEMBER = "set_id"			VALUE = 5>
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 5 MEMBER = "color"			VALUE = "{ l.colors[ 5 ] }">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 5 MEMBER = "name"			VALUE = "Average Age">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 5 MEMBER = "data_type"		VALUE = "numeric">
+		<MvASSIGN NAME = "l.chart:datasets" INDEX = 5 MEMBER = "force_visible"	VALUE = "{ g.Report_Chart_Param EQ 5 }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"													VALUE = "{ miva_array_collapse( l.chart:datasets ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Canvas_Output_LabelFormat_JavaScript" PARAMETERS = "module var, report var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Tabular_Definition" PARAMETERS = "module var, report var, definition var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.report:config:active }">			<MvASSIGN NAME = "l.labels" INDEX = 1 VALUE = "Active">				</MvIF>
+	<MvIF EXPR = "{ l.report:config:new }">				<MvASSIGN NAME = "l.labels" INDEX = 2 VALUE = "New">				</MvIF>
+	<MvIF EXPR = "{ l.report:config:cancellations }">	<MvASSIGN NAME = "l.labels" INDEX = 3 VALUE = "Cancellations">		</MvIF>
+	<MvIF EXPR = "{ l.report:config:gross_revenue }">	<MvASSIGN NAME = "l.labels" INDEX = 4 VALUE = "Gross Revenue">		</MvIF>
+	<MvIF EXPR = "{ l.report:config:age }">				<MvASSIGN NAME = "l.labels" INDEX = 5 VALUE = "Average Age">		</MvIF>
+
+	<MvASSIGN NAME = "l.null"												VALUE = "{ miva_array_collapse( l.labels ) }">
+
+	<MvASSIGN NAME = "l.definition:columns"		INDEX = 1 MEMBER = "type"	VALUE = "values">
+	<MvASSIGN NAME = "l.definition:columns"		INDEX = 1 MEMBER = "start"	VALUE = 2>
+	<MvASSIGN NAME = "l.definition:columns"		INDEX = 1 MEMBER = "values"	VALUE = "{ l.labels }">
+
+	<MvASSIGN NAME = "l.definition:rows"		INDEX = 1 MEMBER = "type"	VALUE = "reportdata_date">
+	<MvASSIGN NAME = "l.definition:rows"		INDEX = 1 MEMBER = "start"	VALUE = 2>
+	<MvASSIGN NAME = "l.definition:rows"		INDEX = 1 MEMBER = "set_id"	VALUE = 1>
+
+	<MvIF EXPR = "{ l.report:config:active }">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 2 MEMBER = "type"	VALUE = "reportdata">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 2 MEMBER = "start"	VALUE = 2>
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 2 MEMBER = "set_id"	VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:new }">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 3 MEMBER = "type"	VALUE = "reportdata">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 3 MEMBER = "start"	VALUE = 2>
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 3 MEMBER = "set_id"	VALUE = 2>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:cancellations }">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 4 MEMBER = "type"	VALUE = "reportdata">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 4 MEMBER = "start"	VALUE = 2>
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 4 MEMBER = "set_id"	VALUE = 3>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:gross_revenue }">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 5 MEMBER = "type"	VALUE = "reportdata">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 5 MEMBER = "start"	VALUE = 2>
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 5 MEMBER = "set_id"	VALUE = 4>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:config:age }">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 6 MEMBER = "type"	VALUE = "reportdata">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 6 MEMBER = "start"	VALUE = 2>
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 6 MEMBER = "set_id"	VALUE = 5>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"												VALUE = "{ miva_array_collapse( l.definition:rows ) }">
+
+	<MvIF EXPR = "{ l.definition:rows[ 2 ]:set_id }">
+		<MvASSIGN NAME = "l.definition:rows"	INDEX = 1 MEMBER = "set_id"	VALUE = "{ l.definition:rows[ 2 ]:set_id }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| If there are more than 256 datapoints, rotate the output to be vertical to avoid
+	| issues with Excel
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.report:last_state:setsize GT 256 }">
+		<MvASSIGN NAME = "l.temp"											VALUE = "{ l.definition:rows }">
+		<MvASSIGN NAME = "l.definition:rows"								VALUE = "{ l.definition:columns }">
+		<MvASSIGN NAME = "l.definition:columns"								VALUE = "{ l.temp }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Provision_Settings" PARAMETERS = "module var, report var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.report:module_id NE l.module:id }">
+		<MvASSIGN NAME = "l.report:config:subscriptions"	VALUE = "all">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'Subscriptions',	l.report:config:subscriptions,	'All,Selected',	'all,selected' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report:config:active"				VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:Metrics[ 1 ], 'Active' ) }">
+	<MvASSIGN NAME = "l.report:config:new"					VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:Metrics[ 1 ], 'New' ) }">
+	<MvASSIGN NAME = "l.report:config:cancellations"		VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:Metrics[ 1 ], 'Cancellations' ) }">
+	<MvASSIGN NAME = "l.report:config:gross_revenue"		VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:Metrics[ 1 ], 'GrossRevenue' ) }">
+	<MvASSIGN NAME = "l.report:config:age"					VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml:tags:Metrics[ 1 ], 'Age' ) }">
+
+	<MvIF EXPR = "{ NOT l.report:config:active AND
+					NOT l.report:config:new AND
+					NOT l.report:config:cancellations AND
+					NOT l.report:config:gross_revenue AND
+					NOT l.report:config:age }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'At least one metric must be specified' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'SelectedSubscriptions' ) }">
+		<MvEVAL EXPR = "{ ReportModule_Provision_Settings_SelectedSubscriptions( l.module, l.report, l.provide_xml:tags:SelectedSubscriptions[ 1 ] ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportModule_Provision_Settings_SelectedSubscriptions" PARAMETERS = "module var, report var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.productsubscriptionterm_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.productsubscriptionterms"			VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children" COUNT = "{ miva_array_elements( l.provide_xml:children ) }">
+		<MvASSIGN NAME = "l.name"				VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.name NE 'productsubscriptionterm' }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child_xml, 'Unknown tag' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.child_xml, 'product_code',	l.product_code )	OR
+						NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text(	l.child_xml, 'term_descrip',	l.term_descrip ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.product_code, l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product with the code \'' $ l.product_code $ '\' does not exist' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionTerm_Load_Description( l.product:id, l.term_descrip, l.productsubscriptionterm ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product Subscription Term \'' $ l.term_descrip $ '\' not found for product \'' $ l.product:code $ '\'' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productsubscriptionterm_count"	VALUE = "{ miva_array_insert( l.productsubscriptionterms, l.productsubscriptionterm, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT SubscriptionStatsXTerm_Delete_All_Report( l.report:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.productsubscriptionterm" ARRAY = "l.productsubscriptionterms" COUNT = "{ l.productsubscriptionterm_count }">
+		<MvIF EXPR = "{ NOT SubscriptionStatsXTerm_Insert( l.report:id, l.productsubscriptionterm:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Report data generation functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SubscriptionStats_Run_Active" PARAMETERS = "report var, intervals var, interval_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'COUNT( * ) AS active' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Subscriptions', 's' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'ProductSubscriptionTerms', 'pst' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'pst.id = s.subterm_id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 's.firstdate	<= ? AND
+																		 ( ( ( s.status = \'A\' ) AND ( ( pst.term = 0 ) OR ( pst.term <> 0 AND s.termrem > 0 ) OR ( s.lastdate >= ? ) ) ) OR
+																		   ( ( s.status = \'C\' ) AND ( s.cncldate >= ? ) ) )',
+															   'l.interval:time_t_end, l.interval:time_t_start, l.interval:time_t_start' ) }">
+
+	<MvIF EXPR = "{ l.report:config:subscriptions EQ 'selected' }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'SubscriptionStatsXTerm', 'sxt' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'sxt.report_id = ? AND s.subterm_id = sxt.subterm_id', 'l.report:id' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.query_fields ) }">
+
+	<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "SubscriptionStats_Active"
+					QUERY	= "{ l.query_sql }"
+					FIELDS	= "{ l.query_fields }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00004', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ SubscriptionStats_Active.d.EOF }">	<MvASSIGN NAME = "l.active"	VALUE = 0>
+		<MvELSE>											<MvASSIGN NAME = "l.active" VALUE = "{ SubscriptionStats_Active.d.active }">
+		</MvIF>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStats_Active">
+
+		<MvIF EXPR = "{ NOT SubscriptionStats_Insert_Active( l.report, l.interval, l.active ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Run_New" PARAMETERS = "report var, intervals var, interval_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'COUNT( * ) AS new' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Subscriptions', 's' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 's.firstdate >= ? AND s.firstdate <= ?', 'l.interval:time_t_start, l.interval:time_t_end' ) }">
+
+	<MvIF EXPR = "{ l.report:config:subscriptions EQ 'selected' }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'SubscriptionStatsXTerm', 'sxt' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'sxt.report_id = ? AND s.subterm_id = sxt.subterm_id', 'l.report:id' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.query_fields ) }">
+
+	<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "SubscriptionStats_New"
+					QUERY	= "{ l.query_sql }"
+					FIELDS	= "{ l.query_fields }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00005', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ SubscriptionStats_New.d.EOF }">	<MvASSIGN NAME = "l.new" VALUE = 0>
+		<MvELSE>										<MvASSIGN NAME = "l.new" VALUE = "{ SubscriptionStats_New.d.new }">
+		</MvIF>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStats_New">
+
+		<MvIF EXPR = "{ NOT SubscriptionStats_Insert_New( l.report, l.interval, l.new ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Run_Cancellations" PARAMETERS = "report var, intervals var, interval_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'COUNT( * ) AS cancellations' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Subscriptions', 's' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 's.status = \'C\' AND cncldate >= ? AND cncldate <= ?', 'l.interval:time_t_start, l.interval:time_t_end' ) }">
+
+	<MvIF EXPR = "{ l.report:config:subscriptions EQ 'selected' }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'SubscriptionStatsXTerm', 'sxt' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'sxt.report_id = ? AND s.subterm_id = sxt.subterm_id', 'l.report:id' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.query_fields ) }">
+
+	<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "SubscriptionStats_Cancellations"
+					QUERY	= "{ l.query_sql }"
+					FIELDS	= "{ l.query_fields }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00006', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ SubscriptionStats_Cancellations.d.EOF }">	<MvASSIGN NAME = "l.cancellations" VALUE = 0>
+		<MvELSE>													<MvASSIGN NAME = "l.cancellations" VALUE = "{ SubscriptionStats_Cancellations.d.cancellations }">
+		</MvIF>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStats_Cancellations">
+
+		<MvIF EXPR = "{ NOT SubscriptionStats_Insert_Cancellations( l.report, l.interval, l.cancellations ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Run_GrossRevenue" PARAMETERS = "report var, intervals var, interval_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query,	'oi.line_id			AS orderitem_line_id,
+																			 oi.price			AS orderitem_price,
+																			 oi.quantity		AS orderitem_quantity,
+																			 oo.price			AS orderoption_price,
+																			 oo.attr_id			AS orderoption_attr_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Orders',			'o' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'OrderItems',		'oi' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'oi', g.Store_Table_Prefix $ 'OrderOptions', 'oo', 'oi.line_id = oo.line_id', '' ) }">
+
+	<MvIF EXPR = "{ l.report:config:subscriptions EQ 'selected' }">
+ 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query,	g.Store_Table_Prefix $ 'SubscriptionStatsXTerm', 'sxt' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query,	'sxt.report_id	= ?					AND
+																			 oi.subterm_id	= sxt.subterm_id', 'l.report:id' ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query,	'oi.subscrp_id	<> 0', '' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query,		'o.id			= oi.order_id		AND
+																			 o.source		= \'subscription\'	AND
+																			 o.orderdate	>= ?				AND
+																			 o.orderdate	<= ?', 'l.interval:time_t_start, l.interval:time_t_end' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query,	'orderitem_line_id',	'ASC' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query,	'orderoption_attr_id',	'ASC' ) }">
+
+	<MvASSIGN NAME = "l.query_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.query_fields ) }">
+
+	<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "SubscriptionStats_GrossRevenue"
+					QUERY	= "{ l.query_sql }"
+					FIELDS	= "{ l.query_fields }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00014', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subtotal"					VALUE = 0.00>
+		<MvASSIGN NAME = "l.last_line_id"				VALUE = -1>
+
+		<MvWHILE EXPR = "{ NOT SubscriptionStats_GrossRevenue.d.EOF }">
+			<MvIF EXPR = "{ SubscriptionStats_GrossRevenue.d.orderitem_line_id NE l.last_line_id }">
+				<MvASSIGN NAME = "l.subtotal"			VALUE = "{ l.subtotal + ( SubscriptionStats_GrossRevenue.d.orderitem_price * SubscriptionStats_GrossRevenue.d.orderitem_quantity ) }">
+				<MvASSIGN NAME = "l.last_line_id"		VALUE = "{ SubscriptionStats_GrossRevenue.d.orderitem_line_id }">
+			</MvIF>
+
+			<MvIF EXPR = "{ SubscriptionStats_GrossRevenue.d.orderoption_price GT 0 }">
+				<MvASSIGN NAME = "l.subtotal"			VALUE = "{ l.subtotal + ( SubscriptionStats_GrossRevenue.d.orderoption_price * SubscriptionStats_GrossRevenue.d.orderitem_quantity ) }">
+			</MvIF>
+
+			<MvSKIP NAME = "Merchant" VIEW = "SubscriptionStats_GrossRevenue" ROWS = 1>
+		</MvWHILE>
+
+		<MvIF EXPR = "{ l.subtotal GT 0 }">
+			<MvIF EXPR = "{ NOT SubscriptionStats_Insert_GrossRevenue( l.report, l.interval, l.subtotal ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStats_GrossRevenue">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStats_GrossRevenue">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Run_Age" PARAMETERS = "report var, intervals var, interval_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 's.firstdate' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Subscriptions', 's' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'firstdate	<= ? AND
+																		 ( ( ( status = \'A\' ) AND ( ( termrem > 0 ) OR ( lastdate <= ? ) ) ) OR
+																		   ( ( status = \'C\' ) AND ( cncldate <= ? ) ) )',
+															   'l.interval:time_t_end, l.interval:time_t_end, l.interval:time_t_end' ) }">
+
+	<MvIF EXPR = "{ l.report:config:subscriptions EQ 'selected' }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'SubscriptionStatsXTerm', 'sxt' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'sxt.report_id = ? AND s.subterm_id = sxt.subterm_id', 'l.report:id' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.query_fields ) }">
+
+	<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "SubscriptionStats_Age"
+					QUERY	= "{ l.query_sql }"
+					FIELDS	= "{ l.query_fields }">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00008', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.count"				VALUE = 0>
+		<MvASSIGN NAME = "l.total_age"			VALUE = 0>
+
+		<MvWHILE EXPR = "{ NOT SubscriptionStats_Age.d.EOF }">
+			<MvASSIGN NAME = "l.count"			VALUE = "{ l.count + 1 }">
+			<MvASSIGN NAME = "l.total_age"		VALUE = "{ l.total_age + l.interval:time_t_end - SubscriptionStats_Age.d.firstdate }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "SubscriptionStats_Age" ROWS = 1>
+		</MvWHILE>
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStats_Age">
+
+		<MvIF EXPR = "{ l.count EQ 0 }">	<MvASSIGN NAME = "l.average_age"	VALUE = 0.0>
+		<MvELSE>							<MvASSIGN NAME = "l.average_age"	VALUE = "{ l.total_age / l.count }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT SubscriptionStats_Insert_Age( l.report, l.interval, l.average_age / 86400 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Insert_Active" PARAMETERS = "report var, interval var, interval_active" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.interval_active EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.reportdata:report_id"	VALUE = "{ l.report:id }">
+	<MvASSIGN NAME = "l.reportdata:dt_start"	VALUE = "{ l.interval:time_t_start }">
+	<MvASSIGN NAME = "l.reportdata:dt_end"		VALUE = "{ l.interval:time_t_end }">
+	<MvASSIGN NAME = "l.reportdata:set_id"		VALUE = 1>
+	<MvASSIGN NAME = "l.reportdata:data"		VALUE = "{ l.interval_active ROUND 0 }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportData_Insert( l.reportdata ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Insert_New" PARAMETERS = "report var, interval var, interval_new" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.interval_new EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.reportdata:report_id"	VALUE = "{ l.report:id }">
+	<MvASSIGN NAME = "l.reportdata:dt_start"	VALUE = "{ l.interval:time_t_start }">
+	<MvASSIGN NAME = "l.reportdata:dt_end"		VALUE = "{ l.interval:time_t_end }">
+	<MvASSIGN NAME = "l.reportdata:set_id"		VALUE = 2>
+	<MvASSIGN NAME = "l.reportdata:data"		VALUE = "{ l.interval_new ROUND 0 }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportData_Insert( l.reportdata ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Insert_Cancellations" PARAMETERS = "report var, interval var, interval_cancellations" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.interval_cancellations EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.reportdata:report_id"	VALUE = "{ l.report:id }">
+	<MvASSIGN NAME = "l.reportdata:dt_start"	VALUE = "{ l.interval:time_t_start }">
+	<MvASSIGN NAME = "l.reportdata:dt_end"		VALUE = "{ l.interval:time_t_end }">
+	<MvASSIGN NAME = "l.reportdata:set_id"		VALUE = 3>
+	<MvASSIGN NAME = "l.reportdata:data"		VALUE = "{ l.interval_cancellations ROUND 0 }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportData_Insert( l.reportdata ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Insert_GrossRevenue" PARAMETERS = "report var, interval var, interval_revenue" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.interval_revenue EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.reportdata:report_id"	VALUE = "{ l.report:id }">
+	<MvASSIGN NAME = "l.reportdata:dt_start"	VALUE = "{ l.interval:time_t_start }">
+	<MvASSIGN NAME = "l.reportdata:dt_end"		VALUE = "{ l.interval:time_t_end }">
+	<MvASSIGN NAME = "l.reportdata:set_id"		VALUE = 4>
+	<MvASSIGN NAME = "l.reportdata:data"		VALUE = "{ l.interval_revenue ROUND 2 }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportData_Insert( l.reportdata ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStats_Insert_Age" PARAMETERS = "report var, interval var, interval_age" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.reportdata:report_id"	VALUE = "{ l.report:id }">
+	<MvASSIGN NAME = "l.reportdata:dt_start"	VALUE = "{ l.interval:time_t_start }">
+	<MvASSIGN NAME = "l.reportdata:dt_end"		VALUE = "{ l.interval:time_t_end }">
+	<MvASSIGN NAME = "l.reportdata:set_id"		VALUE = 5>
+	<MvASSIGN NAME = "l.reportdata:data"		VALUE = "{ l.interval_age ROUND 1 }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportData_Insert( l.reportdata ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Database functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "SubscriptionStatsXTermIDList_Load_Report" PARAMETERS = "report_id, subterm_ids var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "SubscriptionStatsXTerm"
+				QUERY	= "{ 'SELECT subterm_id FROM ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm WHERE report_id = ?' }"
+				FIELDS	= "l.report_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.subterm_count"	VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT SubscriptionStatsXTerm.d.EOF }">
+		<MvASSIGN NAME = "l.subterm_ids" INDEX = "{ ++l.subterm_count }" VALUE = "{ SubscriptionStatsXTerm.d.subterm_id }">
+		<MvSKIP NAME = "Merchant" VIEW = "SubscriptionStatsXTerm" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionStatsXTerm">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-SUB-STS-00010', l.subterm_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStatsXTerm_Delete_All_Report" PARAMETERS = "report_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm WHERE report_id = ?' }"
+			 FIELDS	= "l.report_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SubscriptionStatsXTerm_Insert" PARAMETERS = "report_id, subterm_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'SubscriptionStatsXTerm
+						  ( report_id, subterm_id )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.report_id, l.subterm_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

@@ -1,0 +1,133 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2019 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-INV-JSN-
+| Next Error Code: 2
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_InventoryProductSettings_Update" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'INVT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.inventoryproductsettings_loaded" VALUE = "{ [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.product:id, l.inventoryproductsettings ) }">
+
+	<MvIF EXPR = "{ NOT l.inventoryproductsettings_loaded }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.inventoryproductsettings ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.inventoryproductsettings:low_lvl_d }">	<MvASSIGN NAME = "l.low_level" VALUE = "default">
+	<MvELSE>													<MvASSIGN NAME = "l.low_level" VALUE = "{ l.inventoryproductsettings:low_level }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.inventoryproductsettings:out_lvl_d }">	<MvASSIGN NAME = "l.out_level" VALUE = "default">
+	<MvELSE>													<MvASSIGN NAME = "l.out_level" VALUE = "{ l.inventoryproductsettings:out_level }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(		'O', 'TrackLowStockLevel',		l.inventoryproductsettings:low_track,	'Default,Yes,No', 'd,y,n' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_List(		'O', 'TrackOutOfStockLevel',	l.inventoryproductsettings:out_track,	'Default,Yes,No', 'd,y,n' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_List(		'O', 'HideOutOfStockProducts',	l.inventoryproductsettings:out_hide,	'Default,Yes,No', 'd,y,n' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O', 'LowStockLevel',			l.low_level )														OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O', 'OutOfStockLevel',			l.out_level )														OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'o', 'TrackProduct',			l.inventoryproductsettings:active  ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'InStockMessageShort',		l.inventoryproductsettings:in_short ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'InStockMessageLong',		l.inventoryproductsettings:in_long ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'LowStockMessageShort',	l.inventoryproductsettings:low_short ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'LowStockMessageLong',		l.inventoryproductsettings:low_long ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'OutOfStockMessageShort',	l.inventoryproductsettings:out_short ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'OutOfStockMessageLong',	l.inventoryproductsettings:out_long ) 								OR  
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'LimitedStockMessage',		l.inventoryproductsettings:ltd_long ) 								OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer( 	'o', 'AdjustStockBy',			l.inventory_adjust )												OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer( 	'o', 'CurrentStock',			l.current_stock ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.low_level"								VALUE = "{ tolower( l.low_level ) }">
+	<MvASSIGN NAME = "l.out_level"								VALUE = "{ tolower( l.out_level ) }">
+
+	<MvIF EXPR = "{ l.low_level EQ 'default' }">
+		<MvASSIGN NAME = "l.inventoryproductsettings:low_lvl_d"	VALUE = 1>
+		<MvASSIGN NAME = "l.inventoryproductsettings:low_level"	VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Required( l.low_level ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'LowStockLevel', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.inventoryproductsettings:low_lvl_d"	VALUE = 0>
+		<MvASSIGN NAME = "l.inventoryproductsettings:low_level"	VALUE = "{ l.low_level }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.out_level EQ 'default' }">
+		<MvASSIGN NAME = "l.inventoryproductsettings:out_lvl_d"	VALUE = 1>
+		<MvASSIGN NAME = "l.inventoryproductsettings:out_level"	VALUE = 0>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Required( l.out_level ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'OutOfStockLevel', g.Validation_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.inventoryproductsettings:out_lvl_d"	VALUE = 0>
+		<MvASSIGN NAME = "l.inventoryproductsettings:out_level"	VALUE = "{ l.out_level }">
+	</MvIF>
+
+	<MvIF EXPR = "{ len_var( l.current_stock ) AND len_var( l.inventory_adjust ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-INV-JSN-00001', 'Parameters CurrentStockLevel and AdjustStockBy cannot be passed at the same time.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.inventoryproductsettings_loaded }">
+		<MvIF EXPR = "{ NOT l.inventoryproductsettings:active }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Delete( l.product:id ) OR 
+							NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Delete( l.product:id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Update( l.inventoryproductsettings ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.current_stock }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Update( l.product:id, l.current_stock ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT ISNULL l.inventory_adjust }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Adjust( l.product:id, l.inventory_adjust ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.inventoryproductsettings:active }">
+		<MvASSIGN NAME = "l.inventoryproductsettings:product_id" VALUE = "{ l.product:id }">
+
+		<MvIF EXPR = "{ NOT ISNULL l.current_stock }">
+			<MvASSIGN NAME = "l.inventory_value" VALUE = "{ l.current_stock }">
+		<MvELSEIF EXPR = "{ NOT ISNULL l.inventory_adjust }">
+			<MvASSIGN NAME = "l.inventory_value" VALUE = "{ l.inventory_adjust }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.inventory_value" VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Insert( l.inventoryproductsettings ) OR
+						NOT [ g.Module_Feature_INV_DB ].InventoryProductCount_Insert( l.product:id, l.inventory_value ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>

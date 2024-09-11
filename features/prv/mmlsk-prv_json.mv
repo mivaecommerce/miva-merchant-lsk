@@ -1,0 +1,117 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-PRV-JSN-
+| Next Error Code: 5
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_Provision_Domain" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT g.Session:api_privilege_override }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied_Message( 'Function not assigned to token' ) }">
+	<MvELSEIF EXPR = "{ NOT g.Session:api_token:req_sig }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied_Message( 'Token does not require signature' ) }">
+	<MvELSEIF EXPR = "{ NOT g.Session:api_token:req_ts }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied_Message( 'Token does not require timestamp' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'XML', l.xml ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.wrapped_xml"><XML1><XML2><MvEVAL EXPR = "{ l.xml }"></XML2></XML1></MvCAPTURE>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.wrapped_xml, l.provision_parsed ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_line, l.error_message ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PRV-JSN-00002', 'Unable to parse XML: ' $ l.error_line $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ miva_array_elements( l.provision_parsed:XML1:children ) GT 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'XML', 'Too many top-level tags' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.PRV_log_file_name"	VALUE = "{ 'json_provision_domain_' $ int( s.process_id ) $ '.log' }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ fdelete( g.PRV_log_file_name ) }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Action_Provision_Domain( l.provision_parsed:XML1:tags:XML2[ 1 ] ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	[
+		<MvIF EXPR = "{ fexists( g.PRV_log_file_name ) }">
+			<MIVA MvIMPORT_Error = "nonfatal, nodisplay">
+			<MvIMPORT FILE = "{ g.PRV_log_file_name }" DELIMITER = "{ asciichar( 9 ) }" FIELDS = "l.log_date, l.log_time, l.log_lineno, l.log_tag, l.log_message">
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.count ) }">
+				"dtstamp":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.log_date $ ' ' $ l.log_time ) }">",
+				"lineno":	<MvEVAL EXPR = "{ int( l.log_lineno ) }">,
+				"tag":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.log_tag ) }">",
+				"message":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.log_message ) }">"
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			</MvIMPORT>
+			<MIVA MvIMPORT_Error = "nonfatal, display">
+
+			<MvASSIGN NAME = "l.null"		VALUE = "{ fdelete( g.PRV_log_file_name ) }">
+		</MvIF>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Provision_Store" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">		<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ NOT g.Session:api_privilege_override }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied_Message( 'Function not assigned to token' ) }">
+	<MvELSEIF EXPR = "{ NOT g.Session:api_token:req_sig }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied_Message( 'Token does not require signature' ) }">
+	<MvELSEIF EXPR = "{ NOT g.Session:api_token:req_ts }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied_Message( 'Token does not require timestamp' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_JSON ].JSON_Branch_Loaders_Present() }">
+		<MvASSIGN NAME = "l.branch" VALUE = "{ g.Store:branch }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_TUI_JSON ].JSON_Branch_Load( l.branch ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'XML', l.xml ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.wrapped_xml"><XML1><XML2 code="{ g.Store:code }" branchkey="{ l.branch:branchkey }"><MvEVAL EXPR = "{ l.xml }"></XML2></XML1></MvCAPTURE>
+
+	<MvIF EXPR = "{ NOT xml_parse_var( l.wrapped_xml, l.provision_parsed ) }">
+		<MvEVAL EXPR = "{ xml_parse_error( l.error_line, l.error_message ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PRV-JSN-00004', 'Unable to parse XML: ' $ l.error_line $ ': ' $ l.error_message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ miva_array_elements( l.provision_parsed:XML1:children ) GT 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'XML', 'Too many top-level tags' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.PRV_log_file_name"	VALUE = "{ 'json_provision_store_' $ int( g.Store:id ) $ 'x' $ int( s.process_id ) $ '.log' }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ fdelete( g.PRV_log_file_name ) }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_Action_Provision_Store( l.provision_parsed:XML1:tags:XML2[ 1 ] ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	[
+		<MvIF EXPR = "{ fexists( g.PRV_log_file_name ) }">
+			<MIVA MvIMPORT_Error = "nonfatal, nodisplay">
+			<MvIMPORT FILE = "{ g.PRV_log_file_name }" DELIMITER = "{ asciichar( 9 ) }" FIELDS = "l.log_date, l.log_time, l.log_lineno, l.log_tag, l.log_message">
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.count ) }">
+				"dtstamp":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.log_date $ ' ' $ l.log_time ) }">",
+				"lineno":	<MvEVAL EXPR = "{ int( l.log_lineno ) }">,
+				"tag":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.log_tag ) }">",
+				"message":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.log_message ) }">"
+				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+			</MvIMPORT>
+			<MIVA MvIMPORT_Error = "nonfatal, display">
+
+			<MvASSIGN NAME = "l.null"		VALUE = "{ fdelete( g.PRV_log_file_name ) }">
+		</MvIF>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>

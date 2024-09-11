@@ -1,0 +1,160 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source ids contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2017 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-SCY-
+| Next Error Code: 5    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "StoreCountryList_Update_Offsets" PARAMETERS = "storecountries var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.pastend_count"						VALUE = 0>
+
+	<MvASSIGN NAME = "l.state_pos"							VALUE = 1>
+	<MvASSIGN NAME = "l.state_count"						VALUE = "{ miva_array_elements( l.storecountries ) }">
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray( l.storecountries, l.state_count ) }">
+
+	<MvWHILE EXPR = "{ l.state_pos LE l.state_count }">
+		<MvASSIGN NAME = "g.StoreCountries_Order_ID"		VALUE = "{ l.storecountries[ l.state_pos ]:id }">
+
+		<MvCOMMENT>
+		|
+		| Determine disp_order of current state at this offset.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant',
+																				   'StoreCountries',
+																				   'SELECT id, disp_order FROM ' $ g.Store_Table_Prefix $ 'StoreCountries WHERE id <> ? ORDER BY disp_order',
+																				   'g.StoreCountries_Order_ID',
+																				   l.storecountries[ l.state_pos ]:offset - 1,
+																				   1 ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SCY-00001', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ StoreCountries.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "StoreCountries">
+
+			<MvCOMMENT>
+			|
+			| Offset was higher than the last record.  This case requires specialized processing, so save this record for later.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.pastend_count"							VALUE = "{ l.pastend_count + 1 }">
+			<MvASSIGN NAME = "l.pastend" INDEX = "{ l.pastend_count }"	VALUE = "{ l.storecountries[ l.state_pos ] }">
+
+			<MvASSIGN NAME = "l.state_pos"	VALUE = "{ l.state_pos + 1 }">
+		<MvELSEIF EXPR = "{ l.pastend_count }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "StoreCountries">
+
+			<MvIF EXPR = "{ NOT StoreCountries_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.pastend_count" VALUE = 0>
+		<MvELSE>
+			<MvASSIGN NAME = "l.disp_order" VALUE = "{ StoreCountries.d.disp_order }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "StoreCountries">
+
+			<MvCOMMENT>
+			|
+			| Make a hole by shifting storecountries after this disp_order down
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' 
+									$ g.Store_Table_Prefix $ 'StoreCountries 
+								  SET 
+									disp_order = disp_order + 1 
+								  WHERE 
+									disp_order >= ?' }" 
+					 FIELDS	= "l.disp_order">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SCY-00002', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ StoreKey_Generate( 'StoreCountryDisplayOrder' ) }">
+
+			<MvCOMMENT>
+			|
+			| Put the state in the newly created hole
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' 
+									$ g.Store_Table_Prefix $ 'StoreCountries 
+								  SET 
+									disp_order = ? 
+								  WHERE 
+									id = ?' }" 
+					 FIELDS	= "l.disp_order, g.StoreCountries_Order_ID">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SCY-00003', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.state_pos"	VALUE = "{ l.state_pos + 1 }">
+		</MvIF>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| If all the downward records were past the end, they must be processed here.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pastend_count }">
+		<MvIF EXPR = "{ NOT StoreCountries_Update_Offsets_PastEnd( l.pastend, l.pastend_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>		
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreCountries_Update_Offsets_PastEnd" PARAMETERS = "pastend var, pastend_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Process records moving past the end.  These records must be sorted in ascending order.
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].SortOffsetArray_PastEnd( l.pastend, l.pastend_count ) }">
+
+	<MvASSIGN NAME = "l.pastend_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.pastend_pos LE l.pastend_count }">
+		<MvASSIGN NAME = "g.StoreCountries_Order_ID" 	VALUE = "{ l.pastend[ l.pastend_pos ]:id }">
+		<MvASSIGN NAME = "l.disp_order"					VALUE = "{ StoreKey_Generate( 'StoreCountryDisplayOrder' ) }">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'UPDATE ' 
+								$ g.Store_Table_Prefix $ 'StoreCountries 
+							  SET 
+								disp_order = ? 
+							  WHERE 
+								id = ?' }" 
+				 FIELDS	= "l.disp_order, g.StoreCountries_Order_ID">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-SCY-00004', g.MvQUERY_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.pastend_pos"	VALUE = "{ l.pastend_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

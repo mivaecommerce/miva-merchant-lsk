@@ -1,0 +1,573 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-CSSUI-CMP-VORD-
+| Next Error Code: 9    
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-cssui-vieworder">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "CSSUI View Order">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0800">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "component, skins, component_prov">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Initialize" PARAMETERS = "module var, item, all_settings var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( NOT ISNULL g.Order_BillEmail ) AND ( NOT ISNULL g.Order_BillZip ) }">
+		<MvIF EXPR = "{ NOT Order_Load_Lookup_BillEmail_BillZip( g.Order_BillEmail, g.Order_BillZip, g.Order_ID, l.all_settings:order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Throw_Exception( 'customerorder_invalid_order' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ ( NOT ISNULL g.Order_BillEmail ) }">
+		<MvIF EXPR = "{ NOT Order_Load_Lookup_BillEmail( g.Order_BillEmail, g.Order_ID, l.all_settings:order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Throw_Exception( 'customerorder_invalid_order' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Basket:cust_id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Load_Customer( g.Order_ID, g.Basket:cust_id, l.all_settings:order ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Throw_Exception( 'customerorder_invalid_order' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Throw_Exception( 'customerorder_invalid_order' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order( l.all_settings:order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_CustomField_Lookup( l.all_settings, l.settings:fields_custom ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order_CustomField_Lookup( l.all_settings, l.settings:fields_custom_order ) OR
+					NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order_CustomFields( l.all_settings:order:id, l.all_settings:order, l.all_settings, l.settings:fields_custom_order ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.all_settings:order:have_custom_order_field_values" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.settings:fields_custom_order">
+		<MvASSIGN NAME = "l.safe_module_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:module ) }">
+		<MvASSIGN NAME = "l.safe_field_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:code ) }">
+
+		<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.all_settings:order:customfield_order_values">
+			<MvMEMBER NAME = "{ l.safe_module_code }">
+			<MvMEMBER NAME = "{ l.safe_field_code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL trim( l.value ) }">
+			<MvASSIGN NAME = "l.all_settings:order:have_custom_order_field_values" VALUE = 1>
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.total"						VALUE = 0.00>
+	<MvASSIGN NAME = "l.orderitem_count"			VALUE = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.all_settings:order:id, l.all_settings:order:items ) }">
+	<MvASSIGN NAME = "l.coupon_count"				VALUE = "{ [ g.Module_Feature_PGR_DB ].OrderCouponList_Load_Order( l.all_settings:order:id, l.all_settings:order:coupons ) }">
+	<MvASSIGN NAME = "l.ordercharge_count"			VALUE = "{ [ g.Module_Library_DB ].OrderChargeList_Load_Order( l.all_settings:order:id, l.all_settings:order:charges ) }">
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.all_settings:order:items" COUNT = "{ l.orderitem_count }">
+		<MvCOMMENT>
+		|
+		| Initialize tokens provided by CommonComponentFields
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_OrderItem_WithParts( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_CustomFields( l.orderitem:product_id, l.orderitem, l.all_settings, l.settings:fields_custom ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.orderitem:product:id }">	<MvASSIGN NAME = "l.orderitem:link" VALUE = "">
+		<MvELSE>										<MvASSIGN NAME = "l.orderitem:link" VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Product_URL( l.orderitem:product, l.null ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" 										VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_ImageTypes( l.orderitem:product_id, l.orderitem:variant_id, l.orderitem, l.all_settings, l.settings:imagetypes, l.settings:constrain, l.settings:b_width, l.settings:b_height ) }">
+		<MvASSIGN NAME = "l.orderitem_total"							VALUE = "{ l.orderitem:subtotal }">
+
+		<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderitem:options" COUNT = "{ l.orderitem:option_count }">
+			<MvASSIGN NAME = "l.orderitem_total"						VALUE = "{ l.orderitem_total + l.orderoption:subtotal }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.total"										VALUE = "{ l.total + l.orderitem_total }">
+		<MvASSIGN NAME = "l.orderitem:subtotal_comprehensive"			VALUE = "{ [ g.Module_Library_Utilities ].IEEE754_Normalize( 2, l.orderitem_total ) ROUND 2 }">
+		<MvASSIGN NAME = "l.orderitem:formatted_subtotal_comprehensive"	VALUE = "{ [ g.Module_Root $ g.Store_Module_Currency:module ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.orderitem:subtotal_comprehensive ) }">
+
+		<MvCOMMENT>
+		|
+		| The following tokens are maintained for compatibility with older versions of this module
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.orderitem:reorder"		VALUE = "{ [ g.Module_Library_DB ].Runtime_Product_Load_Code( l.orderitem:code, l.product ) }">
+
+		<MvIF EXPR = "{ l.orderitem:status EQ 0 }">											<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "Pending">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 100 }">									<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "Picking">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 200 }">
+			<MvIF EXPR = "{ NOT ISNULL l.orderitem:shipment:tracklink }">					<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'Shipped on ' $ l.orderitem:shipment:formatted_ship_date $ '. Tracking #<a href="' $ encodeentities( l.orderitem:shipment:tracklink ) $ '" target="_blank">' $ encodeentities( l.orderitem:shipment:tracknum ) $ '</a>' }">
+			<MvELSEIF EXPR = "{ NOT ISNULL l.orderitem:shipment:tracknum }">				<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'Shipped on ' $ l.orderitem:shipment:formatted_ship_date $ '. Tracking #' $ encodeentities( l.orderitem:shipment:tracknum ) }">
+			<MvELSEIF EXPR = "{ NOT ISNULL l.orderitem:shipment:formatted_ship_date }">		<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'Shipped on ' $ l.orderitem:shipment:formatted_ship_date }">
+			<MvELSE>																		<MvASSIGN NAME = "l.orderitem:order_status"	VALUE = "Shipped">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 210 }">									<MvASSIGN NAME = "l.orderitem:order_status"	VALUE = "Gift Certificate: Not Redeemed">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 211 }">									<MvASSIGN NAME = "l.orderitem:order_status"	VALUE = "Gift Certificate: Redeemed">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 220 }">									<MvASSIGN NAME = "l.orderitem:order_status"	VALUE = "Digital: Not Downloaded">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 221 }">									<MvASSIGN NAME = "l.orderitem:order_status"	VALUE = "Digital: Downloaded">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 300 }">									<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "Cancelled">
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 400 }">
+			<MvIF EXPR = "{ l.orderitem:dt_instock }">										<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'Backordered.  In stock on ' $ l.orderitem:formatted_dt_instock }">
+			<MvELSE>																		<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "Backordered">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 500 }">
+			<MvIF EXPR = "{ ISNULL l.orderitem:return:code }">								<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "RMA Issued">
+			<MvELSEIF EXPR = "{ l.orderitem:return:dt_issued }">							<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'RMA Issued on ' $ l.orderitem:return:formatted_dt_issued $ '. RMA: ' $ l.orderitem:return:code }">
+			<MvELSE>																		<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'RMA Issued: ' $ l.orderitem:return:code }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 600 }">
+			<MvIF EXPR = "{ l.orderitem:return:dt_recvd }">									<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "{ 'Received. Item was received on ' $ l.orderitem:return:formatted_dt_recvd }">
+			<MvELSE>																		<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "Item Received">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.orderitem:status EQ 999 }">									<MvASSIGN NAME = "l.orderitem:order_status" VALUE = "Adjustment">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.ordergroup_count"						VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Merge_BasketOrOrderItem_Groups( l.all_settings:order:items, l.orderitem_count, l.all_settings:order:groups ) }">
+
+	<MvASSIGN NAME = "l.all_settings:order:subtotal" 			VALUE = "{ [ g.Module_Library_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
+	<MvASSIGN NAME = "l.all_settings:order:formatted_subtotal" 	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.all_settings:order:subtotal ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_OrderCharges( l.all_settings:order:charges, l.ordercharge_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.settings:payments }">
+		<MvEVAL EXPR = "{ OrderComponent_Initialize_Payments( l.all_settings:order:id, l.all_settings:order:payments ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Remove PII from orders for non-logged in customers / order's not associated with the logged-in customer
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( NOT g.Customer_Session_Verified ) OR ( g.Basket:cust_id NE l.all_settings:order:cust_id ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Order_RemovePII( l.all_settings:order ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderComponentModule_Generate_Code" PARAMETERS = "settings var, code var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:groups }">						<MvASSIGN NAME = "l.array"			VALUE = "order:groups">
+	<MvELSE>													<MvASSIGN NAME = "l.array"			VALUE = "order:items">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }">	<MvASSIGN NAME = "l.charge_colspan"	VALUE = 5>
+	<MvELSE>													<MvASSIGN NAME = "l.charge_colspan" VALUE = 4>
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.code"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+<script language="JavaScript">
+<!--
+function ReloadForm( form_field )
+{
+	document.location.reload();
+	document.getElementsByName( "OrderDetails_Format" ).value = form_field;
+}
+//-->
+</script>
+<table>
+	<tr class="heading">
+		<td class="order-reorder">&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-image">&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-description">Product Description</td>
+		<td class="order-status">Status</td>
+		<td class="order-quantity">Quantity</td>
+		<td class="order-price">Price/Ea.</td>
+		<td class="order-total">Total</td>
+	</tr>
+
+	<mvt:foreach iterator="item" array="{ l.array }">
+	<tr>
+		<mvt:if expr="l.settings:item:option_count">
+			<mvt:assign name="l.settings:rowspan" value="l.settings:item:option_count + 1" />
+		<mvt:else>
+			<mvt:assign name="l.settings:rowspan" value="1" />
+		</mvt:if>
+
+		<td class="order-reorder" rowspan="&mvt:rowspan;">
+			<mvt:if expr="l.settings:item:reorder EQ 1">
+				<a target="_blank" href="&mvte:urls:BASK:secure_sep;Action=ADPR&amp;Product_Code=&mvta:item:code;&amp;Quantity=1">reorder</a>
+			<mvt:else>
+				&nbsp;
+			</mvt:if>
+		</td>
+<MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-image" rowspan="&mvt:rowspan;"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvASSIGN NAME = "l.imagetype"  VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.settings:imagetypes[ 1 ] ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="{ 'ISNULL l.settings:item:imagetypes:' $ l.imagetype }">
+				&nbsp;
+			<mvt:else>
+				<img src="{ '&mvt:global:baseurl;&mvte:item:imagetypes:' $ l.imagetype $ ';' }" alt="&mvte:item:name;" />
+			</mvt:if>
+		</td>
+		<MIVA STANDARDOUTPUTLEVEL = ""></MvIF>
+<MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-description">
+			<mvt:if expr="ISNULL l.settings:item:link">
+				&mvt:item:name;
+			<mvt:else>
+				<a href="&mvte:item:link;">&mvt:item:name;</a>
+			</mvt:if> <mvt:if expr="l.settings:item:upsold">(Special Offer)</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.settings:fields_custom">
+				<MvASSIGN NAME = "l.safe_module_code"   VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:module ) }">
+				<MvASSIGN NAME = "l.safe_field_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:code ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="{ 'NOT ISNULL l.settings:item:customfield_values:' $ l.safe_module_code $ ':' $ l.safe_field_code }">
+				<div class="custom-field">&mvt:customfield_names:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;: &mvt:item:customfield_values:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;</div>
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvFOREACH>
+			<MvIF EXPR = "{ l.settings:lineitemdiscounts }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:foreach iterator="discount" array="item:discounts">
+				<mvt:if expr="l.settings:discount:display">
+					<div class="order-discount">&mvt:discount:descrip;: &mvt:discount:formatted_discount;</div>
+				</mvt:if>
+			</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		</td>
+		<td class="order-status">&mvt:item:order_status;</td>
+		<td class="order-quantity">&mvt:item:quantity;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ l.settings:groups }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-price"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:retail">
+				&mvt:item:formatted_retail;
+			<mvt:else>
+				&mvt:item:formatted_base_price;
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			&mvt:item:formatted_base_price;<MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			&mvt:item:formatted_price;<MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		</td>
+		<td class="order-total"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:subtotal_retail AND l.settings:item:subtotal_retail NE l.settings:item:subtotal">
+				<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_retail;</span>
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:subtotal_base_price NE l.settings:item:subtotal">
+				<span style="text-decoration: line-through;">&mvt:item:formatted_subtotal_base_price;</span>
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			&mvt:item:formatted_subtotal;
+		</td><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-price"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:retail AND l.settings:item:retail NE l.settings:item:price">
+				<span style="text-decoration: line-through;">&mvt:item:formatted_retail;</span>
+			<mvt:elseif expr="l.settings:base_price NE l.settings:item:price">
+				<span style="text-decoration: line-through;">&mvt:item:formatted_base_price;</span>
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:item:base_price NE l.settings:item:price">
+				<span style="text-decoration: line-through;">&mvt:item:formatted_base_price;</span>
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			&mvt:item:formatted_price;
+		</td>
+		<td class="order-total">
+			&mvt:item:formatted_subtotal;
+		</td><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	</tr>
+
+	<mvt:foreach iterator="option" array="item:options">
+	<tr class="item-options">
+		<td colspan="2">
+			<mvt:if expr="l.settings:option:option_id">
+				&mvt:option:attr_code;: &mvt:option:opt_code;
+			<mvt:elseif expr="NOT ISNULL l.settings:option:data">
+				<mvt:if expr="( l.settings:option:attr_code EQ 'digitaldownload' ) AND ( NOT ISNULL l.settings:option:digital_download_url )">
+					<a href="&mvte:option:digital_download_url;" target="_blank">Digital Download</a>
+				<mvt:else>
+					&mvt:option:attr_code;: &mvt:option:data;
+				</mvt:if>
+			<mvt:elseif expr="NOT ISNULL l.settings:option:data_long">
+				&mvt:option:attr_code;: &mvt:option:data_long;
+			<mvt:else>
+				&mvt:option:attr_code;
+			</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemdiscounts }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:foreach iterator="discount" array="option:discounts">
+				<mvt:if expr="l.settings:discount:display">
+					<div class="order-discount">&mvt:discount:descrip;: &mvt:discount:formatted_discount;</div>
+				</mvt:if>
+			</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		</td>
+		<td>&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ l.settings:groups }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-price"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:retail">
+				&mvt:option:formatted_retail;
+			<mvt:elseif expr="l.settings:option:base_price">
+				&mvt:option:formatted_base_price;<MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:base_price">
+				&mvt:option:formatted_base_price;<MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:price">
+				&mvt:option:formatted_price;<MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:else>
+				&nbsp;
+			</mvt:if>
+		</td>
+		<td class="order-total"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:subtotal_retail OR l.settings:option:subtotal_base_price OR l.settings:option:subtotal">
+				<mvt:if expr="l.settings:option:subtotal_retail AND l.settings:option:subtotal_retail NE l.settings:option:subtotal">
+					<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_retail;</span>
+				<mvt:elseif expr="l.settings:option:subtotal_base_price NE l.settings:option:subtotal">
+					<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_base_price;</span>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:subtotal_base_price OR l.settings:option:subtotal">
+				<mvt:if expr="l.settings:option:subtotal_base_price NE l.settings:option:subtotal">
+					<span style="text-decoration: line-through;">&mvt:option:formatted_subtotal_base_price;</span>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				&mvt:option:formatted_subtotal;
+			<mvt:else>
+				&nbsp;
+			</mvt:if>
+		</td><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-price"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:retail OR l.settings:option:base_price OR l.settings:option:price">
+				<mvt:if expr="l.settings:option:retail AND l.settings:option:retail NE l.settings:option:price">
+					<span style="text-decoration: line-through;">&mvt:option:formatted_retail;</span>
+				<mvt:elseif expr="l.settings:option:base_price NE l.settings:option:price">
+					<span style="text-decoration: line-through;">&mvt:option:formatted_base_price;</span>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:base_price OR l.settings:option:price">
+				<mvt:if expr="l.settings:option:base_price NE l.settings:option:price">
+					<span style="text-decoration: line-through;">&mvt:option:formatted_base_price;</span>
+				</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:price"><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				&mvt:option:formatted_price;
+			<mvt:else>
+				&nbsp;
+			</mvt:if>
+		</td>
+		<td class="order-total"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvIF EXPR = "{ l.settings:lineitemprice EQ 'retail' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:subtotal_retail OR l.settings:option:subtotal_base_price OR l.settings:option:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSEIF EXPR = "{ l.settings:lineitemprice EQ 'base' }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:subtotal_base_price OR l.settings:option:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+			<MvELSE><MIVA STANDARDOUTPUTLEVEL = "text, html">
+			<mvt:if expr="l.settings:option:subtotal"><MIVA STANDARDOUTPUTLEVEL = "">
+			</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+				&mvt:option:formatted_subtotal;
+			<mvt:else>
+				&nbsp;
+			</mvt:if>
+		</td><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	</tr>
+	</mvt:foreach>
+	</mvt:foreach>
+<MIVA STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:lineitemcoupons }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	<mvt:foreach iterator="coupon" array="order:coupons">
+	<tr class="order-charges">
+		<td class="order-reorder">&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvIF EXPR = "{ NOT ISNULL l.settings:imagetypes[ 1 ] }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-image">&nbsp;</td><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<td class="order-description">
+			Coupon - &mvt:coupon:code;
+			<mvt:if expr="NOT ISNULL l.settings:coupon:descrip">
+				<div class="order-discount">&mvt:coupon:descrip;</div>
+			</mvt:if>
+		</td>
+		<td class="order-status">&nbsp;</td>
+		<td class="order-quantity">&nbsp;</td>
+		<td class="order-price">&nbsp;</td>
+		<td class="order-total">&nbsp;</td>
+	</tr>
+	</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+
+	<mvt:foreach iterator="charge" array="order:charges">
+	<tr class="order-charges">
+		<td colspan="{ l.charge_colspan }">&nbsp;</td>
+		<td class="charge-description">&mvt:charge:descrip;:</td>
+		<td class="charge-fee">&mvt:charge:formatted_disp_amt;</td>
+	</tr>
+	</mvt:foreach>
+
+	<tr class="totals">
+		<td colspan="{ l.charge_colspan }">&nbsp;</td>
+		<td class="total-prompt">Total:</td>
+		<td class="formatted-total">&mvt:order:formatted_total;</td>
+	</tr><MIVA STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.settings:payments }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+
+	<mvt:foreach iterator="payment" array="order:payments">
+	<tr class="order-payments">
+		<td colspan="{ l.charge_colspan }">&nbsp;</td>
+		<td class="charge-description">
+			<mvt:if expr="l.settings:payment:type EQ 6">
+				Refund:
+			<mvt:else>
+				Payment:
+			</mvt:if>
+			&mvt:payment:desc;:
+		</td>
+		<td class="charge-fee">
+			<mvt:if expr="l.settings:payment:type EQ 6">
+				&mvt:payment:formatted_amount;
+			<mvt:else>
+				&mvt:payment:formatted_amount_negative;
+			</mvt:if>
+		</td>
+	</tr>
+	</mvt:foreach><MIVA STANDARDOUTPUTLEVEL = "">
+	</MvIF><MIVA STANDARDOUTPUTLEVEL = "text, html">
+</table>
+
+<mvt:if expr="l.settings:order:have_custom_order_field_values">
+	<br />
+	<table>
+		<tr class="heading">
+			<td colspan="2">Additional Order Information</td>
+		</tr><MIVA STANDARDOUTPUTLEVEL = "">
+		<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.settings:fields_custom_order">
+			<MvASSIGN NAME = "l.safe_module_code"   VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:module ) }">
+			<MvASSIGN NAME = "l.safe_field_code"	VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.customfield:code ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html">
+		<mvt:if expr="{ 'NOT ISNULL l.settings:order:customfield_order_values:' $ l.safe_module_code $ ':' $ l.safe_field_code }">
+			<tr>
+				<td nowrap>
+					&mvt:customfield_order_names:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;:
+				</td>
+				<td width="100%">
+					&mvt:order:customfield_order_values:<MvEVAL EXPR = "{ l.safe_module_code }">:<MvEVAL EXPR = "{ l.safe_field_code }">;
+				</td>
+			</tr>
+		</mvt:if><MIVA STANDARDOUTPUTLEVEL = "">
+		</MvFOREACH><MIVA STANDARDOUTPUTLEVEL = "text, html">
+	</table>
+</mvt:if>
+<MIVA STANDARDOUTPUTLEVEL = "">
+	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_Lookup_BillEmail_BillZip" PARAMETERS = "bill_email, bill_zip, order_id, order var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ len_var( l.bill_zip ) NE 5 OR NOT isdigit( l.bill_zip ) }">
+		<MvASSIGN NAME = "l.query"			VALUE = "{ 'SELECT
+															*
+														FROM ' $
+															g.Store_Table_Prefix $ 'Orders
+														WHERE
+															id = ? AND
+															' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_email' )	$ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' AND
+															' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_zip' )	$ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }">
+
+		<MvASSIGN NAME = "l.fields" 		VALUE = "l.order_id, l.bill_email, l.bill_zip">
+	<MvELSE>
+		<MvASSIGN NAME = "l.bill_zip_plus"	VALUE = "{ l.bill_zip $ '-%' }">
+
+		<MvASSIGN NAME = "l.query"			VALUE = "{ 'SELECT
+															*
+														FROM ' $
+															g.Store_Table_Prefix $ 'Orders
+														WHERE
+															id = ? AND
+															' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_email' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' AND
+															(
+																' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_zip' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' OR
+																(
+																	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_cntry' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '\'US\'' ) $ ' AND
+																	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_zip' ) $ ' LIKE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ '
+																)
+															)' }">
+
+		<MvASSIGN NAME = "l.fields"			VALUE = "l.order_id, l.bill_email, l.bill_zip, l.bill_zip_plus">
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Orders"
+				QUERY	= "{ l.query }"
+				FIELDS	= "{ l.fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CSSUI-CMP-VORD-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-CSSUI-CMP-VORD-00004' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].v56_Order_Read( l.order ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Load_Lookup_BillEmail" PARAMETERS = "bill_email, order_id, order var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Orders"
+				QUERY	= "{ 'SELECT
+								*
+							  FROM ' $
+							  	g.Store_Table_Prefix $ 'Orders
+							  WHERE
+								id = ? AND
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'bill_email' )	$ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.order_id, l.bill_email">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CSSUI-CMP-VORD-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Orders.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-CSSUI-CMP-VORD-00008' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].v56_Order_Read( l.order ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/component/cmp-include-order.mv">

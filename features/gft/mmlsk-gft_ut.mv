@@ -1,0 +1,197 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-GFT-UTL-
+| Next Error Code: 2
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "GiftCertificate_Generate_Code" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Randomly generated coupon codes consist of 16 base-32 characters, using a total of 80bits of
+	| random data.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.base32chars"	VALUE = "0123456789ABCDEFGHJKLMNPQRSTUVWX">
+	<MvASSIGN NAME = "l.data_1"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_2"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_3"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_4"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_5"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_6"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_7"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_8"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_9"			VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+	<MvASSIGN NAME = "l.data_10"		VALUE = "{ asciivalue( crypto_rand_bytes( 1 ) ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ substring_var( l.base32chars, 1 + ( l.data_1 BITSR 3 ),										1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_1 BITAND 7 ) BITSL 2 ) + ( l.data_2 BITSR 6 ),	1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_2 BITAND 62 ) BITSR 1 ),							1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_2 BITAND 1 ) BITSL 4 ) + ( l.data_3 BITSR 4 ),	1 )	$
+								 '-'																								$
+								 substring_var( l.base32chars, 1 + ( ( l.data_3 BITAND 15 ) BITSL 1 ) + ( l.data_4 BITSR 7 ),	1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_4 BITAND 124 ) BITSR 2 ),							1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_4 BITAND 3 ) BITSL 3 ) + ( l.data_5 BITSR 5 ),	1 )	$
+								 substring_var( l.base32chars, 1 + ( l.data_5 BITAND 31 ),										1 ) $
+								 '-'																								$
+								 substring_var( l.base32chars, 1 + ( l.data_6 BITSR 3 ),										1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_6 BITAND 7 ) BITSL 2 ) + ( l.data_7 BITSR 6 ),	1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_7 BITAND 62 ) BITSR 1 ),							1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_7 BITAND 1 ) BITSL 4 ) + ( l.data_8 BITSR 4 ),	1 )	$
+								 '-'																								$
+								 substring_var( l.base32chars, 1 + ( ( l.data_8 BITAND 15 ) BITSL 1 ) + ( l.data_9 BITSR 7 ),	1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_9 BITAND 124 ) BITSR 2 ),							1 )	$
+								 substring_var( l.base32chars, 1 + ( ( l.data_9 BITAND 3 ) BITSL 3 ) + ( l.data_10 BITSR 5 ),	1 )	$
+								 substring_var( l.base32chars, 1 + ( l.data_10 BITAND 31 ),										1 )	}">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GiftCertificate_Redeem_LockFile" PARAMETERS = "giftcert var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ g.MerchantPath $ 'giftcertificate-' $ crypto_md5( l.giftcert:id $ ' redeem lock file' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GiftCertificateSales_Process_Order" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.created_giftcertificates"		VALUE = "">
+	<MvASSIGN NAME = "l.created_giftcertificate_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.giftcertificatesales_item" ARRAY = "l.giftcertificatesales" COUNT = "{ [ g.Feature_Filename_GFT_DB ].GiftCertificateSalesAndOrderItemList_Load_Order( l.order:id, l.giftcertificatesales ) }">
+		<MvIF EXPR = "{ NOT GiftCertificateSales_Process_OrderItem( l.giftcertificatesales_item, l.giftcertificatesales_item:orderitem, l.created_giftcertificates, l.created_giftcertificate_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ Notify_GiftCertificates_Created( l.created_giftcertificates, l.created_giftcertificate_count ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GiftCertificateSales_Process_OrderItem" PARAMETERS = "giftcertificatesales var, orderitem var, created_giftcertificates var, created_giftcertificate_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.option"										VALUE = "">
+	<MvASSIGN NAME = "l.option:order_id"							VALUE = "{ l.orderitem:order_id }">
+	<MvASSIGN NAME = "l.option:attr_id"								VALUE = 0>
+	<MvASSIGN NAME = "l.option:attr_code"							VALUE = "giftcert">
+	<MvASSIGN NAME = "l.option:attmpat_id"							VALUE = 0>
+	<MvASSIGN NAME = "l.option:option_id"							VALUE = 0>
+	<MvASSIGN NAME = "l.option:opt_code"							VALUE = "">
+	<MvASSIGN NAME = "l.option:retail"								VALUE = 0>
+	<MvASSIGN NAME = "l.option:base_price"							VALUE = 0>
+	<MvASSIGN NAME = "l.option:price"								VALUE = 0>
+	<MvASSIGN NAME = "l.option:weight"								VALUE = 0>
+	<MvASSIGN NAME = "l.option:data"								VALUE = "">
+	<MvASSIGN NAME = "l.option:data_long"							VALUE = "">
+	<MvASSIGN NAME = "l.option:attr_prompt"							VALUE = "Gift Certificate">
+	<MvASSIGN NAME = "l.option:opt_prompt"							VALUE = "">
+
+	<MvASSIGN NAME = "l.giftcertificate"							VALUE = "">
+	<MvASSIGN NAME = "l.giftcertificate:code"						VALUE = "">
+	<MvASSIGN NAME = "l.giftcertificate:active"						VALUE = 1>
+	<MvASSIGN NAME = "l.giftcertificate:order_id"					VALUE = "{ l.orderitem:order_id }">
+	<MvASSIGN NAME = "l.giftcertificate:cust_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.giftcertificate:redeem_dt"					VALUE = "">
+	<MvASSIGN NAME = "l.giftcertificate:credit_id"					VALUE = 0>
+
+	<MvIF EXPR = "{ l.giftcertificatesales:type EQ 'fixed' }">
+		<MvASSIGN NAME = "l.giftcertificate:amount"					VALUE = "{ l.giftcertificatesales:amount }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.orderoption_line_total"					VALUE = "{ [ g.Module_Library_DB ].OrderOption_Total_Line( l.orderitem:line_id ) }">
+		<MvASSIGN NAME = "l.giftcertificate:amount"					VALUE = "{ [ g.Module_Library_Utilities ].IEEE754_Normalize( 2, l.orderoption_line_total + l.orderitem:price ) ROUND 2 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Explode( l.orderitem, l.exploded_orderitems, l.exploded_orderitem_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.exploded_orderitem" ARRAY = "l.exploded_orderitems" COUNT = "{ l.exploded_orderitem_count }">
+		<MvFOR INDEX = "l.attempt" COUNT = "{ 100 }">
+			<MvASSIGN NAME = "l.giftcertificate:code"				VALUE = "{ GiftCertificate_Generate_Code() }">
+
+			<MvIF EXPR = "{ NOT [ g.Feature_Filename_GFT_DB ].GiftCertificate_Load_Code( l.giftcertificate:code, l.null ) }">
+				<MvFORSTOP>
+			</MvIF>
+		</MvFOR>
+
+		<MvIF EXPR = "{ l.attempt GT 100 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-GFT-UTL-00001', 'Unable to generate unique gift certificate code after 100 attempts') }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.giftcertificate:line_id"				VALUE = "{ l.exploded_orderitem:line_id }">
+
+		<MvIF EXPR = "{ NOT [ g.Feature_Filename_GFT_DB ].GiftCertificate_Insert( l.giftcertificate ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.created_giftcertificate_count"			VALUE = "{ miva_array_insert_var( l.created_giftcertificates, l.giftcertificate, -1 ) }">
+
+		<MvASSIGN NAME = "l.option:line_id"							VALUE = "{ l.exploded_orderitem:line_id }">
+		<MvASSIGN NAME = "l.option:data"							VALUE = "{ l.giftcertificate:code }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderOption_Insert( l.option ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.exploded_orderitem:group_id"			VALUE = "{ l.exploded_orderitem:line_id }">
+		<MvASSIGN NAME = "l.exploded_orderitem:status"				VALUE = 210>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update( l.exploded_orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "GiftCertificateSales_Process_OrderItems" PARAMETERS = "orderitems var, orderitem_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.created_giftcertificates"		VALUE = "">
+	<MvASSIGN NAME = "l.created_giftcertificate_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvIF EXPR = "{ NOT l.orderitem:product_id }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ [ g.Feature_Filename_GFT_DB ].GiftCertificateSales_Load_Product( l.orderitem:product_id, l.giftcertificatesales ) AND
+						l.giftcertificatesales:enabled }">
+			<MvIF EXPR = "{ NOT GiftCertificateSales_Process_OrderItem( l.giftcertificatesales, l.orderitem, l.created_giftcertificates, l.created_giftcertificate_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ Notify_GiftCertificates_Created( l.created_giftcertificates, l.created_giftcertificate_count ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Notify_GiftCertificates_Created" PARAMETERS = "created_giftcertificates var, created_giftcertificate_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.created_giftcertificate_count }">
+		<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_giftcert', l.modules ) }">
+			<MvIF EXPR = "{ l.module:api_ver GE 10.08 }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_GiftCertificates_Created( l.module, l.created_giftcertificates, l.created_giftcertificate_count ) }">
+			<MvELSE>
+				<MvFOREACH ITERATOR = "l.created_giftcertificate" ARRAY = "l.created_giftcertificates" COUNT = "{ l.created_giftcertificate_count }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_GiftCertificate_Created( l.module, l.created_giftcertificate ) }">
+				</MvFOREACH>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>

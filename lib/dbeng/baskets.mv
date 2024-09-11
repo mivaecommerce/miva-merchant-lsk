@@ -1,0 +1,933 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-BSK-
+| Next Error Code: 22   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Basket_Create" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basket"					VALUE = "">
+	<MvASSIGN NAME = "l.basket:cust_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.basket:order_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.basket:order_proc"		VALUE = 0>
+	<MvASSIGN NAME = "l.basket:ship_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.basket:session_id"		VALUE = "{ g.Session_ID }">
+	<MvASSIGN NAME = "l.basket:cussess_id"		VALUE = "">
+	<MvASSIGN NAME = "l.basket:chksess_id"		VALUE = "">
+	<MvASSIGN NAME = "l.basket:lastupdate"		VALUE = "{ s.time_t }">
+	<MvASSIGN NAME = "l.basket:csrf_token"		VALUE = "{ MakeSessionID() }">
+
+	<MvFUNCTIONRETURN VALUE = "{ Basket_Insert( l.basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Create_Provisional" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basket"					VALUE = "">
+	<MvASSIGN NAME = "l.basket:basket_id"		VALUE = "provisional">
+	<MvASSIGN NAME = "l.basket:cust_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.basket:order_id"		VALUE = 0>
+	<MvASSIGN NAME = "l.basket:order_proc"		VALUE = 0>
+	<MvASSIGN NAME = "l.basket:ship_id"			VALUE = 0>
+	<MvASSIGN NAME = "l.basket:session_id"		VALUE = "{ g.Session_ID }">
+	<MvASSIGN NAME = "l.basket:cussess_id"		VALUE = "">
+	<MvASSIGN NAME = "l.basket:chksess_id"		VALUE = "">
+	<MvASSIGN NAME = "l.basket:lastupdate"		VALUE = "{ s.time_t }">
+	<MvASSIGN NAME = "l.basket:csrf_token"		VALUE = "{ MakeSessionID() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Register" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Basket_Is_Provisional( l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Basket_Insert( l.basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_ID_Register" PARAMETERS = "basket_id var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( ISNULL g.Basket ) OR ( g.Basket:basket_id NE l.basket_id ) OR ( g.Basket:session_id NE g.Session_ID ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00016', 'Basket is provisional' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Basket_Register( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket_id"	VALUE = "{ g.Basket:basket_id }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Is_Provisional" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Basket_ID_Is_Provisional( l.basket:basket_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_ID_Is_Provisional" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ l.basket_id EQ 'provisional' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Dirty" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_Is_Provisional( l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.basket:order_id }">
+		<MvASSIGN NAME = "l.basket:order_id"	VALUE = 0>
+		<MvASSIGN NAME = "l.basket:order_proc"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT Basket_Update_Order( l.basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basket:subtotal"		VALUE = "">
+	<MvASSIGN NAME = "l.basket:quantity"		VALUE = "">
+	<MvASSIGN NAME = "l.basket:weight"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT BasketInfo_Clear_Basket( l.basket:basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Basket_Reset_Tax( l.basket:basket_id )							OR 
+					NOT BasketCharge_Delete_All_Type( l.basket:basket_id, 'TAX' )		OR
+					NOT BasketCharge_Delete_All_Type( l.basket:basket_id, 'SHIPPING' )	OR
+					NOT BasketCharge_Delete_All_Type( l.basket:basket_id, 'HANDLING' )	OR
+					NOT BasketCharge_Delete_All_Type( l.basket:basket_id, 'PAYMENT' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_SubTotal_Taxable" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT SUM( bi.price * bi.quantity ) as item_total 
+							  FROM ' $ 
+							  	g.Store_Table_Prefix $ 'BasketItems bi 
+							  WHERE 
+							  	bi.basket_id 	= ? AND 
+							  	bi.taxable 		= 1 
+							  UNION ALL 
+							  SELECT 
+							  	SUM( bo.price * bi.quantity ) AS item_total 
+							  FROM ' $ 
+							  	g.Store_Table_Prefix $ 'BasketItems bi, ' $ 
+							  	g.Store_Table_Prefix $ 'BasketOptions bo 
+							  WHERE 
+							  	bi.basket_id 	= ? AND 
+							  	bi.taxable 		= 1 AND 
+							  	bo.line_id 		= bi.line_id' }"
+				FIELDS	= "l.basket_id, l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00001', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT BasketItems.d.EOF }">
+		<MvASSIGN NAME = "l.total" VALUE = "{ l.total + BasketItems.d.item_total }">
+		
+		<MvSKIP NAME = "Merchant" VIEW = "BasketItems" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.total ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_SubTotal" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.subtotal"	VALUE = "{ BasketItem_Total( l.basket_id ) + BasketOption_Total( l.basket_id ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.subtotal ) ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Total" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.total"		VALUE = "{ BasketItem_Total( l.basket_id ) + BasketOption_Total( l.basket_id ) + BasketCharge_Total( l.basket_id ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketInfo_InsertOrUpdate" PARAMETERS = "basketinfo var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ BasketInfo_Insert( l.basketinfo ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ BasketInfo_Update( l.basketinfo ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketItem_Total" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT SUM( price * quantity ) AS total FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE basket_id = ?' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00002', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total"	VALUE = "{ BasketItems.d.total ROUND 2 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.total }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketItemDiscount_Total_Line" PARAMETERS = "line_id, total var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketItemDiscounts"
+				QUERY	= "{ 'SELECT SUM( discount ) AS total FROM ' $ g.Store_Table_Prefix $ 'BasketItemDiscounts WHERE line_id = ?' }"
+				FIELDS	= "l.line_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketItemDiscounts.d.EOF }">	<MvASSIGN NAME = "l.total"	VALUE = 0.00>
+	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ BasketItemDiscounts.d.total ROUND 2 }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItemDiscounts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketOptionDiscount_Total_Option" PARAMETERS = "line_id, attr_id, attmpat_id, total var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketOptionDiscounts"
+				QUERY	= "{ 'SELECT
+								SUM( discount ) AS total
+							  FROM
+								' $ g.Store_Table_Prefix $ 'BasketOptionDiscounts
+							  WHERE
+								line_id		= ?	AND
+								attr_id		= ?	AND
+								attmpat_id	= ?' }"
+				FIELDS	= "l.line_id, l.attr_id, l.attmpat_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketOptionDiscounts.d.EOF }">	<MvASSIGN NAME = "l.total"	VALUE = 0.00>
+	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ BasketOptionDiscounts.d.total ROUND 2 }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketOptionDiscounts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketOptionDiscount_Total_LineOption_ID" PARAMETERS = "lineopt_id, total var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketOptionDiscounts"
+				QUERY	= "{ 'SELECT
+								SUM( discount ) AS total
+							  FROM
+								' $ g.Store_Table_Prefix $ 'BasketOptionDiscounts
+							  WHERE
+								lineopt_id = ?' }"
+				FIELDS	= "l.lineopt_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ BasketOptionDiscounts.d.EOF }">	<MvASSIGN NAME = "l.total"	VALUE = 0.00>
+	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ BasketOptionDiscounts.d.total ROUND 2 }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketOptionDiscounts">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketOption_Total" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketOptions"
+				QUERY	= "{ 'SELECT
+								SUM( bo.price * bi.quantity ) AS total
+							  FROM ' $
+								g.Store_Table_Prefix $ 'BasketItems bi, ' $
+								g.Store_Table_Prefix $ 'BasketOptions bo
+							  WHERE
+								bi.basket_id	= ?				AND
+								bo.line_id		= bi.line_id' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00003', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total"	VALUE = "{ BasketOptions.d.total ROUND 2 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketOptions">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.total }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Total" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| This version of the function rounds of each basket charge to 2 decimal places, before adding it to the total in order to 
+	| avoid discrpeancies between the invoice line items and the invoice total.  
+	| See GEM#M5-756.
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketCharges"
+				QUERY	= "{ 'SELECT
+								amount
+							  FROM ' $
+								g.Store_Table_Prefix $ 'BasketCharges
+							  WHERE
+								basket_id	= ?' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT BasketCharges.d.EOF }">
+		<MvASSIGN NAME = "l.total"	VALUE = "{ l.total + ( BasketCharges.d.amount ROUND 2 ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "BasketCharges" ROWS = "1">
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketCharge_Total_Type" PARAMETERS = "basket_id, type" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketCharges"
+				QUERY	= "{ 'SELECT
+								amount
+							  FROM ' $
+								g.Store_Table_Prefix $ 'BasketCharges
+							  WHERE
+								basket_id	= ?	AND
+								type		= ?' }"
+				FIELDS	= "l.basket_id, l.type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00012', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.total"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT BasketCharges.d.EOF }">
+		<MvASSIGN NAME = "l.total"	VALUE = "{ l.total + ( BasketCharges.d.amount ROUND 2 ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "BasketCharges" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketCharges">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Quantity_All" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT SUM( quantity ) AS quantity FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE basket_id = ?' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00005', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.quantity" VALUE = "{ BasketItems.d.quantity ROUND 0 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.quantity }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Quantity" PARAMETERS = "basket_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT SUM( quantity ) AS quantity FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE basket_id = ? AND product_id = ?' }"
+				FIELDS	= "l.basket_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00006', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.quantity" VALUE = "{ BasketItems.d.quantity ROUND 0 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.quantity }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Weight" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.weight"	VALUE = "{ BasketItem_Weight( l.basket_id ) + BasketOption_Weight( l.basket_id ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.weight ) ROUND 2 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketItem_Weight" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT SUM( weight * quantity ) AS weight FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE basket_id = ?' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00007', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.weight"	VALUE = "{ BasketItems.d.weight ROUND 2 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.weight }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Quantity_Upsold" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "BasketItems"
+				QUERY	= "{ 'SELECT COUNT( * ) AS item_count FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE basket_id = ? AND upsold = 1' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.upsold_count" VALUE = "{ int( BasketItems.d.item_count ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.upsold_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketOption_Weight" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_ID_Is_Provisional( l.basket_id ) }">
+		<MvFUNCTIONRETURN VALUE = 0.00>
+	</MvIF>
+
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketOptions"
+				QUERY	= "{ 'SELECT
+								SUM( bo.weight * bi.quantity ) AS weight
+							  FROM ' $
+								g.Store_Table_Prefix $ 'BasketItems bi, ' $
+								g.Store_Table_Prefix $ 'BasketOptions bo
+							  WHERE
+								bi.basket_id	= ?				AND
+								bo.line_id		= bi.line_id' }"
+				FIELDS	= "l.basket_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.weight"	VALUE = "{ BasketOptions.d.weight ROUND 2 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketOptions">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.weight }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketOption_Line_Weight" PARAMETERS = "line_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketOptions"
+				QUERY	= "{ 'SELECT
+								SUM( weight ) AS weight
+							  FROM
+								' $ g.Store_Table_Prefix $ 'BasketOptions
+							  WHERE
+								line_id	= ?' }"
+				FIELDS	= "l.line_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.weight"	VALUE = "{ BasketOptions.d.weight ROUND 2 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketOptions">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.weight }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketOption_Total_Line" PARAMETERS = "line_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW	NAME	= "Merchant"
+				VIEW	= "BasketOptions"
+				QUERY	= "{ 'SELECT
+								SUM( price ) AS price
+							  FROM
+								' $ g.Store_Table_Prefix $ 'BasketOptions
+							  WHERE
+								line_id	= ?' }"
+				FIELDS	= "l.line_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00021', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.price"	VALUE = "{ BasketOptions.d.price ROUND 2 }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketOptions">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.price }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Reset" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_Is_Provisional( l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT Basket_Delete_ID( l.basket:basket_id )													OR
+					NOT BasketOptionDiscount_Delete_All_Basket( l.basket:basket_id )							OR
+					NOT BasketOption_Delete_All_Basket( l.basket:basket_id )									OR
+					NOT BasketItemDiscount_Delete_All_Basket( l.basket:basket_id )								OR
+				    NOT BasketItem_Delete_All_Basket( l.basket:basket_id )										OR
+					NOT BasketCharge_Delete_All_Basket( l.basket:basket_id )									OR
+					NOT BasketInfo_Delete_All_Basket( l.basket:basket_id )										OR
+					NOT [ g.Module_Feature_PGR_DB ].BasketCoupon_Delete_All_Basket( l.basket:basket_id )		OR
+					NOT [ g.Module_Feature_PGR_DB ].BasketDiscountTotal_Delete_All_Basket( l.basket:basket_id )	OR
+					NOT [ g.Module_Feature_CUS_DB ].ShopAsCustomerSession_Delete_All_Basket( g.Store:id, l.basket:basket_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AFF_DB ].Basket_Delete( l.basket:session_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Reset_Basket" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_Is_Provisional( l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT BasketInfo_Delete_All_Basket( l.basket:basket_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Basket_Delete_ID( l.basket:basket_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].ShopAsCustomerSession_Delete_All_Basket( g.Store:id, l.basket:basket_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AFF_DB ].Basket_Delete( l.basket:session_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Reset_Contents" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_Is_Provisional( l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT BasketOptionDiscount_Delete_All_Basket( l.basket:basket_id )						OR
+					NOT BasketOption_Delete_All_Basket( l.basket:basket_id )								OR
+					NOT BasketItemDiscount_Delete_All_Basket( l.basket:basket_id )							OR
+				    NOT BasketItem_Delete_All_Basket( l.basket:basket_id )									OR
+					NOT BasketCharge_Delete_All_Basket( l.basket:basket_id )								OR
+					NOT BasketInfo_Delete_ClearOnMod_Basket( l.basket:basket_id )							OR
+					NOT [ g.Module_Feature_PGR_DB ].BasketCoupon_Delete_All_Basket( l.basket:basket_id )	OR
+					NOT [ g.Module_Feature_PGR_DB ].BasketDiscountTotal_Delete_All_Basket( l.basket:basket_id ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_InventoryAdjust_ProductList" PARAMETERS = "time" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.time EQ 0 }">
+		<MvCOMMENT>
+		|
+		| This code joins to Baskets even though it does not technically need to do so,
+		| because a previous bug in Basket_Delete_All_OlderThan() left orphaned BasketItems which
+		| would cause this function to improperly reapply those expired BasketItem records to
+		| the product inventory
+		|
+		</MvCOMMENT>
+
+		<MvOPENVIEW	NAME	= "Merchant"
+					VIEW	= "Products"
+					QUERY	= "{ 'SELECT
+									bi.variant_id		AS variant_id,
+									SUM( bi.quantity )	AS quantity,
+									prod.id				AS id,
+									prod.catcount		AS catcount,
+									prod.agrpcount		AS agrpcount,
+									prod.pgrpcount		AS pgrpcount,
+									prod.disp_order		AS disp_order,
+									prod.code			AS code,
+									prod.sku			AS sku,
+									prod.name			AS name,
+									prod.thumbnail		AS thumbnail,
+									prod.image			AS image,
+									prod.price			AS price,
+									prod.cost			AS cost,
+									prod.descrip		AS descrip,
+									prod.weight			AS weight,
+									prod.taxable		AS taxable,
+									prod.active			AS active,
+									prod.dt_created		AS dt_created,
+									prod.dt_updated		AS dt_updated,
+									ipc.inventory		AS ipc_inventory,
+									ips.active			AS ips_active,
+									ips.in_long			AS ips_in_long,
+									ips.in_short		AS ips_in_short,
+									ips.low_level		AS ips_low_level,
+									ips.low_long		AS ips_low_long,
+									ips.low_lvl_d		AS ips_low_lvl_d,
+									ips.low_short		AS ips_low_short,
+									ips.low_track		AS ips_low_track,
+									ips.out_level		AS ips_out_level,
+									ips.out_long		AS ips_out_long,
+									ips.out_lvl_d		AS ips_out_lvl_d,
+									ips.out_short		AS ips_out_short,
+									ips.out_track		AS ips_out_track,
+									iset.active			AS iset_active,
+									iset.in_long		AS iset_in_long,
+									iset.in_short		AS iset_in_short,
+									iset.low_level		AS iset_low_level,
+									iset.low_long		AS iset_low_long,
+									iset.low_short		AS iset_low_short,
+									iset.low_track		AS iset_low_track,
+									iset.out_level		AS iset_out_level,
+									iset.out_long		AS iset_out_long,
+									iset.out_short		AS iset_out_short,
+									iset.out_track		AS iset_out_track
+								  FROM ' $
+									g.Store_Table_Prefix $ 'Baskets b, ' $
+									g.Store_Table_Prefix $ 'BasketItems bi, ' $
+									g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+									g.Store_Table_Prefix $ 'Products prod
+									LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+									LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+								  WHERE
+									bi.basket_id	= b.basket_id	AND
+									prod.id			= bi.product_id
+								  GROUP BY
+									bi.variant_id,
+									prod.id, prod.catcount, prod.agrpcount, prod.pgrpcount, prod.disp_order, prod.code, prod.sku, prod.name,
+									prod.thumbnail, prod.image, prod.price, prod.cost, prod.descrip, prod.weight, prod.taxable, prod.active,
+									prod.dt_created, prod.dt_updated,
+									ipc.inventory,
+									ips.active, ips.in_long, ips.in_short, ips.low_level, ips.low_long, ips.low_lvl_d, ips.low_short, ips.low_track,
+									ips.out_level, ips.out_long, ips.out_lvl_d, ips.out_short, ips.out_track,
+									iset.active, iset.in_long, iset.in_short, iset.low_level, iset.low_long, iset.low_short, iset.low_track, iset.out_level,
+									iset.out_long, iset.out_short, iset.out_track' }">
+	<MvELSE>
+		<MvOPENVIEW	NAME	= "Merchant"
+					VIEW	= "Products"
+					QUERY	= "{ 'SELECT
+									bi.variant_id		AS variant_id,
+									SUM( bi.quantity )	AS quantity,
+									prod.id				AS id,
+									prod.catcount		AS catcount,
+									prod.agrpcount		AS agrpcount,
+									prod.pgrpcount		AS pgrpcount,
+									prod.disp_order		AS disp_order,
+									prod.code			AS code,
+									prod.sku			AS sku,
+									prod.name			AS name,
+									prod.thumbnail		AS thumbnail,
+									prod.image			AS image,
+									prod.price			AS price,
+									prod.cost			AS cost,
+									prod.descrip		AS descrip,
+									prod.weight			AS weight,
+									prod.taxable		AS taxable,
+									prod.active			AS active,
+									prod.dt_created		AS dt_created,
+									prod.dt_updated		AS dt_updated,
+									ipc.inventory		AS ipc_inventory,
+									ips.active			AS ips_active,
+									ips.in_long			AS ips_in_long,
+									ips.in_short		AS ips_in_short,
+									ips.low_level		AS ips_low_level,
+									ips.low_long		AS ips_low_long,
+									ips.low_lvl_d		AS ips_low_lvl_d,
+									ips.low_short		AS ips_low_short,
+									ips.low_track		AS ips_low_track,
+									ips.out_level		AS ips_out_level,
+									ips.out_long		AS ips_out_long,
+									ips.out_lvl_d		AS ips_out_lvl_d,
+									ips.out_short		AS ips_out_short,
+									ips.out_track		AS ips_out_track,
+									iset.active			AS iset_active,
+									iset.in_long		AS iset_in_long,
+									iset.in_short		AS iset_in_short,
+									iset.low_level		AS iset_low_level,
+									iset.low_long		AS iset_low_long,
+									iset.low_short		AS iset_low_short,
+									iset.low_track		AS iset_low_track,
+									iset.out_level		AS iset_out_level,
+									iset.out_long		AS iset_out_long,
+									iset.out_short		AS iset_out_short,
+									iset.out_track		AS iset_out_track
+								  FROM ' $
+									g.Store_Table_Prefix $ 'Baskets b, ' $
+									g.Store_Table_Prefix $ 'BasketItems bi, ' $
+									g.Store_Table_Prefix $ 'InventorySettings iset, ' $
+									g.Store_Table_Prefix $ 'Products prod
+									LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductSettings ips ON ips.product_id = prod.id
+									LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'InventoryProductCounts ipc ON ipc.product_id = prod.id
+								  WHERE
+									b.lastupdate	< ?				AND
+									bi.basket_id	= b.basket_id	AND
+									prod.id			= bi.product_id
+								  GROUP BY
+									bi.variant_id,
+									prod.id, prod.catcount, prod.agrpcount, prod.pgrpcount, prod.disp_order, prod.code, prod.sku, prod.name,
+									prod.thumbnail, prod.image, prod.price, prod.cost, prod.descrip, prod.weight, prod.taxable, prod.active,
+									prod.dt_created, prod.dt_updated,
+									ipc.inventory,
+									ips.active, ips.in_long, ips.in_short, ips.low_level, ips.low_long, ips.low_lvl_d, ips.low_short, ips.low_track,
+									ips.out_level, ips.out_long, ips.out_lvl_d, ips.out_short, ips.out_track,
+									iset.active, iset.in_long, iset.in_short, iset.low_level, iset.low_long, iset.low_short, iset.low_track, iset.out_level,
+									iset.out_long, iset.out_short, iset.out_track' }"
+					FIELDS	= "l.time">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">	
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-BSK-00010', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"		VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvASSIGN NAME = "l.product_count"	VALUE = "{ l.product_count + 1 }">
+
+		<MvEVAL EXPR = "{ Product_Read( l.products[ l.product_count ] ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.products[ l.product_count ] ) }">
+
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "variant_id"	VALUE = "{ Products.d.variant_id }">
+		<MvASSIGN NAME = "l.products" INDEX = "{ l.product_count }" MEMBER = "quantity"		VALUE = "{ Products.d.quantity }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+	<MvASSIGN NAME = "l.product_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.product_pos LE l.product_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Adjust_Variant( l.products[ l.product_pos ], l.products[ l.product_pos ]:variant_id, l.products[ l.product_pos ]:quantity ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product_pos"	VALUE = "{ l.product_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "BasketItem_Delete" PARAMETERS = "line_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ BasketOptionDiscount_Delete_All_Line( l.line_id )	AND
+								 BasketOption_Delete_All_Line( l.line_id )			AND
+								 BasketItemDiscount_Delete_All_Line( l.line_id )	AND
+								 BasketItem_Delete_Line( l.line_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Reset_Tax" PARAMETERS = "basket_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'BasketItems 
+			 			  SET 
+			 				tax			= 0.00 
+			 			  WHERE 
+			 				basket_id	= ?' }"
+			 FIELDS = "l.basket_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-BSK-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'BasketCharges 
+			 			  SET 
+			 				tax			= 0.00 
+			 			  WHERE 
+			 				basket_id	= ?' }"
+			 FIELDS = "l.basket_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-BSK-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Delete_All" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'Baskets' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketOptionDiscounts' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketOptions' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketItems' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketItemDiscounts' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCharges' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketInfo' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCoupons' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketDiscountTotals' }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AFF_DB ].AffiliateSession_Delete_All() }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_DB ].ShopAsCustomerSession_Delete_All() }">
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Delete_All_OlderThan" PARAMETERS = "time_t" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_DB ].ShopAsCustomerSession_Delete_All_Basket_OlderThan( g.Store:id, l.time_t ) }">
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketOptionDiscounts bod
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bod.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketOptions bo
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bo.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketItems bi
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bi.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketItemDiscounts bid
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bid.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCharges bc
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bc.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketInfo bi
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bi.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketCoupons bc
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bc.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'BasketDiscountTotals bd
+				 			  USING ' $
+				 			  	g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bd.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'Baskets WHERE lastupdate < ?' }"
+				 FIELDS	= "l.time_t">
+	<MvELSE>
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bod.* FROM ' $ g.Store_Table_Prefix $ 'BasketOptionDiscounts bod, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bod.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bo.* FROM ' $ g.Store_Table_Prefix $ 'BasketOptions bo, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bo.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bi.* FROM ' $ g.Store_Table_Prefix $ 'BasketItems bi, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bi.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bid.* FROM ' $ g.Store_Table_Prefix $ 'BasketItemDiscounts bid, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bid.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bc.* FROM ' $ g.Store_Table_Prefix $ 'BasketCharges bc, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bc.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bi.* FROM ' $ g.Store_Table_Prefix $ 'BasketInfo bi, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bi.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bc.* FROM ' $ g.Store_Table_Prefix $ 'BasketCoupons bc, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bc.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE bd.* FROM ' $ g.Store_Table_Prefix $ 'BasketDiscountTotals bd, ' $ g.Store_Table_Prefix $ 'Baskets b WHERE b.lastupdate < ? AND bd.basket_id = b.basket_id' }"
+				 FIELDS	= "l.time_t">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'Baskets WHERE lastupdate < ?' }"
+				 FIELDS	= "l.time_t">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AFF_DB ].AffiliateSession_Delete_All_OlderThan( l.time_t ) }">
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Basket_Is_Empty" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ Basket_Is_Provisional( l.basket ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Basket_Is_Empty', 'SELECT line_id FROM ' $ g.Store_Table_Prefix $ 'BasketItems WHERE basket_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.basket:basket_id ), 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-BSK-00019', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.empty" VALUE = "{ Basket_Is_Empty.d.EOF }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Basket_Is_Empty">
+	<MvFUNCTIONRETURN VALUE = "{ l.empty }">
+</MvFUNCTION>

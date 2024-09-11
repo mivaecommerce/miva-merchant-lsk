@@ -1,0 +1,1059 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-PAY-M10-
+| Next Error Code: 28   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-mod10">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Credit Card Payment with Simple Validation">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to capture credit card payments without processing them.  This is an offline payment method. It allows you to capture the customer's credit card information so that you can process it later.  When a customer enters their credit card number it is checked against the \"mod-10\" algorithm.  For each credit card that you accept with this module, you can set one or more prefixes and one or more allowable lengths.">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "payment, vis_payment, provision_store, data_store, json, clientside, clientside_sri, externalreq">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_External_Requirements_Met" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ g.Store:crypt_id NE 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Install_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'MOD10Cards
+						  (
+						  	id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() 	$ ',
+							name		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )	$ ',
+							prefixes	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							lengths		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'MOD10Cards_1 ON ' $ g.Store_Table_Prefix $ 'MOD10Cards
+						  ( name )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'MOD10Cards_2 ON ' $ g.Store_Table_Prefix $ 'MOD10Cards ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00023', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'MOD10Cards', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card_count"												VALUE = 1>
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "name"		VALUE = "Visa">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "prefixes"	VALUE = 4>
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "lengths"	VALUE = "13, 16">
+
+	<MvASSIGN NAME = "l.card_count"												VALUE = "{ l.card_count + 1 }">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "name"		VALUE = "MasterCard">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "prefixes"	VALUE = "510000-559999, 222100-272099">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "lengths"	VALUE = 16>
+
+	<MvASSIGN NAME = "l.card_count"												VALUE = "{ l.card_count + 1 }">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "name"		VALUE = "Discover">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "prefixes"	VALUE = "6011, 622126-622925, 624000-626999, 628200-628899, 64, 65">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "lengths"	VALUE = "16, 17, 18, 19">
+
+	<MvASSIGN NAME = "l.card_count"												VALUE = "{ l.card_count + 1 }">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "name"		VALUE = "American Express">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "prefixes"	VALUE = "34, 37">
+	<MvASSIGN NAME = "l.cards" INDEX = "{ l.card_count }" MEMBER = "lengths"	VALUE = 15>
+
+	<MvASSIGN NAME = "l.card_pos"		VALUE = 1>
+	<MvWHILE EXPR = "{ l.card_pos LE l.card_count }">
+		<MvIF EXPR = "{ NOT MOD10Card_Insert( l.cards[ l.card_pos ] ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.card_pos"	VALUE = "{ l.card_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Upgrade_Store" PARAMETERS = "module var, version" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Uninstall_Store" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'MOD10Cards' }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'MOD10Cards' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_LeftNavigation" PARAMETERS = "module var, indent" STANDARDOUTPUTLEVEL = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Methods" PARAMETERS = "module var, methods var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Store:crypt_id EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.card_count"		VALUE = "{ MOD10CardList_Load( l.cards ) }">
+
+	<MvWHILE EXPR = "{ l.card_pos LE l.card_count }">
+		<MvASSIGN NAME = "l.methods"	INDEX = "{ l.card_pos }" MEMBER = "code"	VALUE = "{ l.cards[ l.card_pos ]:name }">
+		<MvASSIGN NAME = "l.methods"	INDEX = "{ l.card_pos }" MEMBER = "name"	VALUE = "{ l.cards[ l.card_pos ]:name }">
+
+		<MvASSIGN NAME = "l.card_pos"	VALUE = "{ l.card_pos + 1 }">
+	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.card_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_URL" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Message" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Hide_Additional_Fields" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Fields" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "cc_name,cc_number,cc_exp">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Prompt" PARAMETERS = "module var, data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'cc_name' }">
+		<MvFUNCTIONRETURN VALUE = "Name on Card:">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_number' }">
+		<MvFUNCTIONRETURN VALUE = "Card Number:">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_exp' }">
+		<MvFUNCTIONRETURN VALUE = "Expiration Date:">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Invalid" PARAMETERS = "module var, data, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.field_id EQ 'cc_name' ) AND g.MOD10_CardName_Invalid }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.field_id EQ 'cc_number' ) AND g.MOD10_CardNumber_Invalid }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.field_id EQ 'cc_exp' ) AND g.MOD10_CardExp_Invalid }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Field" PARAMETERS = "module var, data, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.field_id EQ 'cc_name' }">
+		<input type="text" name="MOD10_CardName" size=40 value="{ encodeentities( g.MOD10_CardName ) }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'cc_number' }">
+		<input type="text" name="MOD10_CardNumber" size=20 value="{ encodeentities( g.MOD10_CardNumber ) }">
+	<MvELSEIF EXPR = "{ l.field_id EQ 'cc_exp' }">
+		<select name="MOD10_CardExp_Month">
+			<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawOption_SelectOne() }">
+
+			<MvASSIGN NAME = "l.month" VALUE = 1>
+			<MvWHILE EXPR = "{ l.month LE 12 }">
+				<MvIF EXPR = "{ g.MOD10_CardExp_Month EQ l.month }">
+					<option value="{ l.month }" selected><MvEVAL EXPR = "{ l.month }"></option>
+				<MvELSE>
+					<option value="{ l.month }"><MvEVAL EXPR = "{ l.month }"></option>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.month" VALUE = "{ l.month + 1 }">
+			</MvWHILE>
+		</select>
+
+		/
+
+		<MvASSIGN NAME = "l.year" VALUE = "{ s.dyn_tm_year }">
+		<MvASSIGN NAME = "l.count" VALUE = 1>
+
+		<select name="MOD10_CardExp_Year">
+			<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawOption_SelectOne() }">
+
+			<MvWHILE EXPR = "{ l.count LE 25 }">
+				<MvIF EXPR = "{ g.MOD10_CardExp_Year EQ l.year }">
+					<option value="{ l.year }" selected><MvEVAL EXPR = "{ l.year }"></option>
+				<MvELSE>
+					<option value="{ l.year }"><MvEVAL EXPR = "{ l.year }"></option>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.year" VALUE = "{ l.year + 1 }">
+				<MvASSIGN NAME = "l.count" VALUE = "{ l.count + 1 }">
+			</MvWHILE>
+		</select>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Payment_Validate" PARAMETERS = "module var, pay_data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT MOD10Card_Load_Name_Cached( l.pay_data, l.card ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.valid" VALUE = 1>
+
+	<MvASSIGN NAME = "g.MOD10_CardName"		VALUE = "{ trim( g.MOD10_CardName ) }">
+	<MvASSIGN NAME = "g.MOD10_CardNumber"	VALUE = "{ trim( g.MOD10_CardNumber ) }">
+
+	<MvIF EXPR = "{ len( g.MOD10_CardName ) EQ 0 }">
+		<MvASSIGN NAME = "l.valid"						VALUE = 0>
+		<MvASSIGN NAME = "g.MOD10_CardName_Invalid"		VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( len( g.MOD10_CardNumber ) EQ 0 ) OR ( NOT ValidCC( l.card, g.MOD10_CardNumber ) ) }">
+		<MvASSIGN NAME = "l.valid"						VALUE = 0>
+		<MvASSIGN NAME = "g.MOD10_CardNumber_Invalid"	VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( g.MOD10_CardExp_Year LT s.dyn_tm_year ) OR
+					( NOT g.MOD10_CardExp_Month ) OR
+					( NOT isdigit( g.MOD10_CardExp_Month ) ) OR
+					( ( g.MOD10_CardExp_Year EQ s.dyn_tm_year ) AND ( g.MOD10_CardExp_Month LT s.dyn_tm_mon ) ) }">
+		<MvASSIGN NAME = "l.valid"						VALUE = 0>
+		<MvASSIGN NAME = "g.MOD10_CardExp_Invalid"		VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Description" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Fields" PARAMETERS = "module var, data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "cc_card,cc_name,cc_number,cc_exp">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Label" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.field_id EQ 'cc_card' }">
+		<MvFUNCTIONRETURN VALUE = "Card Type:">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_name' }">
+		<MvFUNCTIONRETURN VALUE = "Name on Card:">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_number' }">
+		<MvFUNCTIONRETURN VALUE = "Card Number:">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_exp' }">
+		<MvFUNCTIONRETURN VALUE = "Expiration Date:">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Report_Value" PARAMETERS = "module var, field_id, data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ len( l.secure_data ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "** Secured **">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_card' }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.data ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_name' }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.secure_data:Name ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_number' }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.secure_data:Number ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field_id EQ 'cc_exp' }">
+		<MvFUNCTIONRETURN VALUE = "{ encodeentities( l.secure_data:ExpMo ) $ '/' $ encodeentities( l.secure_data:ExpYear ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Manipulate_Shipping" PARAMETERS = "module var, data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Authorize" PARAMETERS = "module var, module_data, total, data var, secure_data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT MOD10Card_Load_Name_Cached( l.module_data, l.card ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error_PaymentMethod_Invalid() }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.data" 					VALUE = "{ l.module_data }">
+	<MvASSIGN NAME = "l.secure_data:number" 	VALUE = "{ g.MOD10_CardNumber }">
+	<MvASSIGN NAME = "l.secure_data:name" 		VALUE = "{ g.MOD10_CardName }">
+	<MvASSIGN NAME = "l.secure_data:expmo" 		VALUE = "{ g.MOD10_CardExp_Month }">
+	<MvASSIGN NAME = "l.secure_data:expyear" 	VALUE = "{ g.MOD10_CardExp_Year }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.data }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Process" PARAMETERS = "module var, data var, secure_data var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ValidCC" PARAMETERS = "card var, ccnum" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Strip spaces and dashes from the credit card number.
+	| If after this it contains any non-numeric characters,
+	| then it's invalid.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.validate" VALUE = "{ glosub( l.ccnum, ' ', '' ) }">
+	<MvASSIGN NAME = "l.validate" VALUE = "{ glosub( l.validate, '-', '' ) }">
+
+	<MvIF EXPR = "{ ( len( l.validate ) EQ 0 ) OR ( NOT isdigit( l.validate ) ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ValidCC_length_check( l.validate, l.card:lengths ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ValidCC_prefix_check( l.validate, l.card:prefixes ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ValidCC_MOD10_check( l.validate ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ValidCC_length_check" PARAMETERS = "ccnum, lengths" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| 'lengths' contains a list of acceptable number lengths for this card type.  It may be blank
+	| If it's blank, return valid = 1 and we're done.
+	| Otherwise, determine the length of ccnum, and scan lengths until that length is found (success)
+	| Or we've reached the end (failure)
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ len( l.lengths ) EQ 0}">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.ccnum_len" VALUE = "{ len( l.ccnum ) }">
+		<MvASSIGN NAME = "l.pos" VALUE = 1>
+		<MvASSIGN NAME = "l.valid_length" VALUE = "{ trim( gettoken( l.lengths, ',', l.pos ) ) }">
+		<MvWHILE EXPR = "{ ( NOT l.valid ) AND ( len( l.valid_length ) ) }">
+			<MvIF EXPR = "{ l.ccnum_len EQ l.valid_length }">
+				<MvASSIGN NAME = "l.valid" VALUE = 1>
+			<MvELSE>
+				<MvASSIGN NAME = "l.pos" VALUE = "{ l.pos + 1 }">
+				<MvASSIGN NAME = "l.valid_length" VALUE = "{ trim( gettoken( l.lengths, ',', l.pos ) ) }">
+			</MvIF>
+		</MvWHILE>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.valid }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ValidCC_prefix_check" PARAMETERS = "ccnum, prefixes" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| 'prefixes' contains a list of acceptable prefixes for this card type.  It may be blank
+	| If it's blank, return valid = 1 and we're done.
+	| Otherwise, compare each prefix in the list to leading digits of ccnum until there is a match (success)
+	| Or we've reached the end (failure)
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ISNULL l.prefixes }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.prefix" ARRAY = "l.split_prefixes" COUNT = "{ miva_splitstring( l.prefixes, ',', l.split_prefixes, 'trim' ) }">
+		<MvASSIGN NAME = "l.dash_pos"	VALUE = "{ '-' IN l.prefix }">
+
+		<MvIF EXPR = "{ l.dash_pos EQ 0 }">
+			<MvIF EXPR = "{ substring_var( l.ccnum, 1, len_var( l.prefix ) ) EQ l.prefix }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.low"	VALUE = "{ substring_var( l.prefix, 1, l.dash_pos - 1 ) }">
+			<MvASSIGN NAME = "l.high"	VALUE = "{ substring_var( l.prefix, l.dash_pos + 1, len_var( l.prefix ) - l.dash_pos ) }">
+
+			<MvIF EXPR = "{ ( ISNULL l.low ) OR ( ISNULL l.high ) OR ( NOT isdigit( l.low ) ) OR ( NOT isdigit( l.high ) ) }">
+				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ ( substring_var( l.ccnum, 1, len_var( l.low ) ) GE l.low ) AND
+								( substring_var( l.ccnum, 1, len_var( l.high ) ) LE l.high ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ValidCC_MOD10_check" PARAMETERS = "ccnum" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Add all the digits together.  We start at the end
+	| and proceed towards the front.  Odd-numbered positions
+	| are multiplied by two
+	|
+	</MvCOMMENT>
+	<MvASSIGN NAME = "l.odd" 	VALUE = 0>
+	<MvASSIGN NAME = "l.total" 	VALUE = 0>
+
+	<MvASSIGN NAME = "l.pos" 	VALUE = "{ len( l.ccnum ) }">
+	<MvWHILE EXPR = "{ l.pos GT 0 }">
+		<MvASSIGN NAME = "l.digit" VALUE = "{ substring( l.ccnum, l.pos , 1 ) }">
+		<MvIF EXPR = "{ l.odd }">
+			<MvASSIGN NAME = "l.digit" VALUE = "{ l.digit * 2 }">
+			<MvIF EXPR = "{ l.digit GT 9 }">
+				<MvASSIGN NAME = "l.digit" VALUE = "{ l.digit - 9 }">
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.total" 	VALUE = "{ l.total + l.digit }">
+		<MvASSIGN NAME = "l.odd" 	VALUE = "{ NOT l.odd }">
+
+		<MvASSIGN NAME = "l.pos" 	VALUE = "{ l.pos - 1 }">
+	</MvWHILE>
+	<MvCOMMENT>
+	|
+	| The result must be evenly dividable by 10
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.total MOD 10 ) NE 0 }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "MOD10:Credit Card Payment With Simple Validation">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Payment_Content" PARAMETERS = "module var, tab, load_fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.tab EQ 'MOD10' }">
+		<MvEVAL EXPR = "{ Element_MOD10CardList_CSS( l.module ) }">
+
+		<MvIF EXPR = "{ Element_MOD10_JavaScript_Combined_Begin( l.module ) }">
+			<MvEVAL EXPR = "{ Element_MOD10CardList_JavaScript( l.module ) }">
+			<MvEVAL EXPR = "{ Element_MOD10_JavaScript_Combined_End( l.module ) }">
+		</MvIF>
+
+		<script language="JavaScript">
+			MMScreen_LoadFinished( function() { new MOD10CardList(); } );
+		</script>
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawButtons_Suppress( '[UPDATE]' ) }">
+		<MvEVAL EXPR = "{ Element_MOD10CardList_HTML( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Order_MOD10_CC_Name" 	VALUE = "{ trim( g.Order_MOD10_CC_Name ) }">
+	<MvASSIGN NAME = "g.Order_MOD10_CC_Number" 	VALUE = "{ trim( g.Order_MOD10_CC_Number ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Update" PARAMETERS = "module var, data var, secure_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.secure_data:name" 		VALUE = "{ g.Order_MOD10_CC_Name }">
+	<MvASSIGN NAME = "l.secure_data:number" 	VALUE = "{ g.Order_MOD10_CC_Number }">
+	<MvASSIGN NAME = "l.secure_data:expmo" 		VALUE = "{ g.Order_MOD10_CC_Exp_Month }">
+	<MvASSIGN NAME = "l.secure_data:expyear" 	VALUE = "{ g.Order_MOD10_CC_Exp_Year }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Delete" PARAMETERS = "module var, data, secure_data" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Tabs" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "MOD10:Credit Card Payment With Simple Validation">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PaymentModule_Order_Content" PARAMETERS = "module var, tab, load_fields, data, secure_data" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.load_fields }">
+		<MvASSIGN NAME = "g.Order_MOD10_Card" VALUE = "{ l.data }">
+
+		<MvIF EXPR = "{ g.Order_Lock_Mode EQ 'locked' }">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Name" 		VALUE = "">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Number" 		VALUE = "">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Exp_Month" 	VALUE = "">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Exp_Year" 	VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Name" 		VALUE = "{ l.secure_data:name }">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Number" 		VALUE = "{ l.secure_data:number }">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Exp_Month" 	VALUE = "{ l.secure_data:expmo }">
+			<MvASSIGN NAME = "g.Order_MOD10_CC_Exp_Year" 	VALUE = "{ l.secure_data:expyear }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.tab EQ 'MOD10' }">
+		<table border=0 cellpadding=2 cellspacing=0 width = "100%">
+		<tr><td colspan=2 nowrap>
+				<input type="hidden" name="Order_MOD10_Card" value="{ encodeentities( g.Order_MOD10_Card ) }">
+				<b><MvEVAL EXPR = "{ encodeentities( g.Order_MOD10_Card ) }"></b>
+		</td></tr>
+
+		<MvIF EXPR = "{ g.Order_Lock_Mode NE 'locked' }">
+
+			<tr><td nowrap>
+					<b>Name on Card:</b>
+			</td><td width="100%">
+					<input type="text" size=40 name="Order_MOD10_CC_Name" value="{ encodeentities( g.Order_MOD10_CC_Name ) }">
+			</td></tr>
+
+			<tr><td nowrap>
+					<b>Card Number:</b>
+			</td><td width="100%">
+					<input type="text" size=40 name="Order_MOD10_CC_Number" value="{ encodeentities( g.Order_MOD10_CC_Number ) }">
+			</td></tr>
+
+			<tr><td nowrap>
+					<b>Expiration Date:</b>
+			</td><td width="100%">
+					<select name="Order_MOD10_CC_Exp_Month">
+						<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawOption_SelectOne() }">
+
+						<MvASSIGN NAME = "l.month" VALUE = 1>
+						<MvWHILE EXPR = "{ l.month LE 12 }">
+							<MvIF EXPR = "{ g.Order_MOD10_CC_Exp_Month EQ l.month }">
+								<option value="{ l.month }" selected><MvEVAL EXPR = "{ l.month }"></option>
+							<MvELSE>
+								<option value="{ l.month }"><MvEVAL EXPR = "{ l.month }"></option>
+							</MvIF>
+
+							<MvASSIGN NAME = "l.month" VALUE = "{ l.month + 1 }">
+						</MvWHILE>
+					</select>
+
+					/
+
+					<MvASSIGN NAME = "l.year" VALUE = "{ s.dyn_tm_year }">
+					<MvASSIGN NAME = "l.count" VALUE = 1>
+
+					<select name="Order_MOD10_CC_Exp_Year">
+						<MvDO FILE = "{ g.Module_Library_Utilities }" NAME = "l.foo" VALUE = "{ DrawOption_SelectOne() }">
+
+						<MvWHILE EXPR = "{ l.count LE 25 }">
+							<MvIF EXPR = "{ g.Order_MOD10_CC_Exp_Year EQ l.year }">
+								<option value="{ l.year }" selected><MvEVAL EXPR = "{ l.year }"></option>
+							<MvELSE>
+								<option value="{ l.year }"><MvEVAL EXPR = "{ l.year }"></option>
+							</MvIF>
+
+							<MvASSIGN NAME = "l.year" VALUE = "{ l.year + 1 }">
+							<MvASSIGN NAME = "l.count" VALUE = "{ l.count + 1 }">
+						</MvWHILE>
+					</select>
+			</td></tr>
+		</MvIF>
+		</table>
+	<MvELSE>
+		<input type="hidden" name="Order_MOD10_Card" 			value="{ encodeentities( g.Order_MOD10_Card ) }">
+		<input type="hidden" name="Order_MOD10_CC_Name" 		value="{ encodeentities( g.Order_MOD10_CC_Name ) }">
+		<input type="hidden" name="Order_MOD10_CC_Number" 		value="{ encodeentities( g.Order_MOD10_CC_Number ) }">
+		<input type="hidden" name="Order_MOD10_CC_Exp_Month" 	value="{ encodeentities( g.Order_MOD10_CC_Exp_Month ) }">
+		<input type="hidden" name="Order_MOD10_CC_Exp_Year" 	value="{ encodeentities( g.Order_MOD10_CC_Exp_Year ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_pos"		VALUE = 1>
+	<MvASSIGN NAME = "l.child_count"	VALUE = "{ miva_array_elements( l.provide_xml:children ) }">
+	<MvWHILE EXPR = "{ l.child_pos LE l.child_count }">
+		<MvASSIGN NAME = "l.name"		VALUE = "{ tolower( l.provide_xml:children[ l.child_pos ]:name ) }">
+
+		<MvIF EXPR = "{ l.name EQ 'card_delete' }">		<MvEVAL EXPR = "{ Module_Provision_Store_CardDelete( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'card_add' }">	<MvEVAL EXPR = "{ Module_Provision_Store_CardAdd( l.module, l.provide_xml:children[ l.child_pos ] ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.child_pos"	VALUE = "{ l.child_pos + 1 }">
+	</MvWHILE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_CardDelete" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Text( l.provide_xml, 'name', l.name ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT MOD10Card_Delete( l.name ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-M10-00015', 'MOD10 Card \'' $ l.name $ '\' deleted' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Provision_Store_CardAdd" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R', l.provide_xml,	'Name',				l.card:name ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R', l.provide_xml,	'ValidPrefixes',	l.card:prefixes ) OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'R', l.provide_xml,	'ValidLengths',		l.card:lengths ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ MOD10Card_Load_Name( l.card:name, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'A card with the name \'' $ l.card:name $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentCardType_Validate_Prefixes( l.card:prefixes ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentCardType_Validate_Lengths( l.card:lengths ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Lengths must be numeric.  Separate multiple prefixes with commas.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT MOD10Card_Insert( l.card ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-M10-00016', 'MOD10 Card \'' $ l.card:name $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module JSON Feature (json)
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_MOD10Card_Load" PARAMETERS = "card var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.MOD10Card_ID" VALUE = "{ int( g.MOD10Card_ID ) }">
+
+	<MvIF EXPR = "{ NOT MOD10Card_Load_ID( g.MOD10Card_ID, l.card ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00024', 'Failed to load card' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MOD10Card_Validate" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Name" 		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Name ) }">
+	<MvASSIGN NAME = "g.Prefixes" 	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Prefixes ) }">
+	<MvASSIGN NAME = "g.Lengths" 	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Lengths ) }">
+
+	<MvIF EXPR = "{ ISNULL g.Name }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Name', 'Name cannot be blank' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentCardType_Validate_Prefixes( g.Prefixes ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Prefixes', g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentCardType_Validate_Lengths( g.Lengths ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Lengths', 'Lengths must be numeric.  Multiple values must be separated by commas.' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MOD10CardList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PMNT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'name',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'prefixes',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR( l.available_filters, 'lengths',	'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'MOD10Cards', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.search_query, l.sort, 'name,prefixes,lengths', 'name' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'MOD10Cards', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-M10-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ int( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ int( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT MOD10Cards.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.card_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ MOD10Card_Read( l.card ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.card_count ) }">
+				"id":		<MvEVAL EXPR = "{ int( l.card:id ) }">,
+				"name":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.card:name ) }">",
+				"prefixes":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.card:prefixes ) }">",
+				"lengths":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.card:lengths ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "MOD10Cards" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "MOD10Cards">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MOD10Card_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PMNT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_MOD10Card_Validate() }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ MOD10Card_Load_Name( g.Name, l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Name', 'A credit card with the name \'' $ g.Name $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card:name" 		VALUE = "{ g.Name }">
+	<MvASSIGN NAME = "l.card:prefixes" 	VALUE = "{ g.Prefixes }">
+	<MvASSIGN NAME = "l.card:lengths" 	VALUE = "{ g.Lengths }">
+
+	<MvIF EXPR = "{ NOT MOD10Card_Insert( l.card ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-M10-00018', 'MOD10 Card \'' $ g.Name $ '\' created' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MOD10Card_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PMNT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_MOD10Card_Load( l.card ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_MOD10Card_Validate() }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ tolower( g.Name ) NE tolower( l.card:name ) }">
+		<MvIF EXPR = "{ MOD10Card_Load_Name( g.Name, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Name', 'A credit card with the name \'' $ g.Name $ '\' already exists' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card:name" 		VALUE = "{ g.Name }">
+	<MvASSIGN NAME = "l.card:prefixes" 	VALUE = "{ g.Prefixes }">
+	<MvASSIGN NAME = "l.card:lengths" 	VALUE = "{ g.Lengths }">
+
+	<MvIF EXPR = "{ NOT MOD10Card_Update( l.card ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-M10-00020', 'MOD10 Card \'' $ g.Name $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MOD10Card_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PMNT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_MOD10Card_Load( l.card ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT MOD10Card_Delete_ID( l.card:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-M10-00022', 'MOD10 Card \'' $ l.card:name $ '\' deleted' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_JSON" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Module_Function EQ 'MOD10CardList_Load_Query' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_MOD10CardList_Load_Query( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'MOD10Card_Insert' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_MOD10Card_Insert( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'MOD10Card_Update' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_MOD10Card_Update( l.module ) }">
+	<MvELSEIF EXPR = "{ g.Module_Function EQ 'MOD10Card_Delete' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_MOD10Card_Delete( l.module ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Module Client Side Feature (clientside)
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/payment/mod10/combined.mv">
+
+<MvFUNCTION NAME = "Module_Clientside" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( '.js' EIN g.Filename ) EQ len_var( g.Filename ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Module_Content_Type( l.module, 'text/javascript' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Filename EQ 'combined.js' }">									<MvFUNCTIONRETURN VALUE = "{ Element_MOD10_JavaScript_Combined( l.module ) }">
+	<MvELSEIF EXPR = "{ Module_Clientside_Output_File( l.module, g.Filename ) }">	<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Output_File" PARAMETERS = "module var, filename" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/payment/mod10/output.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_File_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/payment/mod10/integrity.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Clientside_Combined_Integrity" PARAMETERS = "module var, filename, minified" STANDARDOUTPUTLEVEL = "">
+	<MvINCLUDE FILE = "modules/payment/mod10/combined_integrity.mv">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "MOD10Card_Read" PARAMETERS = "card var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.card:id"		VALUE = "{ MOD10Cards.d.id }">
+	<MvASSIGN NAME = "l.card:name"		VALUE = "{ MOD10Cards.d.name }">
+	<MvASSIGN NAME = "l.card:prefixes"	VALUE = "{ MOD10Cards.d.prefixes }">
+	<MvASSIGN NAME = "l.card:lengths"	VALUE = "{ MOD10Cards.d.lengths }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10CardList_Load" PARAMETERS = "cards var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "MOD10Cards"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'MOD10Cards ORDER BY name' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00003', g.MvOPENVIEW_Error ) - 1 }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card_count"		VALUE = 0>
+	<MvWHILE EXPR = "{ NOT MOD10Cards.d.EOF }">
+		<MvASSIGN NAME = "l.card_count"	VALUE = "{ l.card_count + 1 }">
+		<MvEVAL EXPR = "{ MOD10Card_Read( l.cards[ l.card_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "MOD10Cards" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "MOD10Cards">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-PAY-M10-00008', l.card_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Load_ID" PARAMETERS = "id, card var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "MOD10Cards"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'MOD10Cards WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00025', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ MOD10Cards.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "MOD10Cards">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-PAY-M10-00026' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MOD10Card_Read( l.card ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "MOD10Cards">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Load_Name" PARAMETERS = "name, card var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "MOD10Cards"
+				QUERY	= "{ 'SELECT
+								*
+							  FROM ' $
+								g.Store_Table_Prefix $ 'MOD10Cards
+							  WHERE
+								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'name' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.name">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00004', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ MOD10Cards.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "MOD10Cards">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-PAY-M10-00009' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ MOD10Card_Read( l.card ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "MOD10Cards">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Load_Name_Cached" PARAMETERS = "name, card var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:mod10:mod10card_load_name_cached">
+
+	<MvIF EXPR = "{ l.cache:name NE l.name }">
+		<MvASSIGN NAME = "l.cache:name"					VALUE = "{ l.name }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ MOD10Card_Load_Name( l.name, l.cache:card ) }">
+
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.card"							VALUE = "{ l.cache:card }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Insert" PARAMETERS = "card var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.card:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'MOD10Cards' ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'MOD10Cards
+						  ( id, name, prefixes, lengths )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.card:id, l.card:name, l.card:prefixes, l.card:lengths">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Update" PARAMETERS = "card var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'MOD10Cards
+						  SET
+							name		= ?,
+							prefixes	= ?,
+							lengths		= ?
+						  WHERE
+							id			= ?' }"
+			 FIELDS	= "l.card:name, l.card:prefixes, l.card:lengths, l.card:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Delete" PARAMETERS = "name" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'MOD10Cards
+						  WHERE
+							' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'name' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+			 FIELDS	= "l.name">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MOD10Card_Delete_ID" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'MOD10Cards WHERE id = ?' }"
+			 FIELDS = "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PAY-M10-00027', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvINCLUDE FILE = "modules/payment/mod10/functions.mv">
+<MvINCLUDE FILE = "modules/payment/mod10/list.mv">

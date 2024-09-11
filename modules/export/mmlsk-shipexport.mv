@@ -1,0 +1,475 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-EXP-SHP-
+| Next Error Code: 9    
+|
+</MvCOMMENT>
+
+<MvINCLUDE FILE = "modules/export/export_include.mv">
+
+<MvFUNCTION NAME = "Module_Description" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-shipexport">
+	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Shipment Information to Flat File">
+	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
+	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.ShipExport_Delimiter_Tab"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.ShipExport_Delimiter_Tab ) }">
+	<MvASSIGN NAME = "g.ShipExport_Delimiter" 		VALUE = "{ trim( g.ShipExport_Delimiter ) }">
+	<MvASSIGN NAME = "g.ShipExport_FileName" 		VALUE = "{ trim( g.ShipExport_FileName ) }">
+	<MvASSIGN NAME = "g.ShipExport_Header"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.ShipExport_Header ) }">
+	<MvASSIGN NAME = "g.ShipExport_SendEmail" 		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.ShipExport_SendEmail ) }">
+	<MvASSIGN NAME = "g.ShipExport_Email"	 		VALUE = "{ trim( g.ShipExport_Email ) }">
+	<MvASSIGN NAME = "g.ShipExport_Overwrite"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.ShipExport_Overwrite ) }">
+	
+	<MvIF EXPR = "{ g.ShipExport_Delimiter_Tab }">
+		<MvASSIGN NAME = "g.ShipExport_Delimiter" 	VALUE = "{ asciichar( 9 ) }">	
+	<MvELSEIF EXPR = "{ ISNULL g.ShipExport_Delimiter }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ShipExport_delimiter', 'Please specify a column delimiter' ) }">	
+	</MvIF>
+	
+	<MvIF EXPR = "{ ISNULL g.ShipExport_FileName }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ShipExport_FileName', 'Please specify a file' ) }">
+	<MvELSEIF EXPR = "{ '/' IN g.ShipExport_FileName }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ShipExport_FileName', 'Please do not include a path in the file name' ) }">
+	</MvIF>
+	
+	<MvIF EXPR = "{ g.ShipExport_SendEmail AND NOT [ g.Module_Admin ].Validate_Email( g.ShipExport_Email ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ShipExport_Email', 'Please specify a valid email address' ) }">
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Export" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.record" 			VALUE = "">
+	<MvASSIGN NAME = "l.cached_modules" 	VALUE = "">
+	<MvASSIGN NAME = "l.start_time" 		VALUE = "{ s.time_t }">
+	<MvASSIGN NAME = "l.directory"			VALUE = "{ g.MerchantPath $ 's' $ padl( g.Store:id, 2, '0' ) $ '/export/' }">
+	<MvASSIGN NAME = "l.output_file" 		VALUE = "{ l.directory $ g.ShipExport_FileName }">
+	<MvASSIGN NAME = "g.Refresh" 			VALUE = 0>
+	
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'data', l.directory ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.ShipExport_Counter }">		<MvASSIGN NAME = "g.ShipExport_Counter"		VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_LastShipID }">	<MvASSIGN NAME = "g.ShipExport_LastShipID" 	VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_LastOrderID }">	<MvASSIGN NAME = "g.ShipExport_LastOrderID" VALUE = 0> </MvIF>
+	
+	<MvIF EXPR = "{ ISNULL g.ShipExport_TotalExports }">
+		<MvASSIGN NAME = "g.ShipExport_TotalExports" VALUE = 0>	
+		
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW	= "TotalOrders"
+					QUERY 	= "{ 'SELECT
+									COUNT( * ) AS total
+								  FROM '
+									$ g.Store_Table_Prefix $ 'OrderShipments os
+								  WHERE
+									os.status = 100
+								  UNION ALL
+								  SELECT
+									COUNT( * ) AS total
+								  FROM '
+									$ g.Store_Table_Prefix $ 'Orders o
+								  WHERE
+									o.pend_count > 0' }">				
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00001', g.MvOPENVIEW_Error ) }">
+		</MvIF>		
+		
+		<MvWHILE EXPR = "{ NOT TotalOrders.d.EOF }">
+			<MvASSIGN NAME = "g.ShipExport_TotalExports" VALUE = "{ g.ShipExport_TotalExports + TotalOrders.d.total }">	
+			<MvSKIP NAME = "Merchant" VIEW = "TotalOrders" ROWS = 1>
+		</MvWHILE>
+			
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "TotalOrders">
+	</MvIF>
+	
+	<MvIF EXPR = "{ NOT g.ShipExport_Counter }">
+		<MvIF EXPR = "{ g.ShipExport_Overwrite }">
+			<MvIF EXPR = "{ fexists( l.output_file ) AND NOT fdelete( l.output_file ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00002', 'An error occurred trying to delete the existing output file.' ) }">
+			</MvIF>
+		</MvIF>
+		
+		<MvIF EXPR = "{ g.ShipExport_Header }">
+			<MvIF EXPR = "{ NOT Write_Line( 'ORDER', 'SHIPMENT_CODE', 'WEIGHT', 'NAME', 'ADDRESS', 'ADDRESS2', 'CITY', 'STATE', 'ZIP', 'SHIP_CNTRY', 'SHIPPING_METHOD', 'PROD_COUNT', 'TRACKTYPE', 'TRACKNUM', 'COST', l.output_file ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00003', 'An error occurred trying to write to the output file.' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Start( 'Shipment Information Export Progress', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Show() }">
+	
+	<MvCOMMENT>
+	|
+	| Processes all orders that are already in shipments
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ g.ShipExport_LastShipID NE -1 }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW 	= "Processing"
+					QUERY 	= "{ 'SELECT
+									o.*,
+									os.*,
+									os.id AS shipment_id
+								  FROM '
+									$ g.Store_Table_Prefix $ 'OrderShipments os,'
+									$ g.Store_Table_Prefix $ 'Orders o
+								  WHERE
+									o.id = os.order_id AND
+									os.status = 100 AND
+									os.id > ?
+								  ORDER BY
+									shipment_id' }"
+					FIELDS	= "g.ShipExport_LastShipID">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00004', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+		
+		<MvWHILE EXPR = "{ ( NOT Processing.d.EOF ) AND ( NOT g.Refresh ) }">
+			<MvASSIGN NAME = "g.ShipExport_Counter" VALUE = "{ g.ShipExport_Counter + 1 }">			
+			<MvASSIGN NAME = "l.weight" 			VALUE = "{ Processing.d.weight + OrderOption_Total_Weight_Status( Processing.d.id, 100 ) }">			
+			<MvASSIGN NAME = "l.method" 			VALUE = "{ ShippingMethod_Description( l.cached_modules, Processing.d.ship_id, Processing.d.ship_data ) }">
+			<MvASSIGN NAME = "l.name" 				VALUE = "{ Processing.d.ship_fname $ ' ' $ Processing.d.ship_lname }">
+			<MvASSIGN NAME = "l.prod_count" 		VALUE = 0>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.ShipExport_Counter, g.ShipExport_TotalExports ) }">
+			
+			<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Module_Library_DB ].OrderItemList_Load_Shipment( Processing.d.shipment_id, l.orderitems ) }">
+				<MvASSIGN NAME = "l.prod_count" 	VALUE = "{ l.prod_count + l.orderitem:quantity }">
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT Write_Line( Processing.d.id, Processing.d.code, l.weight ROUND 2, l.name, Processing.d.ship_addr, Processing.d.ship_addr2, Processing.d.ship_city, Processing.d.ship_state, Processing.d.ship_zip, Processing.d.ship_cntry, l.method, l.prod_count, Processing.d.tracktype, Processing.d.tracknum, Processing.d.cost ROUND 2, l.output_file ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Processing">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00005', 'An error occurred trying to write to the output file.' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ Needs_Refresh( l.start_time ) }">
+				<MvASSIGN NAME = "g.Refresh" 				VALUE = 1>
+				<MvASSIGN NAME = "g.ShipExport_LastShipID" 	VALUE = "{ Processing.d.shipment_id }">
+			<MvELSE>
+				<MvSKIP NAME = "Merchant" VIEW = "Processing" ROWS = 1>
+			</MvIF>
+		</MvWHILE>
+		
+		<MvIF EXPR = "{ Processing.d.EOF }">
+			<MvASSIGN NAME = "g.ShipExport_LastShipID" VALUE = -1>
+		</MvIF>
+		
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Processing">
+	</MvIF>
+	
+	<MvCOMMENT>
+	|
+	| Processes all items that are not in orders and group the items together
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ g.ShipExport_LastOrderID NE -1 }">
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW 	= "Items"
+					QUERY 	= "{ 'SELECT
+									o.id,
+									o.ship_addr,
+									o.ship_addr2,
+									o.ship_city,
+									o.ship_state,
+									o.ship_zip,
+									o.ship_id,
+									o.ship_data,
+									o.ship_fname,
+									o.ship_lname,
+									SUM( oi.quantity ) AS order_item_quantity,
+									SUM( oi.quantity * oi.weight ) AS order_weight
+								  FROM '
+									$ g.Store_Table_Prefix $ 'Orders o,'
+									$ g.Store_Table_Prefix $ 'OrderItems oi
+								  WHERE
+									o.id > ? AND
+									oi.status = 0 AND
+									oi.order_id = o.id
+								  GROUP BY
+									o.id,
+									o.ship_addr,
+									o.ship_addr2,
+									o.ship_city,
+									o.ship_state,
+									o.ship_zip,
+									o.ship_id,
+									o.ship_data,
+									o.ship_fname,
+									o.ship_lname
+								  ORDER BY
+									id' }"
+					FIELDS	= "g.ShipExport_LastOrderID">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00006', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+		
+		<MvWHILE EXPR = "{ ( NOT Items.d.EOF ) AND ( NOT g.Refresh ) }">
+			<MvASSIGN NAME = "g.ShipExport_Counter" VALUE = "{ g.ShipExport_Counter + 1 }">			
+			<MvASSIGN NAME = "l.weight" 			VALUE = "{ Items.d.order_weight + OrderOption_Total_Weight_Status( Items.d.id, 0 ) }">			
+			<MvASSIGN NAME = "l.method" 			VALUE = "{ ShippingMethod_Description( l.cached_modules, Items.d.ship_id, Items.d.ship_data ) }">
+			<MvASSIGN NAME = "l.name" 				VALUE = "{ Items.d.ship_fname $ ' ' $ Items.d.ship_lname }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Update( g.ShipExport_Counter, g.ShipExport_TotalExports ) }">
+			
+			<MvIF EXPR = "{ NOT Write_Line( Items.d.id, '', l.weight ROUND 2, l.name, Items.d.ship_addr, Items.d.ship_addr2, Items.d.ship_city, Items.d.ship_state, Items.d.ship_zip, Items.d.ship_cntry, l.method, Items.d.order_item_quantity, '', '', 0 ROUND 2, l.output_file ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Items">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00007', 'An error occurred trying to write to the output file.' ) }">
+			</MvIF>
+			
+			<MvIF EXPR = "{ Needs_Refresh( l.start_time ) }">
+				<MvASSIGN NAME = "g.Refresh" 				VALUE = 1>
+				<MvASSIGN NAME = "g.ShipExport_LastOrderID" VALUE = "{ Items.d.id }">
+			<MvELSE>
+				<MvSKIP NAME = "Merchant" VIEW = "Items" ROWS = 1>
+			</MvIF>
+		</MvWHILE>
+		
+		<MvIF EXPR = "{ Items.d.EOF }">
+			<MvASSIGN NAME = "g.ShipExport_LastOrderID" VALUE = -1>
+		</MvIF>
+		
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Items">
+	</MvIF>
+	
+	<MvCOMMENT>
+	|
+	| If all shipments have been exported
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ g.ShipExport_LastShipID EQ -1 AND g.ShipExport_LastOrderID EQ -1 }">
+		<MvIF EXPR = "{ g.ShipExport_SendEmail }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Send_Email_Attachment( g.Store:email, g.ShipExport_Email, '', 'Miva Merchant Shipment Export', g.ShipExport_FileName, l.directory, 'data' ) }">	
+		</MvIF>
+
+		<MvIF EXPR = "{ g.ShipExport_Counter EQ 1 }">	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( '1 shipment exported to \'' $ l.output_file $ '\'' ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_ProgressComplete( g.ShipExport_Counter $ ' shipments exported to \'' $ l.output_file $ '\'' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ExportModule_Screen" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Refresh }">
+		<MvHIDE FIELDS = "g.ShipExport_Delimiter, g.ShipExport_Delimiter_Tab, g.ShipExport_FileName, g.ShipExport_Header, g.ShipExport_SendEmail, g.ShipExport_Email, g.ShipExport_Overwrite, g.ShipExport_LastShipID, g.ShipExport_LastOrderID, g.ShipExport_TotalExports, g.ShipExport_Counter, g.Module_Code">
+		
+		<script type="text/javascript">
+			window.onload = function()
+			{
+				document.forms[ Screen ].submit();
+			};
+		</script>
+		
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_End() }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+	
+	<MvCOMMENT>
+	|
+	| Default settings for the module
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ ISNULL g.ShipExport_Delimiter_Tab }">									<MvASSIGN NAME = "g.ShipExport_Delimiter_Tab"	VALUE = 0>						</MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_Delimiter OR g.ShipExport_Delimiter_Tab }">			<MvASSIGN NAME = "g.ShipExport_Delimiter"		VALUE = ",">					</MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_FileName }">										<MvASSIGN NAME = "g.ShipExport_FileName"		VALUE = "shipments.csv">		</MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_Header }">											<MvASSIGN NAME = "g.ShipExport_Header"			VALUE = 1>						</MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_SendEmail }">										<MvASSIGN NAME = "g.ShipExport_SendEmail"		VALUE = 0>						</MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_Email }">											<MvASSIGN NAME = "g.ShipExport_Email"			VALUE = "{ g.Store:email }">	</MvIF>
+	<MvIF EXPR = "{ ISNULL g.ShipExport_Overwrite }">										<MvASSIGN NAME = "g.ShipExport_Overwrite"		VALUE = 1>						</MvIF>
+	
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_Start( 'Export Shipment Information to Flat File', 'EXPT', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_JavaScript( 'Exporting Shipment Information to Flat File', 'EXPT', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_CSS() }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginScreen_End( 'Export Shipment Information to Flat File', 'EXPT', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginContent() }">
+	
+	<table border="0" cellpadding="2" cellspacing="0" width="100%">
+        <tr>
+			<td width="50%" nowrap>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Destination', 115 ) }">
+				<tr>
+					<td valign="top" nowrap>
+						<b>Export Shipments to File:</b>
+					</td>
+					<td width="100%">
+						<input type="text" name="ShipExport_FileName" size="40" value="{ encodeentities( g.ShipExport_FileName ) }">
+					</td>
+				</tr>
+				<tr>
+					<td valign="top" nowrap>
+						Email File To:
+					</td>
+					<td width="100%">
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawRadio( 'ShipExport_SendEmail', 0, 	g.ShipExport_SendEmail, 'Do Not Email' ) }"><br />
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawRadio( 'ShipExport_SendEmail', 1, 	g.ShipExport_SendEmail, '' ) }">
+						<input type="text" size="40" name="ShipExport_Email" value="{ encodeentities( g.ShipExport_Email ) }">
+					</td>
+				</tr>
+				<tr>
+					<td valign="top" nowrap>
+						<b>If File Exists:</b>
+					</td>
+					<td width="100%">
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawRadio( 'ShipExport_Overwrite', 1, g.ShipExport_Overwrite, 'Replace File' ) }"><br />
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawRadio( 'ShipExport_Overwrite', 0, g.ShipExport_Overwrite, 'Append To File' ) }">				
+					</td>
+				</tr>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+			</td>
+			<td valign="top" nowrap>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Open( 'Configuration', 115 ) }">
+					<tr><td valign="top" nowrap>
+						<b>File Delimiter:</b>
+					</td>
+					<td width="100%">
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawRadio( 'ShipExport_Delimiter_Tab', 1, 	g.ShipExport_Delimiter_Tab, 'Tab' ) }"><br />
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawRadio( 'ShipExport_Delimiter_Tab', 0, 	g.ShipExport_Delimiter_Tab, 'Other:' ) }">
+						<input type="text" name="ShipExport_delimiter" value="{ encodeentities( g.ShipExport_Delimiter ) }" size="1" />
+					</td></tr>
+					<td valign="top" nowrap>
+						&nbsp;
+					</td>
+					<td width="100%">
+						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.ShipExport_Header, 'ShipExport_Header', 'Yes', 'Export Field Names as Header' ) }">
+					</td>
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
+			</td>
+		</tr>
+	</table>
+	
+	<MvHIDE FIELDS = "g.Module_Code">	
+	
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Element_ExportProgressBar_HTML() }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndContent() }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Draw_ExportProgressBar_Buttons( 'Export', 'EXPT' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].EndScreen() }">
+	
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Private functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Needs_Refresh" PARAMETERS = "start_time var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( NOT s.globaltimeout ) OR ( s.globaltimeout GT 20 ) }">
+		<MvASSIGN NAME = "l.end_time" VALUE = "20">
+	<MvELSE>
+		<MvASSIGN NAME = "l.end_time" VALUE = "{ s.globaltimeout / 3 }">		
+	</MvIF>
+
+	<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GT l.end_time }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Write_Line" PARAMETERS = "id, code, weight, name, address, address2, city, state, zip, country, method, prod_count, tracktype, tracknum, cost, output var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.record" VALUE = "">
+	
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.id ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.code ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.weight ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.name ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.address ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.address2 ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.city ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.state ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.zip ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.country ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.method ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.prod_count ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.tracktype ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.tracknum ) }">
+	<MvEVAL EXPR = "{ Buffer_Add_Encoded( l.record, g.ShipExport_Delimiter, l.cost ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ Miva_Fwriteln( l.output, l.record ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ShippingMethod_Description" PARAMETERS = "cached_modules var, ship_id, ship_data" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.ship_id }">
+		<MvASSIGN NAME = "l.method"	VALUE = "Unknown">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT l.cached_modules[ l.ship_id ]:loaded }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Module_Load_ID( l.ship_id, l.cached_modules[ l.ship_id ] ) }">
+				<MvASSIGN NAME = "l.cached_modules" INDEX = "{ l.ship_id }" MEMBER = "loaded" VALUE = 1>
+			<MvELSE>
+				<MvASSIGN NAME = "l.cached_modules" INDEX = "{ l.ship_id }" MEMBER = "loaded" VALUE = -1>
+			</MvIF>
+		</MvIF>
+			
+		<MvIF EXPR = "{ l.cached_modules[ l.ship_id ]:loaded EQ -1 }">
+			<MvASSIGN NAME = "l.method" VALUE = "Unknown">
+		<MvELSE>
+			<MvASSIGN NAME = "l.method" VALUE = "{ [ g.Module_Root $ l.cached_modules[ l.ship_id ]:module ].ShippingModule_Description( l.cached_modules[ l.ship_id ], l.ship_data ) }">
+		</MvIF>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ l.method }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderOption_Total_Weight_Status" PARAMETERS = "order_id, status" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "OptionsWeight"
+				QUERY 	= "{ 'SELECT
+								oi.line_id,
+								oi.quantity,
+								SUM( oi.quantity * oo.weight ) AS options_weight
+							  FROM '
+								$ g.Store_Table_Prefix $ 'OrderItems oi,'
+								$ g.Store_Table_Prefix $ 'OrderOptions oo
+							  WHERE
+								oi.order_id = ? AND
+								oi.status 	= ? AND
+								oo.line_id 	= oi.line_id										
+							  GROUP BY
+								oi.line_id,
+								oi.quantity' }"
+				FIELDS	= "l.order_id, l.status">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-EXP-SHP-00008', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ OptionsWeight.d.EOF }">
+		<MvASSIGN NAME = "l.weight" VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.weight" VALUE = "{ OptionsWeight.d.options_weight }">
+	</MvIF>
+	
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OptionsWeight">
+	
+	<MvFUNCTIONRETURN VALUE = "{ l.weight }">
+</MvFUNCTION>

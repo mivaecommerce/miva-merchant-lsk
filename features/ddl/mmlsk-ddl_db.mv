@@ -1,0 +1,861 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DDL-DB-
+| Next Error Code: 48   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DDL_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.ddl_dir"		VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Directory_DigitalDownloads() }">
+	<MvASSIGN NAME = "l.store_dir"		VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Directory_Store() }">
+	<MvASSIGN NAME = "l.symlinks_dir"	VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Directory_Symlinks() }">
+	<MvASSIGN NAME = "l.uploads_dir"	VALUE = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Directory_Uploads() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'script', l.symlinks_dir ) OR
+					NOT [ g.Module_Library_Utilities ].EnsurePathExists( 'script', l.uploads_dir ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Create empty index.html files to prevent directory listings
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ file_create( l.ddl_dir $ 'index.html',			'script', l.empty ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ file_create( l.store_dir $ 'index.html', 		'script', l.empty ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ file_create( l.symlinks_dir $ 'index.html', 	'script', l.empty ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ file_create( l.uploads_dir $ 'index.html', 	'script', l.empty ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloadSettings
+						  (
+							expiration	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ ',
+							max_dl		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER() $ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00001', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_settings:expiration"	VALUE = 0>
+	<MvASSIGN NAME = "l.dl_settings:max_dl" 	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT DigitalDownloadSettings_Insert( l.dl_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloads
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							code		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							symlink		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 ) 	$ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							order_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							line_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							total_dl	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							total_bw	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_DOUBLE()	 	$ ',
+							create_dt	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							expiration	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							max_dl		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00002', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloads_1 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloads ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00003', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloads_2 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloads ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloads_3 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloads ( symlink )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloads_4 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloads ( product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings
+						  (
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							enabled		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL() 		$ ',
+							cdn_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							miva_name	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 ) 	$ ',
+							miva_path	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 ) 	$ ',
+							expiration	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							max_dl		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							data		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings_1 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings ( product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'DigitalDownloads', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs
+						  (
+							id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							name	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 ) 	$ ',
+							cdn		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 ) 	$ ',
+							data	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO() 		$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs_1 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs_2 ON ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs ( name )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'DigitalDownloadCDNs', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DDL_Store_Delete" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloads' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloadSettings' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs' }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DDL_Create_Data_Files" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].DomainPrivilege_Insert( 'DDLS', 'Digital Downloads' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DigitalDownloadSettings
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownloadSettings_Read" PARAMETERS = "dl_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl_settings:expiration"	VALUE = "{ DigitalDownloadSettings.d.expiration }">
+	<MvASSIGN NAME = "l.dl_settings:max_dl" 	VALUE = "{ DigitalDownloadSettings.d.max_dl }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadSettings_Insert" PARAMETERS = "dl_settings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DigitalDownloadSettings
+						  ( expiration, max_dl )
+						  VALUES
+						  ( ?, ? )' }"
+			 FIELDS	= "l.dl_settings:expiration, l.dl_settings:max_dl">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadSettings_Update" PARAMETERS = "dl_settings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DigitalDownloadSettings
+			 			  SET
+			 			  	expiration	= ?,
+			 			  	max_dl		= ?' }"
+			 FIELDS = "l.dl_settings:expiration, l.dl_settings:max_dl">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00013', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:digital_downloads:settings" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadSettings_Load_Cached" PARAMETERS = "dl_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.cache" VARIABLE = "g.Session:cache:digital_downloads:settings">
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ DigitalDownloadSettings_Load( l.cache:dl_settings ) }">
+
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code" 		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message" 	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof" 	VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ NOT l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_settings" VALUE = "{ l.cache:dl_settings }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadSettings_Load" PARAMETERS = "dl_settings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloadSettings"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadSettings' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloadSettings.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadSettings">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00015' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownloadSettings_Read( l.dl_settings ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadSettings">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DigitalDownloads
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownload_Read" PARAMETERS = "dl var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl:id" 			VALUE = "{ DigitalDownloads.d.id }">
+	<MvASSIGN NAME = "l.dl:code" 		VALUE = "{ DigitalDownloads.d.code }">
+	<MvASSIGN NAME = "l.dl:symlink" 	VALUE = "{ DigitalDownloads.d.symlink }">
+	<MvASSIGN NAME = "l.dl:product_id"	VALUE = "{ DigitalDownloads.d.product_id }">
+	<MvASSIGN NAME = "l.dl:order_id" 	VALUE = "{ DigitalDownloads.d.order_id }">
+	<MvASSIGN NAME = "l.dl:line_id" 	VALUE = "{ DigitalDownloads.d.line_id }">
+	<MvASSIGN NAME = "l.dl:total_dl" 	VALUE = "{ DigitalDownloads.d.total_dl }">
+	<MvASSIGN NAME = "l.dl:total_bw" 	VALUE = "{ DigitalDownloads.d.total_bw }">
+	<MvASSIGN NAME = "l.dl:create_dt" 	VALUE = "{ DigitalDownloads.d.create_dt }">
+	<MvASSIGN NAME = "l.dl:expiration" 	VALUE = "{ DigitalDownloads.d.expiration }">
+	<MvASSIGN NAME = "l.dl:max_dl" 		VALUE = "{ DigitalDownloads.d.max_dl }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Insert" PARAMETERS = "dl var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl:id" 				VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'DigitalDownloads' ) }">
+	<MvASSIGN NAME = "l.dl:total_dl" 		VALUE = 0>
+	<MvASSIGN NAME = "l.dl:total_bw" 		VALUE = 0>
+	<MvASSIGN NAME = "l.dl:create_dt" 		VALUE = "{ s.dyn_time_t }">
+
+	<MvIF EXPR = "{ ISNULL l.dl:order_id }">
+		<MvASSIGN NAME = "l.dl:order_id" 	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.dl:line_id }">
+		<MvASSIGN NAME = "l.dl:line_id" 	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.dl:expiration }">
+		<MvASSIGN NAME = "l.dl:expiration"	VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.dl:max_dl }">
+		<MvASSIGN NAME = "l.dl:max_dl"		VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_UT ].DigitalDownload_Generate_DownloadCode( l.dl:code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_DDL_UT ].DigitalDownload_Generate_SymlinkCode( l.dl:symlink ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT DigitalDownload_Insert_LowLevel( l.dl ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Insert_LowLevel" PARAMETERS = "dl var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DigitalDownloads
+						  ( id, code, symlink, product_id, order_id, line_id, total_dl, total_bw, create_dt, expiration, max_dl )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.dl:id, l.dl:code, l.dl:symlink, l.dl:product_id, l.dl:order_id, l.dl:line_id,
+			 		   l.dl:total_dl, l.dl:total_bw, l.dl:create_dt, l.dl:expiration, l.dl:max_dl">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00016', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Update" PARAMETERS = "dl var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DigitalDownloads
+			 			  SET
+			 			  	expiration	= ?,
+			 			  	max_dl		= ?
+			 			  WHERE
+			 			  	id			= ?' }"
+			 FIELDS = "l.dl:expiration, l.dl:max_dl,
+			 		   l.dl:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00017', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Delete" PARAMETERS = "dl var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Feature_Filename_DDL_UT ].DigitalDownload_Symlink_Delete( l.dl:symlink ) }">
+
+	<MvIF EXPR = "{ NOT DigitalDownload_Delete_LowLevel( l.dl:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderOption_Update_AttributeCode( l.dl:order_id, l.dl:line_id, 'digitaldownload', 'digitaldownload_deleted' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_digital', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_DigitalDownload_Deleted( l.module, l.dl ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Delete_LowLevel" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloads WHERE id = ?' }"
+			 FIELDS = "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00018', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.dl" ARRAY = "l.dls" COUNT = "{ DigitalDownloadList_Load_Product( l.product_id, l.dls ) }">
+		<MvIF EXPR = "{ NOT DigitalDownload_Delete( l.dl ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Load_Code" PARAMETERS = "code, dl var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloads"
+				QUERY 	= "{ 'SELECT
+								*
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'DigitalDownloads
+							  WHERE
+							  	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00020', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloads.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00021' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownload_Read( l.dl ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Load_ID" PARAMETERS = "id, dl var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloads"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloads WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00022', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloads.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00023' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownload_Read( l.dl ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Load_Symlink" PARAMETERS = "symlink, dl var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloads"
+				QUERY 	= "{ 'SELECT
+								*
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'DigitalDownloads
+							  WHERE
+							  	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'symlink' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.symlink">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00024', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloads.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00025' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownload_Read( l.dl ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Increment_TotalDownloads" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DigitalDownloads
+			 			  SET
+			 			  	total_dl	= total_dl + 1
+			 			  WHERE
+			 			  	id			= ?' }"
+			 FIELDS = "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00026', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownload_Increment_TotalBandwidth" PARAMETERS = "bytes, id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DigitalDownloads
+			 			  SET
+			 			  	total_bw	= total_bw + ?
+			 			  WHERE
+			 			  	id			= ?' }"
+			 FIELDS = "l.bytes, l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00027', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadList_Load_Order" PARAMETERS = "order_id, dls var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloads"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloads WHERE order_id = ?' }"
+				FIELDS	= "l.order_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00028', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT DigitalDownloads.d.EOF }">
+		<MvEVAL EXPR = "{ DigitalDownload_Read( l.dls[ ++l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "DigitalDownloads" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-DDL-DB-00029', l.count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadList_Load_Product" PARAMETERS = "product_id, dls var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloads"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloads WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00045', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT DigitalDownloads.d.EOF }">
+		<MvEVAL EXPR = "{ DigitalDownload_Read( l.dls[ ++l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "DigitalDownloads" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloads">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-DDL-DB-00046', l.count ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DigitalDownloadProductSettings
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Read" PARAMETERS = "dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl_productsettings:product_id"	VALUE = "{ DigitalDownloadProductSettings.d.product_id }">
+	<MvASSIGN NAME = "l.dl_productsettings:enabled" 	VALUE = "{ DigitalDownloadProductSettings.d.enabled }">
+	<MvASSIGN NAME = "l.dl_productsettings:cdn_id" 		VALUE = "{ DigitalDownloadProductSettings.d.cdn_id }">
+	<MvASSIGN NAME = "l.dl_productsettings:miva_name" 	VALUE = "{ DigitalDownloadProductSettings.d.miva_name }">
+	<MvASSIGN NAME = "l.dl_productsettings:miva_path" 	VALUE = "{ DigitalDownloadProductSettings.d.miva_path }">
+	<MvASSIGN NAME = "l.dl_productsettings:expiration"	VALUE = "{ DigitalDownloadProductSettings.d.expiration }">
+	<MvASSIGN NAME = "l.dl_productsettings:max_dl" 		VALUE = "{ DigitalDownloadProductSettings.d.max_dl }">
+	<MvASSIGN NAME = "l.dl_productsettings:data" 		VALUE = "{ miva_array_deserialize( DigitalDownloadProductSettings.d.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Insert" PARAMETERS = "dl_productsettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data" VALUE = "{ miva_array_serialize( l.dl_productsettings:data ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings
+			 			  ( product_id, enabled, cdn_id, miva_name, miva_path, expiration, max_dl, data )
+			 			  VALUES
+			 			  ( ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS = "l.dl_productsettings:product_id, l.dl_productsettings:enabled, l.dl_productsettings:cdn_id, l.dl_productsettings:miva_name,
+			 		   l.dl_productsettings:miva_path, l.dl_productsettings:expiration, l.dl_productsettings:max_dl, l.data">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00030', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.dl_productsettings:product_id GT 0 }">
+		<MvASSIGN NAME = "g.Session:cache:digital_downloads:product_settings" INDEX = "{ l.dl_productsettings:product_id }" VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Update" PARAMETERS = "dl_productsettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data" VALUE = "{ miva_array_serialize( l.dl_productsettings:data ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings
+			 			  SET
+			 			  	enabled		= ?,
+			 			  	cdn_id		= ?,
+			 			  	miva_name	= ?,
+			 			  	miva_path	= ?,
+			 			  	expiration	= ?,
+			 			  	max_dl		= ?,
+			 			  	data		= ?
+			 			  WHERE
+			 			  	product_id	= ?' }"
+			 FIELDS = "l.dl_productsettings:enabled, l.dl_productsettings:cdn_id, l.dl_productsettings:miva_name, l.dl_productsettings:miva_path,
+			 		   l.dl_productsettings:expiration, l.dl_productsettings:max_dl, l.data,
+			 		   l.dl_productsettings:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00031', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.dl_productsettings:product_id GT 0 }">
+		<MvASSIGN NAME = "g.Session:cache:digital_downloads:product_settings" INDEX = "{ l.dl_productsettings:product_id }" VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_InsertOrUpdate" PARAMETERS = "dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DigitalDownloadProductSetting_Insert( l.dl_productsettings ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT DigitalDownloadProductSetting_Update( l.dl_productsettings ) }">				<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Delete" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings WHERE product_id = ?' }"
+			 FIELDS = "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00032', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product_id GT 0 }">
+		<MvASSIGN NAME = "g.Session:cache:digital_downloads:product_settings" INDEX = "{ l.product_id }" VALUE = "">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Delete_All_CDN" PARAMETERS = "cdn_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings WHERE cdn_id = ?' }"
+			 FIELDS = "l.cdn_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00047', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:digital_downloads:product_settings" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Load_Product" PARAMETERS = "product_id, dl_productsettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloadProductSettings"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadProductSettings WHERE product_id = ?' }"
+				FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00033', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloadProductSettings.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadProductSettings">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00034' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownloadProductSetting_Read( l.dl_productsettings ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadProductSettings">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSetting_Load_Product_Cached" PARAMETERS = "product_id, dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.product_id" VALUE = "{ int( l.product_id ) }">
+
+	<MvIF EXPR = "{ l.product_id LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00035' ) }">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.cache" VARIABLE = "g.Session:cache:digital_downloads:product_settings">
+		<MvDIMENSION INDEX = "{ l.product_id }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ ISNULL l.cache:result }">
+		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ DigitalDownloadProductSetting_Load_Product( l.product_id, l.cache:dl_productsettings ) }">
+
+		<MvIF EXPR = "{ NOT l.cache:result }">
+			<MvASSIGN NAME = "l.cache:error_code" 		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.cache:error_message" 	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.cache:error_db_eof" 	VALUE = "{ g.Error_DB_EOF }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.cache:result }">
+		<MvIF EXPR = "{ NOT l.cache:error_db_eof }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dl_productsettings" VALUE = "{ l.cache:dl_productsettings }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSettings_Default" PARAMETERS = "product_id, dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl_productsettings:product_id"	VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "l.dl_productsettings:enabled" 	VALUE = 0>
+	<MvASSIGN NAME = "l.dl_productsettings:cdn_id" 		VALUE = -1>
+	<MvASSIGN NAME = "l.dl_productsettings:miva_name" 	VALUE = "">
+	<MvASSIGN NAME = "l.dl_productsettings:miva_path" 	VALUE = "">
+	<MvASSIGN NAME = "l.dl_productsettings:expiration"	VALUE = -1>
+	<MvASSIGN NAME = "l.dl_productsettings:max_dl" 		VALUE = -1>
+	<MvASSIGN NAME = "l.dl_productsettings:data" 		VALUE = "">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSettings_Equal_Default" PARAMETERS = "dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ DigitalDownloadProductSettings_Default( l.dl_productsettings:product_id, l.defaults ) }">
+
+	<MvIF EXPR = "{ l.dl_productsettings:enabled EQ l.defaults:enabled 	AND
+					l.dl_productsettings:cdn_id EQ l.defaults:cdn_id	AND
+	 				l.dl_productsettings:max_dl EQ l.defaults:max_dl	AND
+	 				l.dl_productsettings:expiration EQ l.defaults:expiration }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadProductSettings_Load_ProductOrDefault" PARAMETERS = "product_id, dl_productsettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DigitalDownloadProductSetting_Load_Product_Cached( l.product_id, l.dl_productsettings ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ DigitalDownloadProductSettings_Default( l.product_id, l.dl_productsettings ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_DigitalDownloadCDNs
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Read" PARAMETERS = "dl_cdn var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl_cdn:id" 		VALUE = "{ DigitalDownloadCDNs.d.id }">
+	<MvASSIGN NAME = "l.dl_cdn:name" 	VALUE = "{ DigitalDownloadCDNs.d.name }">
+	<MvASSIGN NAME = "l.dl_cdn:cdn" 	VALUE = "{ DigitalDownloadCDNs.d.cdn }">
+	<MvASSIGN NAME = "l.dl_cdn:data" 	VALUE = "{ miva_array_deserialize( DigitalDownloadCDNs.d.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Insert" PARAMETERS = "dl_cdn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl_cdn:id" 		VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'DigitalDownloadCDNs' ) }">
+	<MvASSIGN NAME = "l.dl_cdn:data" 	VALUE = "{ miva_array_serialize( l.dl_cdn:data ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs
+						  ( id, name, cdn, data )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.dl_cdn:id, l.dl_cdn:name, l.dl_cdn:cdn, l.dl_cdn:data">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00036', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Update" PARAMETERS = "dl_cdn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.dl_cdn:data" VALUE = "{ miva_array_serialize( l.dl_cdn:data ) }">
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs
+			 			  SET
+			 			  	name 	= ?,
+			 			  	cdn		= ?,
+			 			  	data	= ?
+			 			  WHERE
+			 			  	id		= ?' }"
+			 FIELDS = "l.dl_cdn:name, l.dl_cdn:cdn, l.dl_cdn:data,
+			 		   l.dl_cdn:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00037', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Delete" PARAMETERS = "dl_cdn var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT DigitalDownloadCDN_Delete_LowLevel( l.dl_cdn ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ DigitalDownloadProductSetting_Delete_All_CDN( l.dl_cdn:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Delete_LowLevel" PARAMETERS = "dl_cdn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs WHERE id = ?' }"
+			 FIELDS = "l.dl_cdn:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00038', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Load_ID" PARAMETERS = "id, dl_cdn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloadCDNs"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00039', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloadCDNs.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadCDNs">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00040' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownloadCDN_Read( l.dl_cdn ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadCDNs">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDN_Load_Name" PARAMETERS = "name, dl_cdn var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloadCDNs"
+				QUERY 	= "{ 'SELECT
+								*
+							  FROM
+							  	' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs
+							  WHERE
+							  	' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'name' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.name">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00041', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ DigitalDownloadCDNs.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadCDNs">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-DDL-DB-00042' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ DigitalDownloadCDN_Read( l.dl_cdn ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadCDNs">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DigitalDownloadCDNList_Load" PARAMETERS = "dl_cdns var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "DigitalDownloadCDNs"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'DigitalDownloadCDNs ORDER BY name' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DDL-DB-00043', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT DigitalDownloadCDNs.d.EOF }">
+		<MvEVAL EXPR = "{ DigitalDownloadCDN_Read( l.dl_cdns[ ++l.count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "DigitalDownloadCDNs" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "DigitalDownloadCDNs">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-DDL-DB-00044', l.count ) }">
+</MvFUNCTION>

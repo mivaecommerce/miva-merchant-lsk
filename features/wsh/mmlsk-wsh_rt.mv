@@ -1,0 +1,722 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-WSH-RNT-
+| Next Error Code: 3
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "WishList_ValidateDestination" PARAMETERS = "wishlist var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_customer_login' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.WishList_ID }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( g.WishList_ID, l.wishlist ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+		<MvELSEIF EXPR = "{ l.wishlist:cust_id NE g.Basket:cust_id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist_count" VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListList_Load_Customer( g.Basket:cust_id, l.wishlists ) }">
+
+	<MvIF EXPR = "{ l.wishlist_count EQ 1 }">
+		<MvASSIGN NAME = "l.wishlist" 			VALUE = "{ l.wishlists[ 1 ] }">
+		<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ l.wishlist:id }">
+		
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.wishlist_count EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].CustomerSettings_Load_Cached( l.customersettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.wishlist" 			VALUE = "">
+		<MvASSIGN NAME = "l.wishlist:cust_id" 	VALUE = "{ g.Basket:cust_id }">
+		<MvASSIGN NAME = "l.wishlist:title" 	VALUE = "{ l.customersettings:def_wshlst }">
+		<MvASSIGN NAME = "l.wishlist:notes" 	VALUE = "">
+		<MvASSIGN NAME = "l.wishlist:shared" 	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Insert( l.wishlist ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "g.WishList_ID" 		VALUE = "{ l.wishlist:id }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_pick' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddProductToWishList" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ int( g.WishList_ID ) }">
+	<MvASSIGN NAME = "g.Product_Code"		VALUE = "{ trim( g.Product_Code ) }">
+	<MvASSIGN NAME = "g.Quantity"			VALUE = "{ trim( g.Quantity ) }">
+	<MvASSIGN NAME = "g.Attributes"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( g.Quantity ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_Code( g.Product_Code, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ miva_array_collapse( g.Product_Attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Validate_Attributes( l.product, g.Attributes NE 0, g.Product_Attributes, l.attribute_count, l.item_wishlistoptions, l.item_wishlistoption_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'product_attributes' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT WishList_ValidateDestination( l.destination_wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT WishListItemAndOptions_InsertOrUpdate( l.destination_wishlist, l.product:id, g.Quantity, l.item_wishlistoptions, l.item_wishlistoption_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddProductFromWishList" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Wish_ID"						VALUE = "{ int( g.Wish_ID ) }">
+	<MvASSIGN NAME = "g.Quantity"						VALUE = "{ trim( g.Quantity ) }">
+	<MvASSIGN NAME = "g.Product_Subscription_Term_ID"	VALUE = "{ int( g.Product_Subscription_Term_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( g.Quantity ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Load_ID( g.Wish_ID, l.wishlistitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlistitem:wshlst_id, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	<MvELSEIF EXPR = "{ ( NOT l.wishlist:shared ) AND ( ( l.wishlist:cust_id NE g.Basket:cust_id ) OR ( NOT g.Customer_Session_Verified ) ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_ID( l.wishlistitem:product_id, l.product ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Product_Subscription_Term_ID }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( g.Product_Subscription_Term_ID, l.productsubscriptionterm ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'invalid_subscription' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id"		VALUE = "{ l.productsubscriptionterm:id }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvASSIGN NAME = "g.Product_Code" VALUE = "{ l.product:code }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'subscription_required' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id"		VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" 			VALUE = "{ Action_AddProductFromWishList_LowLevel( l.wishlistitem, l.product, l.subterm_id, g.Quantity ) }">
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.result EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddAllProductsFromWishList" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ int( g.WishList_ID ) }">
+	<MvASSIGN NAME = "l.items_added" 		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( g.WishList_ID, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	<MvELSEIF EXPR = "{ ( NOT l.wishlist:shared ) AND ( ( l.wishlist:cust_id NE g.Basket:cust_id ) OR ( NOT g.Customer_Session_Verified ) ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.wishlistitem" ARRAY = "l.wishlistitems" COUNT = "{ [ g.Module_Feature_WSH_DB ].Runtime_WishListProductList_Load_Offset_WishList( l.wishlist:id, 0, 0, l.sort_by, g.NextOffset, l.wishlistitems ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.wishlistitem:product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.wishlistitem:product:code $ '\' requires a subscription and was not added to the basket' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.result" 		VALUE = "{ Action_AddProductFromWishList_LowLevel( l.wishlistitem, l.wishlistitem:product, 0, l.wishlistitem:quantity ) }">
+
+		<MvIF EXPR = "{ NOT l.result }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ l.result EQ -1 }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.items_added" 	VALUE = "{ ++l.items_added }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.items_added }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_AddProductFromWishList_LowLevel" PARAMETERS = "wishlistitem var, product var, subterm_id, quantity" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.option_count" 		VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.wishlistitem:id, l.options ) }">
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ [ g.Module_Library_DB ].AttributeList_Load_Product( l.product:id, l.attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant_LowLevel( l.product, l.attributes, l.attribute_count, l.options, l.option_count, l.variant_id ) }">
+		<MvASSIGN NAME = "l.variant_id" 	VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.wishlistitem:product:code $ '\' is no longer available in the configuration you added to your wishlist.' ) }">
+
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.product, l.variant_id, l.quantity ) }">
+		<MvCOMMENT>
+		|
+		| Message_Error is eventually called from Inventory_Is_Available_Variant, we can skip that here.
+		|
+		</MvCOMMENT>
+
+		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Dirty( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Check to see if there is already an entry that has the same options as this add request, and if so,
+	| update the quantity of the existing record rather than inserting a new one. If the item already exists
+	| with the same wish_id, increment the existing line. Otherwise use the first matching item's line_id
+	| as l.resolved_group_id which will be assigned to the new basketitem:group_id
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.resolved_group_id"		VALUE = "">	<MvCOMMENT> Default to null to allow the database code to assign line_id as group_id if none match </MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		<MvIF EXPR = "{ l.basketitem:product_id NE l.product:id		OR
+						l.basketitem:upsold							OR
+						( l.basketitem:variant_id NE l.variant_id )	OR
+						( l.basketitem:subterm_id NE l.subterm_id ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.item_option_count" VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.item_options ) }">
+
+		<MvIF EXPR = "{ l.item_option_count NE l.option_count }">
+			<MvFOREACHSTOP>
+		</MvIF>
+
+		<MvFOREACH INDEX = "l.item_option_pos" ITERATOR = "l.item_option" ARRAY = "l.item_options" COUNT = "{ l.item_option_count }">
+			<MvASSIGN NAME = "l.option_pos" VALUE = "{ miva_array_search( l.options, 1, l.option,
+																		  '( l.item_option:attr_id 		EQ l.option:attr_id ) 		AND
+																		   ( l.item_option:attmpat_id 	EQ l.option:attmpat_id ) 	AND
+																		   ( l.item_option:option_id 	EQ l.option:option_id ) 	AND
+																		   ( l.item_option:data 		EQ l.option:data ) 			AND
+																		   ( l.item_option:data_long 	EQ l.option:data_long )' ) }">
+
+			<MvIF EXPR = "{ l.option_pos EQ 0 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ ( l.item_option_pos GT l.item_option_count ) AND ( NOT l.basketitem:upsold ) }">
+			<MvIF EXPR = "{ l.basketitem:wish_id EQ l.wishlistitem:id }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Increment_Quantity( l.product, l.basketitem, l.quantity ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+			<MvELSEIF EXPR = "{ ISNULL l.resolved_group_id }">
+				<MvASSIGN NAME = "l.resolved_group_id"	VALUE = "{ l.basketitem:group_id }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.attr_price_override"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem:basket_id"	VALUE = "{ g.Basket:basket_id }">
+	<MvASSIGN NAME = "l.basketitem:group_id"	VALUE = "{ l.resolved_group_id }">
+	<MvASSIGN NAME = "l.basketitem:product_id" 	VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.basketitem:variant_id"	VALUE = "{ l.variant_id }">
+	<MvASSIGN NAME = "l.basketitem:wish_id"		VALUE = "{ l.wishlistitem:id }">
+	<MvASSIGN NAME = "l.basketitem:subterm_id"	VALUE = "{ l.subterm_id }">
+	<MvASSIGN NAME = "l.basketitem:code" 		VALUE = "{ l.product:code }">
+	<MvASSIGN NAME = "l.basketitem:name" 		VALUE = "{ l.product:name }">
+
+	<MvASSIGN NAME = "l.part_count"				VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.parts ) }">
+
+	<MvIF EXPR = "{ l.variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.product:sku }">
+	<MvELSEIF EXPR = "{ l.part_count EQ 1 }">					<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+	<MvELSE>													<MvASSIGN NAME = "l.basketitem:sku" VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem:retail"		VALUE = "{ l.product:price }">
+	<MvASSIGN NAME = "l.basketitem:base_price"	VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.product:price, l.product:cost ) }">
+	<MvASSIGN NAME = "l.basketitem:price"		VALUE = "{ l.basketitem:base_price }">
+	<MvASSIGN NAME = "l.basketitem:weight" 		VALUE = "{ l.product:weight }">
+	<MvASSIGN NAME = "l.basketitem:taxable" 	VALUE = "{ l.product:taxable }">
+	<MvASSIGN NAME = "l.basketitem:upsold" 		VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem:quantity" 	VALUE = "{ l.quantity }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Insert( l.product, l.basketitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.options" COUNT = "{ l.option_count }">
+		<MvASSIGN NAME = "l.basketoption:basket_id"			VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketoption:line_id"			VALUE = "{ l.basketitem:line_id }">
+		<MvASSIGN NAME = "l.basketoption:base_price"		VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.basketoption:price, l.basketoption:cost ) }">
+		<MvASSIGN NAME = "l.basketoption:price"				VALUE = "{ l.basketoption:base_price }">
+
+		<MvIF EXPR = "{ l.attr_price_override }">
+			<MvASSIGN NAME = "l.basketoption:retail"		VALUE = 0.00>
+			<MvASSIGN NAME = "l.basketoption:base_price"	VALUE = 0.00>
+			<MvASSIGN NAME = "l.basketoption:price"			VALUE = 0.00>
+			<MvASSIGN NAME = "l.basketoption:weight"		VALUE = 0.00>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketOption_Insert( l.basketoption ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.basketitem:subterm_id }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_SubCount( g.Basket:basket_id ) OR
+						NOT [ g.Module_Library_DB ].Basket_Load_ID( g.Basket:basket_id, g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_RemoveProductFromWishList" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Wish_ID" VALUE = "{ int( g.Wish_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Load_ID( g.Wish_ID, l.wishlistitem ) }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlistitem:wshlst_id, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	<MvELSEIF EXPR = "{ ( l.wishlist:cust_id NE g.Basket:cust_id ) OR ( NOT g.Customer_Session_Verified ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Delete( l.wishlistitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_UpdateWishListProduct" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Wish_ID" 		VALUE = "{ int( g.Wish_ID ) }">
+	<MvASSIGN NAME = "g.Quantity"		VALUE = "{ trim( g.Quantity ) }">
+	<MvASSIGN NAME = "g.Notes"			VALUE = "{ trim( g.Notes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.Quantity ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Load_ID( g.Wish_ID, l.wishlistitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlistitem:wshlst_id, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	<MvELSEIF EXPR = "{ ( l.wishlist:cust_id NE g.Basket:cust_id ) OR ( NOT g.Customer_Session_Verified ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Quantity EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Delete( l.wishlistitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlistitem:quantity"	VALUE = "{ g.Quantity }">
+	<MvASSIGN NAME = "l.wishlistitem:notes"	 	VALUE = "{ g.Notes }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update( l.wishlistitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_MoveProductToWishList" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_ID" 		VALUE = "{ int( g.WishList_ID ) }">
+	<MvASSIGN NAME = "g.Wish_ID" 			VALUE = "{ int( g.Wish_ID ) }">
+	<MvASSIGN NAME = "g.Group_ID" 			VALUE = "{ int( g.Group_ID ) }">
+	<MvASSIGN NAME = "g.Line_ID" 			VALUE = "{ int( g.Line_ID ) }">
+
+	<MvIF EXPR = "{ g.Wish_ID }">
+		<MvCOMMENT>
+		|
+		| Verify permissions on source_wishlist before validating destination if moving an existing wish list item
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Load_ID( g.Wish_ID, l.wishlistitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlistitem:wshlst_id, l.source_wishlist ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+		<MvELSEIF EXPR = "{ ( l.source_wishlist:cust_id NE g.Basket:cust_id ) OR ( NOT g.Customer_Session_Verified ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT WishList_ValidateDestination( l.destination_wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Wish_ID }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID_Cached( l.wishlistitem:product_id, l.product ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Item could not be added to the wish list.' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update_WishList( l.wishlistitem:id, l.destination_wishlist:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Group_ID }">
+		<MvASSIGN NAME = "l.update_basket_subcount"	VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem_count"		VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket_Group( g.Basket:basket_id, g.Group_ID, l.basketitems ) }">
+
+		<MvIF EXPR = "{ l.basketitem_count EQ 0 }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_basketitem_notfound' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Item \'' $ encodeentities( l.basketitem:code ) $ '\' could not be added to the wish list.' ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list' ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketoption_count" VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketoptions ) }">
+
+			<MvIF EXPR = "{ NOT WishListItemAndOptions_InsertOrUpdate( l.destination_wishlist, l.basketitem:product_id, l.basketitem:quantity, l.basketoptions, l.basketoption_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.basketitem:subterm_id AND NOT l.update_basket_subcount }">
+				<MvASSIGN NAME = "l.update_basket_subcount" VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Delete( l.product, l.basketitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.update_basket_subcount }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_SubCount( g.Basket:basket_id ) OR
+							NOT [ g.Module_Library_DB ].Basket_Load_ID( g.Basket:basket_id, g.Basket ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Line_ID }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Load_Line( g.Basket:basket_id, g.Line_ID, l.basketitem ) }">
+			<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_basketitem_notfound' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Item \'' $ encodeentities( l.basketitem:code ) $ '\' could not be added to the wish list.' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketoption_count" VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketoptions ) }">
+
+		<MvIF EXPR = "{ NOT WishListItemAndOptions_InsertOrUpdate( l.destination_wishlist, l.basketitem:product_id, l.basketitem:quantity, l.basketoptions, l.basketoption_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Delete( l.product, l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.basketitem:subterm_id }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_SubCount( g.Basket:basket_id ) OR
+							NOT [ g.Module_Library_DB ].Basket_Load_ID( g.Basket:basket_id, g.Basket ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_MoveAllProductsToWishList" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_ID" VALUE = "{ int( g.WishList_ID ) }">
+
+	<MvIF EXPR = "{ NOT WishList_ValidateDestination( l.destination_wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.update_basket_subcount"	VALUE = 0>
+	<MvASSIGN NAME = "l.basketitem_count"		VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+
+	<MvIF EXPR = "{ l.basketitem_count EQ 0 }">
+		<MvIF EXPR = "{ [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_basketitem_notfound' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ l.basketitem_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Item \'' $ encodeentities( l.basketitem:code ) $ '\' could not be added to the wish list.' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketoption_count" VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketoptions ) }">
+
+		<MvIF EXPR = "{ NOT WishListItemAndOptions_InsertOrUpdate( l.destination_wishlist, l.basketitem:product_id, l.basketitem:quantity, l.basketoptions, l.basketoption_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.basketitem:subterm_id AND NOT l.update_basket_subcount }">
+			<MvASSIGN NAME = "l.update_basket_subcount" VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_BasketItem_Delete( l.product, l.basketitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.update_basket_subcount }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_SubCount( g.Basket:basket_id ) OR
+						NOT [ g.Module_Library_DB ].Basket_Load_ID( g.Basket:basket_id, g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WishListItemAndOptions_InsertOrUpdate" PARAMETERS = "wishlist var, product_id, quantity, options var, option_count" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.wishlistitem" ARRAY = "l.wishlistitems" COUNT = "{ [ g.Module_Feature_WSH_DB ].WishListItemList_Load_WishList_Product( l.wishlist:id, l.product_id, l.wishlistitems ) }">
+		<MvASSIGN NAME = "l.wishlistoption_count" VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.wishlistitem:id, l.wishlistoptions ) }">
+
+		<MvIF EXPR = "{ l.wishlistoption_count NE l.option_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH INDEX = "l.wishlistoption_pos" ITERATOR = "l.wishlistoption" ARRAY = "l.wishlistoptions" COUNT = "{ l.wishlistoption_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.options, 1, l.option,
+												   '( l.wishlistoption:attr_id 		EQ l.option:attr_id ) 		AND
+													( l.wishlistoption:attmpat_id 	EQ l.option:attmpat_id ) 	AND
+													( l.wishlistoption:option_id 	EQ l.option:option_id ) 	AND
+													( l.wishlistoption:data 		EQ l.option:data ) 			AND
+													( l.wishlistoption:data_long 	EQ l.option:data_long )' ) }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.wishlistoption_pos GT l.wishlistoption_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Increment_Quantity( l.wishlistitem:id, l.quantity ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.wishlistitem" 						VALUE = "">
+	<MvASSIGN NAME = "l.wishlistitem:wshlst_id" 			VALUE = "{ l.wishlist:id }">
+	<MvASSIGN NAME = "l.wishlistitem:product_id" 			VALUE = "{ l.product_id }">
+	<MvASSIGN NAME = "l.wishlistitem:dtadded" 				VALUE = "{ s.dyn_time_t }">
+	<MvASSIGN NAME = "l.wishlistitem:quantity" 				VALUE = "{ l.quantity }">
+	<MvASSIGN NAME = "l.wishlistitem:notes" 				VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Insert( l.wishlistitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ l.option_count }">
+		<MvASSIGN NAME = "l.wishlistoption" 				VALUE = "">
+		<MvASSIGN NAME = "l.wishlistoption:wish_id" 		VALUE = "{ l.wishlistitem:id }">
+		<MvASSIGN NAME = "l.wishlistoption:attr_id" 		VALUE = "{ l.option:attr_id }">
+		<MvASSIGN NAME = "l.wishlistoption:attmpat_id" 		VALUE = "{ l.option:attmpat_id }">
+		<MvASSIGN NAME = "l.wishlistoption:option_id" 		VALUE = "{ l.option:option_id }">
+		<MvASSIGN NAME = "l.wishlistoption:data" 			VALUE = "{ l.option:data }">
+		<MvASSIGN NAME = "l.wishlistoption:data_long" 		VALUE = "{ l.option:data_long }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListOption_Insert( l.wishlistoption ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_WishList_Insert" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_Title"		VALUE = "{ trim( g.WishList_Title ) }">
+	<MvASSIGN NAME = "g.WishList_Notes"		VALUE = "{ trim( g.WishList_Notes ) }">
+	<MvASSIGN NAME = "g.WishList_Shared"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.WishList_Shared ) }">
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_customer_login' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.WishList_Title }">
+		<MvASSIGN NAME = "g.WishList_Title_Invalid" VALUE = 1>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid_addinfo' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist" 			VALUE = "">
+	<MvASSIGN NAME = "l.wishlist:cust_id" 	VALUE = "{ g.Basket:cust_id }">
+	<MvASSIGN NAME = "l.wishlist:title" 	VALUE = "{ g.WishList_Title }">
+	<MvASSIGN NAME = "l.wishlist:notes"		VALUE = "{ g.WishList_Notes }">
+	<MvASSIGN NAME = "l.wishlist:shared"	VALUE = "{ g.WishList_Shared }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Insert( l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "g.WishList_ID" 		VALUE = "{ l.wishlist:id }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_WishList_Update" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ int( g.WishList_ID ) }">
+	<MvASSIGN NAME = "g.WishList_Title"		VALUE = "{ trim( g.WishList_Title ) }">
+	<MvASSIGN NAME = "g.WishList_Notes"		VALUE = "{ trim( g.WishList_Notes ) }">
+	<MvASSIGN NAME = "g.WishList_Shared"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.WishList_Shared ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( g.WishList_ID, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	<MvELSEIF EXPR = "{ l.wishlist:cust_id NE g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL g.WishList_Title }">
+		<MvASSIGN NAME = "g.WishList_Title_Invalid" VALUE = 1>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid_editinfo' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist:title" 	VALUE = "{ g.WishList_Title }">
+	<MvASSIGN NAME = "l.wishlist:notes"		VALUE = "{ g.WishList_Notes }">
+	<MvASSIGN NAME = "l.wishlist:shared"	VALUE = "{ g.WishList_Shared }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Update( l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_WishList_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ int( g.WishList_ID ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( g.WishList_ID, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	<MvELSEIF EXPR = "{ l.wishlist:cust_id NE g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_invalid' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Delete( l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>

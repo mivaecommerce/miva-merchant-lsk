@@ -1,0 +1,55 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-BCH-
+| Next Error Code: 3
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Batch_Create" PARAMETERS = "batch var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.order_count" VALUE = "{ OrderList_Load_Batch( 0, l.orders ) }">
+	
+	<MvFUNCTIONRETURN VALUE = "{ Batch_Create_OrderList( l.batch, l.order_count, l.orders ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Batch_Create_OrderList" PARAMETERS = "batch var, order_count, orders var" STANDARDOUTPUTLEVEL = "">
+	<MvTRANSACT NAME = "Merchant">
+
+	<MvIF EXPR = "{ NOT Batch_Insert( l.batch ) }">
+		<MvROLLBACK NAME = "Merchant">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_orders" VALUE = "{ l.orders }">
+
+	<MvFOREACH ITERATOR = "l.order" ARRAY = "l.orders" COUNT = "{ l.order_count }">
+		<MvASSIGN NAME = "l.order:batch_id"	VALUE = "{ l.batch:id }">
+
+		<MvIF EXPR = "{ NOT Order_Update_Batch( l.order ) }">
+			<MvROLLBACK NAME = "Merchant">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_order', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.00 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Order_BatchChange( l.module, l.order_count, l.original_orders, l.orders ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = "{ l.batch:id }">
+</MvFUNCTION>
