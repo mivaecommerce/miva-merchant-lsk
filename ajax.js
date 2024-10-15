@@ -204,11 +204,13 @@ function AJAX_Call_Module( callback, session_type, module_code, func, parameters
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00002';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Module: ' + module_code + '\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 									return response;
 							   } );
@@ -231,10 +233,12 @@ function AJAX_Call_Module_JSON( callback, session_type, module_code, func, data,
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00013';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -323,10 +327,12 @@ function AJAX_Call_Module_WithFile_FormData( progress_object, session_type, modu
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00010';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -350,10 +356,12 @@ function AJAX_Call_Domain( callback, session_type, func, parameters, delegator )
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00008';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -377,10 +385,12 @@ function AJAX_Call_Domain_JSON( callback, session_type, func, parameters, delega
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00014';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -404,10 +414,12 @@ function AJAX_Call_Module_Domain_JSON( callback, session_type, module_code, func
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00017';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -453,10 +465,12 @@ function AJAX_Call_WithStoreCode( callback, session_type, store_code, func, para
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00012';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -480,10 +494,12 @@ function AJAX_Call_JSON( callback, session_type, func, parameters, delegator )
 									var response;
 
 									response				= new Object();
+									response.status			= http_request.status;
 									response.success		= 0;
 									response.error_code		= 'MER-AJX-00015';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -575,9 +591,11 @@ function AJAX_Call_WithFile_FormData( progress_object, session_type, func, param
 
 									response				= new Object();
 									response.success		= 0;
+									response.status			= http_request.status;
 									response.error_code		= 'MER-AJX-00003';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -628,9 +646,11 @@ function AJAX_Call_WithFileList_FormData( progress_object, session_type, func, p
 
 									response				= new Object();
 									response.success		= 0;
+									response.status			= http_request.status;
 									response.error_code		= 'MER-AJX-00003';
 									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 															  'Function: ' + func + '\n' +
+															  'Status: ' + http_request.status + '\n' +
 															  'Response: ' + http_request.responseText;
 
 									return response;
@@ -669,7 +689,14 @@ function AJAX_Call_Initialize( http_request, callback, content_type, uri, error_
 
 		if ( http_request.readyState == 4 )
 		{
-			if ( http_request.status == 200 )
+			if ( http_request.status != 200 )
+			{
+				response = error_response( http_request );
+
+				callback( response );
+				if ( window.Modal_Resize ) Modal_Resize();
+			}
+			else
 			{
 				// Prevent eval() of a partial response due to a navigation away from the current page, pressing
 				// the stop button, etc...
@@ -725,9 +752,11 @@ function AJAX_AutoComplete_Initialize( http_request, callback, session_type, fun
 
 							  response					= new Object();
 							  response.success			= 0;
+							  response.status			= http_request.status;
 							  response.error_code		= 'MER-AJX-00007';
 							  response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 														  'Function: ' + func + '\n' +
+														  'Status: ' + http_request.status + '\n' +
 														  'Response: ' + http_request.responseText;
 
 							  return response;
@@ -768,9 +797,11 @@ function AJAX_Call_JSON_Runtime( callback, session_type, func, parameters, flags
 
 											response				= new Object();
 											response.success		= 0;
+											response.status			= http_request.status;
 											response.error_code		= 'MER-AJX-00016';
 											response.error_message	= 'Miva Merchant returned an invalid response.\n' +
 																	  'Function: ' + func + '\n' +
+																	  'Status: ' + http_request.status + '\n' +
 																	  'Response: ' + http_request.responseText;
 
 											return response;

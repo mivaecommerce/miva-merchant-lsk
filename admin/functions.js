@@ -613,8 +613,18 @@ function Attribute_Load_Code( product_code, attribute_code, callback )				{ retu
 function Customer_Attribute_Load_Code( customer_id, product_code, attribute_code,
 									   callback )									{ return AJAX_Call( callback, 'admin', 'Attribute_Load_Code',					'Customer_ID=' + encodeURIComponent( customer_id ) + '&Product_Code=' + encodeURIComponent( product_code ) + '&Attribute_Code=' + encodeURIComponent( attribute_code ) ); }
 function AttributeList_Load_Inventory( product_id, callback )						{ return AJAX_Call( callback, 'admin', 'AttributeList_Load_Inventory',			'Product_ID=' + encodeURIComponent( product_id ) ); }
-function AttributeList_Load_CodeMatch( customer_id, product_code, attr_code, count,
-									   callback, delegator )						{ return AJAX_Call( callback, 'admin', 'AttributeList_Load_CodeMatch',			'Customer_ID=' + encodeURIComponent( customer_id ) + '&Product_Code=' + encodeURIComponent( product_code ) + '&Attribute_Code=' + encodeURIComponent( attr_code ) + '&Count=' + encodeURIComponent( count ), delegator ); }
+
+function AttributeList_Load_CodeMatch( customer_id, product_code, attr_code, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'AttributeList_Load_CodeMatch',
+	{
+		Customer_ID:	!customer_id ? undefined : customer_id,
+		Product_Code:	product_code,
+		Attribute_Code:	attr_code,
+		Count:			count
+	}, delegator );
+}
+
 function AttributeList_Load_CodeMatch_Initialize( http_request,
 												  customer_id, product_code,
 												  attr_code, count,
@@ -2212,6 +2222,15 @@ function APIToken_Update( token_id, data, callback, delegator )
 		APIToken_SigningKey:		data.signkey,
 		APIToken_Require_Timestamp:	data.req_ts,
 		APIToken_Timestamp_Window:	data.ts_window
+	}, delegator );
+}
+
+function APIToken_Update_Enabled( token_id, enabled, callback, delegator )								
+{ 
+	return AJAX_Call_Domain_JSON( callback, 'admin', 'APIToken_Update_Enabled',
+	{
+		APIToken_ID:		token_id,
+		APIToken_Enabled:	enabled
 	}, delegator );
 }
 

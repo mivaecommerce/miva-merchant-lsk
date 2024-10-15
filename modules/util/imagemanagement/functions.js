@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2020 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -39,14 +39,6 @@ function ImageManagement_ImageList_Delete_GeneratedImages( image_ids, callback )
 						   	 'imagemanagement',
 						   	 'ImageManagement_ImageList_Delete_GeneratedImages',
 						   	 'Image_IDs=' + EncodeArray( image_ids ) );
-}
-
-function ImageManagement_Delete_UnreferencedImages( callback )
-{
-	return AJAX_Call_Module( callback, 'admin',
-							 'imagemanagement',
-							 'ImageManagement_Delete_UnreferencedImages',
-							 '' );
 }
 
 function ImageManagement_CheckForUpdatedMasterImages( last_masterimage_id, callback, delegator )

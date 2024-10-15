@@ -1797,7 +1797,17 @@
 		"total":				<MvEVAL EXPR = "{ g.Basket:total ROUND 2 }">,
 		"subtotal":				<MvEVAL EXPR = "{ g.Basket:subtotal ROUND 2 }">,
 		"formatted_total":		"<MvEVAL EXPR = "{ JSON_Encode( g.Basket:formatted_total ) }">",
-		"formatted_subtotal":	"<MvEVAL EXPR = "{ JSON_Encode( g.Basket:formatted_subtotal ) }">"
+		"formatted_subtotal":	"<MvEVAL EXPR = "{ JSON_Encode( g.Basket:formatted_subtotal ) }">",
+		"charges":
+		[
+			<MvASSIGN NAME = "l.charge_count" VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ [ g.Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.charge_count ) }">				
+					<MvEVAL EXPR = "{ JSON_Runtime_BasketCharge( l.basketcharge ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		]
 	}
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
@@ -2058,6 +2068,18 @@
 	<MvASSIGN NAME = "l.verified_address_count" VALUE = "{ [ g.Module_Root $ l.address_module:module ].AddressValidationModule_Validate_Address( l.address_module, l.address, l.verified_addresses ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_BasketCharge" PARAMETERS = "basketcharge var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"type":					"<MvEVAL EXPR = "{ JSON_Encode( l.basketcharge:type ) }">",
+	"descrip":				"<MvEVAL EXPR = "{ JSON_Encode( l.basketcharge:descrip ) }">",
+	"amount":				<MvEVAL EXPR = "{ l.basketcharge:amount ROUND 3 }">,
+	"disp_amt":				<MvEVAL EXPR = "{ l.basketcharge:disp_amt ROUND 3 }">,
+	"tax_exempt":			<MvEVAL EXPR = "{ JSON_Boolean( l.basketcharge:tax_exempt ) }">,
+	"tax":					<MvEVAL EXPR = "{ l.basketcharge:tax ROUND 2 }">,
+	"formatted_amount":		"<MvEVAL EXPR = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketcharge:amount ) }">",
+	"formatted_disp_amt":	"<MvEVAL EXPR = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketcharge:disp_amt ) }">",
+	"formatted_tax":		"<MvEVAL EXPR = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketcharge:tax ) }">"
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -2557,18 +2579,19 @@
 	<MvASSIGN NAME = "g.Basket:subtotal" 						VALUE = "{ [ g.Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
 	<MvASSIGN NAME = "g.Basket:formatted_total" 				VALUE = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, g.Basket:total ) }">
 	<MvASSIGN NAME = "g.Basket:formatted_subtotal" 				VALUE = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, g.Basket:subtotal ) }">
+	<MvASSIGN NAME = "l.basketcharge_count"						VALUE = "{ [ g.Library_DB ].BasketChargeList_Load_Basket( g.Basket:basket_id, l.basketcharges ) }">
 	<MvASSIGN NAME = "l.ready_for_checkout_shipping"			VALUE = 1>
 	<MvASSIGN NAME = "l.ready_for_checkout_tax"					VALUE = 1>
 
 	<MvIF EXPR = "{ ( ( g.Basket:total GT 0 ) AND g.Store:req_ship ) OR
 					( ( g.Basket:total EQ 0 ) AND g.Store:req_frship ) }">
-		<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketCharge_Count_Type( g.Basket:basket_id, 'SHIPPING' ) }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.basketcharges, 1, l.element, 'l.element:type EQ \'SHIPPING\'' ) }">
 			<MvASSIGN NAME = "l.ready_for_checkout_shipping"	VALUE = 0>
 		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ g.Store:req_tax }">
-		<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketCharge_Count_Type( g.Basket:basket_id, 'TAX' ) }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.basketcharges, 1, l.element, 'l.element:type EQ \'TAX\'' ) }">
 			<MvASSIGN NAME = "l.ready_for_checkout_tax"			VALUE = 0>
 		</MvIF>
 	</MvIF>
@@ -2579,6 +2602,16 @@
 		"subtotal":				<MvEVAL EXPR = "{ g.Basket:subtotal ROUND 2 }">,
 		"formatted_total":		"<MvEVAL EXPR = "{ JSON_Encode( g.Basket:formatted_total ) }">",
 		"formatted_subtotal":	"<MvEVAL EXPR = "{ JSON_Encode( g.Basket:formatted_subtotal ) }">",
+		"charges":
+		[
+			<MvASSIGN NAME = "l.charge_count" VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.charge_count ) }">				
+					<MvEVAL EXPR = "{ JSON_Runtime_BasketCharge( l.basketcharge ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		],
 
 		<MvIF EXPR = "{ l.ready_for_checkout_shipping AND l.ready_for_checkout_tax }">
 			"ready_for_checkout": true

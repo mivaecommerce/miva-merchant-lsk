@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2021 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-TAX-VAT-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-vat">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Generic VAT">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0100">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1001">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.01">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "tax, vis_product, vis_store, provision_store, data_store, not_prod, clientside, clientside_sri, json, copy_prod">
 </MvFUNCTION>
@@ -158,8 +158,9 @@
 				<MvASSIGN NAME = "l.basketitem_price" VALUE = "{ l.basketitem_price + l.basketoption:price }">
 			</MvFOREACH>
 
-			<MvASSIGN NAME = "l.basketitem:tax"	VALUE = "{ ( l.basketitem_price * l.basketitem:quantity ) * ( l.vat:rate / 100 ) }">
-			<MvASSIGN NAME = "l.tax"			VALUE = "{ l.tax + l.basketitem:tax }">
+			<MvASSIGN NAME = "l.item_tax"		VALUE = "{ ( l.basketitem_price * l.basketitem:quantity ) * ( l.vat:rate / 100 ) }">
+			<MvASSIGN NAME = "l.tax"			VALUE = "{ l.tax + l.item_tax }">
+			<MvASSIGN NAME = "l.basketitem:tax"	VALUE = "{ l.item_tax ROUND 2 }">
 		</MvIF>
 
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Update_Tax( l.basketitem ) }">
@@ -171,8 +172,9 @@
 		<MvIF EXPR = "{ l.basketcharge:type EQ 'TAX' }">																		<MvFOREACHCONTINUE>
 		<MvELSEIF EXPR = "{ ( l.basketcharge:type EQ 'SHIPPING' AND NOT l.options:tax_ship ) OR l.basketcharge:tax_exempt }">	<MvFOREACHCONTINUE>
 		<MvELSE>
-			<MvASSIGN NAME = "l.basketcharge:tax"		VALUE = "{ l.basketcharge:amount * ( l.options:otherrate / 100 ) }">
-			<MvASSIGN NAME = "l.tax"					VALUE = "{ l.tax + l.basketcharge:tax }">
+			<MvASSIGN NAME = "l.charge_tax"				VALUE = "{ l.basketcharge:amount * ( l.options:otherrate / 100 ) }">
+			<MvASSIGN NAME = "l.tax"					VALUE = "{ l.tax + l.charge_tax }">
+			<MvASSIGN NAME = "l.basketcharge:tax"		VALUE = "{ l.charge_tax ROUND 2 }">
 
 			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update_Tax( l.basketcharge ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
@@ -180,7 +182,7 @@
 		</MvIF>
 	</MvFOREACH>
 
-	<MvASSIGN NAME = "l.tax"						VALUE = "{ max( 0.00, l.tax ) }">
+	<MvASSIGN NAME = "l.tax"						VALUE = "{ max( 0.00, l.tax ) ROUND 2 }">
 
 	<MvASSIGN NAME = "l.basketcharge"				VALUE = "">
 	<MvASSIGN NAME = "l.basketcharge:basket_id" 	VALUE = "{ g.Basket:basket_id }">
@@ -238,8 +240,9 @@
 			<MvASSIGN NAME = "l.orderitem_price"		VALUE = "{ l.orderitem_price + l.orderoption:price }">
 		</MvFOREACH>
 
-		<MvASSIGN NAME = "l.orderitem:tax"				VALUE = "{ ( l.orderitem_price * l.orderitem:quantity ) * ( l.vat:rate / 100 ) }">
-		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.orderitem:tax }">
+		<MvASSIGN NAME = "l.item_tax"					VALUE = "{ ( l.orderitem_price * l.orderitem:quantity ) * ( l.vat:rate / 100 ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.item_tax }">
+		<MvASSIGN NAME = "l.orderitem:tax"				VALUE = "{ l.item_tax ROUND 2 }">
 
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Update_Tax( l.orderitem ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
@@ -251,17 +254,16 @@
 		<MvELSEIF EXPR = "{ ( l.ordercharge:type EQ 'SHIPPING' AND NOT l.options:tax_ship ) OR l.ordercharge:tax_exempt }">	<MvFOREACHCONTINUE>
 		</MvIF>
 
-		<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = "{ l.ordercharge:amount * ( l.options:otherrate / 100 ) }">
-		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.ordercharge:tax }">
+		<MvASSIGN NAME = "l.charge_tax"					VALUE = "{ l.ordercharge:amount * ( l.options:otherrate / 100 ) }">
+		<MvASSIGN NAME = "l.tax"						VALUE = "{ l.tax + l.charge_tax }">
+		<MvASSIGN NAME = "l.ordercharge:tax"			VALUE = "{ l.charge_tax ROUND 2 }">
 
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderCharge_Update_Tax( l.ordercharge ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvFOREACH>
 
-	<MvIF EXPR = "{ l.tax LT 0.00 }">
-		<MvASSIGN NAME = "l.tax"						VALUE = 0.00>
-	</MvIF>
+	<MvASSIGN NAME = "l.tax"							VALUE = "{ max( 0.00, l.tax ) ROUND 2 }">
 
 	<MvASSIGN NAME = "l.ordercharge"					VALUE = "">
 	<MvASSIGN NAME = "l.ordercharge:order_id" 			VALUE = "{ l.order:id }">

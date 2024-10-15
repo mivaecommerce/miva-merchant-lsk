@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-PGR-UTL-
@@ -3666,8 +3666,9 @@
 
 	<MvIF EXPR = "{ l.amount GT 0 }">
 		<MvFOREACH ITERATOR = "l.option" ARRAY = "l.discount_item:options" COUNT = "{ l.discount_item:option_count }">
-			<MvIF EXPR = "{ l.amount GT l.option:price }">	<MvASSIGN NAME = "l.option_discount" VALUE = "{ l.option:price }">
-			<MvELSE>										<MvASSIGN NAME = "l.option_discount" VALUE = "{ l.amount }">
+			<MvIF EXPR = "{ l.option:price LE 0 }">				<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ l.amount GT l.option:price }">	<MvASSIGN NAME = "l.option_discount" VALUE = "{ l.option:price }">
+			<MvELSE>											<MvASSIGN NAME = "l.option_discount" VALUE = "{ l.amount }">
 			</MvIF>
 
 			<MvIF EXPR = "{ l.option_discount GT l.discount_item:eligible_price }">
@@ -3692,42 +3693,54 @@
 	<MvIF EXPR = "{ l.quantity LE 0 }">
 		<MvFUNCTIONRETURN>
 	<MvELSEIF EXPR = "{ l.item:quantity LE l.quantity }">
-		<MvREFERENCE NAME = "l.discount_item"				VARIABLE = "l.item">
+		<MvREFERENCE NAME = "l.discount_item"			VARIABLE = "l.item">
 	<MvELSE>
-		<MvASSIGN NAME = "l.item:modified"					VALUE = 1>
-		<MvASSIGN NAME = "l.item:quantity"					VALUE = "{ l.item:quantity - l.quantity }">
+		<MvASSIGN NAME = "l.item:modified"				VALUE = 1>
+		<MvASSIGN NAME = "l.item:quantity"				VALUE = "{ l.item:quantity - l.quantity }">
 
-		<MvASSIGN NAME = "l.discount_item"					VALUE = "{ l.item }">
-		<MvASSIGN NAME = "l.discount_item:quantity"			VALUE = "{ l.quantity }">
-		<MvASSIGN NAME = "l.discount_item:line_id"			VALUE = 0>
-		<MvASSIGN NAME = "l.discount_state:item_count"		VALUE = "{ miva_array_insert_ref( l.discount_state:items, l.discount_item, -1 ) }">
+		<MvASSIGN NAME = "l.discount_item"				VALUE = "{ l.item }">
+		<MvASSIGN NAME = "l.discount_item:quantity"		VALUE = "{ l.quantity }">
+		<MvASSIGN NAME = "l.discount_item:line_id"		VALUE = 0>
+		<MvASSIGN NAME = "l.discount_state:item_count"	VALUE = "{ miva_array_insert_ref( l.discount_state:items, l.discount_item, -1 ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.item_discount"						VALUE = "{ ( min( l.discount_item:price, l.discount_item:eligible_price ) * ( l.percent / 100 ) ) ROUND 2 }">
+	<MvIF EXPR = "{ l.discount_item:price GT l.discount_item:eligible_price }">
+		<MvASSIGN NAME = "l.item_discount"				VALUE = "{ ( l.discount_item:eligible_price * ( l.percent / 100 ) ) ROUND 2 }">
 
-	<MvIF EXPR = "{ l.item_discount GT l.discount_item:eligible_price }">
-		<MvASSIGN NAME = "l.item_discount"					VALUE = "{ l.discount_item:eligible_price }">
+		<MvIF EXPR = "{ l.item_discount GT l.discount_item:eligible_price }">
+			<MvASSIGN NAME = "l.item_discount"			VALUE = "{ l.discount_item:eligible_price }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.item_discount }">
+			<MvEVAL EXPR = "{ DiscountState_Add_Item_Discount( l.discount_state, l.discount_item, l.item_discount ) }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.item_discount"				VALUE = "{ ( l.discount_item:price * ( l.percent / 100 ) ) ROUND 2 }">
+
+		<MvIF EXPR = "{ l.item_discount GT l.discount_item:eligible_price }">
+			<MvASSIGN NAME = "l.item_discount"			VALUE = "{ l.discount_item:eligible_price }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.item_discount }">
+			<MvEVAL EXPR = "{ DiscountState_Add_Item_Discount( l.discount_state, l.discount_item, l.item_discount ) }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.option" ARRAY = "l.discount_item:options" COUNT = "{ l.discount_item:option_count }">
+			<MvIF EXPR = "{ l.discount_item:eligible_price EQ 0 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.option_discount"		VALUE = "{ ( l.option:price * ( l.percent / 100 ) ) ROUND 2 }">
+
+			<MvIF EXPR = "{ l.option_discount GT l.discount_item:eligible_price }">
+				<MvASSIGN NAME = "l.option_discount"	VALUE = "{ l.discount_item:eligible_price }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.option_discount }">
+				<MvEVAL EXPR = "{ DiscountState_Add_Option_Discount( l.discount_state, l.discount_item, l.option, l.option_discount ) }">
+			</MvIF>
+		</MvFOREACH>
 	</MvIF>
-
-	<MvIF EXPR = "{ l.item_discount }">
-		<MvEVAL EXPR = "{ DiscountState_Add_Item_Discount( l.discount_state, l.discount_item, l.item_discount ) }">
-	</MvIF>
-
-	<MvFOREACH ITERATOR = "l.option" ARRAY = "l.discount_item:options" COUNT = "{ l.discount_item:option_count }">
-		<MvIF EXPR = "{ l.discount_item:eligible_price EQ 0 }">
-			<MvFOREACHSTOP>
-		</MvIF>
-
-		<MvASSIGN NAME = "l.option_discount"		VALUE = "{ ( l.option:price * ( l.percent / 100 ) ) ROUND 2 }">
-
-		<MvIF EXPR = "{ l.option_discount GT l.discount_item:eligible_price }">
-			<MvASSIGN NAME = "l.option_discount"	VALUE = "{ l.discount_item:eligible_price }">
-		</MvIF>
-
-		<MvIF EXPR = "{ l.option_discount }">
-			<MvEVAL EXPR = "{ DiscountState_Add_Option_Discount( l.discount_state, l.discount_item, l.option, l.option_discount ) }">
-		</MvIF>
-	</MvFOREACH>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "DiscountState_Discount_SubTotal_Fixed" PARAMETERS = "discount_state var, amount" STANDARDOUTPUTLEVEL = "">

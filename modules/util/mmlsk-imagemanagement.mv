@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-UTL-IGR-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-imagemanagement">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Image Management">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0700">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1001">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "The Image Management screen is used to manage Images on the Product page.  Once you have installed the module, you can access Image Management under Utilities in the main menu.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, clientside, clientside_sri, json, provision_store, scheduledtask">
@@ -136,7 +136,6 @@
 	<MvIF EXPR = "{ g.Module_Function EQ 'ImageManagement_ImageList_Load_Query' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_ImageList_Load_Query( l.module ) }">
 	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ImageManagement_Image_Delete' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_Image_Delete( l.module ) }">
 	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ImageManagement_ImageList_Delete_GeneratedImages' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_ImageList_Delete_GeneratedImages( l.module ) }">
-	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ImageManagement_Delete_UnreferencedImages' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_Delete_UnreferencedImages( l.module ) }">
 	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ImageManagement_CheckForUpdatedMasterImages' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_CheckForUpdatedMasterImages( l.module ) }">
 	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ImageManagement_CheckForUpdatedGeneratedImages' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_CheckForUpdatedGeneratedImages( l.module ) }">
 	<MvELSEIF EXPR = "{ g.Module_Function EQ 'ImageManagement_GeneratedImageList_Load_Image' }">		<MvFUNCTIONRETURN VALUE = "{ JSON_ImageManagement_GeneratedImageList_Load_Image( l.module ) }">
@@ -297,145 +296,6 @@
 	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "JSON_ImageManagement_Delete_UnreferencedImages" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ ( NOT g.Admin_User_Administrator ) AND
-					( g.Admin_User_ID NE g.Store:manager_id ) }">			<MvFUNCTIONRETURN>	</MvIF>
-
-	<MvCOMMENT>
-	|
-	| For ease of testing, we process 1,000 images in chunks of 200, with an early
-	| recycle if there are less than 3 seconds of globaltimeout remaining or we have
-	| processed for 30 seconds.
-	|
-	</MvCOMMENT>
-
-	<MvASSIGN NAME = "l.recycle_time_t"			VALUE = "{ s.dyn_time_t + 30 }">
-	
-	<MvFOR COUNT = "{ 5 }">
-		<MvCOMMENT>
-		|
-		| Load Image records 200 at a time to avoid overloading the database or consuming too much memory
-		|
-		</MvCOMMENT>
-
-		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Images',
-																				 'SELECT
-																					i.id		AS image_id,
-																					i.image		AS image_image,
-																					gi.id		AS generatedimage_id,
-																					gi.image	AS generatedimage_image
-																				  FROM
-																					' $ g.Store_Table_Prefix $ 'Images i
-																					LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'GeneratedImages gi ON gi.image_id = i.id
-																				  WHERE
-																					i.refcount	= 0',
-																				 '', 0, 200 ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-IGR-00002', g.MvOPENVIEW_Error ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.record_count"						VALUE = 0>
-		<MvASSIGN NAME = "l.image_count"						VALUE = 0>
-		<MvASSIGN NAME = "l.last_image_id"						VALUE = -1>
-
-		<MvWHILE EXPR = "{ ( l.record_count LT 200 ) AND ( NOT Images.d.EOF ) }">
-			<MvASSIGN NAME = "l.record_count"					VALUE = "{ l.record_count + 1 }">
-
-			<MvIF EXPR = "{ Images.d.image_id NE l.last_image_id }">
-				<MvIF EXPR = "{ l.image_count }">
-					<MvASSIGN NAME = "l.image:delete"			VALUE = 1>
-				</MvIF>
-
-				<MvASSIGN NAME = "l.image_count"				VALUE = "{ l.image_count + 1 }">
-				<MvASSIGN NAME = "l.last_image_id"				VALUE = "{ Images.d.id }">
-
-				<MvREFERENCEARRAY NAME = "l.image" VARIABLE = "l.images">
-					<MvDIMENSION INDEX = "{ l.image_count }">
-				</MvREFERENCEARRAY>
-
-				<MvASSIGN NAME = "l.image:id"					VALUE = "{ Images.d.image_id }">	
-				<MvASSIGN NAME = "l.image:image"				VALUE = "{ Images.d.image_image }">
-				<MvASSIGN NAME = "l.image:generatedimage_count"	VALUE = 0>
-			</MvIF>
-
-			<MvIF EXPR = "{ Images.d.generatedimage_id }">
-				<MvASSIGN NAME = "l.image:generatedimage_count"	VALUE = "{ l.image:generatedimage_count + 1 }">
-
-				<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.image">
-					<MvMEMBER NAME = "generatedimages">
-					<MvDIMENSION INDEX = "{ l.image:generatedimage_count }">
-				</MvREFERENCEARRAY>
-
-				<MvASSIGN NAME = "l.generatedimage:id"			VALUE = "{ Images.d.generatedimage_id }">
-				<MvASSIGN NAME = "l.generatedimage:image"		VALUE = "{ Images.d.generatedimage_image }">
-			</MvIF>
-
-			<MvSKIP NAME = "Merchant" VIEW = "Images" ROWS = 1>
-		</MvWHILE>
-
-		<MvIF EXPR = "{ ( l.record_count LT 200 ) AND l.image_count }">
-			<MvASSIGN NAME = "l.image:delete"					VALUE = 1>
-		</MvIF>
-
-		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Images">
-
-		<MvFOREACH ITERATOR = "l.image" ARRAY = "l.images" COUNT = "{ l.image_count }">
-			<MvFOREACH ITERATOR = "l.generatedimage" ARRAY = "l.image:generatedimages" COUNT = "{ l.image:generatedimage_count }">
-				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].GeneratedImage_Delete_ID( l.generatedimage:id ) }">
-					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-				</MvIF>
-
-				<MvCOMMENT>
-				|
-				| Delete the image file as long as the image is not being used as a master image
-				|
-				</MvCOMMENT>
-
-				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Image_Load_File( l.generatedimage:image, l.null ) }">
-					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-					</MvIF>
-
-					<MvASSIGN NAME = "l.null"		VALUE = "{ sdelete( g.imageroot $ l.generatedimage:image ) }">
-				</MvIF>
-
-				<MvIF EXPR = "{ ( s.dyn_time_t GE l.recycle_time_t ) OR ( ( s.dyn_time_remaining NE -1 ) AND ( s.dyn_time_remaining LE 3 ) ) }">
-					<MvFORSTOP>
-				</MvIF>
-			</MvFOREACH>
-
-			<MvIF EXPR = "{ l.image:delete }">
-				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Image_Delete( l.image:id ) }">
-					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-				</MvIF>
-
-				<MvASSIGN NAME = "l.null"			VALUE = "{ sdelete( g.imageroot $ l.image:image ) }">
-			</MvIF>
-
-			<MvIF EXPR = "{ ( s.dyn_time_t GE l.recycle_time_t ) OR ( ( s.dyn_time_remaining NE -1 ) AND ( s.dyn_time_remaining LE 3 ) ) }">
-				<MvFORSTOP>
-			</MvIF>
-		</MvFOREACH>
-		
-		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-IGR-00026', 'Deleted unreferenced images' ) }">
-
-		<MvIF EXPR = "{ l.image_count LT 200 }">
-			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
-			{
-				"complete":	true
-			}
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
-		</MvIF>
-	</MvFOR>
-
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
-	{
-		"complete":	false
-	}
-	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_ImageManagement_CheckForUpdatedMasterImages" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
@@ -912,10 +772,6 @@
 
 		<MvIF EXPR = "{ l.tag EQ 'check_updatedimages' }">
 			<MvEVAL EXPR = "{ Module_Provision_Store_Check_UpdatedImages( l.module, l.child ) }">
-		<MvELSEIF EXPR = "{ l.tag EQ 'delete_unreferencedimages' }">
-			<MvIF EXPR = "{ NOT ImageManagement_Delete_UnreferencedImages() }">
-				<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.child ) }">
-			</MvIF>
 		<MvELSE>
 			<MvEVAL EXPR = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.child, 'Unknown tag \'' $ l.tag $ '\'' ) }">
 		</MvIF>
@@ -986,10 +842,7 @@
 	<MvASSIGN NAME = "l.operations" INDEX = 1 MEMBER = "code"		VALUE = "updated">
 	<MvASSIGN NAME = "l.operations" INDEX = 1 MEMBER = "descrip"	VALUE = "Check for Updated Images">
 
-	<MvASSIGN NAME = "l.operations" INDEX = 2 MEMBER = "code"		VALUE = "unreferenced">
-	<MvASSIGN NAME = "l.operations" INDEX = 2 MEMBER = "descrip"	VALUE = "Delete Unreferenced Images">
-
-	<MvFUNCTIONRETURN VALUE = 2>
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ScheduledTaskModule_Fields" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
@@ -1020,8 +873,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ScheduledTaskModule_Execute" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.task:operation EQ 'updated' }">			<MvFUNCTIONRETURN VALUE = "{ ScheduledTaskModule_Execute_CheckForUpdatedImages( l.module, l.task ) }">
-	<MvELSEIF EXPR = "{ l.task:operation EQ 'unreferenced' }">	<MvFUNCTIONRETURN VALUE = "{ ImageManagement_Delete_UnreferencedImages() }">
+	<MvIF EXPR = "{ l.task:operation EQ 'updated' }">
+		<MvFUNCTIONRETURN VALUE = "{ ScheduledTaskModule_Execute_CheckForUpdatedImages( l.module, l.task ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-IGR-00015', 'Unsupported operation' ) }">
@@ -1131,67 +984,6 @@
 | Utility Functions
 |
 </MvCOMMENT>
-
-<MvFUNCTION NAME = "ImageManagement_Delete_UnreferencedImages" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvOPENVIEW NAME 	= "Merchant"
-				VIEW 	= "ImageManagement_Images"
-				QUERY	= "{ 'SELECT
-								i.id		AS image_id,
-								i.image		AS image_image,
-								gi.id		AS generatedimage_id,
-								gi.image	AS generatedimage_image
-							  FROM
-								' $ g.Store_Table_Prefix $ 'Images i
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'GeneratedImages gi ON gi.image_id = i.id
-							  WHERE
-								i.refcount	= 0' }">
-	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-IGR-00014', g.MvOPENVIEW_Error ) }">
-	</MvIF>
-
-	<MvWHILE EXPR = "{ NOT ImageManagement_Images.d.EOF }">
-		<MvASSIGN NAME = "l.last_image:id"		VALUE = "{ ImageManagement_Images.d.image_id }">
-		<MvASSIGN NAME = "l.last_image:image"	VALUE = "{ ImageManagement_Images.d.image_image }">
-
-		<MvWHILE EXPR = "{ ( ImageManagement_Images.d.image_id EQ l.last_image:id ) AND ( NOT ImageManagement_Images.d.EOF ) }">
-			<MvASSIGN NAME = "l.generatedimage_id"		VALUE = "{ ImageManagement_Images.d.generatedimage_id }">
-			<MvASSIGN NAME = "l.generatedimage_image"	VALUE = "{ ImageManagement_Images.d.generatedimage_image }">
-
-			<MvSKIP NAME = "Merchant" VIEW = "ImageManagement_Images" ROWS = 1>
-
-			<MvIF EXPR = "{ l.generatedimage_id }">
-				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].GeneratedImage_Delete_ID( l.generatedimage_id ) }">
-					<MvCLOSEVIEW NAME = "Merchant" VIEW = "ImageManagement_Images">
-					<MvFUNCTIONRETURN VALUE = 0>
-				</MvIF>
-
-				<MvCOMMENT>
-				|
-				| Delete the image file as long as the image is not being used as a master image
-				|
-				</MvCOMMENT>
-
-				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Image_Load_File( l.generatedimage_image, l.null ) }">
-					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-					</MvIF>
-
-					<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( g.imageroot $ l.generatedimage_image ) }">
-				</MvIF>
-			</MvIF>
-		</MvWHILE>
-
-		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Image_Delete( l.last_image:id ) }">
-			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ImageManagement_Images">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
-
-		<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( g.imageroot $ l.last_image:image ) }">
-	</MvWHILE>
-
-	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ImageManagement_Images">
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
 
 <MvFUNCTION NAME = "Image_Count" PARAMETERS = "count var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.count" VALUE = 0>

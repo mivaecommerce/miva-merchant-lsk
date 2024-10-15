@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -27,7 +27,6 @@ function ImageManagement_ImageList()
 
 		this.Feature_Delete_Enable( 'Delete Image(s)' );
 
-		this.button_deleteunreferenced			= this.Feature_Buttons_AddButton_Persistent( 'Delete Unreferenced',			'',	'',			this.ImageManagement_DeleteUnreferenced );
 		this.button_checkforupdatedimages		= this.Feature_Buttons_AddButton_Persistent( 'Check for Updated Images',	'',	'',			this.ImageManagement_CheckForUpdatedImages );
 		this.button_partitionimages				= this.Feature_Buttons_AddButton_Persistent( 'Partition Images',			'',	'',			this.ImageManagement_PartitionImages );
 		this.button_deletegenerated				= this.Feature_Buttons_AddButton_Dynamic( 'Delete Resized',					'',	'delete',	this.ImageManagement_DeleteResizedImages );
@@ -130,56 +129,6 @@ ImageManagement_ImageList.prototype.ImageManagement_DeleteResizedImages_LowLevel
 
 ImageManagement_ImageList.prototype.ImageManagement_ImageList_Delete_GeneratedImages_Callback = function( response )
 {
-	this.processingdialog.Hide();
-
-	if ( !response.success )
-	{
-		return this.onError( response.error_message );
-	}
-
-	this.Refresh();
-}
-
-ImageManagement_ImageList.prototype.ImageManagement_DeleteUnreferenced = function()
-{
-	const self = this;
-	var dialog;
-
-	dialog			= new ConfirmationDialog();
-	dialog.onYes	= function() { self.ImageManagement_DeleteUnreferenced_LowLevel(); };
-
-	dialog.SetButtonNoText( 'Cancel' );
-	dialog.SetButtonYesText( 'Continue' );
-	dialog.SetTitle( 'Delete Unreferenced Images?' );
-	dialog.Show( `This function will check for images that are not being used by any products.<br />
-				  <br />
-				  Any unused images will be deleted, including any resized versions of the master image.<br />
-				  The image files will be permanently removed from the server.<br />
-				  <br />
-				  Depending on the number of images present, this process may take a long time.  Once<br />
-				  the process has begun, it cannot be aborted.<br />
-				  <br />
-				  Continue?` );
-}
-
-ImageManagement_ImageList.prototype.ImageManagement_DeleteUnreferenced_LowLevel = function()
-{
-	const self = this;
-
-	this.processingdialog.Show( 'Deleting Unreferenced Images...' );
-	ImageManagement_Delete_UnreferencedImages( function( response ) { self.ImageManagement_Delete_UnreferencedImages_Callback( response ); } );
-}
-
-ImageManagement_ImageList.prototype.ImageManagement_Delete_UnreferencedImages_Callback = function( response )
-{
-	const self = this;
-
-	if ( response.success && !response.data.complete )
-	{
-		ImageManagement_Delete_UnreferencedImages( function( response ) { self.ImageManagement_Delete_UnreferencedImages_Callback( response ); } );
-		return;
-	}
-
 	this.processingdialog.Hide();
 
 	if ( !response.success )

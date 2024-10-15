@@ -144,6 +144,10 @@
 				</MvIF>
 			</MvIF>
 		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_URI_UT ].URI_Route_JSON() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
 	<MvELSEIF EXPR = "{ g.Session_Type EQ 'admin' }">
 		<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_AdminOrigin() }">
 			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Screen_RejectOrigin() }">
@@ -316,6 +320,10 @@
 				<MvASSIGN NAME = "l.null"						VALUE = "{ miva_output_header( 'Content-Type', l.response_content_type $ '; charset=utf-8' ) }">
 			</MvIF>
 		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_URI_UT ].URI_Route_JSON() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -445,6 +453,7 @@
 				<MvELSEIF EXPR = "{ g.Function EQ 'APITokenList_Load_Query' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_APITokenList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'APIToken_Insert' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_APIToken_Insert() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'APIToken_Update' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_APIToken_Update() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'APIToken_Update_Enabled' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_APIToken_Update_Enabled() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'APITokenList_Delete' }">													<MvFUNCTIONRETURN VALUE = "{ JSON_APITokenList_Delete() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'APIToken_Generate_SigningKey' }">										<MvFUNCTIONRETURN VALUE = "{ JSON_APIToken_Generate_SigningKey() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'APIToken_Generate_Token' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_APIToken_Generate_Token() }">
@@ -1479,6 +1488,17 @@
 			<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
 
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'access_denied', 'Access denied' ) }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Validate the token is enabled
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT g.Session:api_token:enabled }">
+			<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_API_Call_Failure( 'Token is disabled' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'access_denied', 'Token is disabled' ) }">
 		</MvIF>
 
 		<MvCOMMENT>
@@ -4200,8 +4220,12 @@
 
 			<MvASSIGN NAME = "l.search_filter_count" VALUE = "{ miva_array_filter_ref( l.filterlist, 1, l.sibling_filter, 'l.sibling_filter:name EQ \'search\' OR l.sibling_filter:name EQ \'search_AND\' OR l.sibling_filter:name EQ \'search_OR\'', l.null ) }">
 
-			<MvIF EXPR = "{ l.search_filter_count EQ 1 }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Filter_Search_Is_Conjunctive_Child( l.filter:value ) }">
-			<MvELSE>										<MvFUNCTIONRETURN VALUE = 0>
+			<MvIF EXPR = "{ l.search_filter_count EQ 1 }">
+				<MvIF EXPR = "{ NOT JSON_Filter_Search_Is_Conjunctive_Child( l.filter:value ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		<MvELSEIF EXPR = "{ l.filter:name EQ 'search' OR l.filter:name EQ 'search_AND' }">
 			<MvCOMMENT>
@@ -4213,9 +4237,16 @@
 			<MvASSIGN NAME = "l.value_count"						VALUE = "{ miva_array_elements( l.filter:value ) }">
 			<MvASSIGN NAME = "l.value_count_subwhere_search_and"	VALUE = "{ miva_array_filter_ref( l.filter:value, 1, l.child_value, 'l.child_value:operator EQ \'SUBWHERE\' AND l.child_value:field EQ \'search_AND\'', l.null ) }">
 
-			<MvIF EXPR = "{ l.value_count LE 1 }">										<MvFUNCTIONRETURN VALUE = "{ JSON_Filter_Search_Is_Conjunctive_Child( l.filter:value ) }">
-			<MvELSEIF EXPR = "{ l.value_count EQ l.value_count_subwhere_search_and }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Filter_Search_Is_Conjunctive_Child( l.filter:value ) }">
-			<MvELSE>																	<MvFUNCTIONRETURN VALUE = 0>
+			<MvIF EXPR = "{ l.value_count LE 1 }">
+				<MvIF EXPR = "{ NOT JSON_Filter_Search_Is_Conjunctive_Child( l.filter:value ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.value_count EQ l.value_count_subwhere_search_and }">
+				<MvIF EXPR = "{ NOT JSON_Filter_Search_Is_Conjunctive_Child( l.filter:value ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		</MvIF>
 	</MvFOREACH>
@@ -4232,8 +4263,12 @@
 			|
 			</MvCOMMENT>
 
-			<MvIF EXPR = "{ miva_array_elements( l.value ) EQ 1 }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Filter_Search_Is_Conjunctive_Child( l.search:value ) }">
-			<MvELSE>												<MvFUNCTIONRETURN VALUE = 0>
+			<MvIF EXPR = "{ miva_array_elements( l.value ) EQ 1 }">
+				<MvIF EXPR = "{ NOT JSON_Filter_Search_Is_Conjunctive_Child( l.search:value ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		<MvELSEIF EXPR = "{ l.search:operator EQ 'SUBWHERE' AND l.search:field EQ 'search_AND' }">
 			<MvCOMMENT>
@@ -4245,9 +4280,16 @@
 			<MvASSIGN NAME = "l.value_count"						VALUE = "{ miva_array_elements( l.search:value ) }">
 			<MvASSIGN NAME = "l.value_count_subwhere_search_and"	VALUE = "{ miva_array_filter_ref( l.search:value, 1, l.child_value, 'l.child_value:operator EQ \'SUBWHERE\' AND l.child_value:field EQ \'search_AND\'', l.null ) }">
 
-			<MvIF EXPR = "{ l.value_count LE 1 }">										<MvFUNCTIONRETURN VALUE = "{ JSON_Filter_Search_Is_Conjunctive_Child( l.search:value ) }">
-			<MvELSEIF EXPR = "{ l.value_count EQ l.value_count_subwhere_search_and }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Filter_Search_Is_Conjunctive_Child( l.search:value ) }">
-			<MvELSE>																	<MvFUNCTIONRETURN VALUE = 0>
+			<MvIF EXPR = "{ l.value_count LE 1 }">
+				<MvIF EXPR = "{ NOT JSON_Filter_Search_Is_Conjunctive_Child( l.search:value ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.value_count EQ l.value_count_subwhere_search_and }">
+				<MvIF EXPR = "{ NOT JSON_Filter_Search_Is_Conjunctive_Child( l.search:value ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSE>
+				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		</MvIF>
 	</MvFOREACH>

@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1000">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1001">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -8855,12 +8855,24 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "CustomFields_Generic_Query_With_Search" PARAMETERS = "data var, query var, code, operator, value, is_conjunctive var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "CustomFields_Generic_Query_With_Search" PARAMETERS = "data var, query var, code, operator var, value var, is_conjunctive var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ l.data:field:id LE 0 }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00381', 'Invalid field identifier' ) }">
 	</MvIF>
 
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Data_Reference( l.query, 'customfld', l.ref ) }">
+
+	<MvCOMMENT>
+	|
+	| Translate searches for checkbox fields that use the "EQ" operator and have a "0"
+	| value to use the FALSE operator instead
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.data:field:fieldtype EQ 'checkbox' AND l.operator EQ 'EQ' AND strcmp( l.value, '0' ) EQ 0 }">
+		<MvASSIGN NAME = "l.operator"	VALUE = "FALSE">
+		<MvASSIGN NAME = "l.value"		VALUE = "">
+	</MvIF>
 
 	<MvCOMMENT>
 	|
@@ -8965,12 +8977,6 @@
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.query, ternary( l.is_conjunctive, 'CHAR', 'NULL_CHAR' ), l.element:alias $ '.value,' $ l.element:alias $ '.value_long', l.operator, l.value, 'AND', l.inner_joining_clause ) }">
 		<MvELSE>
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.query, ternary( l.is_conjunctive, 'CHAR', 'NULL_CHAR' ), l.element:alias $ ternary( len_var( l.value ) GT 254, '.value_long', '.value' ), l.operator, l.value, 'AND', l.inner_joining_clause ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ l.data:field:fieldtype EQ 'checkbox' }">
-			<MvIF EXPR = "{ ( l.operator EQ 'EQ' ) AND ( 'x' $ l.value EQ 'x0' ) }">
-				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.element:alias $ '.field_id IS NULL', '' ) }">
-			</MvIF>
 		</MvIF>
 	</MvIF>
 
