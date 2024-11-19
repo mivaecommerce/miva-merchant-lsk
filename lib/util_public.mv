@@ -1023,10 +1023,20 @@
 		<MvELSEIF EXPR = "{ NOT l.pricegroup_lookup[ l.pricegroup:id ] }">	<MvFOREACHCONTINUE>
 		</MvIF>
 		
-		<MvIF EXPR = "{ l.pricegroup:rate EQ 'C' }">		<MvASSIGN NAME = "l.adjusted"	VALUE = "{ l.cost }">
-		<MvELSEIF EXPR = "{ l.pricegroup:rate EQ 'R' }">	<MvASSIGN NAME = "l.adjusted"	VALUE = "{ l.price }">
-		<MvELSEIF EXPR = "{ l.pricegroup:rate EQ 'D' }">	<MvASSIGN NAME = "l.adjusted"	VALUE = "{ ( l.price - ( l.price * ( l.pricegroup:discount / 100 ) ) ) ROUND 2 }">
-		<MvELSEIF EXPR = "{ l.pricegroup:rate EQ 'M' }">	<MvASSIGN NAME = "l.adjusted"	VALUE = "{ ( l.cost + ( l.cost * ( l.pricegroup:markup / 100 ) ) ) ROUND 2 }">
+		<MvIF EXPR = "{ l.pricegroup:rate EQ 'C' }">		<MvASSIGN NAME = "l.adjusted" VALUE = "{ l.cost }">
+		<MvELSEIF EXPR = "{ l.pricegroup:rate EQ 'R' }">	<MvASSIGN NAME = "l.adjusted" VALUE = "{ l.price }">
+		<MvELSEIF EXPR = "{ l.pricegroup:rate EQ 'D' }">
+			<MvIF EXPR = "{ NOT Price_IsHighPrecision( l.price ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+			<MvELSE>													<MvASSIGN NAME = "l.scale" VALUE = 8>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.adjusted" VALUE = "{ ( l.price - ( l.price * ( l.pricegroup:discount / 100 ) ) ) ROUND l.scale }">
+		<MvELSEIF EXPR = "{ l.pricegroup:rate EQ 'M' }">
+			<MvIF EXPR = "{ NOT Price_IsHighPrecision( l.cost ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+			<MvELSE>												<MvASSIGN NAME = "l.scale" VALUE = 8>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.adjusted" VALUE = "{ ( l.cost + ( l.cost * ( l.pricegroup:markup / 100 ) ) ) ROUND l.scale }">
 		</MvIF>
 
 		<MvIF EXPR = "{ g.Store:pgrp_ovlp EQ 'PRIORITY' }">
@@ -1112,6 +1122,36 @@
 	<script type="text/javascript">
 		DrawCredentialInput( '<MvEVAL EXPR = "{ encodejavascriptstring( l.id ) }">' );
 	</script>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "DrawMMWeightInput" PARAMETERS = "name, value, title, autosize, autosize_max" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.attributes"		VALUE = "">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.attributes, 'type="number"', -1 ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.attributes, 'name="' $ encodeentities( l.name ) $ '"', -1 ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.attributes, 'value="' $ encodeentities( l.value ) $ '"', -1 ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.attributes, 'weight-unit="' $ encodeentities( g.Store:wtunitcode ) $ '"', -1 ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.attributes, 'min-precision="' $ encodeentities( g.Store:wtdispdig ) $ '"', -1 ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.attributes, 'resize', -1 ) }">
+
+	<MvIF EXPR = "{ g.Store:wtdispmix }">
+		<MvASSIGN NAME = "l.null"		VALUE = "{ miva_array_insert( l.attributes, 'mixed-units', -1 ) }">
+	<MvELSEIF EXPR = "{ g.Store:wtdisplow }">
+		<MvASSIGN NAME = "l.null"		VALUE = "{ miva_array_insert( l.attributes, 'smaller-units', -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.title }">
+		<MvASSIGN NAME = "l.null"		VALUE = "{ miva_array_insert( l.attributes, 'title="' $ encodeentities( l.title ) $ '"', -1 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.autosize }">
+		<MvASSIGN NAME = "l.null"		VALUE = "{ miva_array_insert( l.attributes, 'autosize-enabled', -1 ) }">
+
+		<MvIF EXPR = "{ int( l.autosize_max ) GT 0 }">
+			<MvASSIGN NAME = "l.null"	VALUE = "{ miva_array_insert( l.attributes, 'autosize-max-width="' $ encodeentities( l.autosize_max ) $ '"', -1 ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ '<mm-weight-input ' $ miva_joinstring( l.attributes, ' ', '' ) $ '></mm-weight-input>' }">
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -5691,6 +5731,102 @@
 	<MvFUNCTIONRETURN VALUE = "{ miva_joinstring( l.unique_cidrs, ', ', '' ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Price_Pad" PARAMETERS = "price" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Decimal_Pad( l.price, 2 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Decimal_Pad" PARAMETERS = "value, digits" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.part_count"	VALUE = "{ miva_splitstring( l.value + 0.0, '.', l.parts, '' ) }">
+	<MvASSIGN NAME = "l.integer"	VALUE = "{ l.parts[ 1 ] }">
+	<MvASSIGN NAME = "l.decimal"	VALUE = "{ padr( l.parts[ 2 ], l.digits, '0' ) }">
+
+	<MvIF EXPR = "{ ISNULL l.decimal }">	<MvFUNCTIONRETURN VALUE = "{ l.integer }">
+	<MvELSE>								<MvFUNCTIONRETURN VALUE = "{ l.integer $ '.' $ l.decimal }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Format_Weight" PARAMETERS = "weight" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.weight EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Decimal_Pad( l.weight, g.Store:wtdispdig ) $ ' ' $ g.Store:wtunits }">
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Store:wtdisplow AND l.weight LT 1 AND l.weight GT -1 }">
+		<MvIF EXPR = "{ g.Store:wtunitcode EQ 'LB' }">		<MvFUNCTIONRETURN VALUE = "{ Decimal_Pad( ( l.weight * 16 ) ROUND 8, g.Store:wtdispdig ) $ ' oz' }">
+		<MvELSEIF EXPR = "{ g.Store:wtunitcode EQ 'KG' }">	<MvFUNCTIONRETURN VALUE = "{ Decimal_Pad( ( l.weight * 1000 ) ROUND 8, g.Store:wtdispdig ) $ ' g' }">
+		<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ Decimal_Pad( l.weight, g.Store:wtdispdig ) $ ' ' $ g.Store:wtunits }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Store:wtdispmix }">
+		<MvASSIGN NAME = "l.prefix"							VALUE = "{ ternary( l.weight GE 0, '', '-' ) }">
+		<MvASSIGN NAME = "l.weight"							VALUE = "{ abs( l.weight ) }">
+		<MvASSIGN NAME = "l.weight_big" 					VALUE = 0>
+		<MvASSIGN NAME = "l.weight_small" 					VALUE = 0>
+		<MvASSIGN NAME = "l.formatted_weight_big" 			VALUE = "">
+		<MvASSIGN NAME = "l.formatted_weight_small" 		VALUE = "">
+
+		<MvIF EXPR = "{ g.Store:wtunitcode EQ 'OZ' }">
+			<MvASSIGN NAME = "l.weight_big"					VALUE = "{ floor( l.weight / 16 ) }">
+			<MvASSIGN NAME = "l.weight_small"				VALUE = "{ fmod( l.weight, 16 ) ROUND 8 }">
+
+			<MvASSIGN NAME = "l.formatted_weight_big"		VALUE = "{ l.weight_big $ ' lb' }">
+			<MvASSIGN NAME = "l.formatted_weight_small"		VALUE = "{ Decimal_Pad( l.weight_small, g.Store:wtdispdig ) $ ' ' $ g.Store:wtunits }">
+		<MvELSEIF EXPR = "{ g.Store:wtunitcode EQ 'LB' }">
+			<MvASSIGN NAME = "l.weight_big"					VALUE = "{ floor( l.weight ) }">
+			<MvASSIGN NAME = "l.weight_small"				VALUE = "{ ( ( l.weight - l.weight_big ) * 16 ) ROUND 8 }">
+
+			<MvASSIGN NAME = "l.formatted_weight_big"		VALUE = "{ l.weight_big $ ' ' $ g.Store:wtunits }">
+			<MvASSIGN NAME = "l.formatted_weight_small"		VALUE = "{ Decimal_Pad( l.weight_small, g.Store:wtdispdig ) $ ' oz' }">
+		<MvELSEIF EXPR = "{ g.Store:wtunitcode EQ 'G' }">
+			<MvASSIGN NAME = "l.weight_big"					VALUE = "{ floor( l.weight / 1000 ) }">
+			<MvASSIGN NAME = "l.weight_small"				VALUE = "{ fmod( l.weight, 1000 ) ROUND 8 }">
+
+			<MvASSIGN NAME = "l.formatted_weight_big"		VALUE = "{ l.weight_big $ ' kg' }">
+			<MvASSIGN NAME = "l.formatted_weight_small"		VALUE = "{ Decimal_Pad( l.weight_small, g.Store:wtdispdig ) $ ' ' $ g.Store:wtunits }">
+		<MvELSEIF EXPR = "{ g.Store:wtunitcode EQ 'KG' }">
+			<MvASSIGN NAME = "l.weight_big"					VALUE = "{ floor( l.weight ) }">
+			<MvASSIGN NAME = "l.weight_small"				VALUE = "{ ( ( l.weight - l.weight_big ) * 1000 ) ROUND 8 }">
+
+			<MvASSIGN NAME = "l.formatted_weight_big"		VALUE = "{ l.weight_big $ ' ' $ g.Store:wtunits }">
+			<MvASSIGN NAME = "l.formatted_weight_small"		VALUE = "{ Decimal_Pad( l.weight_small, g.Store:wtdispdig ) $ ' g' }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.weight_big AND l.weight_small }">	<MvFUNCTIONRETURN VALUE = "{ l.prefix $ l.formatted_weight_big $ ', ' $ l.formatted_weight_small }">
+		<MvELSEIF EXPR = "{ l.weight_big  }">				<MvFUNCTIONRETURN VALUE = "{ l.prefix $ l.formatted_weight_big }">
+		<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.prefix $ l.formatted_weight_small }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Decimal_Pad( l.weight, g.Store:wtdispdig ) $ ' ' $ g.Store:wtunits }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Convert_Weight" PARAMETERS = "weight, from_unit, to_unit" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.from_unit"	VALUE = "{ tolower( l.from_unit ) }">
+	<MvASSIGN NAME = "l.to_unit"	VALUE = "{ tolower( l.to_unit ) }">
+
+	<MvIF EXPR = "{ l.from_unit EQ 'oz' }">
+		<MvIF EXPR = "{ l.to_unit EQ 'lb' }">		<MvFUNCTIONRETURN VALUE = "{ ( l.weight / 16 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'g' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 28.3495231 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'kg' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 0.0283495231 ) ROUND 8 }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.from_unit EQ 'lb' }">
+		<MvIF EXPR = "{ l.to_unit EQ 'oz' }">		<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 16 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'g' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 453.59237 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'kg' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 0.45359237 ) ROUND 8 }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.from_unit EQ 'g' }">
+		<MvIF EXPR = "{ l.to_unit EQ 'oz' }">		<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 0.0352739619 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'lb' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 0.0022046226 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'kg' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight / 1000 ) ROUND 8 }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.from_unit EQ 'kg' }">
+		<MvIF EXPR = "{ l.to_unit EQ 'oz' }">		<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 35.27396195 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'lb' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 2.2046226218 ) ROUND 8 }">
+		<MvELSEIF EXPR = "{ l.to_unit EQ 'g' }">	<MvFUNCTIONRETURN VALUE = "{ ( l.weight * 1000 ) ROUND 8 }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.weight }">
+</MvFUNCTION>
+
 <MvCOMMENT>
 |
 | Dummy Basket Functions
@@ -5802,7 +5938,7 @@
 		|
 		</MvCOMMENT>
 
-		<MvIF EXPR = "{ NOT [ g.Library_Filename_DB ].BasketItem_Delete( l.basketitem:line_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_Filename_DB ].BasketItem_Delete_LowLevel( l.basketitem:line_id ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		<MvELSEIF EXPR = "{ NOT [ g.Library_Filename_DB ].BasketItem_Insert_LowLevel( l.basketitem ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
@@ -5823,7 +5959,7 @@
 			<MvASSIGN NAME = "l.basketoption"			VALUE = "{ l.orderoption }">
 			<MvASSIGN NAME = "l.basketoption:basket_id"	VALUE = "{ l.basket:basket_id }">
 
-			<MvIF EXPR = "{ NOT [ g.Library_Filename_DB ].BasketOption_Insert( l.basketoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_Filename_DB ].v10_BasketOption_Insert( l.basketitem, l.basketoption ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 
@@ -6305,4 +6441,22 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| High Precision Pricing Helper Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Round_Item_Total" PARAMETERS = "price" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.total" VALUE = "{ l.price ROUND 2 }">
+
+	<MvIF EXPR = "{ l.total EQ 0 AND l.price NE 0 }">	<MvFUNCTIONRETURN VALUE = 0.01>
+	<MvELSE>											<MvFUNCTIONRETURN VALUE = "{ l.total }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Price_IsHighPrecision" PARAMETERS = "price" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ miva_decimal_scale( l.price ) GT 2 }">
 </MvFUNCTION>

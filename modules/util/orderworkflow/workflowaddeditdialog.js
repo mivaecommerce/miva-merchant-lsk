@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2023 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -8182,7 +8182,7 @@ OWFWorkflow_Step_Actions_ActionItem_CustomField_Numeric.prototype.onValidateValu
 	}
 	else
 	{
-		options.max_left_digits		= 10;
+		options.max_left_digits		= 8;
 		options.max_right_digits	= this.float_value;
 
 		if ( ValidateFloatingPointNumber( value, options ) )

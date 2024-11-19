@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2023 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -212,7 +212,7 @@ QuoteListDetailOverlayDetails.prototype.ItemList_Add = function()
 	var quoteitem_dialog;
 
 	quoteitem_dialog		= new Quote_ItemDialog( this.quote, null );
-	quoteitem_dialog.onadd	= function()
+	quoteitem_dialog.onAdd	= function()
 	{
 		self.Reload();
 	}
@@ -226,7 +226,7 @@ QuoteListDetailOverlayDetails.prototype.ItemList_Edit = function( item )
 	var quoteitem_dialog;
 
 	quoteitem_dialog			= new Quote_ItemDialog( this.quote, item );
-	quoteitem_dialog.onupdate	= function()
+	quoteitem_dialog.onUpdate	= function()
 	{
 		self.Reload();
 	}
@@ -860,7 +860,7 @@ QuoteListDetailOverlayDetails.prototype.ItemList_Load_Callback = function( respo
 		newTextNode( this.quoteitemlist[ i ].name,					item_row.td_name );
 		newTextNode( this.quoteitemlist[ i ].sku,					item_row.td_sku );
 		newTextNode( this.quoteitemlist[ i ].quantity,				item_row.td_quantity );
-		newTextNode( this.quoteitemlist[ i ].weight.toFixed( 2 ),	item_row.td_weight );
+		newTextNode( this.quoteitemlist[ i ].formatted_weight,		item_row.td_weight );
 		newTextNode( this.quoteitemlist[ i ].price.toFixed( 2 ),	item_row.td_price );
 		newTextNode( this.quoteitemlist[ i ].total.toFixed( 2 ),	item_row.td_total );
 
@@ -912,7 +912,7 @@ QuoteListDetailOverlayDetails.prototype.ItemList_Load_Callback = function( respo
 				if ( this.quoteitemlist[ i ].options[ j ].value.length )	newTextNode( this.quoteitemlist[ i ].options[ j ].attribute + ': ' + this.quoteitemlist[ i ].options[ j ].value, option_row.td_name );
 				else														newTextNode( this.quoteitemlist[ i ].options[ j ].attribute, option_row.td_name );
 
-				if ( this.quoteitemlist[ i ].options[ j ].weight )			newTextNode( this.quoteitemlist[ i ].options[ j ].weight.toFixed( 2 ),	option_row.td_weight );
+				if ( this.quoteitemlist[ i ].options[ j ].weight )			newTextNode( this.quoteitemlist[ i ].options[ j ].formatted_weight,		option_row.td_weight );
 				if ( this.quoteitemlist[ i ].options[ j ].price )			newTextNode( this.quoteitemlist[ i ].options[ j ].price.toFixed( 2 ),	option_row.td_price );
 
 				if ( this.quoteitemlist[ i ].options[ j ].discounts )

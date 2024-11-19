@@ -972,7 +972,7 @@
 			<MvELSE>										<MvASSIGN NAME = "l.orderoption:data" 		VALUE = "{ l.reason }">
 			</MvIF>
 
-			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderOption_Insert( l.orderoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].v10_OrderOption_Insert( l.orderitem, l.orderoption ) }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvFOREACH>
@@ -1077,57 +1077,21 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
 	
-	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Load_Line( l.order:id, l.line_id, l.original_orderitem ) }">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Load_Line( l.order:id, l.line_id, l.orderitem ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ l.original_orderitem:subscrp_id }">
+	<MvIF EXPR = "{ l.orderitem:subscrp_id }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-ORD-00078', 'Subscription items cannot be split' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ l.original_orderitem:quantity LE l.quantity }">
+	<MvIF EXPR = "{ l.orderitem:quantity LE l.quantity }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-ORD-00023', 'The split quantity is greater than the quantity of this line item, minus one' ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.new_orderitem"					VALUE = "{ l.original_orderitem }">
-	<MvASSIGN NAME = "l.original_quantity"				VALUE = "{ l.original_orderitem:quantity }">
-	<MvASSIGN NAME = "l.original_orderitem:quantity"	VALUE = "{ l.original_orderitem:quantity - l.quantity }">
-	<MvASSIGN NAME = "l.new_orderitem:quantity"			VALUE = "{ l.quantity }">
-	<MvASSIGN NAME = "l.new_orderitem:tax"				VALUE = "{ ( l.original_orderitem:tax * ( l.new_orderitem:quantity / l.original_quantity ) ) ROUND 2 }">
-	<MvASSIGN NAME = "l.original_orderitem:tax"			VALUE = "{ ( l.original_orderitem:tax - l.new_orderitem:tax ) ROUND 2 }">
-	<MvASSIGN NAME = "l.new_orderitem:group_id"			VALUE = ""> <MvCOMMENT> NULL group_id gets assigned to the value of line_id in OrderItem_Insert_LowLevel, line_id generated in OrderItem_Insert </MvCOMMENT>
-	<MvASSIGN NAME = "l.orderoption_count"				VALUE = "{ [ g.Library_DB ].OrderOptionList_Load_Line( l.original_orderitem:line_id, l.orderoptions ) }">
-
-	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Insert( l.new_orderitem ) OR
-					NOT [ g.Library_DB ].OrderItem_Update( l.original_orderitem ) }">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Split( l.orderitem, l.quantity, l.split_orderitem_original, l.split_orderitem_new ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
-
-	<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.discounts" COUNT = "{ [ g.Library_DB ].OrderItemDiscountList_Load_Line( l.original_orderitem:line_id, l.discounts ) }">
-		<MvASSIGN NAME = "l.discount:line_id"			VALUE = "{ l.new_orderitem:line_id }">
-
-		<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItemDiscount_Insert( l.discount ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	</MvFOREACH>
-
-	<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ l.orderoption_count }">
-		<MvASSIGN NAME = "l.discount_count"				VALUE = "{ [ g.Library_DB ].OrderOptionDiscountList_Load_LineOption_ID( l.orderoption:id, l.discounts ) }">
-		<MvASSIGN NAME = "l.orderoption:line_id"		VALUE = "{ l.new_orderitem:line_id }">
-
-		<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderOption_Insert( l.orderoption ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-
-		<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.discounts" COUNT = "{ l.discount_count }">
-			<MvASSIGN NAME = "l.discount:line_id"		VALUE = "{ l.orderoption:line_id }">
-			<MvASSIGN NAME = "l.discount:lineopt_id"	VALUE = "{ l.orderoption:id }">
-
-			<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderOptionDiscount_Insert( l.discount ) }">
-				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-		</MvFOREACH>
-	</MvFOREACH>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_LastUpdated( l.order:id ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
@@ -1137,11 +1101,11 @@
 	{
 		"original_orderitem":
 		{
-			<MvEVAL EXPR = "{ JSON_OrderItem( l.original_orderitem ) }">
+			<MvEVAL EXPR = "{ JSON_OrderItem( l.split_orderitem_original ) }">
 		},
 		"split_orderitem":
 		{
-			<MvEVAL EXPR = "{ JSON_OrderItem( l.new_orderitem ) }">
+			<MvEVAL EXPR = "{ JSON_OrderItem( l.split_orderitem_new ) }">
 		}
 	}
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
@@ -1373,7 +1337,7 @@
 				"sku":				"<MvEVAL EXPR = "{ JSON_Encode( l.part:sku ) }">",
 				"name":				"<MvEVAL EXPR = "{ JSON_Encode( l.part:name ) }">",
 				"quantity":			<MvEVAL EXPR = "{ int( l.part:quantity ) }">,
-				"price":			<MvEVAL EXPR = "{ l.part:price ROUND 2 }">
+				"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.part:price ) }">
 				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 			</MvFOREACH>
 		]
@@ -1389,6 +1353,7 @@
 	"order_id":			<MvEVAL EXPR = "{ int( l.orderitem:order_id ) }">,
 	"line_id":			<MvEVAL EXPR = "{ int( l.orderitem:line_id ) }">,
 	"group_id":			<MvEVAL EXPR = "{ int( l.orderitem:group_id ) }">,
+	"parent_id":		<MvEVAL EXPR = "{ int( l.orderitem:parent_id ) }">,
 	"status":			<MvEVAL EXPR = "{ int( l.orderitem:status ) }">,
 	"subscrp_id":		<MvEVAL EXPR = "{ int( l.orderitem:subscrp_id ) }">,
 	"subterm_id":		<MvEVAL EXPR = "{ int( l.orderitem:subterm_id ) }">,
@@ -1408,10 +1373,14 @@
 	"code":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderitem:code ) }">",
 	"name":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderitem:name ) }">",
 	"sku":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderitem:sku ) }">",
-	"retail":			<MvEVAL EXPR = "{ l.orderitem:retail ROUND 2 }">,
-	"base_price":		<MvEVAL EXPR = "{ l.orderitem:base_price ROUND 2 }">,
-	"price":			<MvEVAL EXPR = "{ l.orderitem:price ROUND 2 }">,
-	"weight":			<MvEVAL EXPR = "{ l.orderitem:weight ROUND 2 }">,
+	"type":				"<MvEVAL EXPR = "{ JSON_Encode( l.orderitem:type ) }">",
+	"retail":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.orderitem:retail ) }">,
+	"base_price":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.orderitem:base_price ) }">,
+	"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.orderitem:price ) }">,
+	"total":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.orderitem:total ) }">,
+	"formatted_total":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderitem:total ) ) }">",
+	"weight":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.orderitem:weight ) }">,
+	"formatted_weight":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Library_Utilities ].Format_Weight( l.orderitem:weight ) ) }">",
 	"taxable":			<MvEVAL EXPR = "{ JSON_Boolean( l.orderitem:taxable ) }">,
 	"tax":				<MvEVAL EXPR = "{ l.orderitem:tax ROUND 2 }">,
 	"formatted_tax":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderitem:tax ) ) }">",
@@ -1444,6 +1413,7 @@
 				"tracktype":		"<MvEVAL EXPR = "{ JSON_Encode( l.shipment:tracktype ) }">",
 				"tracklink":		"<MvEVAL EXPR = "{ JSON_Encode( glosub( l.trackinglink:url, '%tracknum%', l.shipment:tracknum ) ) }">",
 				"weight":			<MvEVAL EXPR = "{ l.shipment:weight ROUND 2 }">,
+				"formatted_weight":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Library_Utilities ].Format_Weight( l.shipment:weight ) ) }">",
 				"cost":				<MvEVAL EXPR = "{ l.shipment:cost ROUND 2 }">,
 				"formatted_cost":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.shipment:cost ) ) }">"
 			}
@@ -1463,7 +1433,7 @@
 				"pgrp_id":		<MvEVAL EXPR = "{ int( l.discount:pgrp_id ) }">,
 				"display":		<MvEVAL EXPR = "{ JSON_Boolean( l.discount:display ) }">,
 				"descrip":		"<MvEVAL EXPR = "{ JSON_Encode( l.discount:descrip ) }">",
-				"discount":		<MvEVAL EXPR = "{ l.discount:discount ROUND 2 }">
+				"discount":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.discount:discount ) }">
 				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 			</MvFOREACH>
 		]
@@ -1480,22 +1450,23 @@
 				<MvASSIGN NAME = "l.option_subtotal"	VALUE = "{ l.option_subtotal + l.option:price }">
 
 				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.option_pos ) }">
-				"id":				<MvEVAL EXPR = "{ int( l.option:id ) }">,
-				"order_id":			<MvEVAL EXPR = "{ int( l.option:order_id ) }">,
-				"line_id":			<MvEVAL EXPR = "{ int( l.option:line_id ) }">,
-				"attr_id":			<MvEVAL EXPR = "{ int( l.option:attr_id ) }">,
-				"attr_code":		"<MvEVAL EXPR = "{ JSON_Encode( l.option:attr_code ) }">",
-				"attmpat_id":		<MvEVAL EXPR = "{ int( l.option:attmpat_id ) }">,
-				"option_id":		<MvEVAL EXPR = "{ int( l.option:option_id ) }">,
-				"opt_code":			"<MvEVAL EXPR = "{ JSON_Encode( l.option:opt_code ) }">",
-				"retail":			<MvEVAL EXPR = "{ l.option:retail ROUND 2 }">,
-				"base_price":		<MvEVAL EXPR = "{ l.option:base_price ROUND 2 }">,
-				"price":			<MvEVAL EXPR = "{ l.option:price ROUND 2 }">,
-				"weight":			<MvEVAL EXPR = "{ l.option:weight ROUND 2 }">,
-				"data":				"<MvEVAL EXPR = "{ JSON_Encode( l.option:data ) }">",
-				"data_long":		"<MvEVAL EXPR = "{ JSON_Encode( l.option:data_long ) }">",
-				"attr_prompt":		"<MvEVAL EXPR = "{ JSON_Encode( l.option:attr_prompt ) }">",
-				"opt_prompt":		"<MvEVAL EXPR = "{ JSON_Encode( l.option:opt_prompt ) }">",
+				"id":					<MvEVAL EXPR = "{ int( l.option:id ) }">,
+				"order_id":				<MvEVAL EXPR = "{ int( l.option:order_id ) }">,
+				"line_id":				<MvEVAL EXPR = "{ int( l.option:line_id ) }">,
+				"attr_id":				<MvEVAL EXPR = "{ int( l.option:attr_id ) }">,
+				"attr_code":			"<MvEVAL EXPR = "{ JSON_Encode( l.option:attr_code ) }">",
+				"attmpat_id":			<MvEVAL EXPR = "{ int( l.option:attmpat_id ) }">,
+				"option_id":			<MvEVAL EXPR = "{ int( l.option:option_id ) }">,
+				"opt_code":				"<MvEVAL EXPR = "{ JSON_Encode( l.option:opt_code ) }">",
+				"retail":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:retail ) }">,
+				"base_price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:base_price ) }">,
+				"price":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:price ) }">,
+				"weight":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:weight ) }">,
+				"formatted_weight":		"<MvEVAL EXPR = "{ JSON_Encode( [ g.Library_Utilities ].Format_Weight( l.option:weight ) ) }">",
+				"data":					"<MvEVAL EXPR = "{ JSON_Encode( l.option:data ) }">",
+				"data_long":			"<MvEVAL EXPR = "{ JSON_Encode( l.option:data_long ) }">",
+				"attr_prompt":			"<MvEVAL EXPR = "{ JSON_Encode( l.option:attr_prompt ) }">",
+				"opt_prompt":			"<MvEVAL EXPR = "{ JSON_Encode( l.option:opt_prompt ) }">",
 				
 				<MvCOMMENT>
 				|
@@ -1530,7 +1501,7 @@
 							"pgrp_id":		<MvEVAL EXPR = "{ int( l.discount:pgrp_id ) }">,
 							"display":		<MvEVAL EXPR = "{ JSON_Boolean( l.discount:display ) }">,
 							"descrip":		"<MvEVAL EXPR = "{ JSON_Encode( l.discount:descrip ) }">",
-							"discount":		<MvEVAL EXPR = "{ l.discount:discount ROUND 2 }">
+							"discount":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.discount:discount ) }">
 							<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 						</MvFOREACH>
 					]
@@ -1558,9 +1529,10 @@
 						"name":				"<MvEVAL EXPR = "{ JSON_Encode( l.part:name ) }">",
 						"quantity":			<MvEVAL EXPR = "{ int( l.part:quantity ) }">,
 						"total_quantity":	<MvEVAL EXPR = "{ int( l.orderitem:quantity * l.part:quantity ) }">,
-						"price":			<MvEVAL EXPR = "{ l.part:price ROUND 2 }">,
-						"cost":				<MvEVAL EXPR = "{ l.part:cost ROUND 2 }">,
-						"weight":			<MvEVAL EXPR = "{ l.part:weight ROUND 2 }">
+						"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.part:price ) }">,
+						"cost":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.part:cost ) }">,
+						"weight":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.part:weight ) }">,
+						"formatted_weight":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Library_Utilities ].Format_Weight( l.part:weight ) ) }">"
 						<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 					</MvFOREACH>
 				]
@@ -1626,8 +1598,6 @@
 			}
 		</MvIF>
 	</MvIF>
-
-	, "total":			<MvEVAL EXPR = "{ ( ( l.orderitem:price + l.option_subtotal ) * l.orderitem:quantity ) ROUND 2 }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_OrderItemList" PARAMETERS = "query, fields" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace" ERROROUTPUTLEVEL = "">
@@ -1660,7 +1630,7 @@
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "JSON_OrderItemList_Load" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "JSON_OrderItemList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
 	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
 
@@ -1668,15 +1638,17 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvFUNCTIONRETURN VALUE = "{ JSON_OrderItemList( 'SELECT
-														*
-													  FROM ' $
-														g.Store_Table_Prefix $ 'OrderItems
-													  WHERE
-														order_id	= ?
-													  ORDER BY
-														line_id ASC',
-													 [ g.Library_DB ].SQL_Query_Field( l.order:id ) ) }">
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	[
+		<MvASSIGN NAME = "l.orderitem_count" VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ [ g.Library_DB ].OrderItemList_Load_Order( l.order:id, l.orderitems ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.orderitem_count ) }">
+			<MvEVAL EXPR = "{ JSON_OrderItem( l.orderitem ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+		</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_OrderItemList_Load_Status" STANDARDOUTPUTLEVEL = "">
@@ -2248,6 +2220,7 @@
 		<MvASSIGN NAME = "l.orderitem:code"					VALUE = "">
 		<MvASSIGN NAME = "l.orderitem:name"					VALUE = "">
 		<MvASSIGN NAME = "l.orderitem:sku"					VALUE = "">
+		<MvASSIGN NAME = "l.orderitem:type"					VALUE = "">
 		<MvASSIGN NAME = "l.orderitem:tracknum"				VALUE = "">
 		<MvASSIGN NAME = "l.orderitem:tracktype"			VALUE = "">
 		<MvASSIGN NAME = "l.orderitem:price"				VALUE = 0.00>
@@ -2257,19 +2230,20 @@
 		<MvASSIGN NAME = "l.orderitem:upsold"				VALUE = 0>
 		<MvASSIGN NAME = "l.orderitem:tax"					VALUE = 0.00>
 
-		<MvIF EXPR = "{ NOT JSON_Input_Element_List(	l.item, 'O', 'status',		l.orderitem:status,
-																	 '0,100,200,300,400,500,600', '0,100,200,300,400,500,600' ) OR
-						NOT JSON_Input_Element_Text(	l.item, 'R', 'code',		l.orderitem:code )							OR
-						NOT JSON_Input_Element_Text(	l.item, 'o', 'name',		l.orderitem:name )							OR
-						NOT JSON_Input_Element_Text(	l.item, 'o', 'sku',			l.orderitem:sku )							OR
-						NOT JSON_Input_Element_Text(	l.item, 'o', 'tracknum',	l.orderitem:tracknum )						OR
-						NOT JSON_Input_Element_Text(	l.item, 'o', 'tracktype',	l.orderitem:tracktype )						OR
-						NOT JSON_Input_Element_Number(	l.item,	'O', 'price',		l.orderitem:price,	10, 2 )					OR
-						NOT JSON_Input_Element_Number(	l.item, 'O', 'weight',		l.orderitem:weight,	10, 2 )					OR
-						NOT JSON_Input_Element_Integer(	l.item,	'R', 'quantity',	l.orderitem:quantity )						OR
-						NOT JSON_Input_Element_Boolean(	l.item, 'O', 'taxable',		l.orderitem:taxable )						OR
-						NOT JSON_Input_Element_Boolean(	l.item, 'O', 'upsold',		l.orderitem:upsold )						OR
-						NOT JSON_Input_Element_Number(	l.item, 'O', 'tax',			l.orderitem:tax,	10, 2 ) }">
+		<MvIF EXPR = "{ NOT JSON_Input_Element_List(	l.item, 'O',	'status',		l.orderitem:status,
+																		'0,100,200,300,400,500,600', '0,100,200,300,400,500,600' )	OR
+						NOT JSON_Input_Element_Text(	l.item, 'R',	'code',			l.orderitem:code )							OR
+						NOT JSON_Input_Element_Text(	l.item, 'o',	'name',			l.orderitem:name )							OR
+						NOT JSON_Input_Element_Text(	l.item, 'o',	'sku',			l.orderitem:sku )							OR
+						NOT JSON_Input_Element_Text(	l.item, 'o:20',	'type',			l.orderitem:type )							OR
+						NOT JSON_Input_Element_Text(	l.item, 'o',	'tracknum',		l.orderitem:tracknum )						OR
+						NOT JSON_Input_Element_Text(	l.item, 'o',	'tracktype',	l.orderitem:tracktype )						OR
+						NOT JSON_Input_Element_Price(	l.item,	'O',	'price',		l.orderitem:price )							OR
+						NOT JSON_Input_Element_Weight(	l.item, 'O',	'weight',		l.orderitem:weight )						OR
+						NOT JSON_Input_Element_Integer(	l.item,	'R',	'quantity',		l.orderitem:quantity )						OR
+						NOT JSON_Input_Element_Boolean(	l.item, 'O',	'taxable',		l.orderitem:taxable )						OR
+						NOT JSON_Input_Element_Boolean(	l.item, 'O',	'upsold',		l.orderitem:upsold )						OR
+						NOT JSON_Input_Element_Number(	l.item, 'O',	'tax',			l.orderitem:tax,	10, 2 ) }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 		</MvIF>
 
@@ -2292,6 +2266,10 @@
 				<MvASSIGN NAME = "l.orderitem:retail"		VALUE = "{ l.products[ 1 ]:price }">
 				<MvASSIGN NAME = "l.product"				VALUE = "{ l.products[ 1 ] }">
 			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.orderitem:product_id AND ISNULL l.orderitem:type }">
+			<MvASSIGN NAME = "l.orderitem:type"				VALUE = "product">
 		</MvIF>
 
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Insert( l.orderitem ) }">
@@ -2319,8 +2297,8 @@
 			<MvASSIGN NAME = "l.orderoption:data_long"						VALUE = "">
 
 			<MvIF EXPR = "{ NOT JSON_Input_Element_Text(	l.option, 'o', 'attr_code',	l.orderoption:attr_code )		OR
-							NOT JSON_Input_Element_Number(	l.option, 'O', 'price',		l.orderoption:price,	10, 2 )	OR
-							NOT JSON_Input_Element_Number(	l.option, 'O', 'weight',	l.orderoption:weight,	10, 2 ) }">
+							NOT JSON_Input_Element_Price(	l.option, 'O', 'price',		l.orderoption:price )			OR
+							NOT JSON_Input_Element_Weight(	l.option, 'O', 'weight',	l.orderoption:weight ) }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 			</MvIF>
 
@@ -2418,7 +2396,7 @@
 				</MvIF>
 			</MvIF>
 
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderOption_Insert( l.orderoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_OrderOption_Insert( l.orderitem, l.orderoption ) }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvFOREACH>
@@ -2514,6 +2492,7 @@
 		<MvASSIGN NAME = "l.orderitem:product_id"			VALUE = "{ l.loaded_product:id }">
 		<MvASSIGN NAME = "l.orderitem:code"					VALUE = "{ l.loaded_product:code }">
 		<MvASSIGN NAME = "l.orderitem:name"					VALUE = "{ l.loaded_product:name }">
+		<MvASSIGN NAME = "l.orderitem:type"					VALUE = "product">
 		<MvASSIGN NAME = "l.orderitem:quantity"				VALUE = "{ l.quantity }">
 		<MvASSIGN NAME = "l.orderitem:tracknum"				VALUE = "{ l.tracknum }">
 		<MvASSIGN NAME = "l.orderitem:tracktype"			VALUE = "{ l.tracktype }">
@@ -2581,7 +2560,7 @@
 			<MvASSIGN NAME = "l.orderoption:data"			VALUE = "{ l.basketoption:data }">
 			<MvASSIGN NAME = "l.orderoption:data_long"		VALUE = "{ l.basketoption:data_long }">
 
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderOption_Insert( l.orderoption ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_OrderOption_Insert( l.orderitem, l.orderoption ) }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvFOREACH>
@@ -3695,8 +3674,8 @@
 							NOT JSON_Input_Element_Text(	l.input_attribute, 'o', 'opt_code_or_data',	l.attribute:opt_code_or_data )	OR
 							NOT JSON_Input_Element_Text(	l.input_attribute, 'o', 'opt_code',			l.attribute:opt_code )			OR
 							NOT JSON_Input_Element_Text(	l.input_attribute, 'o', 'data',				l.attribute:data )				OR
-							NOT JSON_Input_Element_Number(	l.input_attribute, 'o', 'price',			l.attribute:price,	10, 2 )		OR
-							NOT JSON_Input_Element_Number(	l.input_attribute, 'o', 'weight',			l.attribute:weight,	10, 2 ) }">
+							NOT JSON_Input_Element_Price(	l.input_attribute, 'o', 'price',			l.attribute:price )				OR
+							NOT JSON_Input_Element_Weight(	l.input_attribute, 'o', 'weight',			l.attribute:weight ) }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 			</MvIF>
 
@@ -3712,8 +3691,8 @@
 		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_String(	l.attribute_options,		l.attributes, 'opt_code_or_data' ) }">
 		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_String(	l.attribute_option_codes,	l.attributes, 'opt_code' ) }">
 		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_String(	l.attribute_option_data,	l.attributes, 'data' ) }">
-		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_Rounded(	l.attribute_prices,			l.attributes, 'price',	2 ) }">
-		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_Rounded(	l.attribute_weights,		l.attributes, 'weight',	2 ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_Rounded(	l.attribute_prices,			l.attributes, 'price',	8 ) }">
+		<MvASSIGN NAME = "l.null"				VALUE = "{ JSON_Array_Coalesce_Rounded(	l.attribute_weights,		l.attributes, 'weight',	8 ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.orderoption_count"		VALUE = 0>
@@ -3901,7 +3880,7 @@
 		<MvASSIGN NAME = "l.orderoption:order_id"	VALUE = "{ l.orderitem:order_id }">
 		<MvASSIGN NAME = "l.orderoption:line_id"	VALUE = "{ l.orderitem:line_id }">
 
-		<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderOption_Insert( l.orderoption ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].v10_OrderOption_Insert( l.orderitem, l.orderoption ) }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvFOREACH>
@@ -3922,18 +3901,20 @@
 	<MvASSIGN NAME = "l.orderitem:dt_instock"		VALUE = 0>
 	<MvASSIGN NAME = "l.orderitem:product_id"		VALUE = 0>
 	<MvASSIGN NAME = "l.orderitem:sku"				VALUE = "">
+	<MvASSIGN NAME = "l.orderitem:type"				VALUE = "">
 	<MvASSIGN NAME = "l.orderitem:price"			VALUE = 0.00>
 	<MvASSIGN NAME = "l.orderitem:weight"			VALUE = 0.00>
 	<MvASSIGN NAME = "l.orderitem:taxable"			VALUE = 0>
 	<MvASSIGN NAME = "l.orderitem:upsold"			VALUE = 0>
 	<MvASSIGN NAME = "l.orderitem:tax"				VALUE = 0.00>
 
-	<MvIF EXPR = "{ NOT JSON_Input_Code(	'R',		'Code',		l.orderitem:code )			OR
-					NOT JSON_Input_Text(	'R:100',	'Name',		l.orderitem:name )			OR
-					NOT JSON_Input_Text(	'o:50',		'SKU',		l.orderitem:sku )			OR
-					NOT JSON_Input_Integer(	'R',		'Quantity',	l.orderitem:quantity )		OR
-					NOT JSON_Input_Number(	'o',		'Price',	l.orderitem:price,	10, 2 ) OR
-					NOT JSON_Input_Number(	'o',		'Weight',	l.orderitem:weight,	10, 2 ) OR
+	<MvIF EXPR = "{ NOT JSON_Input_Code(	'R',		'Code',		l.orderitem:code )		OR
+					NOT JSON_Input_Text(	'R:100',	'Name',		l.orderitem:name )		OR
+					NOT JSON_Input_Text(	'o:50',		'SKU',		l.orderitem:sku )		OR
+					NOT JSON_Input_Text(	'o:20',		'Type',		l.orderitem:type )		OR
+					NOT JSON_Input_Integer(	'R',		'Quantity',	l.orderitem:quantity )	OR
+					NOT JSON_Input_Price(	'o',		'Price',	l.orderitem:price )		OR
+					NOT JSON_Input_Weight(	'o',		'Weight',	l.orderitem:weight )	OR
 					NOT JSON_Input_Boolean(	'o',		'Taxable',	l.orderitem:taxable ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
@@ -3975,6 +3956,10 @@
 
 		<MvASSIGN NAME = "l.orderitem:retail"		VALUE = "{ l.product:price }">
 		<MvASSIGN NAME = "l.orderitem:product_id"	VALUE = "{ l.product:id }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.orderitem:product_id AND ISNULL l.orderitem:type }">
+		<MvASSIGN NAME = "l.orderitem:type"			VALUE = "product">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].v56_OrderItem_Insert( l.orderitem, l.product, l.variant_id ) }">
@@ -4117,6 +4102,7 @@
 	<MvASSIGN NAME = "l.orderitem:product_id"				VALUE = "{ l.product:id }">
 	<MvASSIGN NAME = "l.orderitem:code"						VALUE = "{ l.product:code }">
 	<MvASSIGN NAME = "l.orderitem:name"						VALUE = "{ l.product:name }">
+	<MvASSIGN NAME = "l.orderitem:type"						VALUE = "product">
 	<MvASSIGN NAME = "l.orderitem:quantity"					VALUE = "{ l.subscription_withoptions:quantity }">
 	<MvASSIGN NAME = "l.orderitem:price"					VALUE = "{ l.product:price }">
 	<MvASSIGN NAME = "l.orderitem:taxable"					VALUE = "{ l.product:taxable }">
@@ -4208,13 +4194,14 @@
 	<MvASSIGN NAME = "l.update_attributes"			VALUE = "{ JSON_Input_Exists( 'Attributes' ) OR JSON_Input_Exists( 'Options' ) OR JSON_Input_Exists( 'Attribute_Codes' ) }">
 	<MvASSIGN NAME = "l.update_price"				VALUE = "{ JSON_Input_Exists( 'Price' ) }">
 
-	<MvIF EXPR = "{ NOT JSON_Input_Code(	'O', 'Code',		l.orderitem:code )			OR
-					NOT JSON_Input_Text(	'O', 'Name',		l.orderitem:name )			OR
-					NOT JSON_Input_Text(	'o', 'SKU',			l.orderitem:sku )			OR
-					NOT JSON_Input_Integer(	'O', 'Quantity',	l.orderitem:quantity )		OR
-					NOT JSON_Input_Number(	'O', 'Weight',		l.orderitem:weight,	10, 2 )	OR
-					NOT JSON_Input_Number(	'O', 'Price',		l.orderitem:price,	10, 2 )	OR
-					NOT JSON_Input_Boolean(	'O', 'Taxable',		l.orderitem:taxable ) }">
+	<MvIF EXPR = "{ NOT JSON_Input_Code(	'O',	'Code',		l.orderitem:code )		OR
+					NOT JSON_Input_Text(	'O',	'Name',		l.orderitem:name )		OR
+					NOT JSON_Input_Text(	'o',	'SKU',		l.orderitem:sku )		OR
+					NOT JSON_Input_Text(	'o:20',	'Type',		l.orderitem:type )		OR
+					NOT JSON_Input_Integer(	'O',	'Quantity',	l.orderitem:quantity )	OR
+					NOT JSON_Input_Price(	'O',	'Price',	l.orderitem:price )		OR
+					NOT JSON_Input_Weight(	'O',	'Weight',	l.orderitem:weight )	OR
+					NOT JSON_Input_Boolean(	'O',	'Taxable',	l.orderitem:taxable ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
 
@@ -4266,11 +4253,17 @@
 
 		<MvIF EXPR = "{ l.variant_id }">
 			<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvIF>
 
 		<MvASSIGN NAME = "l.orderitem:retail"		VALUE = "{ l.product:price }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_orderitem:quantity NE l.orderitem:quantity }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].OrderItem_Update_Child_Quantity( l.orderitem, l.original_orderitem:quantity, l.orderitem:quantity ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvASSIGN NAME = "l.orderitem:group_id"			VALUE = "{ [ g.Library_DB ].StoreKey_Generate( 'BasketItems' ) }">
@@ -4428,6 +4421,7 @@
 	<MvASSIGN NAME = "l.orderitem:product_id"				VALUE = "{ l.product:id }">
 	<MvASSIGN NAME = "l.orderitem:code"						VALUE = "{ l.product:code }">
 	<MvASSIGN NAME = "l.orderitem:name"						VALUE = "{ l.product:name }">
+	<MvASSIGN NAME = "l.orderitem:type"						VALUE = "product">
 	<MvASSIGN NAME = "l.orderitem:quantity"					VALUE = "{ l.subscription_withoptions:quantity }">
 	<MvASSIGN NAME = "l.orderitem:price"					VALUE = "{ l.product:price }">
 	<MvASSIGN NAME = "l.orderitem:taxable"					VALUE = "{ l.product:taxable }">

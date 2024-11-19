@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-ORD-
-| Next Error Code: 43
+| Next Error Code: 45
 |
 </MvCOMMENT>
 
@@ -414,10 +414,10 @@
 <MvFUNCTION NAME = "OrderItem_Copy_Basket" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'OrderItems
-						  ( order_id, line_id, status, shpmnt_id, rma_id, dt_instock, product_id, code, name,
-						    sku, retail, base_price, price, weight, taxable, upsold, quantity, tax )
+						  ( order_id, line_id, parent_id, status, shpmnt_id, rma_id, dt_instock, product_id, code, name,
+						    sku, type, retail, base_price, price, weight, taxable, upsold, quantity, tax )
 						  SELECT
-							?, line_id, 0, 0, 0, \'\', product_id, code, name, sku, retail, base_price, price, weight, taxable, upsold, quantity, tax
+							?, line_id, parent_id, 0, 0, 0, 0, product_id, code, name, sku, type, retail, base_price, price, weight, taxable, upsold, quantity, tax
 						  FROM ' $
 							g.Store_Table_Prefix $ 'BasketItems
 						  WHERE
@@ -495,7 +495,9 @@
 
 		<MvIF EXPR = "{ NOT OrderItem_Insert_LowLevel( l.exploded_orderitem )									OR
 						NOT OrderItemDiscount_Copy_Line( l.orderitem:line_id, l.exploded_orderitem:line_id )	OR
-						NOT OrderOption_Copy_Line( l.orderitem:line_id, l.exploded_orderitem:line_id ) }">
+						NOT OrderOption_Copy_Line( l.orderitem:line_id, l.exploded_orderitem:line_id )			OR
+						NOT OrderItem_Recalculate_Total( l.exploded_orderitem )									OR
+						NOT OrderItem_Update_Pricing_LowLevel( l.exploded_orderitem ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
@@ -539,7 +541,7 @@
 		<MvASSIGN NAME = "l.old_lineopt_id"			VALUE = "{ l.orderoption:id }">
 		<MvASSIGN NAME = "l.orderoption:line_id"	VALUE = "{ l.new_line_id }">
 
-		<MvIF EXPR = "{ NOT OrderOption_Insert( l.orderoption ) }">
+		<MvIF EXPR = "{ NOT OrderOption_Insert_LowLevel( l.orderoption ) }">
 			<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptions">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
@@ -553,6 +555,7 @@
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptions">
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -624,7 +627,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ OrderItemDiscounts.d.EOF }">	<MvASSIGN NAME = "l.total"	VALUE = 0.00>
-	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ OrderItemDiscounts.d.total ROUND 2 }">
+	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ OrderItemDiscounts.d.total }">
 	</MvIF>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItemDiscounts">
@@ -648,7 +651,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ OrderOptionDiscounts.d.EOF }">	<MvASSIGN NAME = "l.total"	VALUE = 0.00>
-	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ OrderOptionDiscounts.d.total ROUND 2 }">
+	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ OrderOptionDiscounts.d.total }">
 	</MvIF>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptionDiscounts">
@@ -670,7 +673,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ OrderOptionDiscounts.d.EOF }">	<MvASSIGN NAME = "l.total"	VALUE = 0.00>
-	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ OrderOptionDiscounts.d.total ROUND 2 }">
+	<MvELSE>										<MvASSIGN NAME = "l.total"	VALUE = "{ OrderOptionDiscounts.d.total }">
 	</MvIF>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptionDiscounts">
@@ -961,45 +964,27 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderShipment_SubTotal" PARAMETERS = "shpmnt_id" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.subtotal"	VALUE = "{ OrderItem_Total_OrderShipment( l.shpmnt_id ) + OrderOption_Total_OrderShipment( l.shpmnt_id ) }">
+	<MvASSIGN NAME = "l.subtotal"	VALUE = "{ OrderItem_Total_OrderShipment( l.shpmnt_id ) }">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.subtotal ) ROUND 2 }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderItem_Total_OrderShipment" PARAMETERS = "shpmnt_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvOPENVIEW	NAME	= "Merchant"
 				VIEW	= "OrderItems"
-				QUERY	= "{ 'SELECT SUM( price * quantity ) AS total FROM ' $ g.Store_Table_Prefix $ 'OrderItems WHERE shpmnt_id = ?' }"
+				QUERY	= "{ 'SELECT SUM( total ) AS total FROM ' $ g.Store_Table_Prefix $ 'OrderItems WHERE shpmnt_id = ?' }"
 				FIELDS	= "l.shpmnt_id">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ORD-00014', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.total"	VALUE = "{ OrderItems.d.total ROUND 2 }">
-	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItems">
+	<MvASSIGN NAME = "l.total"	VALUE = "{ OrderItems.d.total }">
 
-	<MvFUNCTIONRETURN VALUE = "{ l.total }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItems">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "OrderOption_Total_OrderShipment" PARAMETERS = "shpmnt_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvOPENVIEW	NAME	= "Merchant"
-				VIEW	= "OrderOptions"
-				QUERY	= "{ 'SELECT
-								SUM( oo.price * oi.quantity ) AS total
-							  FROM ' $
-								g.Store_Table_Prefix $ 'OrderItems oi, ' $
-								g.Store_Table_Prefix $ 'OrderOptions oo
-							  WHERE
-								oi.shpmnt_id	= ?				AND
-								oo.line_id		= oi.line_id' }"
-				FIELDS	= "l.shpmnt_id">
-	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-ORD-00015', g.MvOPENVIEW_Error ) }">
-	</MvIF>
-
-	<MvASSIGN NAME = "l.total"	VALUE = "{ OrderOptions.d.total ROUND 2 }">
-	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderOptions">
-
-	<MvFUNCTIONRETURN VALUE = "{ l.total }">
+<MvFUNCTION NAME = "OrderOption_Total_OrderShipment" PARAMETERS = "shpmnt_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-ORD-00043', 'Function OrderOption_Total_OrderShipment has been deprecated' ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderItemList_RemoveFromShipments" PARAMETERS = "orderitem_count, orderitems var" STANDARDOUTPUTLEVEL = "">
@@ -1062,6 +1047,151 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "OrderItem_Update_Parent" PARAMETERS = "original_orderitem var, orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderItem_Update_Parent_LowLevel( l.orderitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_orderitem', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderItem_Update( l.module, l.original_orderitem, l.orderitem ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Update_Child_Quantity" PARAMETERS = "parent_orderitem var, original_quantity, quantity" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.quantity EQ l.original_quantity }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ OrderItemList_Load_Parent( l.parent_orderitem:order_id, l.parent_orderitem:line_id, l.orderitems ) }">
+	<MvASSIGN NAME = "l.group_lookup"		VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
+			<MvMEMBER NAME = "{ l.orderitem:group_id }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ISNULL l.group }">
+			<MvASSIGN NAME = "l.group:orderitems"		VALUE = "">
+			<MvASSIGN NAME = "l.group:orderitem_count"	VALUE = "{ miva_array_insert_var( l.group:orderitems, l.orderitem, -1 ) }">
+			<MvASSIGN NAME = "l.group:oldest_orderitem"	VALUE = "{ l.orderitem }">
+			<MvASSIGN NAME = "l.group:quantity"			VALUE = "{ l.orderitem:quantity }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.group:orderitem_count"	VALUE = "{ miva_array_insert_var( l.group:orderitems, l.orderitem, -1 ) }">
+			<MvASSIGN NAME = "l.group:quantity"			VALUE = "{ l.group:quantity + l.orderitem:quantity }">
+
+			<MvIF EXPR = "{ l.orderitem:line_id LT l.group:oldest_orderitem:line_id }">
+				<MvASSIGN NAME = "l.group:oldest_orderitem" VALUE = "{ l.orderitem }">
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.group_id" ARRAY = "l.group_ids" COUNT = "{ miva_struct_members( l.group_lookup, l.group_ids ) }">
+		<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
+			<MvMEMBER NAME = "{ l.group_id }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ( l.group:quantity LT l.original_quantity ) OR ( fmod( l.group:quantity, l.original_quantity ) NE 0 ) }">
+			<MvCOMMENT>
+			|
+			| Skip processing. Child-parent quantity ratio is less than 1:1, or the ratio is not a whole number.
+			|
+			</MvCOMMENT>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.group_quantity" VALUE = "{ l.quantity * ( l.group:quantity / l.original_quantity ) }">
+
+		<MvIF EXPR = "{ l.quantity GT l.original_quantity }">
+			<MvASSIGN NAME = "l.original_orderitem"				VALUE = "{ l.group:oldest_orderitem }">
+			<MvASSIGN NAME = "l.orderitem"						VALUE = "{ l.original_orderitem }">
+			<MvASSIGN NAME = "l.orderitem:quantity"				VALUE = "{ l.orderitem:quantity + ( l.group_quantity - l.group:quantity ) }">
+
+			<MvIF EXPR = "{ NOT Product_Load_Code_WithRuntimeInventory( l.original_orderitem:code, l.product ) }">
+				<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.product:id"					VALUE = 0>
+				<MvASSIGN NAME = "l.variant_id"					VALUE = 0>
+			<MvELSE>
+				<MvASSIGN NAME = "l.option_count"				VALUE = "{ OrderOptionList_Load_Line( l.original_orderitem:line_id, l.options ) }">
+				<MvASSIGN NAME = "l.product_attribute_count"	VALUE = "{ AttributeList_Load_Product( l.product:id, l.product_attributes ) }">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant_LowLevel( l.product, l.product_attributes, l.product_attribute_count,
+																										l.options, l.option_count,
+																										l.variant_id ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT v56_OrderItem_Update( l.original_orderitem, l.product, l.variant_id, l.orderitem, l.product, l.variant_id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Sort order items in group in quantity descending order and decrement quantity / remove items until the correct quantity is reached.
+			|
+			</MvCOMMENT>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.group:orderitems, ':quantity', -1 ) }">
+
+			<MvASSIGN NAME = "l.quantity_delta" VALUE = "{ l.group:quantity - l.group_quantity }">
+
+			<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.group:orderitems" COUNT = "{ l.group:orderitem_count }">
+				<MvIF EXPR = "{ l.quantity_delta LT l.orderitem:quantity }">
+					<MvASSIGN NAME = "l.original_orderitem"	VALUE = "{ l.orderitem }">
+					<MvASSIGN NAME = "l.orderitem:quantity"	VALUE = "{ l.orderitem:quantity - l.quantity_delta }">
+
+					<MvIF EXPR = "{ NOT Product_Load_Code_WithRuntimeInventory( l.original_orderitem:code, l.product ) }">
+						<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+
+						<MvASSIGN NAME = "l.product:id"					VALUE = 0>
+						<MvASSIGN NAME = "l.variant_id"					VALUE = 0>
+					<MvELSE>
+						<MvASSIGN NAME = "l.option_count"				VALUE = "{ OrderOptionList_Load_Line( l.original_orderitem:line_id, l.options ) }">
+						<MvASSIGN NAME = "l.product_attribute_count"	VALUE = "{ AttributeList_Load_Product( l.product:id, l.product_attributes ) }">
+
+						<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant_LowLevel( l.product, l.product_attributes, l.product_attribute_count,
+																												l.options, l.option_count,
+																												l.variant_id ) }">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+					</MvIF>
+
+					<MvIF EXPR = "{ NOT v56_OrderItem_Update( l.original_orderitem, l.product, l.variant_id, l.orderitem, l.product, l.variant_id ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+
+					<MvFOREACHSTOP>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.delete_orderitems"		VALUE = "">
+				<MvASSIGN NAME = "l.delete_orderitem_count"	VALUE = "{ miva_array_insert_var( l.delete_orderitems, l.orderitem, -1 ) }">
+
+				<MvIF EXPR = "{ NOT OrderItemList_Delete_LookupVariants( l.delete_orderitem_count, l.delete_orderitems ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.quantity_delta" VALUE = "{ l.quantity_delta - l.orderitem:quantity }">
+
+				<MvIF EXPR = "{ l.quantity_delta EQ 0 }">
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "OrderItemList_Update_Status" PARAMETERS = "orderitem_count, original_orderitems var, orderitems var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.notify_count"				VALUE = 0>
 	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" INDEX = "l.pos" COUNT = "{ l.orderitem_count }">
@@ -1080,6 +1210,157 @@
 																																 l.notify_orderitems ) }">
 		</MvFOREACH>
 	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Split" PARAMETERS = "orderitem var, quantity, split_orderitem_original var, split_orderitem_new var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.split_orderitem_original"			VALUE = "{ l.orderitem }">
+	<MvASSIGN NAME = "l.split_orderitem_original:quantity"	VALUE = "{ l.split_orderitem_original:quantity - l.quantity }">
+
+	<MvASSIGN NAME = "l.split_orderitem_new"				VALUE = "{ l.orderitem }">
+	<MvASSIGN NAME = "l.split_orderitem_new:line_id"		VALUE = "{ StoreKey_Generate( 'BasketItems' ) }">
+	<MvASSIGN NAME = "l.split_orderitem_new:group_id"		VALUE = ""> <MvCOMMENT> NULL group_id gets assigned to the value of line_id in OrderItem_Insert_LowLevel, line_id generated in OrderItem_Insert </MvCOMMENT>
+	<MvASSIGN NAME = "l.split_orderitem_new:quantity"		VALUE = "{ l.quantity }">
+
+	<MvASSIGN NAME = "l.split_orderitem_new:tax"			VALUE = "{ ( l.split_orderitem_original:tax * ( l.split_orderitem_new:quantity / l.orderitem:quantity ) ) ROUND 2 }">
+	<MvASSIGN NAME = "l.split_orderitem_original:tax"		VALUE = "{ miva_ieee754_normalize( 2, l.split_orderitem_original:tax - l.split_orderitem_new:tax ) ROUND 2 }">
+
+	<MvIF EXPR = "{ NOT OrderItem_Insert_LowLevel( l.split_orderitem_new ) OR
+					NOT OrderItem_Update( l.split_orderitem_original ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.discounts" COUNT = "{ OrderItemDiscountList_Load_Line( l.split_orderitem_original:line_id, l.discounts ) }">
+		<MvASSIGN NAME = "l.discount:line_id"				VALUE = "{ l.split_orderitem_new:line_id }">
+
+		<MvIF EXPR = "{ NOT OrderItemDiscount_Insert( l.discount ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ OrderOptionList_Load_Line( l.split_orderitem_original:line_id, l.orderoptions ) }">
+		<MvASSIGN NAME = "l.discount_count"					VALUE = "{ OrderOptionDiscountList_Load_LineOption_ID( l.orderoption:id, l.discounts ) }">
+		<MvASSIGN NAME = "l.orderoption:line_id"			VALUE = "{ l.split_orderitem_new:line_id }">
+
+		<MvIF EXPR = "{ NOT v10_OrderOption_Insert( l.split_orderitem_new, l.orderoption ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.discounts" COUNT = "{ l.discount_count }">
+			<MvASSIGN NAME = "l.discount:line_id"			VALUE = "{ l.orderoption:line_id }">
+			<MvASSIGN NAME = "l.discount:lineopt_id"		VALUE = "{ l.orderoption:id }">
+
+			<MvIF EXPR = "{ NOT OrderOptionDiscount_Insert( l.discount ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT OrderItem_Split_Children( l.split_orderitem_original, l.split_orderitem_new ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_orderitem', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderItem_Insert( l.module, l.split_orderitem_new ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderItem_Update( l.module, l.orderitem, l.split_orderitem_original ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Split_Children" PARAMETERS = "split_orderitem_original var, split_orderitem_new var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.original_quantity"	VALUE = "{ l.split_orderitem_original:quantity + l.split_orderitem_new:quantity }">
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ OrderItemList_Load_Parent( l.split_orderitem_original:order_id, l.split_orderitem_original:line_id, l.orderitems ) }">
+	<MvASSIGN NAME = "l.group_lookup"		VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
+			<MvMEMBER NAME = "{ l.orderitem:group_id }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ISNULL l.group }">
+			<MvASSIGN NAME = "l.group:orderitems"		VALUE = "">
+			<MvASSIGN NAME = "l.group:orderitem_count"	VALUE = 0>
+			<MvASSIGN NAME = "l.group:quantity"			VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.group:orderitem_count"		VALUE = "{ miva_array_insert_var( l.group:orderitems, l.orderitem, -1 ) }">
+		<MvASSIGN NAME = "l.group:quantity"				VALUE = "{ l.group:quantity + l.orderitem:quantity }">
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.group_id" ARRAY = "l.group_ids" COUNT = "{ miva_struct_members( l.group_lookup, l.group_ids ) }">
+		<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
+			<MvMEMBER NAME = "{ l.group_id }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ ( l.group:quantity LT l.original_quantity ) OR ( fmod( l.group:quantity, l.original_quantity ) NE 0 ) }">
+			<MvCOMMENT>
+			|
+			| Leave children in this group with the original orderitem
+			|
+			</MvCOMMENT>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.group_quantity_original"	VALUE = "{ l.split_orderitem_original:quantity * ( l.group:quantity / l.original_quantity ) }">
+		<MvASSIGN NAME = "l.group_quantity_new"			VALUE = "{ l.group:quantity - l.group_quantity_original }">
+
+		<MvCOMMENT>
+		|
+		| Sort items in quantity ascending order to avoid splitting child items when possible
+		|
+		</MvCOMMENT>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.group:orderitems, ':quantity', 1 ) }">
+
+		<MvASSIGN NAME = "l.quantity_delta" VALUE = "{ l.group_quantity_new }">
+
+		<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.group:orderitems" COUNT = "{ l.group:orderitem_count }">
+			<MvIF EXPR = "{ l.orderitem:quantity GT l.quantity_delta }">
+				<MvIF EXPR = "{ NOT OrderItem_Split( l.orderitem, l.quantity_delta, l.split_child_orderitem_original, l.split_child_orderitem_new ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvCOMMENT>
+				|
+				| Update parent reference on newly split item
+				|
+				</MvCOMMENT>
+
+				<MvASSIGN NAME = "l.original_orderitem"						VALUE = "{ l.split_child_orderitem_new }">
+				<MvASSIGN NAME = "l.split_child_orderitem_new:parent_id"	VALUE = "{ l.split_orderitem_new:line_id }">
+
+				<MvIF EXPR = "{ NOT OrderItem_Update_Parent( l.original_orderitem, l.split_child_orderitem_new ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvCOMMENT>
+			|
+			| Update parent reference on whole child order item to point to the new split parent item
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.original_orderitem"		VALUE = "{ l.orderitem }">
+			<MvASSIGN NAME = "l.orderitem:parent_id"	VALUE = "{ l.split_orderitem_new:line_id }">
+
+			<MvIF EXPR = "{ NOT OrderItem_Update_Parent( l.original_orderitem, l.orderitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.quantity_delta" VALUE = "{ l.quantity_delta - l.orderitem:quantity }">
+
+			<MvIF EXPR = "{ l.quantity_delta EQ 0 }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -1413,6 +1694,7 @@
 		<MvASSIGN NAME = "l.original_orderitem" VALUE = "{ l.orderitem }">
 
 		<MvIF EXPR = "{ NOT OrderItem_Delete( l.orderitem:order_id, l.orderitem:line_id )				OR
+						NOT OrderItem_Delete_Children( l.orderitem )									OR
 						NOT OrderItemDiscount_Delete_All_Line( l.orderitem:line_id )					OR
 						NOT OrderOption_Delete_All_Line( l.orderitem:line_id )							OR
 						NOT OrderOptionDiscount_Delete_All_Line( l.orderitem:line_id ) }">
@@ -1443,6 +1725,20 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Delete_Children" PARAMETERS = "orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.child_orderitem_count" VALUE = "{ OrderItemList_Load_Parent( l.orderitem:order_id, l.orderitem:line_id, l.child_orderitems ) }">
+
+	<MvIF EXPR = "{ NOT l.child_orderitem_count }">
+		<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ OrderItemList_Delete_LookupVariants( l.child_orderitem_count, l.child_orderitems ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderItemList_Cancel_LookupVariants" PARAMETERS = "orderitem_count, orderitems var" STANDARDOUTPUTLEVEL = "">
@@ -1970,7 +2266,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderItem_Insert" PARAMETERS = "orderitem var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.orderitem:line_id" VALUE = "{ StoreKey_Generate( 'BasketItems' ) }">
+	<MvASSIGN NAME = "l.orderitem:line_id"	VALUE = "{ StoreKey_Generate( 'BasketItems' ) }">
+	<MvASSIGN NAME = "l.orderitem:total"	VALUE = "{ [ g.Module_Library_Utilities ].Round_Item_Total( l.orderitem:price * l.orderitem:quantity ) }">
 
 	<MvIF EXPR = "{ NOT OrderItem_Insert_LowLevel( l.orderitem ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
@@ -1999,6 +2296,62 @@
 
 		<MvASSIGN NAME = "l.null"	VALUE = "{ [ g.Module_Feature_STA_DB ].ProdStats_Add_Counts( l.product:id, l.product:name, l.orderitem:quantity ) }">
 	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Update" PARAMETERS = "orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderItem_Load_Line_ID( l.orderitem:line_id, l.original_orderitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ v10_OrderItem_Update( l.original_orderitem, l.orderitem ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_OrderItem_Update" PARAMETERS = "original_orderitem var, orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.original_orderitem:price NE l.orderitem:price OR l.original_orderitem:quantity NE l.orderitem:quantity }">
+		<MvIF EXPR = "{ NOT OrderItem_Recalculate_Total( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT OrderItem_Update_LowLevel( l.orderitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_orderitem', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderItem_Update( l.module, l.original_orderitem, l.orderitem ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Update_Pricing" PARAMETERS = "orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderItem_Load_Line_ID( l.orderitem:line_id, l.original_orderitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ v10_OrderItem_Update_Pricing( l.original_orderitem, l.orderitem ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_OrderItem_Update_Pricing" PARAMETERS = "original_orderitem var, orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.original_orderitem:price NE l.orderitem:price OR l.original_orderitem:quantity NE l.orderitem:quantity }">
+		<MvIF EXPR = "{ NOT OrderItem_Recalculate_Total( l.orderitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT OrderItem_Update_Pricing_LowLevel( l.orderitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_orderitem', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderItem_Update( l.module, l.original_orderitem, l.orderitem ) }">
+		</MvIF>
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -2051,15 +2404,47 @@
 		<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Module_Feature_STA_DB ].ProdStats_Add_Counts( l.product:id, l.product:name, l.orderitem:quantity - l.original_orderitem:quantity ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT OrderItem_Update( l.orderitem ) }">
+	<MvCOMMENT>
+	|
+	| v10_OrderItem_Update will recalculate total if necessary and perform module notifications
+	|
+	</MvCOMMENT>
+
+	<MvFUNCTIONRETURN VALUE = "{ v10_OrderItem_Update( l.original_orderitem, l.orderitem ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderOption_Insert" PARAMETERS = "orderoption var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderItem_Load_Line_ID( l.orderoption:line_id, l.orderitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ v10_OrderOption_Insert( l.orderitem, l.orderoption ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_OrderOption_Insert" PARAMETERS = "orderitem var, orderoption var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderOption_Insert_LowLevel( l.orderoption ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_orderitem', l.modules ) }">
-		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
-			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderItem_Update( l.module, l.original_orderitem, l.orderitem ) }">
+	<MvIF EXPR = "{ l.orderoption:price NE 0 }">
+		<MvIF EXPR = "{ NOT OrderItem_Recalculate_Total( l.orderitem ) }">				<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT OrderItem_Update_Pricing_LowLevel( l.orderitem ) }">	<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
-	</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_OrderOption_Update" PARAMETERS = "orderitem var, original_orderoption var, orderoption var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderOption_Update_LowLevel( l.orderoption ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_orderoption:price NE l.orderoption:price }">
+		<MvIF EXPR = "{ NOT OrderItem_Recalculate_Total( l.orderitem ) }">				<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT OrderItem_Update_Pricing_LowLevel( l.orderitem ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -2082,6 +2467,45 @@
 	<MvIF EXPR = "{ NOT OrderShipment_Delete_LowLevel( l.shpmnt_id ) OR
 					NOT OrderShipmentLabel_Delete_All_Shipment( l.shpmnt_id ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderOption_Update_Pricing" PARAMETERS = "orderoption var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderItem_Load_Line_ID( l.orderoption:line_id, l.orderitem ) }">		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT OrderOption_Load_ID( l.orderoption:id, l.original_orderoption ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+	
+	<MvFUNCTIONRETURN VALUE = "{ v10_OrderOption_Update_Pricing( l.orderitem, l.original_orderoption, l.orderoption ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_OrderOption_Update_Pricing" PARAMETERS = "orderitem var, original_orderoption var, orderoption var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderOption_Update_Pricing_LowLevel( l.orderoption ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_orderoption:price NE l.orderoption:price }">
+		<MvIF EXPR = "{ NOT OrderItem_Recalculate_Total( l.orderitem ) }">				<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT OrderItem_Update_Pricing_LowLevel( l.orderitem ) }">	<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderOption_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderOption_Load_ID( l.id, l.orderoption ) }">							<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT OrderItem_Load_Line_ID( l.orderoption:line_id, l.orderitem ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ v10_OrderOption_Delete( l.orderitem, l.orderoption ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "v10_OrderOption_Delete" PARAMETERS = "orderitem var, orderoption var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT OrderOption_Delete_LowLevel( l.orderoption ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT OrderItem_Recalculate_Total( l.orderitem ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT OrderItem_Update_Pricing_LowLevel( l.orderitem ) }">	<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -2161,7 +2585,7 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Order_Total" PARAMETERS = "order_id" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.total"	VALUE = "{ OrderItem_Total( l.order_id ) + OrderOption_Total( l.order_id ) + OrderCharge_Total( l.order_id ) }">
+	<MvASSIGN NAME = "l.total"	VALUE = "{ OrderItem_Total( l.order_id ) + OrderCharge_Total( l.order_id ) }">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].IEEE754_Normalize( 2, l.total ) ROUND 2 }">
 </MvFUNCTION>
 
@@ -2233,6 +2657,49 @@
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-ORD-00037', g.MvQUERY_Error ) }">
 	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItemList_Load_Order_Summary" PARAMETERS = "order_id, orderitems var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.orderitems"			VALUE = "">
+	<MvASSIGN NAME = "l.orderitem_count"	VALUE = "{ OrderItemList_Load_Order( l.order_id, l.orderitems ) }">
+
+	<MvFOREACH ITERATOR = "l.orderitem" ARRAY = "l.orderitems" COUNT = "{ l.orderitem_count }">
+		<MvASSIGN NAME = "l.orderitem:option_count" VALUE = "{ OrderOptionList_Load_Line( l.orderitem:line_id, l.orderitem:options ) }">
+		<MvASSIGN NAME = "l.unit_price"				VALUE = "{ l.orderitem:price }">
+
+		<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderitem:options" COUNT = "{ l.orderitem:option_count }">
+			<MvASSIGN NAME = "l.unit_price" VALUE = "{ l.unit_price + l.orderoption:price }">
+		</MvFOREACH>
+		
+		<MvIF EXPR = "{ [ g.Module_Library_Utilities ].Price_IsHighPrecision( l.unit_price ) }">
+			<MvASSIGN NAME = "l.orderitem:unit_quantity"	VALUE = 1>
+			<MvASSIGN NAME = "l.orderitem:unit_price"		VALUE = "{ l.orderitem:total }">
+			<MvASSIGN NAME = "l.orderitem:unit_name"		VALUE = "{ '(Qty ' $ l.orderitem:quantity $ ') ' $ l.orderitem:name }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.orderitem:unit_quantity"	VALUE = "{ l.orderitem:quantity }">
+			<MvASSIGN NAME = "l.orderitem:unit_price"		VALUE = "{ l.unit_price }">
+			<MvASSIGN NAME = "l.orderitem:unit_name"		VALUE = "{ l.orderitem:name }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-ORD-00044', l.orderitem_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderItem_Recalculate_Total" PARAMETERS = "orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.total"				VALUE = "{ l.orderitem:price }">
+	<MvASSIGN NAME = "l.orderoption_count"	VALUE = "{ OrderOptionList_Load_Line( l.orderitem:line_id, l.orderoptions ) }">
+
+	<MvIF EXPR = "{ l.orderoption_count EQ 0 AND NOT Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ l.orderoption_count }">
+		<MvASSIGN NAME = "l.total"			VALUE = "{ l.total + l.orderoption:price }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.orderitem:total"	VALUE = "{ [ g.Module_Library_Utilities ].Round_Item_Total( l.total * l.orderitem:quantity ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>

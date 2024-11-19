@@ -587,6 +587,10 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
+	<MvIF EXPR = "{ l.product:id AND ISNULL l.basketitem:type }">
+		<MvASSIGN NAME = "l.basketitem:type" VALUE = "product">
+	</MvIF>
+
 	<MvTRANSACT NAME = "Merchant">
 
 	<MvIF EXPR = "{ NOT BasketItem_Insert( l.basketitem ) }">
@@ -605,6 +609,28 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Runtime_BasketItemAndOptions_Insert" PARAMETERS = "product var, basketitem var, basketoptions var, basketoption_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:id AND ISNULL l.basketitem:type }">
+		<MvASSIGN NAME = "l.basketitem:type" VALUE = "product">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BasketItemAndOptions_Insert( l.basketitem, l.basketoptions, l.basketoption_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.inventorysettings:mode EQ 'basket' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Adjust_Variant( l.product, l.basketitem:variant_id, 0 - l.basketitem:quantity ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Runtime_BasketItem_Update" PARAMETERS = "product var, original_basketitem var, basketitem var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
@@ -612,7 +638,7 @@
 
 	<MvTRANSACT NAME = "Merchant">
 
-	<MvIF EXPR = "{ NOT BasketItem_Update( l.basketitem ) }">
+	<MvIF EXPR = "{ NOT v10_BasketItem_Update( l.original_basketitem, l.basketitem ) }">
 		<MvROLLBACK NAME = "Merchant">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
@@ -627,6 +653,55 @@
 	</MvIF>
 
 	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItemAndOptions_Update" PARAMETERS = "product var, original_basketitem var, original_basketoptions var, original_basketoption_count, basketitem var, basketoptions var, basketoption_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT BasketItem_Update_LowLevel( l.basketitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.original_basketoption" ARRAY = "l.original_basketoptions" COUNT = "{ l.original_basketoption_count }">
+		<MvIF EXPR = "{ miva_array_search( l.basketoptions, 1, l.search_basketoption, 'l.search_basketoption:id EQ l.original_basketoption:id' ) }">
+			<MvIF EXPR = "{ NOT BasketOption_Update_LowLevel( l.search_basketoption ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT BasketOption_Delete_LowLevel( l.original_basketoption:id ) OR
+							NOT BasketOptionDiscount_DeleteAll_LineOption_ID( l.original_basketoption:id ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ l.basketoption_count }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.original_basketoptions, 1, l.search_basketoption, 'l.search_basketoption:id EQ l.basketoption:id' ) }">
+			<MvIF EXPR = "{ NOT BasketOption_Insert_LowLevel( l.basketoption ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT BasketItem_Recalculate_Total( l.basketitem ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT BasketItem_Update_Pricing_LowLevel( l.basketitem ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_basketitem', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_BasketItem_Update( l.module, l.original_basketitem, l.basketitem ) }">
+	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.basketitem:quantity - l.original_basketitem:quantity }">
+
+	<MvIF EXPR = "{ l.quantity_adjustment NE 0 AND l.inventorysettings:mode EQ 'basket' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Adjust_Variant( l.product, l.basketitem:variant_id, 0 - l.quantity_adjustment ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -667,10 +742,8 @@
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT BasketOptionDiscount_Delete_All_Line( l.basketitem:line_id )	OR
-					NOT BasketOption_Delete_All_Line( l.basketitem:line_id )			OR
-					NOT BasketItemDiscount_Delete_All_Line( l.basketitem:line_id )		OR
-				    NOT BasketItem_Delete_Line( l.basketitem:line_id ) }">
+	<MvIF EXPR = "{ NOT v10_BasketItem_Delete( l.basketitem ) OR
+					NOT Runtime_BasketItem_Delete_Children( l.basketitem ) }">
 		<MvROLLBACK NAME = "Merchant">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
@@ -692,15 +765,25 @@
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{	NOT BasketOptionDiscount_Delete_All_Line( l.basketitem:line_id )	OR
-					NOT BasketOption_Delete_All_Line( l.basketitem:line_id )			OR
-				    NOT BasketItemDiscount_Delete_All_Line( l.basketitem:line_id )		OR
-					NOT BasketItem_Delete_Line( l.basketitem:line_id ) }">
+	<MvIF EXPR = "{ NOT v10_BasketItem_Delete( l.basketitem ) OR
+					NOT Runtime_BasketItem_Delete_Children( l.basketitem ) }">
 		<MvROLLBACK NAME = "Merchant">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvCOMMIT NAME = "Merchant">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItem_Delete_Children" PARAMETERS = "basketitem var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.child_basketitems" COUNT = "{ BasketItemList_Load_Parent( l.basketitem:basket_id, l.basketitem:line_id, l.child_basketitems ) }">
+		<MvIF EXPR = "{ Runtime_Product_Load_BasketItem( l.child_basketitem, l.child_product ) }">
+			<MvIF EXPR = "{ NOT Runtime_BasketItem_Delete( l.child_product, l.child_basketitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -727,95 +810,217 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Runtime_BasketItemList_Process" PARAMETERS = "items var, item_count var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.rt_basketitem_module_count"	VALUE = "{ StoreModuleList_Load_Features_Cached( 'rt_basketitem', l.rt_basketitem_modules ) }">
-
-	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
-		<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
-			<MvIF EXPR = "{ l.item:insert }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Insert_Validate( l.rt_basketitem_module, l.item:basketitem ) }">
-			<MvELSEIF EXPR = "{ l.item:update }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Update_Validate( l.rt_basketitem_module, l.item:original_basketitem, l.item:basketitem ) }">
-			<MvELSEIF EXPR = "{ l.item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Delete_Validate( l.rt_basketitem_module, l.item:basketitem ) }">
-			<MvELSE>
-				<MvFOREACHSTOP>
-			</MvIF>
-
-			<MvIF EXPR = "{ NOT l.result }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
-		</MvFOREACH>
-	</MvFOREACH>
-
-	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
-		<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
-			<MvIF EXPR = "{ l.item:insert }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Insert( l.rt_basketitem_module, l.item:basketitem ) }">
-			<MvELSEIF EXPR = "{ l.item:update }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Update( l.rt_basketitem_module, l.item:original_basketitem, l.item:basketitem ) }">
-			<MvELSEIF EXPR = "{ l.item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Delete( l.rt_basketitem_module, l.item:basketitem ) }">
-			<MvELSE>
-				<MvFOREACHSTOP>
-			</MvIF>
-
-			<MvIF EXPR = "{ l.result EQ 0 }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			<MvELSEIF EXPR = "{ l.result EQ -1 }">
-				<MvASSIGN NAME = "l.item:skip" VALUE = 1>
-
-				<MvFOREACHSTOP>
-			</MvIF>
-		</MvFOREACH>
-	</MvFOREACH>
-
-	<MvIF EXPR = "{ NOT Basket_Dirty( g.Basket ) }">
+<MvFUNCTION NAME = "Runtime_BasketItemList_Check_Available_Inventory" PARAMETERS = "items var, item_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
-		<MvIF EXPR = "{ l.item:skip }">
-			<MvFOREACHCONTINUE>
-		</MvIF>
+		<MvCOMMENT>
+		|
+		| Validate child inventory
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Check_Available_Variant( l.child_item:product, l.child_item:basketitem:variant_id, l.child_item:basketitem:quantity ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSEIF EXPR = "{ g.UI_Exception }">
+					<MvFUNCTIONRETURN VALUE = 1>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.child_item:update }">
+				<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.child_item:basketitem:quantity - l.child_item:original_basketitem:quantity }">
+
+				<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+					<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.child_item:basketitem:quantity }">
+					<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+					</MvIF>
+
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Check_Available_Variant( l.child_item:product, l.child_item:basketitem:variant_id, l.check_quantity ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					<MvELSEIF EXPR = "{ g.UI_Exception }">
+						<MvFUNCTIONRETURN VALUE = 1>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Validate parent inventory
+		|
+		</MvCOMMENT>
 
 		<MvIF EXPR = "{ l.item:insert }">
-			<MvIF EXPR = "{ NOT Runtime_BasketItem_Insert( l.item:product, l.item:basketitem ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Check_Available_Variant( l.item:product, l.item:basketitem:variant_id, l.item:basketitem:quantity ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ g.UI_Exception }">
+				<MvFUNCTIONRETURN VALUE = 1>
 			</MvIF>
-
-			<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.item:basketitem:options" COUNT = "{ l.item:basketitem:option_count }">
-				<MvASSIGN NAME = "l.basketoption:line_id"	VALUE = "{ l.item:basketitem:line_id }">
-
-				<MvIF EXPR = "{ NOT BasketOption_Insert( l.basketoption ) }">
-					<MvFUNCTIONRETURN VALUE = 0>
-				</MvIF>
-			</MvFOREACH>
 		<MvELSEIF EXPR = "{ l.item:update }">
-			<MvIF EXPR = "{ NOT Runtime_BasketItem_Update( l.item:product, l.item:original_basketitem, l.item:basketitem ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
+			<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.item:basketitem:quantity - l.item:original_basketitem:quantity }">
 
-			<MvFOREACH ITERATOR = "l.original_basketoption" ARRAY = "l.item:original_basketitem:options" COUNT = "{ l.item:original_basketitem:option_count }">
-				<MvIF EXPR = "{ miva_array_search( l.item:basketitem:options, 1, l.search_basketoption, 'l.search_basketoption:id EQ l.original_basketoption:id' ) }">
-					<MvIF EXPR = "{ NOT BasketOption_Update( l.search_basketoption ) }">
-						<MvFUNCTIONRETURN VALUE = 0>
-					</MvIF>
-				<MvELSE>
-					<MvIF EXPR = "{ NOT BasketOption_Delete( l.original_basketoption:id ) OR
-									NOT BasketOptionDiscount_DeleteAll_LineOption_ID( l.original_basketoption:id ) }">
-						<MvFUNCTIONRETURN VALUE = 0>
-					</MvIF>
+			<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+				<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.item:basketitem:quantity }">
+				<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
 				</MvIF>
-			</MvFOREACH>
 
-			<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.item:basketitem:options" COUNT = "{ l.item:basketitem:option_count }">
-				<MvIF EXPR = "{ NOT miva_array_search( l.item:original_basketitem:options, 1, l.search_basketoption, 'l.search_basketoption:id EQ l.basketoption:id' ) }">
-					<MvIF EXPR = "{ NOT BasketOption_Insert( l.basketoption ) }">
-						<MvFUNCTIONRETURN VALUE = 0>
-					</MvIF>
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Check_Available_Variant( l.item:product, l.item:basketitem:variant_id, l.check_quantity ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSEIF EXPR = "{ g.UI_Exception }">
+					<MvFUNCTIONRETURN VALUE = 1>
 				</MvIF>
-			</MvFOREACH>
-		<MvELSEIF EXPR = "{ l.item:delete }">
-			<MvIF EXPR = "{ NOT Runtime_BasketItem_Delete( l.item:product, l.item:basketitem ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		</MvIF>
 	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItemList_Is_Available_Inventory" PARAMETERS = "items var, item_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvCOMMENT>
+		|
+		| Validate child inventory
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.child_item:product, l.child_item:basketitem:variant_id, l.child_item:basketitem:quantity ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.child_item:update }">
+				<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.child_item:basketitem:quantity - l.child_item:original_basketitem:quantity }">
+
+				<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+					<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.child_item:basketitem:quantity }">
+					<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+					</MvIF>
+
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.child_item:product, l.child_item:basketitem:variant_id, l.check_quantity ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Validate parent inventory
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.item:insert }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.item:product, l.item:basketitem:variant_id, l.item:basketitem:quantity ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.item:update }">
+			<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.item:basketitem:quantity - l.item:original_basketitem:quantity }">
+
+			<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+				<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.item:basketitem:quantity }">
+				<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.item:product, l.item:basketitem:variant_id, l.check_quantity ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItemList_Is_Available_Inventory_Filter" PARAMETERS = "items var, item_count, filtered_items var, filtered_item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.filtered_items"			VALUE = "">
+	<MvASSIGN NAME = "l.filtered_item_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvCOMMENT>
+		|
+		| Validate child inventory
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH INDEX = "l.child_index" ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.child_item:product, l.child_item:basketitem:variant_id, l.child_item:basketitem:quantity ) }">
+					<MvFOREACHSTOP>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.child_item:update }">
+				<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.child_item:basketitem:quantity - l.child_item:original_basketitem:quantity }">
+
+				<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+					<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.child_item:basketitem:quantity }">
+					<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+					</MvIF>
+
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.child_item:product, l.child_item:basketitem:variant_id, l.check_quantity ) }">
+						<MvFOREACHSTOP>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.child_index LE l.item:child_item_count }">
+			<MvCOMMENT>
+			|
+			| Child inventory is invalid, skip the parent and all of its children
+			|
+			</MvCOMMENT>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Validate parent inventory
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.item:insert }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.item:product, l.item:basketitem:variant_id, l.item:basketitem:quantity ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.item:update }">
+			<MvASSIGN NAME = "l.quantity_adjustment" VALUE = "{ l.item:basketitem:quantity - l.item:original_basketitem:quantity }">
+
+			<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
+				<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.item:basketitem:quantity }">
+				<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Is_Available_Variant( l.item:product, l.item:basketitem:variant_id, l.check_quantity ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.filtered_item_count" VALUE = "{ miva_array_insert_var( l.filtered_items, l.item, -1 ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItemList_Process" PARAMETERS = "items var, item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT Runtime_BasketItemList_Process_Items( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Basket_Dirty( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
 
 	<MvIF EXPR = "{ Runtime_BasketItemList_Process_ShouldDeleteUpsold( l.items, l.item_count ) }">
 		<MvIF EXPR = "{ NOT Runtime_BasketItem_Delete_Upsold( g.Basket:basket_id ) }">
@@ -831,6 +1036,177 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Runtime_BasketItemList_Process_Items" PARAMETERS = "items var, item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.rt_basketitem_module_count"	VALUE = "{ StoreModuleList_Load_Features_Cached( 'rt_basketitem', l.rt_basketitem_modules ) }">
+
+	<MvCOMMENT>
+	|
+	| When the parent item action is "insert", children are validated / processed after
+	| the parent to ensure the parent_id is available for the child items. For "update"
+	| and "delete" actions, we validate and process before modifying the parent to follow
+	| our convention / guidelines that by the time the update notification is triggered
+	| on the parent item, all moving pieces have been finalized for that item (which
+	| includes modifications to all of its children).
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvIF EXPR = "{ l.item:insert }">
+			<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
+				<MvIF EXPR = "{ NOT [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Insert_Validate( l.rt_basketitem_module, l.item:basketitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT Runtime_BasketItem_Module_Validate_Children( l.item, l.rt_basketitem_modules, l.rt_basketitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT Runtime_BasketItem_Module_Validate_Children( l.item, l.rt_basketitem_modules, l.rt_basketitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
+				<MvIF EXPR = "{ l.item:update }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Update_Validate( l.rt_basketitem_module, l.item:original_basketitem, l.item:basketitem ) }">
+				<MvELSEIF EXPR = "{ l.item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Delete_Validate( l.rt_basketitem_module, l.item:basketitem ) }">
+				<MvELSE>
+					<MvFOREACHSTOP>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT l.result }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvIF EXPR = "{ l.item:insert }">
+			<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
+				<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Insert( l.rt_basketitem_module, l.item:basketitem ) }">
+
+				<MvIF EXPR = "{ l.result EQ 0 }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSEIF EXPR = "{ l.result EQ -1 }">
+					<MvASSIGN NAME = "l.item:skip" VALUE = 1>
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.item:skip }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT Runtime_BasketItemAndOptions_Insert( l.item:product, l.item:basketitem, l.item:basketitem:options, l.item:basketitem:option_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT Runtime_BasketItem_Process_Children( l.item, l.rt_basketitem_modules, l.rt_basketitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT Runtime_BasketItem_Process_Children( l.item, l.rt_basketitem_modules, l.rt_basketitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
+				<MvIF EXPR = "{ l.item:update }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Update( l.rt_basketitem_module, l.item:original_basketitem, l.item:basketitem ) }">
+				<MvELSEIF EXPR = "{ l.item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Delete( l.rt_basketitem_module, l.item:basketitem ) }">
+				<MvELSE>
+					<MvFOREACHSTOP>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.result EQ 0 }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSEIF EXPR = "{ l.result EQ -1 }">
+					<MvASSIGN NAME = "l.item:skip" VALUE = 1>
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.item:skip }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.item:update }">
+				<MvIF EXPR = "{ NOT Runtime_BasketItemAndOptions_Update( l.item:product, l.item:original_basketitem, l.item:original_basketitem:options, l.item:original_basketitem:option_count, l.item:basketitem, l.item:basketitem:options, l.item:basketitem:option_count ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.item:delete }">
+				<MvIF EXPR = "{ NOT Runtime_BasketItem_Delete( l.item:product, l.item:basketitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItem_Module_Validate_Children" PARAMETERS = "item var, rt_basketitem_modules var, rt_basketitem_module_count" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+		<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Insert_Validate( l.rt_basketitem_module, l.child_item:basketitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:update }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Update_Validate( l.rt_basketitem_module, l.child_item:original_basketitem, l.child_item:basketitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Delete_Validate( l.rt_basketitem_module, l.child_item:basketitem ) }">
+			<MvELSE>
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.result }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItem_Process_Children" PARAMETERS = "item var, rt_basketitem_modules var, rt_basketitem_module_count" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+		<MvASSIGN NAME = "l.child_item:basketitem:parent_id" VALUE = "{ l.item:basketitem:line_id }">
+
+		<MvFOREACH ITERATOR = "l.rt_basketitem_module" ARRAY = "l.rt_basketitem_modules" COUNT = "{ l.rt_basketitem_module_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Insert( l.rt_basketitem_module, l.child_item:basketitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:update }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Update( l.rt_basketitem_module, l.child_item:original_basketitem, l.child_item:basketitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_basketitem_module:module ].Module_Runtime_BasketItem_Delete( l.rt_basketitem_module, l.child_item:basketitem ) }">
+			<MvELSE>
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.result EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ l.result EQ -1 }">
+				<MvASSIGN NAME = "l.child_item:skip" VALUE = 1>
+
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.child_item:skip }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.child_item:insert }">
+			<MvIF EXPR = "{ NOT Runtime_BasketItemAndOptions_Insert( l.child_item:product, l.child_item:basketitem, l.child_item:basketitem:options, l.child_item:basketitem:option_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.child_item:update }">
+			<MvIF EXPR = "{ NOT Runtime_BasketItemAndOptions_Update( l.child_item:product, l.child_item:original_basketitem, l.child_item:original_basketitem:options, l.child_item:original_basketitem:option_count, l.child_item:basketitem, l.child_item:basketitem:options, l.child_item:basketitem:option_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.child_item:delete }">
+			<MvIF EXPR = "{ NOT Runtime_BasketItem_Delete( l.child_item:product, l.child_item:basketitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Runtime_BasketItemList_Process_AppendItem_Insert" PARAMETERS = "product var, basketitem var, items var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.item"				VALUE = "">
 	<MvASSIGN NAME = "l.item:insert"		VALUE = 1>
@@ -840,12 +1216,102 @@
 	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Runtime_BasketItemList_Process_AppendItem_Insert_WithChildren" PARAMETERS = "product var, basketitem var, child_items var, child_item_count, items var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.item"					VALUE = "">
+	<MvASSIGN NAME = "l.item:insert"			VALUE = 1>
+	<MvASSIGN NAME = "l.item:product"			VALUE = "{ l.product }">
+	<MvASSIGN NAME = "l.item:basketitem"		VALUE = "{ l.basketitem }">
+	<MvASSIGN NAME = "l.item:child_items"		VALUE = "{ l.child_items }">
+	<MvASSIGN NAME = "l.item:child_item_count"	VALUE = "{ l.child_item_count }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Runtime_BasketItemList_Process_AppendItem_Update" PARAMETERS = "product var, original_basketitem var, basketitem var, items var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.item"						VALUE = "">
-	<MvASSIGN NAME = "l.item:update"				VALUE = 1>
-	<MvASSIGN NAME = "l.item:product"				VALUE = "{ l.product }">
-	<MvASSIGN NAME = "l.item:basketitem"			VALUE = "{ l.basketitem }">
-	<MvASSIGN NAME = "l.item:original_basketitem"	VALUE = "{ l.original_basketitem }">
+	<MvASSIGN NAME = "l.item"								VALUE = "">
+	<MvASSIGN NAME = "l.item:update"						VALUE = 1>
+	<MvASSIGN NAME = "l.item:product"						VALUE = "{ l.product }">
+	<MvASSIGN NAME = "l.item:basketitem"					VALUE = "{ l.basketitem }">
+	<MvASSIGN NAME = "l.item:original_basketitem"			VALUE = "{ l.original_basketitem }">
+	<MvASSIGN NAME = "l.item:child_items"					VALUE = "">
+	<MvASSIGN NAME = "l.item:child_item_count"				VALUE = 0>
+
+	<MvIF EXPR = "{ l.original_basketitem:quantity NE l.basketitem:quantity }">
+		<MvCOMMENT>
+		|
+		| Determine child quantity alterations
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.child_basketitem_count"	VALUE = "{ BasketItemList_Load_Parent( l.basketitem:basket_id, l.basketitem:line_id, l.child_basketitems ) }">
+		<MvASSIGN NAME = "l.group_lookup"			VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.child_basketitems" COUNT = "{ l.child_basketitem_count }">
+			<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
+				<MvMEMBER NAME = "{ l.child_basketitem:group_id }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ ISNULL l.group }">
+				<MvASSIGN NAME = "l.group:basketitems"				VALUE = "">
+				<MvASSIGN NAME = "l.group:basketitem_count"			VALUE = "{ miva_array_insert_var( l.group:basketitems, l.child_basketitem, -1 ) }">
+				<MvASSIGN NAME = "l.group:oldest_basketitem"		VALUE = "{ l.child_basketitem }">
+				<MvASSIGN NAME = "l.group:quantity"					VALUE = "{ l.child_basketitem:quantity }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.group:basketitem_count"			VALUE = "{ miva_array_insert_var( l.group:basketitems, l.child_basketitem, -1 ) }">
+				<MvASSIGN NAME = "l.group:quantity"					VALUE = "{ l.group:quantity + l.child_basketitem:quantity }">
+
+				<MvIF EXPR = "{ l.child_basketitem:line_id LT l.group:oldest_basketitem:line_id }">
+					<MvASSIGN NAME = "l.group:oldest_basketitem"	VALUE = "{ l.child_basketitem }">
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.group_id" ARRAY = "l.group_ids" COUNT = "{ miva_struct_members( l.group_lookup, l.group_ids ) }">
+			<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
+				<MvMEMBER NAME = "{ l.group_id }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ ( l.group:quantity LT l.original_basketitem:quantity ) OR ( fmod( l.group:quantity, l.original_basketitem:quantity ) NE 0 ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.group_quantity" VALUE = "{ l.basketitem:quantity * ( l.group:quantity / l.original_basketitem:quantity ) }">
+
+			<MvIF EXPR = "{ l.basketitem:quantity GT l.original_basketitem:quantity }">
+				<MvASSIGN NAME = "l.child_product"				VALUE = "">
+				<MvASSIGN NAME = "l.child_basketitem"			VALUE = "{ l.group:oldest_basketitem }">
+				<MvASSIGN NAME = "l.child_basketitem:quantity"	VALUE = "{ l.child_basketitem:quantity + ( l.group_quantity - l.group:quantity ) }">
+				<MvASSIGN NAME = "l.null"						VALUE = "{ Runtime_Product_Load_BasketItem( l.child_basketitem, l.child_product ) }">
+				<MvASSIGN NAME = "l.item:child_item_count"		VALUE = "{ Runtime_BasketItemList_Process_AppendItem_Update( l.child_product, l.group:oldest_basketitem, l.child_basketitem, l.item:child_items ) }">
+			<MvELSE>
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].QuickSortArray( l.group:basketitems, ':quantity', -1 ) }">
+
+				<MvASSIGN NAME = "l.quantity_delta" VALUE = "{ l.group:quantity - l.group_quantity }">
+
+				<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.group:basketitems" COUNT = "{ l.group:basketitem_count }">
+					<MvIF EXPR = "{ l.quantity_delta LT l.child_basketitem:quantity }">
+						<MvASSIGN NAME = "l.child_product"				VALUE = "">
+						<MvASSIGN NAME = "l.original_child_basketitem"	VALUE = "{ l.child_basketitem }">
+						<MvASSIGN NAME = "l.child_basketitem:quantity"	VALUE = "{ l.child_basketitem:quantity - l.quantity_delta }">
+						<MvASSIGN NAME = "l.null"						VALUE = "{ Runtime_Product_Load_BasketItem( l.child_basketitem, l.child_product ) }">
+						<MvASSIGN NAME = "l.item:child_item_count"		VALUE = "{ Runtime_BasketItemList_Process_AppendItem_Update( l.child_product, l.original_child_basketitem, l.child_basketitem, l.item:child_items ) }">
+
+						<MvFOREACHSTOP>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.child_product"			VALUE = "">
+					<MvASSIGN NAME = "l.null"					VALUE = "{ Runtime_Product_Load_BasketItem( l.child_basketitem, l.child_product ) }">
+					<MvASSIGN NAME = "l.item:child_item_count"	VALUE = "{ Runtime_BasketItemList_Process_AppendItem_Delete( l.child_product, l.child_basketitem, l.item:child_items ) }">
+
+					<MvASSIGN NAME = "l.quantity_delta"			VALUE = "{ l.quantity_delta - l.child_basketitem:quantity }">
+
+					<MvIF EXPR = "{ l.quantity_delta EQ 0 }">
+						<MvFOREACHSTOP>
+					</MvIF>
+				</MvFOREACH>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
 </MvFUNCTION>

@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-RPT-CUST-SALES-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-report_customer_sales">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Customer Sales Report">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.62">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to generate reports on sales to repeat customers.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "report">
@@ -904,78 +904,38 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "CustomerSales_Populate_Customer_TempTable_Gross_Items" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvOPENVIEW NAME	= "Merchant"
-				VIEW	= "CustomerSales_Gross"
-				QUERY	= "{ 'SELECT
-								o.cust_id		AS cust_id,
-								oi.line_id		AS orderitem_line_id,
-								oi.price		AS orderitem_price,
-								oi.quantity		AS orderitem_quantity,
-								SUM( oo.price )	AS orderoption_price
-							  FROM
-								' $ l.query:order_temp_table $ ' o,
-								' $ g.Store_Table_Prefix $ 'OrderItems oi
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderOptions oo ON oo.line_id = oi.line_id,
-								' $ l.query:product_temp_table $ ' p
-							  WHERE
-								oi.order_id		= o.id	AND
-								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'p.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'oi.code' ) $ '
-							  GROUP BY
-								cust_id, orderitem_line_id, orderitem_price, orderitem_quantity' }">
-	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+<MvFUNCTION NAME = "CustomerSales_Populate_Customer_TempTable_Gross_Items" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI].DB_OPENVIEW_Range( 'Merchant', 'CustomerSales_Gross',
+																		    'SELECT
+																				o.cust_id		AS cust_id,
+																				SUM( oi.total )	AS gross
+																			 FROM
+																				' $ l.query:order_temp_table $ ' o,
+																				' $ g.Store_Table_Prefix $ 'OrderItems oi,
+																				' $ l.query:product_temp_table $ ' p
+																			 WHERE
+																				oi.order_id = o.id AND
+																				' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'p.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'oi.code' ) $ '
+																			 GROUP BY
+																				cust_id
+																			 ORDER BY
+																			  	gross DESC, cust_id ASC',
+																		    '',
+																		    0, l.query:topn ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-CUST-SALES-00032', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
-	<MvCOMMENT>
-	|
-	| Construct an array indexed by customer id that contains the gross sales per customer:
-	|
-	| l.customers[ cust_id ]:id
-	| l.customers[ cust_id ]:gross
-	|
-	</MvCOMMENT>
-
 	<MvWHILE EXPR = "{ NOT CustomerSales_Gross.d.EOF }">
-		<MvREFERENCEARRAY NAME = "l.customer" VARIABLE = "l.customers">
-			<MvDIMENSION INDEX = "{ CustomerSales_Gross.d.cust_id }">
-		</MvREFERENCEARRAY>
-
-		<MvASSIGN NAME = "l.customer:id"	VALUE = "{ CustomerSales_Gross.d.cust_id }">
-		<MvASSIGN NAME = "l.customer:gross"	VALUE = "{ l.customer:gross + ( ( CustomerSales_Gross.d.orderitem_price + CustomerSales_Gross.d.orderoption_price ) * CustomerSales_Gross.d.orderitem_quantity ) }">
+		<MvIF EXPR = "{ NOT CustomerSales_Insert_Customer_TempTable( l.query, CustomerSales_Gross.d.cust_id, CustomerSales_Gross.d.gross ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CustomerSales_Gross">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
 
 		<MvSKIP NAME = "Merchant" VIEW = "CustomerSales_Gross" ROWS = 1>
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CustomerSales_Gross">
-
-	<MvCOMMENT>
-	|
-	| Sort the array by gross descending and insert the top_n customers into the Customer temporary table
-	|
-	</MvCOMMENT>
-
-	<MvASSIGN NAME = "l.customer_count"		VALUE = "{ miva_array_sort( l.customers, 'CustomerSales_Gross_Sort_Callback', l.null ) }">
-
-	<MvFOREACH ITERATOR = "l.customer" ARRAY = "l.customers" COUNT = "{ min( l.customer_count, l.query:topn ) }">
-		<MvIF EXPR = "{ NOT CustomerSales_Insert_Customer_TempTable( l.query, l.customer:id, l.customer:gross ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
-	</MvFOREACH>
-
 	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "CustomerSales_Gross_Sort_Callback" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.left:gross LT l.right:gross }">		<MvFUNCTIONRETURN VALUE = 1>
-	<MvELSEIF EXPR = "{ l.left:gross GT l.right:gross }">	<MvFUNCTIONRETURN VALUE = -1>
-
-	<MvELSEIF EXPR = "{ l.left:id LT l.right:id }">			<MvFUNCTIONRETURN VALUE = -1>
-	<MvELSEIF EXPR = "{ l.left:id GT l.right:id }">			<MvFUNCTIONRETURN VALUE = 1>
-
-	</MvIF>
-
-	<MvFUNCTIONRETURN VALUE = 0>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CustomerSales_Populate_Customer_TempTable_Orders" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
@@ -1232,22 +1192,16 @@
 				QUERY	= "{ 'SELECT
 								o.cust_id		AS cust_id,
 								o.orderdate		AS orderdate,
-								oi.line_id		AS orderitem_line_id,
-								oi.price		AS orderitem_price,
-								oi.quantity		AS orderitem_quantity,
-								SUM( oo.price )	AS orderoption_price
-						      FROM
+								oi.total		AS total
+							  FROM
 								' $ l.query:order_temp_table $ ' o,
 								' $ l.query:customer_temp_table $ ' c,
-								' $ g.Store_Table_Prefix $ 'OrderItems oi
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderOptions oo ON oo.line_id = oi.line_id,
+								' $ g.Store_Table_Prefix $ 'OrderItems oi,
 								' $ l.query:product_temp_table $ ' p
 							  WHERE
-								c.id		= o.cust_id	AND
-								oi.order_id	= o.id		AND
+								c.id		= o.cust_id AND
+								oi.order_id = o.id		AND
 								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'p.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'oi.code' ) $ '
-							  GROUP BY
-								cust_id, orderdate, orderitem_line_id, orderitem_price, orderitem_quantity
 							  ORDER BY
 								cust_id ASC, orderdate ASC' }">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
@@ -1291,7 +1245,7 @@
 			</MvCOMMENT>
 
 			<MvWHILE EXPR = "{ ( NOT CustomerSales_Gross.d.EOF ) AND ( CustomerSales_Gross.d.cust_id EQ l.reportdata:set_id ) AND ( CustomerSales_Gross.d.orderdate LT l.intervals[ l.interval_pos ]:time_t_end ) }">
-				<MvASSIGN NAME = "l.reportdata:data"	VALUE = "{ l.reportdata:data + ( ( CustomerSales_Gross.d.orderitem_price + CustomerSales_Gross.d.orderoption_price ) * CustomerSales_Gross.d.orderitem_quantity ) }">
+				<MvASSIGN NAME = "l.reportdata:data"	VALUE = "{ l.reportdata:data + CustomerSales_Gross.d.total }">
 
 				<MvSKIP NAME = "Merchant" VIEW = "CustomerSales_Gross" ROWS = 1>
 			</MvWHILE>

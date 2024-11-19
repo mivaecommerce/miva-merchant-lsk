@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-
-| Next Error Code: 13   
+| Next Error Code: 14   
 |
 </MvCOMMENT>
 
@@ -587,10 +587,6 @@
 		<MvFUNCTIONRETURN VALUE = "{ UIException( 'invalid_variant' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
-
 	<MvCOMMENT>
 	|
 	| Check to see if there is already an entry that has the same options as this add request, and if so,
@@ -599,8 +595,10 @@
 	</MvCOMMENT>
 
 	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Product( g.Basket:basket_id, l.product:id, l.basketitems ) }">
-		<MvIF EXPR = "{ l.basketitem:wish_id						OR
+		<MvIF EXPR = "{ l.basketitem:parent_id						OR
+						l.basketitem:wish_id						OR
 						l.basketitem:upsold							OR
+						( l.basketitem:type NE 'product' )			OR
 						( l.basketitem:variant_id NE l.variant_id )	OR
 						( l.basketitem:subterm_id NE l.subterm_id ) }">
 			<MvFOREACHCONTINUE>
@@ -635,16 +633,6 @@
 		|
 		</MvCOMMENT>
 
-		<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ l.basketitem:quantity + g.Quantity }">
-		<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ g.Quantity }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.basketitem:variant_id, l.check_quantity ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ g.UI_Exception }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		</MvIF>
-
 		<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.basketitem }">
 		<MvASSIGN NAME = "l.basketitem:quantity"	VALUE = "{ l.original_basketitem:quantity + g.Quantity }">
 		<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
@@ -663,12 +651,6 @@
 
 		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.variant_id, g.Quantity ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ g.UI_Exception }">
-			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
 
 		<MvASSIGN NAME = "l.basketitem"							VALUE = "">
@@ -712,6 +694,12 @@
 		</MvFOREACH>
 
 		<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Insert( l.product, l.basketitem, l.items ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Check_Available_Inventory( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
@@ -781,7 +769,11 @@
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Is_Available_Inventory_Filter( l.items, l.item_count, l.filtered_items, l.filtered_item_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.filtered_items, l.filtered_item_count ) }">
 		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( g.Error_Message ) }">
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
@@ -837,10 +829,6 @@
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Is_Available_Variant( l.loaded_product, l.variant_id, l.product:quantity ) }">
-		<MvFUNCTIONRETURN VALUE = 1>
-	</MvIF>
-
 	<MvCOMMENT>
 	|
 	| Check to see if there is already an entry that has the same options as this add request, and if so,
@@ -851,8 +839,10 @@
 	<MvASSIGN NAME = "l.basketitem_found" VALUE = 0>
 
 	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Product( g.Basket:basket_id, l.loaded_product:id, l.basketitems ) }">
-		<MvIF EXPR = "{ l.basketitem:wish_id						OR
+		<MvIF EXPR = "{ l.basketitem:parent_id						OR
+						l.basketitem:wish_id						OR
 						l.basketitem:upsold							OR
+						( l.basketitem:type NE 'product' )			OR
 						( l.basketitem:variant_id NE l.variant_id )	OR
 						( l.basketitem:subterm_id NE l.subterm_id ) }">
 			<MvFOREACHCONTINUE>
@@ -964,16 +954,16 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-00006', 'Unable to load requested Basket Item. Some or all of the Basket Contents may no longer be available.' ) }">
 	</MvIF>
 
+	<MvIF EXPR = "{ l.basketitem:parent_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'MER-00013', 'This item cannot be directly modified.' ) }">
+	</MvIF>
+
 	<MvIF EXPR = "{ l.basketitem:quantity EQ g.Quantity }">
 		<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Dirty( g.Basket ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
@@ -992,18 +982,10 @@
 	<MvASSIGN NAME = "l.items"						VALUE = "">
 	<MvASSIGN NAME = "l.item_count"					VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
 
-	<MvASSIGN NAME = "l.quantity_adjustment"		VALUE = "{ l.basketitem:quantity - l.original_basketitem:quantity }">
-
-	<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
-		<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ g.Quantity }">
-		<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.basketitem:variant_id, l.check_quantity ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ g.UI_Exception }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Check_Available_Inventory( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
@@ -1044,10 +1026,9 @@
 		</MvIF>
 
 		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.inventorysettings ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ miva_array_search( l.basketitems, 1, l.basketitem, 'l.basketitem:parent_id' ) NE 0 }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'One or more items cannot be directly modified.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitems[ 1 ], l.product ) }">
@@ -1111,16 +1092,10 @@
 		</MvFOREACH>
 	</MvIF>
 
-	<MvIF EXPR = "{ l.quantity_adjustment GT 0 }">
-		<MvIF EXPR = "{ l.inventorysettings:mode EQ 'checkout' }">	<MvASSIGN NAME = "l.check_quantity"	VALUE = "{ g.Quantity }">
-		<MvELSE>													<MvASSIGN NAME = "l.check_quantity" VALUE = "{ l.quantity_adjustment }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Check_Available_Variant( l.product, l.items[ 1 ]:original_basketitem:variant_id, l.check_quantity ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ g.UI_Exception }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Check_Available_Inventory( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ g.UI_Exception }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
 	<MvASSIGN NAME = "l.upsold_present" VALUE = "{ [ g.Library_DB ].Basket_Quantity_Upsold( g.Basket:basket_id ) }">
@@ -1151,6 +1126,11 @@
 		</MvIF>
 
 		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.basketitem:parent_id }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'This item cannot be directly removed.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
@@ -1196,6 +1176,11 @@
 		</MvIF>
 
 		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ miva_array_search( l.basketitems, 1, l.basketitem, 'l.basketitem:parent_id' ) NE 0 }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].Message_Error( 'One or more items cannot be directly removed.' ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Dirty( g.Basket ) }">

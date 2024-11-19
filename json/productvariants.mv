@@ -1113,12 +1113,13 @@
 		"name":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.name ) }">",
 		"thumbnail":		"<MvEVAL EXPR = "{ JSON_Encode( Products.d.thumbnail ) }">",
 		"image":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.image ) }">",
-		"price":			<MvEVAL EXPR = "{ Products.d.price ROUND 2 }">,
+		"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( Products.d.price ) }">,
 		"formatted_price":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.price ) ) }">",
-		"cost":				<MvEVAL EXPR = "{ Products.d.cost ROUND 2 }">,
+		"cost":				<MvEVAL EXPR = "{ encodejavascriptnumber( Products.d.cost ) }">,
 		"formatted_cost":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.cost ) ) }">",
 		"descrip":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.descrip ) }">",
-		"weight":			<MvEVAL EXPR = "{ Products.d.weight ROUND 2 }">,
+		"weight":			<MvEVAL EXPR = "{ encodejavascriptnumber( Products.d.weight ) }">,
+		"formatted_weight":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Library_Utilities ].Format_Weight( Products.d.weight ) ) }">",
 		"taxable":			<MvEVAL EXPR = "{ Products.d.taxable }">,
 		"active":			<MvEVAL EXPR = "{ Products.d.active }">,
 		"dt_created":		<MvEVAL EXPR = "{ Products.d.dt_created }">,
@@ -1227,12 +1228,13 @@
 		"name":				"<MvEVAL EXPR = "{ JSON_Encode( Products.d.name ) }">",
 		"thumbnail":		"<MvEVAL EXPR = "{ JSON_Encode( Products.d.thumbnail ) }">",
 		"image":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.image ) }">",
-		"price":			<MvEVAL EXPR = "{ Products.d.price ROUND 2 }">,
+		"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( Products.d.price ) }">,
 		"formatted_price":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.price ) ) }">",
-		"cost":				<MvEVAL EXPR = "{ Products.d.cost ROUND 2 }">,
+		"cost":				<MvEVAL EXPR = "{ encodejavascriptnumber( Products.d.cost ) }">,
 		"formatted_cost":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, Products.d.cost ) ) }">",
 		"descrip":			"<MvEVAL EXPR = "{ JSON_Encode( Products.d.descrip ) }">",
-		"weight":			<MvEVAL EXPR = "{ Products.d.weight ROUND 2 }">,
+		"weight":			<MvEVAL EXPR = "{ encodejavascriptnumber( Products.d.weight ) }">,
+		"formatted_weight":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Library_Utilities ].Format_Weight( Products.d.weight ) ) }">",
 		"taxable":			<MvEVAL EXPR = "{ Products.d.taxable }">,
 		"active":			<MvEVAL EXPR = "{ Products.d.active }">,
 		"dt_created":		<MvEVAL EXPR = "{ Products.d.dt_created }">,
@@ -1409,6 +1411,8 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Parts( l.parts, l.part_count ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT JSON_Input_Element_ProductVariant_Pricing( l.pricing ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvCOMMENT>
@@ -1466,6 +1470,21 @@
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Insert the pricing
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.pricing:method NE 0 }">
+		<MvASSIGN NAME = "l.pricing:product_id" VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.pricing:variant_id" VALUE = "{ l.variant:variant_id }">
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].ProductVariantPricing_Insert( l.pricing ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
 
 	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-PVT-00012', 'Variant ' $ l.variant:variant_id $ ' updated for product ' $ l.variant:product_id ) }">
 
@@ -1605,9 +1624,9 @@
 			</MvIF>
 
 			<MvIF EXPR = "{ NOT JSON_Input_Element_List(	l.input_data, 'R',			'method',	l.pricing:method,	'master,specific,sum,0,1,2', '0,1,2,0,1,2' )	OR
-							NOT JSON_Input_Element_Number(	l.input_data, 'O:nonneg',	'price',	l.pricing:price,	10, 2 )											OR
-							NOT JSON_Input_Element_Number(	l.input_data, 'O:nonneg',	'cost',		l.pricing:cost,		10, 2 )											OR
-							NOT JSON_Input_Element_Number(	l.input_data, 'O:nonneg',	'weight',	l.pricing:weight,	10, 2 ) }">
+							NOT JSON_Input_Element_Price(	l.input_data, 'O:nonneg',	'price',	l.pricing:price )													OR
+							NOT JSON_Input_Element_Price(	l.input_data, 'O:nonneg',	'cost',		l.pricing:cost )													OR
+							NOT JSON_Input_Element_Weight(	l.input_data, 'O:nonneg',	'weight',	l.pricing:weight ) }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 			</MvIF>
 		</MvIF>
@@ -2073,24 +2092,26 @@
 
 		<MvEVAL EXPR = "{ JSON_Response_Start() }">
 		{
-			"product_id":	<MvEVAL EXPR = "{ int( l.product_id ) }">,
-			"variant_id":	<MvEVAL EXPR = "{ int( l.variant_id ) }">,
-			"method":		0,
-			"price":		0.00,
-			"cost":			0.00,
-			"weight":		0.00
+			"product_id":		<MvEVAL EXPR = "{ int( l.product_id ) }">,
+			"variant_id":		<MvEVAL EXPR = "{ int( l.variant_id ) }">,
+			"method":			0,
+			"price":			0.00,
+			"cost":				0.00,
+			"weight":			0.00,
+			"formatted_weight":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( [ g.Module_Library_Utilities ].Format_Weight( 0.00 ) ) }">"
 		}
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 	</MvIF>
 
 	<MvEVAL EXPR = "{ JSON_Response_Start() }">
 	{
-		"product_id":	<MvEVAL EXPR = "{ int( l.pricing:product_id ) }">,
-		"variant_id":	<MvEVAL EXPR = "{ int( l.pricing:variant_id ) }">,
-		"method":		<MvEVAL EXPR = "{ int( l.pricing:method ) }">,
-		"price":		<MvEVAL EXPR = "{ l.pricing:price ROUND 2 }">,
-		"cost":			<MvEVAL EXPR = "{ l.pricing:cost ROUND 2 }">,
-		"weight":		<MvEVAL EXPR = "{ l.pricing:weight ROUND 2 }">
+		"product_id":		<MvEVAL EXPR = "{ int( l.pricing:product_id ) }">,
+		"variant_id":		<MvEVAL EXPR = "{ int( l.pricing:variant_id ) }">,
+		"method":			<MvEVAL EXPR = "{ int( l.pricing:method ) }">,
+		"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.pricing:price ) }">,
+		"cost":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.pricing:cost ) }">,
+		"weight":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.pricing:weight ) }">,
+		"formatted_weight":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( [ g.Module_Library_Utilities ].Format_Weight( l.pricing:weight ) ) }">"
 	}
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
@@ -2109,9 +2130,9 @@
 
 	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R',		'Variant_ID',	l.variant_id )												OR
 					NOT JSON_Input_List(	'R',		'Method',		l.method,	'master,specific,sum,0,1,2', '0,1,2,0,1,2' )	OR
-					NOT JSON_Input_Number(	'O:nonneg', 'Price',		l.price,	10, 2 )											OR
-					NOT JSON_Input_Number(	'O:nonneg',	'Cost',			l.cost,		10, 2 )											OR
-					NOT JSON_Input_Number(	'O:nonneg',	'Weight',		l.weight,	10, 2 ) }">
+					NOT JSON_Input_Price(	'O:nonneg', 'Price',		l.price )													OR
+					NOT JSON_Input_Price(	'O:nonneg',	'Cost',			l.cost )													OR
+					NOT JSON_Input_Weight(	'O:nonneg',	'Weight',		l.weight ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
 

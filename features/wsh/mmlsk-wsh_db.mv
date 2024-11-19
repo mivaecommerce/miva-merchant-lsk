@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-WSH-DTB-
-| Next Error Code: 60
+| Next Error Code: 65
 |
 </MvCOMMENT>
 
@@ -66,6 +66,7 @@
 						  (
 							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
 							wshlst_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
+							parent_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
 							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
 							dtadded		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
 							quantity	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()	$ ',
@@ -85,6 +86,12 @@
 			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'WishListItems_2 ON ' $ g.Store_Table_Prefix $ 'WishListItems ( wshlst_id )' }">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ g.Store_Table_Prefix $ 'WishListItems_3 ON ' $ g.Store_Table_Prefix $ 'WishListItems ( wshlst_id, parent_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00060', g.MvQUERY_Error ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'WishListItems', 1 ) }">
@@ -539,6 +546,7 @@
 <MvFUNCTION NAME = "WishListItem_Read" PARAMETERS = "wishlistitem var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.wishlistitem:id"			VALUE = "{ WishListItems.d.id }">
 	<MvASSIGN NAME = "l.wishlistitem:wshlst_id"		VALUE = "{ WishListItems.d.wshlst_id }">
+	<MvASSIGN NAME = "l.wishlistitem:parent_id"		VALUE = "{ WishListItems.d.parent_id }">
 	<MvASSIGN NAME = "l.wishlistitem:product_id"	VALUE = "{ WishListItems.d.product_id }">
 	<MvASSIGN NAME = "l.wishlistitem:dtadded"		VALUE = "{ WishListItems.d.dtadded }">
 	<MvASSIGN NAME = "l.wishlistitem:quantity"		VALUE = "{ WishListItems.d.quantity }">
@@ -548,12 +556,16 @@
 <MvFUNCTION NAME = "WishListItem_Insert" PARAMETERS = "wishlistitem var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.wishlistitem:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'WishListItems' ) }">
 
+	<MvIF EXPR = "{ ISNULL l.wishlistitem:parent_id }">
+		<MvASSIGN NAME = "l.wishlistitem:parent_id" VALUE = 0>
+	</MvIF>
+
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'WishListItems
-					      ( id, wshlst_id, product_id, dtadded, quantity, notes )
+					      ( id, wshlst_id, parent_id, product_id, dtadded, quantity, notes )
 						  VALUES
-						  ( ?, ?, ?, ?, ?, ? )' }"
-			 FIELDS	= "l.wishlistitem:id, l.wishlistitem:wshlst_id, l.wishlistitem:product_id, l.wishlistitem:dtadded, l.wishlistitem:quantity, l.wishlistitem:notes">
+						  ( ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.wishlistitem:id, l.wishlistitem:wshlst_id, l.wishlistitem:parent_id, l.wishlistitem:product_id, l.wishlistitem:dtadded, l.wishlistitem:quantity, l.wishlistitem:notes">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00029', g.MvQUERY_Error ) }">
 	</MvIF>
@@ -574,6 +586,38 @@
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00030', g.MvQUERY_Error ) }">
 	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WishListItem_Update_Child_Quantity" PARAMETERS = "parent_wishlistitem var, original_quantity, quantity" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.quantity EQ l.original_quantity }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.wishlistitem" ARRAY = "l.wishlistitems" COUNT = "{ WishListItemList_Load_Parent( l.parent_wishlistitem:wshlst_id, l.parent_wishlistitem:id, l.wishlistitems ) }">
+		<MvIF EXPR = "{ ( l.wishlistitem:quantity LT l.original_quantity ) OR ( fmod( l.wishlistitem:quantity, l.original_quantity ) NE 0 ) }">
+			<MvCOMMENT>
+			|
+			| Skip processing. Child-parent quantity ratio is less than 1:1, or the ratio is not a whole number.
+			|
+			</MvCOMMENT>
+
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.wishlistitem:quantity" VALUE = "{ l.quantity * ( l.wishlistitem:quantity / l.original_quantity ) }">
+
+		<MvIF EXPR = "{ l.wishlistitem:quantity GT 0 }">
+			<MvIF EXPR = "{ NOT WishListItem_Update( l.wishlistitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT WishListItem_Delete( l.wishlistitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -670,10 +714,21 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "WishListItem_Delete" PARAMETERS = "wishlistitem var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT WishListItem_Delete_LowLevel( l.wishlistitem:id ) OR
-					NOT WishListOption_Delete_All_WishListItem( l.wishlistitem:id ) }">
+	<MvIF EXPR = "{ NOT WishListItem_Delete_LowLevel( l.wishlistitem:id )			OR
+					NOT WishListOption_Delete_All_WishListItem( l.wishlistitem:id )	OR
+					NOT WishListItem_Delete_Children( l.wishlistitem ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WishListItem_Delete_Children" PARAMETERS = "wishlistitem var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_wishlistitem" ARRAY = "l.child_wishlistitems" COUNT = "{ WishListItemList_Load_Parent( l.wishlistitem:wshlst_id, l.wishlistitem:id, l.child_wishlistitems ) }">
+		<MvIF EXPR = "{ NOT WishListItem_Delete( l.child_wishlistitem ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -712,22 +767,91 @@
 <MvFUNCTION NAME = "WishListItemList_Load_WishList" PARAMETERS = "wshlst_id, wishlistitems var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "WishListItems"
-				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'WishListItems WHERE wshlst_id = ?' }"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'WishListItems WHERE wshlst_id = ? ORDER BY parent_id, id' }"
 				FIELDS	= "l.wshlst_id">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00036', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.wishlistitem_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.parent_indexes"		VALUE = "">
+
+	<MvCOMMENT>
+	|
+	| Process top-level WishListItems
+	|
+	</MvCOMMENT>
+
 	<MvWHILE EXPR = "{ NOT WishListItems.d.EOF }">
+		<MvIF EXPR = "{ WishListItems.d.parent_id }">
+			<MvWHILESTOP>
+		</MvIF>
+
 		<MvEVAL EXPR = "{ WishListItem_Read( l.wishlistitems[ ++l.wishlistitem_count ] ) }">
 
+		<MvASSIGN NAME = "l.parent_indexes" INDEX = "{ l.wishlistitems[ l.wishlistitem_count ]:id }" VALUE = "{ l.wishlistitem_count }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "WishListItems" ROWS = 1>
+	</MvWHILE>
+
+	<MvCOMMENT>
+	|
+	| Process children, end result is that the child ends up in both:
+	|
+	|	parent:children[]
+	|	wishlistitems[ following parent ]
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.last_parent_id"							VALUE = 0>
+	<MvASSIGN NAME = "l.last_parent_index_correction"			VALUE = 0>
+	<MvASSIGN NAME = "l.parent_index_correction"				VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT WishListItems.d.EOF }">
+		<MvIF EXPR = "{ WishListItems.d.parent_id NE l.last_parent_id }">
+			<MvASSIGN NAME = "l.last_parent_index_correction"   VALUE = "{ l.last_parent_index_correction + l.parent_index_correction }">
+			<MvASSIGN NAME = "l.last_parent_id"                 VALUE = "{ WishListItems.d.parent_id }">
+			<MvASSIGN NAME = "l.parent_index_correction"		VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT miva_element_exists( l.parent_indexes, WishListItems.d.parent_id ) }">
+			<MvEVAL EXPR = "{ WishListItem_Read( l.wishlistitems[ ++l.wishlistitem_count ] ) }">
+		<MvELSE>
+			<MvREFERENCEARRAY NAME = "l.parent_wishlistitem" VARIABLE = "l.wishlistitems">
+				<MvDIMENSION INDEX = "{ l.parent_indexes[ WishListItems.d.parent_id ] + l.last_parent_index_correction }">
+			</MvREFERENCEARRAY>
+	
+			<MvEVAL EXPR = "{ WishListItem_Read( l.parent_wishlistitem:children[ ++l.parent_wishlistitem:child_count ] ) }">
+
+			<MvASSIGN NAME = "l.wishlistitem_count"				VALUE = "{ miva_array_insert_ref( l.wishlistitems, l.parent_wishlistitem:children[ l.parent_wishlistitem:child_count ], l.parent_indexes[ WishListItems.d.parent_id ] + l.last_parent_index_correction + l.parent_index_correction + 1 ) }">
+			<MvASSIGN NAME = "l.parent_index_correction"		VALUE = "{ l.parent_index_correction + 1 }">
+		</MvIF> 
+
+		<MvSKIP NAME = "Merchant" VIEW = "WishListItems" ROWS = 1>
+	 </MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "WishListItems">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-WSH-DTB-00037', l.wishlistitem_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WishListItemList_Load_Parent" PARAMETERS = "wshlst_id, parent_id, wishlistitems var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "WishListItems"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'WishListItems WHERE wshlst_id = ? AND parent_id = ? ORDER BY id' }"
+				FIELDS	= "l.wshlst_id, l.parent_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00061', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlistitem_count"	VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT WishListItems.d.EOF }">
+		<MvEVAL EXPR = "{ WishListItem_Read( l.wishlistitems[ ++l.wishlistitem_count ] ) }">
 		<MvSKIP NAME = "Merchant" VIEW = "WishListItems">
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "WishListItems">
-
-	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-WSH-DTB-00037', l.wishlistitem_count ) }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-WSH-DTB-00062', l.wishlistitem_count ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "WishListItemList_Load_Product" PARAMETERS = "product_id, wishlistitems var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -978,6 +1102,7 @@
 
 		<MvASSIGN NAME = "l.wishlistitem:id"					VALUE = "{ Products.d.id }">
 		<MvASSIGN NAME = "l.wishlistitem:wshlst_id"				VALUE = "{ Products.d.wshlst_id }">
+		<MvASSIGN NAME = "l.wishlistitem:parent_id"				VALUE = "{ Products.d.parent_id }">
 		<MvASSIGN NAME = "l.wishlistitem:product_id"			VALUE = "{ Products.d.product_id }">
 		<MvASSIGN NAME = "l.wishlistitem:dtadded"				VALUE = "{ Products.d.dtadded }">
 		<MvASSIGN NAME = "l.wishlistitem:quantity"				VALUE = "{ Products.d.quantity }">
@@ -1020,6 +1145,120 @@
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-WSH-DTB-00051', l.wishlistitem_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListProductList_Load_Parent" PARAMETERS = "wshlst_id, parent_id, wishlistitems var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query,	'wli.*,
+																			 prod.catcount		AS product_catcount,
+																			 prod.cancat_id		AS product_cancat_id,
+																			 prod.agrpcount		AS product_agrpcount,
+																			 prod.pgrpcount		AS product_pgrpcount,
+																			 prod.disp_order	AS product_disp_order,
+																			 pbv.page_id		AS product_page_id,
+																			 prod.page_code		AS product_page_code,
+																			 prod.code			AS product_code,
+																			 prod.sku			AS product_sku,
+																			 prod.name			AS product_name,
+																			 prod.page_title	AS product_page_title,
+																			 prod.thumbnail		AS product_thumbnail,
+																			 prod.image			AS product_image,
+																			 prod.price			AS product_price,
+																			 prod.cost			AS product_cost,
+																			 prod.descrip		AS product_descrip,
+																			 prod.weight		AS product_weight,
+																			 prod.taxable		AS product_taxable,
+																			 prod.active		AS product_active,
+																			 prod.dt_created	AS product_dt_created,
+																			 prod.dt_updated	AS product_dt_updated,
+																			 ipc.inventory		AS ipc_inventory,
+																			 ips.active			AS ips_active,
+																			 ips.in_long		AS ips_in_long,
+																			 ips.in_short		AS ips_in_short,
+																			 ips.low_level		AS ips_low_level,
+																			 ips.low_long		AS ips_low_long,
+																			 ips.low_lvl_d		AS ips_low_lvl_d,
+																			 ips.low_short		AS ips_low_short,
+																			 ips.low_track		AS ips_low_track,
+																			 ips.out_level		AS ips_out_level,
+																			 ips.out_long		AS ips_out_long,
+																			 ips.out_lvl_d		AS ips_out_lvl_d,
+																			 ips.out_short		AS ips_out_short,
+																			 ips.out_track		AS ips_out_track,
+																			 iset.active		AS iset_active,
+																			 iset.in_long		AS iset_in_long,
+																			 iset.in_short		AS iset_in_short,
+																			 iset.low_level		AS iset_low_level,
+																			 iset.low_long		AS iset_low_long,
+																			 iset.low_short		AS iset_low_short,
+																			 iset.low_track		AS iset_low_track,
+																			 iset.out_level		AS iset_out_level,
+																			 iset.out_long		AS iset_out_long,
+																			 iset.out_short		AS iset_out_short,
+																			 iset.out_track		AS iset_out_track' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'WishListItems', 'wli' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'InventorySettings', 'iset' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'PageBranchVersions', 'pbv', 'prod.page_code <> \'\' AND pbv.branch_id = ? AND pbv.head = 1 AND ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pbv.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prod.page_code' ), [ g.Module_Library_DB ].SQL_Query_Field( [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() ) ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'InventoryProductSettings', 'ips', 'ips.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'InventoryProductCounts', 'ipc', 'ipc.product_id = prod.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'wli.wshlst_id 	= ?			AND 
+																		 wli.parent_id 	= ?			AND 
+																		 wli.product_id = prod.id	AND 
+																		 prod.active = 1', [ g.Module_Library_DB ].SQL_Query_Field( l.wshlst_id ) $ ', ' $ [ g.Module_Library_DB ].SQL_Query_Field( l.parent_id ) ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( ' $ [ g.Module_Library_DB ].Runtime_Product_AvailabilityGroup_Where( l.agrp_fields ) $ ' )', l.agrp_fields ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query, 'prod.id', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products', l.sql, l.fields, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-WSH-DTB-00063', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlistitem_count"						VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvREFERENCEARRAY NAME = "l.wishlistitem" VARIABLE = "l.wishlistitems">
+			<MvDIMENSION INDEX = "{ ++l.wishlistitem_count }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.wishlistitem:id"					VALUE = "{ Products.d.id }">
+		<MvASSIGN NAME = "l.wishlistitem:wshlst_id"				VALUE = "{ Products.d.wshlst_id }">
+		<MvASSIGN NAME = "l.wishlistitem:parent_id"				VALUE = "{ Products.d.parent_id }">
+		<MvASSIGN NAME = "l.wishlistitem:product_id"			VALUE = "{ Products.d.product_id }">
+		<MvASSIGN NAME = "l.wishlistitem:dtadded"				VALUE = "{ Products.d.dtadded }">
+		<MvASSIGN NAME = "l.wishlistitem:quantity"				VALUE = "{ Products.d.quantity }">
+		<MvASSIGN NAME = "l.wishlistitem:notes"					VALUE = "{ Products.d.notes }">
+
+		<MvASSIGN NAME = "l.wishlistitem:product:id"			VALUE = "{ Products.d.product_id }">
+		<MvASSIGN NAME = "l.wishlistitem:product:catcount"		VALUE = "{ Products.d.product_catcount }">
+		<MvASSIGN NAME = "l.wishlistitem:product:cancat_id"		VALUE = "{ Products.d.product_cancat_id }">
+		<MvASSIGN NAME = "l.wishlistitem:product:agrpcount"		VALUE = "{ Products.d.product_agrpcount }">
+		<MvASSIGN NAME = "l.wishlistitem:product:pgrpcount"		VALUE = "{ Products.d.product_pgrpcount }">
+		<MvASSIGN NAME = "l.wishlistitem:product:disp_order"	VALUE = "{ Products.d.product_disp_order }">
+		<MvASSIGN NAME = "l.wishlistitem:product:page_id"		VALUE = "{ int( Products.d.product_page_id ) }">
+		<MvASSIGN NAME = "l.wishlistitem:product:page_code"		VALUE = "{ Products.d.product_page_code }">
+		<MvASSIGN NAME = "l.wishlistitem:product:code"			VALUE = "{ Products.d.product_code }">
+		<MvASSIGN NAME = "l.wishlistitem:product:sku"			VALUE = "{ Products.d.product_sku }">
+		<MvASSIGN NAME = "l.wishlistitem:product:name"			VALUE = "{ Products.d.product_name }">
+		<MvASSIGN NAME = "l.wishlistitem:product:page_title"	VALUE = "{ Products.d.product_page_title }">
+		<MvASSIGN NAME = "l.wishlistitem:product:thumbnail"		VALUE = "{ Products.d.product_thumbnail }">
+		<MvASSIGN NAME = "l.wishlistitem:product:image"			VALUE = "{ Products.d.product_image }">
+		<MvASSIGN NAME = "l.wishlistitem:product:price"			VALUE = "{ Products.d.product_price }">
+		<MvASSIGN NAME = "l.wishlistitem:product:cost"			VALUE = "{ Products.d.product_cost }">
+		<MvASSIGN NAME = "l.wishlistitem:product:descrip"		VALUE = "{ Products.d.product_descrip }">
+		<MvASSIGN NAME = "l.wishlistitem:product:weight"		VALUE = "{ Products.d.product_weight }">
+		<MvASSIGN NAME = "l.wishlistitem:product:taxable"		VALUE = "{ Products.d.product_taxable }">
+		<MvASSIGN NAME = "l.wishlistitem:product:active"		VALUE = "{ Products.d.product_active }">
+		<MvASSIGN NAME = "l.wishlistitem:product:dt_created"	VALUE = "{ Products.d.product_dt_created }">
+		<MvASSIGN NAME = "l.wishlistitem:product:dt_updated"	VALUE = "{ Products.d.product_dt_updated }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_RT ].Runtime_Product_InventoryFields_Read( l.wishlistitem:product ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-WSH-DTB-00064', l.wishlistitem_count ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Runtime_WishListProduct_Count_WishList" PARAMETERS = "wshlst_id, count var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">

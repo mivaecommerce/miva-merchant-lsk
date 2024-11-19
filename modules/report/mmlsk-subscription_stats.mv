@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-RPT-SUB-STS-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-report_subscription_stats">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Subscription Statistics">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.06">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, report">
 </MvFUNCTION>
@@ -762,14 +762,9 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SubscriptionStats_Run_GrossRevenue" PARAMETERS = "report var, intervals var, interval_count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query,	'oi.line_id			AS orderitem_line_id,
-																			 oi.price			AS orderitem_price,
-																			 oi.quantity		AS orderitem_quantity,
-																			 oo.price			AS orderoption_price,
-																			 oo.attr_id			AS orderoption_attr_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'SUM( oi.total ) AS subtotal' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Orders',			'o' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'OrderItems',		'oi' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, 'oi', g.Store_Table_Prefix $ 'OrderOptions', 'oo', 'oi.line_id = oo.line_id', '' ) }">
 
 	<MvIF EXPR = "{ l.report:config:subscriptions EQ 'selected' }">
  		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query,	g.Store_Table_Prefix $ 'SubscriptionStatsXTerm', 'sxt' ) }">
@@ -784,9 +779,6 @@
 																			 o.orderdate	>= ?				AND
 																			 o.orderdate	<= ?', 'l.interval:time_t_start, l.interval:time_t_end' ) }">
 
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query,	'orderitem_line_id',	'ASC' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query,	'orderoption_attr_id',	'ASC' ) }">
-
 	<MvASSIGN NAME = "l.query_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.query_fields ) }">
 
 	<MvFOREACH ITERATOR = "l.interval" ARRAY = "l.intervals" COUNT = "{ l.interval_count }">
@@ -798,21 +790,7 @@
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-STS-00014', g.MvOPENVIEW_Error ) }">
 		</MvIF>
 
-		<MvASSIGN NAME = "l.subtotal"					VALUE = 0.00>
-		<MvASSIGN NAME = "l.last_line_id"				VALUE = -1>
-
-		<MvWHILE EXPR = "{ NOT SubscriptionStats_GrossRevenue.d.EOF }">
-			<MvIF EXPR = "{ SubscriptionStats_GrossRevenue.d.orderitem_line_id NE l.last_line_id }">
-				<MvASSIGN NAME = "l.subtotal"			VALUE = "{ l.subtotal + ( SubscriptionStats_GrossRevenue.d.orderitem_price * SubscriptionStats_GrossRevenue.d.orderitem_quantity ) }">
-				<MvASSIGN NAME = "l.last_line_id"		VALUE = "{ SubscriptionStats_GrossRevenue.d.orderitem_line_id }">
-			</MvIF>
-
-			<MvIF EXPR = "{ SubscriptionStats_GrossRevenue.d.orderoption_price GT 0 }">
-				<MvASSIGN NAME = "l.subtotal"			VALUE = "{ l.subtotal + ( SubscriptionStats_GrossRevenue.d.orderoption_price * SubscriptionStats_GrossRevenue.d.orderitem_quantity ) }">
-			</MvIF>
-
-			<MvSKIP NAME = "Merchant" VIEW = "SubscriptionStats_GrossRevenue" ROWS = 1>
-		</MvWHILE>
+		<MvASSIGN NAME = "l.subtotal" VALUE = "{ SubscriptionStats_GrossRevenue.d.subtotal }">
 
 		<MvIF EXPR = "{ l.subtotal GT 0 }">
 			<MvIF EXPR = "{ NOT SubscriptionStats_Insert_GrossRevenue( l.report, l.interval, l.subtotal ) }">

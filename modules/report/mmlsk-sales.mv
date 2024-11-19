@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2022 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-RPT-SALES-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-report_sales">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Sales Report">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.62">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "report">
 </MvFUNCTION>
@@ -1160,21 +1160,17 @@
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "Sales_Gross"
 				QUERY	= "{ 'SELECT
-								o.orderdate		AS orderdate,
-								oi.line_id		AS line_id,
-								oi.quantity		AS quantity,
-								oi.price		AS item_price,
-								oo.price		AS option_price
+								o.orderdate	AS orderdate,
+								oi.total	AS total
 							  FROM
-								' $ l.query:order_temp_table $ ' o,
+								' $ l.query:order_temp_table $ ' o, 
 								' $ l.query:category_temp_table $ ' p,
 								' $ g.Store_Table_Prefix $ 'OrderItems oi
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderOptions oo ON oo.line_id = oi.line_id
 							  WHERE
-								oi.order_id = o.id	AND
+								oi.order_id = o.id AND
 								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'p.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'oi.code' ) $ '
 							  ORDER BY
-								orderdate, line_id' }">
+								orderdate' }">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SALES-00020', g.MvOPENVIEW_Error ) }">
 	</MvIF>
@@ -1189,20 +1185,16 @@
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "Sales_Gross"
 				QUERY	= "{ 'SELECT
-								o.orderdate		AS orderdate,
-								oi.line_id		AS line_id,
-								oi.quantity		AS quantity,
-								oi.price		AS item_price,
-								oo.price		AS option_price
+								o.orderdate	AS orderdate,
+								oi.total	AS total
 							  FROM
 								' $ l.query:order_temp_table $ ' o,
 								' $ g.Store_Table_Prefix $ 'OrderItems oi
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderOptions oo ON oo.line_id = oi.line_id
 							  WHERE
-								oi.order_id = o.id	AND
+								oi.order_id = o.id AND
 								' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( 'oi.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_Upper( '?' ) $ '
 							  ORDER BY
-								orderdate, line_id' }"
+								orderdate' }"
 				FIELDS	= "l.query:product_code">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SALES-00021', g.MvOPENVIEW_Error ) }">
@@ -1215,9 +1207,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Sales_Run_Gross_CategoryProduct_LowLevel" PARAMETERS = "report var, query var, intervals var, interval_count var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.last_line_id"				VALUE = -1>
-	<MvASSIGN NAME = "l.interval_gross"				VALUE = 0.00>
-	<MvASSIGN NAME = "l.interval_pos"				VALUE = 1>
+	<MvASSIGN NAME = "l.interval_gross"			VALUE = 0.00>
+	<MvASSIGN NAME = "l.interval_pos"			VALUE = 1>
 
 	<MvWHILE EXPR = "{ NOT Sales_Gross.d.EOF }">
 		<MvWHILE EXPR = "{ Sales_Gross.d.orderdate GE l.intervals[ l.interval_pos ]:time_t_end }">
@@ -1225,18 +1216,11 @@
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 
-			<MvASSIGN NAME = "l.interval_gross"		VALUE = 0.00>
-			<MvASSIGN NAME = "l.interval_pos"		VALUE = "{ l.interval_pos + 1 }">
+			<MvASSIGN NAME = "l.interval_gross"	VALUE = 0.00>
+			<MvASSIGN NAME = "l.interval_pos"	VALUE = "{ l.interval_pos + 1 }">
 		</MvWHILE>
 
-		<MvIF EXPR = "{ Sales_Gross.d.line_id NE l.last_line_id }">
-			<MvASSIGN NAME = "l.interval_gross"		VALUE = "{ l.interval_gross + ( Sales_Gross.d.item_price * Sales_Gross.d.quantity ) }">
-			<MvASSIGN NAME = "l.last_line_id"		VALUE = "{ Sales_Gross.d.line_id }">
-		</MvIF>
-
-		<MvIF EXPR = "{ Sales_Gross.d.option_price }">
-			<MvASSIGN NAME = "l.interval_gross"		VALUE = "{ l.interval_gross + ( Sales_Gross.d.option_price * Sales_Gross.d.quantity ) }">
-		</MvIF>
+		<MvASSIGN NAME = "l.interval_gross"		VALUE = "{ l.interval_gross + Sales_Gross.d.total }">
 
 		<MvSKIP NAME = "Merchant" VIEW = "Sales_Gross" ROWS = 1>
 	</MvWHILE>
@@ -1245,14 +1229,14 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.interval_pos"				VALUE = "{ l.interval_pos + 1 }">
+	<MvASSIGN NAME = "l.interval_pos"			VALUE = "{ l.interval_pos + 1 }">
 
 	<MvWHILE EXPR = "{ l.interval_pos LE l.interval_count }">
 		<MvIF EXPR = "{ NOT Sales_Insert_Gross( l.report, l.intervals[ l.interval_pos ], 0.00 ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
-		<MvASSIGN NAME = "l.interval_pos"			VALUE = "{ l.interval_pos + 1 }">
+		<MvASSIGN NAME = "l.interval_pos"		VALUE = "{ l.interval_pos + 1 }">
 	</MvWHILE>
 
 	<MvFUNCTIONRETURN VALUE = 1>

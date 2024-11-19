@@ -689,7 +689,7 @@ function ValidateFloatingPointNumber( value, options )
 
 function ValidateFloatingPointNumberField( field )
 {
-	var validate_options = { max_left_digits: 10, max_right_digits: 2 };
+	var validate_options = { max_left_digits: 8, max_right_digits: 2 };
 
 	if ( ValidateFloatingPointNumber( field.value, validate_options ) )
 	{
@@ -706,7 +706,24 @@ function ValidateFloatingPointNumberField( field )
 
 function ValidateFloatingPointNumberField_NonNegative( field )
 {
-	var validate_options = { max_left_digits: 10, max_right_digits: 2, disallow_negative: true };
+	var validate_options = { max_left_digits: 8, max_right_digits: 2, disallow_negative: true };
+
+	if ( ValidateFloatingPointNumber( field.value, validate_options ) )
+	{
+		return true;
+	}
+
+	Modal_Alert( validate_options.message );
+
+	field.select();
+	field.focus();
+		
+	return false;
+}
+
+function ValidatePriceField( field )
+{
+	const validate_options = { max_left_digits: 8, max_right_digits: 8 };
 
 	if ( ValidateFloatingPointNumber( field.value, validate_options ) )
 	{
@@ -4824,6 +4841,7 @@ function MMInput( parent, name, value )
 	this.disabled								= false;
 	this.readonly								= false;
 	this.select_on_focus						= false;
+	this.autosize_enabled						= false;
 	this.invalid								= false;
 	this.invalid_error_message					= '';
 	this.error_visible							= false;
@@ -4851,6 +4869,7 @@ function MMInput( parent, name, value )
 
 	this.element_input.tabIndex					= this.tab_index;
 
+	this.event_render_autosize					= function() { self.Render_AutoSize(); self.render_autosize_id = requestAnimationFrame( self.event_render_autosize ); };
 	this.event_render_error						= function() { self.Render_Error(); self.render_error_id = requestAnimationFrame( self.event_render_error ); };
 	this.event_mouseover_container				= function( event ) { return self.Event_OnMouseOver_Container( event ? event : window.event ); }
 	this.event_mouseout_container				= function( event ) { return self.Event_OnMouseOut_Container( event ? event : window.event ); }
@@ -4859,6 +4878,7 @@ function MMInput( parent, name, value )
 	AddEvent( this.element_input,		'focus',		function( event ) { return self.Event_OnFocus_Input( event ? event : window.event ); } );
 	AddEvent( this.element_input,		'blur',			function( event ) { return self.Event_OnBlur_Input( event ? event : window.event ); } );
 	AddEvent( this.element_input,		'change',		function( event ) { return self.Event_OnChange_Input( event ? event : window.event ); } );
+	AddEvent( this.element_input,		'input',		function( event ) { return self.Event_OnInput_Input( event ? event : window.event ); } );
 	AddEvent( this.element_input,		'keydown',		function( event ) { return self.Event_OnKeyDown_Input( event ? event : window.event ); } );
 	AddEvent( this.element_input,		'keyup',		function( event ) { return self.Event_OnKeyUp_Input( event ? event : window.event ); } );
 	AddEvent( this.element_input,		'cut',			function( event ) { return self.Event_OnCut_Input( event ? event : window.event ); } );
@@ -4899,6 +4919,38 @@ MMInput.prototype.SetAutoComplete = function( value )
 	if ( typeof value === 'boolean' || typeof value === 'numeric' )		this.element_input.setAttribute( 'autocomplete', value ? 'on' : 'off' );
 	else if ( typeof value === 'string' )								this.element_input.setAttribute( 'autocomplete', value );
 	else																this.element_input.removeAttribute( 'autocomplete' );
+}
+
+MMInput.prototype.SetAutoSize = function( enabled, min_width, max_width, extra_padding )
+{
+	this.autosize_enabled					= stob( enabled );
+
+	if ( !this.autosize_enabled )
+	{
+		cancelAnimationFrame( window[ this.render_autosize_id ] );
+		this.autosize_observer?.disconnect?.();
+	}
+	else
+	{
+		this.autosize_min_width				= stoi_min( min_width, 20 );
+		this.autosize_max_width				= stoi_def_nonneg( max_width, 0 );
+		this.autosize_extra_padding			= stoi_def_nonneg( extra_padding, 0 );
+		this.element_container.style.width	= 'auto';
+		this.render_autosize_id				= requestAnimationFrame( this.event_render_autosize );
+
+		this.autosize_observer				= new IntersectionObserver( ( entries, observer ) => {
+			entries.forEach( entry =>
+			{
+				if ( entry.isIntersecting )
+				{
+					this.CalculateAutoSize();
+				}
+			} );
+		} );
+
+		this.autosize_observer.observe( this.element_container );
+		this.CalculateAutoSize();
+	}
 }
 
 MMInput.prototype.SetTitle = function( text )
@@ -5339,6 +5391,11 @@ MMInput.prototype.SetValue = function( value )
 {
 	this.element_input.value	= value;
 	this.last_validated_value	= value;
+
+	if ( this.autosize_enabled )
+	{
+		this.CalculateAutoSize();
+	}
 }
 
 MMInput.prototype.GetValue = function()
@@ -5365,6 +5422,11 @@ MMInput.prototype.NotifyChange = function()
 {
 	if ( this.last_validated_value !== this.element_input.value )
 	{
+		if ( this.autosize_enabled )
+		{
+			this.CalculateAutoSize();
+		}
+
 		this.last_validated_value = this.element_input.value;
 		this.onChange( this.element_input.value );
 		this.Validate();
@@ -5441,6 +5503,47 @@ MMInput.prototype.GetKeyStackEntry = function()
 	return this.keystackentry;
 }
 
+MMInput.prototype.CalculateAutoSize = function()
+{
+	var width, max_width, min_width, rect_input, rect_container;
+
+	if ( !this.visible )
+	{
+		return;
+	}
+
+	this.element_input.style.width	= '0px';
+	width							= this.element_input.scrollWidth + this.autosize_extra_padding;
+
+	if ( this.autosize_min_width || this.autosize_max_width )
+	{
+		rect_container	= this.element_container.getBoundingClientRect();
+		rect_input		= this.element_input.getBoundingClientRect();
+
+		if ( this.autosize_min_width )
+		{
+			min_width = this.autosize_min_width - ( rect_container.width - rect_input.width );
+
+			if ( width < min_width )
+			{
+				width = min_width;
+			}
+		}
+
+		if ( this.autosize_max_width )
+		{
+			max_width = this.autosize_max_width - ( rect_container.width - rect_input.width );
+
+			if ( width > max_width )
+			{
+				width = max_width;
+			}
+		}
+	}
+
+	this.element_input.style.width	= width + 'px';
+}
+
 MMInput.prototype.Render_Error = function()
 {
 	var dimensions, rect_container;
@@ -5462,6 +5565,14 @@ MMInput.prototype.Render_Error = function()
 
 			this.Redraw_Error();
 		}
+	}
+}
+
+MMInput.prototype.Render_AutoSize = function()
+{
+	if ( this.element_input.scrollWidth > this.element_input.clientWidth && ( !this.autosize_max_width || this.element_input.clientWidth < this.autosize_max_width ) )
+	{
+		this.CalculateAutoSize();
 	}
 }
 
@@ -5544,6 +5655,17 @@ MMInput.prototype.Event_OnBlur_Input = function( e )
 }
 
 MMInput.prototype.Event_OnChange_Input = function( e )
+{
+	if ( this.disabled )
+	{
+		return true;
+	}
+
+	this.NotifyChange();
+	return true;
+}
+
+MMInput.prototype.Event_OnInput_Input = function( e )
 {
 	if ( this.disabled )
 	{
@@ -5886,7 +6008,7 @@ MMInput.prototype.Validate_FloatingPointNumber = function()
 
 MMInput.prototype.Validate_FloatingPointNumber_Silent = function( error /* optional */ )
 {
-	var validate_options = { max_left_digits: 10, max_right_digits: 2 };
+	var validate_options = { max_left_digits: 8, max_right_digits: 2 };
 
 	if ( ValidateFloatingPointNumber( this.element_input.value, validate_options ) )
 	{
@@ -5918,7 +6040,71 @@ MMInput.prototype.Validate_FloatingPointNumber_NonNegative = function()
 
 MMInput.prototype.Validate_FloatingPointNumber_NonNegative_Silent = function( error /* optional */ )
 {
-	var validate_options = { max_left_digits: 10, max_right_digits: 2, disallow_negative: true };
+	var validate_options = { max_left_digits: 8, max_right_digits: 2, disallow_negative: true };
+
+	if ( ValidateFloatingPointNumber( this.element_input.value, validate_options ) )
+	{
+		return true;
+	}
+
+	if ( getVariableType( error ) === 'object' )
+	{
+		error.error_message = validate_options.message;
+	}
+
+	return false;
+}
+
+MMInput.prototype.Validate_Price_NonNegative = function()
+{
+	const error = new Object();
+
+	if ( !this.Validate_Price_NonNegative_Silent( error ) )
+	{
+		this.SetInvalid( error.error_message );
+		this.Select();
+
+		return false;
+	}
+
+	return true;
+}
+
+MMInput.prototype.Validate_Price_NonNegative_Silent = function( error /* optional */ )
+{
+	const validate_options = { max_left_digits: 8, max_right_digits: 8, disallow_negative: true };
+
+	if ( ValidateFloatingPointNumber( this.element_input.value, validate_options ) )
+	{
+		return true;
+	}
+
+	if ( getVariableType( error ) === 'object' )
+	{
+		error.error_message = validate_options.message;
+	}
+
+	return false;
+}
+
+MMInput.prototype.Validate_Price = function()
+{
+	const error = new Object();
+
+	if ( !this.Validate_Price_Silent( error ) )
+	{
+		this.SetInvalid( error.error_message );
+		this.Select();
+
+		return false;
+	}
+
+	return true;
+}
+
+MMInput.prototype.Validate_Price_Silent = function( error /* optional */ )
+{
+	const validate_options = { max_left_digits: 8, max_right_digits: 8 };
 
 	if ( ValidateFloatingPointNumber( this.element_input.value, validate_options ) )
 	{
@@ -5968,6 +6154,1386 @@ MMInput_Password.prototype.ShowPassword = function()
 MMInput_Password.prototype.HidePassword = function()
 {
 	this.element_input.setAttribute( 'type', 'password' );
+}
+
+// MMWeightInput
+////////////////////////////////////////////////////
+
+var MMWeightInput = class
+{
+	#name;
+	#type;
+	#value;
+	#input;
+	#focused;
+	#invalid;
+	#disabled;
+	#readonly;
+	#input_low;
+	#input_high;
+	#weight_unit;
+	#mixed_units;
+	#current_unit;
+	#display_unit;
+	#smaller_units;
+	#min_precision;
+	#element_input;
+	#original_value;
+	#menubutton_units;
+	#element_container;
+	#invalid_error_message;
+
+	constructor( parent, name, value, weight_unit, mixed_units, smaller_units, min_precision, display_unit )
+	{
+		weight_unit = weight_unit?.toLowerCase?.() ?? Store_Weight_Unit?.toLowerCase?.() ?? '';
+
+		if ( [ 'lb', 'oz', 'kg', 'g' ].indexOf( weight_unit ) === -1 )
+		{
+			throw new Error( 'MMWeightInput requires a weight unit of: lb, oz, kg, or g' );
+		}
+
+		this.#name				= name ?? '';
+		this.#type				= 'text';
+		this.#value				= value ?? '';
+		this.#original_value	= value ?? '';
+		this.#weight_unit		= weight_unit;
+		this.#current_unit		= this.#weight_unit;
+		this.#mixed_units		= stob( mixed_units ?? Store_Weight_DisplayMixedUnits );
+		this.#smaller_units		= stob( smaller_units ?? Store_Weight_DisplaySmallerUnits ) && !this.#mixed_units;
+		this.#min_precision		= stoi_range( min_precision ?? Store_Weight_MinimumPrecision, 0, 8, 2 );
+		this.#display_unit		= display_unit ?? Store_Weight_DisplayUnit;
+
+		this.#element_container	= newElement( 'span', { 'class': 'mm_weight_input_container small' }, null, parent );
+
+		this.#redrawDisplay();
+	}
+
+	//
+	// Public Functions
+	//
+
+	SetValue( value )
+	{
+
+		this.#original_value		= value;
+		this.#value					= value;
+		this.#element_input.value	= value;
+
+		this.#setDisplayValue( value );
+	}
+
+	GetValue()
+	{
+		return this.#value;
+	}
+
+	GetFormattedValue()
+	{
+		var unit_low, unit_high, display_unit;
+
+		if ( this.#mixed_units )
+		{
+			const { value_high, value_low } = this.#valueInMixedUnits( this.#getConvertedValue() );
+
+			unit_high	= this.#unitIsMetric( this.#weight_unit ) ? 'kg' : 'lb';
+			unit_low	= this.#unitIsMetric( this.#weight_unit ) ? 'g' : 'oz';
+
+			if ( this.#weight_unit === 'kg' || this.#weight_unit === 'lb' )		unit_high	= this.#display_unit;
+			else																unit_low	= this.#display_unit;
+
+			if ( stoi( value_high ) <= 0 )
+			{
+				return `${Decimal_Pad( value_low, this.#min_precision )} ${unit_low}`;
+			}
+
+			return `${value_high} ${unit_high}, ${Decimal_Pad( value_low, this.#min_precision )} ${unit_low}`;
+		}
+		else if ( this.#smaller_units )
+		{
+			const { unit, value } = this.#valueInSmallerUnits( this.#getConvertedValue(), false );
+
+			if ( unit === this.#weight_unit )	display_unit = this.#display_unit;
+			else								display_unit = unit;
+
+			return `${Decimal_Pad( value, this.#min_precision )} ${display_unit}`;
+		}
+		else
+		{
+			const { value } = this.#valueInDefault( this.#getConvertedValue() );
+
+			return `${Decimal_Pad( value, this.#min_precision )} ${this.#display_unit}`;
+		}
+	}
+
+	Modified()
+	{
+		return this.#original_value === this.#value;
+	}
+
+	SetAutoSize( enabled, min_width, max_width, extra_padding )
+	{
+		if ( enabled )	this.#element_container.classList.add( 'auto_width' );
+		else			this.#element_container.classList.remove( 'auto_width' );
+
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetAutoSize( enabled, min_width, max_width, extra_padding );
+			this.#input_low.SetAutoSize( enabled, min_width, max_width, extra_padding );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetAutoSize( enabled, min_width, max_width, extra_padding );
+		}
+		else
+		{
+			this.#input.SetAutoSize( enabled, min_width, max_width, extra_padding );
+		}
+	}
+
+	SetTitle( text )
+	{
+		if ( this.#mixed_units )		this.#input_high.SetTitle( text );
+		else if ( this.#smaller_units )	this.#input.SetTitle( text );
+		else							this.#input.SetTitle( text );
+	}
+
+	SetToolTip( node_or_text )
+	{
+		if ( this.#mixed_units )		this.#input_high.SetToolTip( node_or_text );
+		else if ( this.#smaller_units )	this.#input.SetToolTip( node_or_text );
+		else							this.#input.SetToolTip( node_or_text );
+	}
+
+	SetName( name )
+	{
+		this.#element_input.name = name;
+	}
+
+	SetType( type )
+	{
+		this.#type = type;
+		this.#setTypeLowLevel();
+	}
+
+	SetMaxLength( length )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetMaxLength( length );
+			this.#input_low.SetMaxLength( length );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetMaxLength( length );
+		}
+		else
+		{
+			this.#input.SetMaxLength( length );
+		}
+	}
+
+	SetDisplayInMixedUnits( mixed_units )
+	{
+		this.#mixed_units = mixed_units;
+
+		if ( this.#mixed_units )
+		{
+			this.#smaller_units = false;
+		}
+
+		this.#redrawDisplay();
+	}
+
+	GetDisplayInMixedUnits()
+	{
+		return this.#mixed_units;
+	}
+
+	SetDisplayInSmallerUnits( smaller_units )
+	{
+		this.#smaller_units = smaller_units;
+
+		if ( this.#smaller_units )
+		{
+			this.#mixed_units = false;
+		}
+
+		this.#redrawDisplay();
+	}
+
+	GetDisplayInSmallerUnits()
+	{
+		return this.#smaller_units;
+	}
+
+	SetDisplayInSmallerUnitsCurrentUnit( unit )
+	{
+		this.#setCurrentUnit( unit );
+	}
+
+	GetDisplayInSmallerUnitsCurrentUnit()
+	{
+		return this.#current_unit;
+	}
+
+	SetMinimumPrecision( min_precision )
+	{
+		this.#min_precision = min_precision;
+		this.#redrawDisplay();
+	}
+
+	SetSelectOnFocus( select_on_focus )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetSelectOnFocus( select_on_focus );
+			this.#input_low.SetSelectOnFocus( select_on_focus );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetSelectOnFocus( select_on_focus );
+		}
+		else
+		{
+			this.#input.SetSelectOnFocus( select_on_focus );
+		}
+	}
+
+	SetClassName( classname )
+	{
+		this.#element_container.className = classname;
+	}
+
+	AddClassName( classname )
+	{
+		classNameAddIfMissing( this.#element_container, classname );
+	}
+
+	RemoveClassName( classname, allow_regex_in_classname )
+	{
+		classNameRemoveIfPresent( this.#element_container, classname, allow_regex_in_classname );
+	}
+
+	GetClassName()
+	{
+		return this.#element_container.className;
+	}
+
+	SetInputClassName( classname )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetClassName( classname );
+			this.#input_low.SetClassName( classname );
+
+			this.#input_high.AddClassName( 'mm_weight_input_mixed_units_input' );
+			this.#input_low.AddClassName( 'mm_weight_input_mixed_units_input' );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetClassName( classname );
+			this.#input.AddClassName( 'mm_weight_input_smaller_units_input' );
+		}
+		else
+		{
+			this.#input.SetClassName( classname );
+		}
+	}
+
+	AddInputClassName( classname )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.AddClassName( classname );
+			this.#input_low.AddClassName( classname );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.AddClassName( classname );
+		}
+		else
+		{
+			this.#input.AddClassName( classname );
+		}
+	}
+
+	RemoveInputClassName( classname, allow_regex_in_classname )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.RemoveClassName( classname, allow_regex_in_classname );
+			this.#input_low.RemoveClassName( classname, allow_regex_in_classname );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.RemoveClassName( classname, allow_regex_in_classname );
+		}
+		else
+		{
+			this.#input.RemoveClassName( classname, allow_regex_in_classname );
+		}
+	}
+
+	SetErrorMessageMatchContainerWidth( match_width )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetErrorMessageMatchContainerWidth( match_width );
+			this.#input_low.SetErrorMessageMatchContainerWidth( match_width );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetErrorMessageMatchContainerWidth( match_width );
+		}
+		else
+		{
+			this.#input.SetErrorMessageMatchContainerWidth( match_width );
+		}
+	}
+
+	SetErrorClassName( classname )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetErrorClassName( classname );
+			this.#input_low.SetErrorClassName( classname );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetErrorClassName( classname );
+		}
+		else
+		{
+			this.#input.SetErrorClassName( classname );
+		}
+	}
+
+	GetErrorClassName()
+	{
+		if ( this.#mixed_units )		return this.#input_high.GetErrorClassName();
+		else if ( this.#smaller_units )	return this.#input.GetErrorClassName();
+		else							return this.#input.GetErrorClassName();
+	}
+
+	SetOnFocusHandler( fn1 )
+	{
+		this.onFocus = fn1;
+	}
+
+	SetOnBlurHandler( fn1 )
+	{
+		this.onBlur = fn1;
+	}
+
+	SetOnChangeHandler( fn1 )
+	{
+		this.onChange = fn1;
+	}
+
+	SetOnValidateHandler( fn1 )
+	{
+		this.onValidate = fn1;
+	}
+
+	SetOnEnterHandler( fn1 )
+	{
+		this.onEnter = fn1;
+	}
+
+	SetOnEscapeHandler( fn1 )
+	{
+		this.onEsc = fn1;
+	}
+
+	Enable()
+	{
+		if ( !this.#disabled )
+		{
+			return;
+		}
+
+		this.#disabled = false;
+		this.#element_container.classList.remove( 'disabled' );
+		this.#element_input.removeAttribute( 'disabled' );
+
+		if ( this.#mixed_units )
+		{
+			this.#input_high.Enable();
+			this.#input_low.Enable();
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.Enable();
+			this.#menubutton_units.Enable();
+		}
+		else
+		{
+			this.#input.Enable();
+		}
+	}
+
+	Disable()
+	{
+		if ( this.#disabled )
+		{
+			return;
+		}
+
+		this.#disabled = true;
+		this.#element_container.classList.add( 'disabled' );
+		this.#element_input.setAttribute( 'disabled', '' );
+
+		if ( this.#mixed_units )
+		{
+			this.#input_high.Disable();
+			this.#input_low.Disable();
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.Disable();
+			this.#menubutton_units.Disable();
+		}
+		else
+		{
+			this.#input.Disable();
+		}
+	}
+
+	IsEnabled()
+	{
+		return !this.#disabled;
+	}
+
+	SetReadOnly( readonly )
+	{
+		this.#readonly = readonly ? true : false;
+
+		if ( this.#readonly )	classNameAddIfMissing( this.#element_container, 'readonly' );
+		else					classNameRemoveIfPresent( this.#element_container, 'readonly' );
+
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetReadOnly( this.#readonly );
+			this.#input_low.SetReadOnly( this.#readonly );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetReadOnly( this.#readonly );
+		}
+		else
+		{
+			this.#input.SetReadOnly( this.#readonly );
+		}
+	}
+
+	GetReadOnly()
+	{
+		return this.#readonly;
+	}
+
+	SetTabIndex( index )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetTabIndex( index );
+			this.#input_low.SetTabIndex( index );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetTabIndex( index );
+		}
+		else
+		{
+			this.#input.SetTabIndex( index );
+		}
+	}
+
+	Show()
+	{
+		this.#element_container.classList.remove( 'hidden' );
+
+		if ( this.#mixed_units )
+		{
+			this.#input_high.Show();
+			this.#input_low.Show();
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.Show();
+			this.#menubutton_units.Show();
+		}
+		else
+		{
+			this.#input.Show();
+		}
+	}
+
+	Hide()
+	{
+		this.#element_container.classList.add( 'hidden' );
+
+		if ( this.#mixed_units )
+		{
+			this.#input_high.Hide();
+			this.#input_low.Hide();
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.Hide();
+			this.#menubutton_units.Hide();
+		}
+		else
+		{
+			this.#input.Hide();
+		}
+	}
+
+	Select()
+	{
+		if ( this.#disabled )
+		{
+			return;
+		}
+
+		if ( this.#mixed_units )		this.#input_high.Select();
+		else if ( this.#smaller_units )	this.#input.Select();
+		else							this.#input.Select();
+	}
+
+	Focus()
+	{
+		if ( this.#disabled )
+		{
+			return;
+		}
+
+		if ( this.#mixed_units )		this.#input_high.Focus();
+		else if ( this.#smaller_units )	this.#input.Focus();
+		else							this.#input.Focus();
+	}
+
+	Blur()
+	{
+
+		if ( this.#mixed_units )		this.#input_high.Blur();
+		else if ( this.#smaller_units )	this.#input.Blur();
+		else							this.#input.Blur();
+	}
+
+	SetInvalid( error_message )
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetInvalid( error_message );
+			this.#input_low.SetInvalid( error_message );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetInvalid( error_message );
+			this.#menubutton_units.SetInvalid( error_message );
+		}
+		else
+		{
+			this.#input.SetInvalid( error_message );
+		}
+
+		this.onSetInvalid();
+	}
+
+	ClearInvalid()
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.ClearInvalid();
+			this.#input_low.ClearInvalid();
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.ClearInvalid();
+			this.#menubutton_units.ClearInvalid();
+		}
+		else
+		{
+			this.#input.ClearInvalid();
+		}
+
+		this.onClearInvalid();
+	}
+
+	GetInvalid()
+	{
+		if ( this.#mixed_units )		return this.#input_high.GetInvalid() || this.#input_low.GetInvalid();
+		else if ( this.#smaller_units )	return this.#input.GetInvalid();
+		else							return this.#input.GetInvalid();
+	}
+
+	GetInvalid_Message()
+	{
+		if ( this.#mixed_units )		return this.#input_high.GetInvalid() ? this.#input_high.GetInvalid_Message() : this.#input_low.GetInvalid_Message();
+		else if ( this.#smaller_units )	return this.#input.GetInvalid_Message();
+		else							return this.#input.GetInvalid_Message();
+	}
+
+	Container()
+	{
+		return this.#element_container;
+	}
+
+	ContainedInputs()
+	{
+		const inputs = new Array();
+
+		if ( this.#mixed_units )
+		{
+			inputs.push( this.#input_high );
+			inputs.push( this.#input_low );
+		}
+		else if ( this.#smaller_units )
+		{
+			inputs.push( this.#input );
+		}
+		else
+		{
+			inputs.push( this.#input );
+		}
+
+		return inputs;
+	}
+
+	Validate()
+	{
+		if ( this.#mixed_units )		return this.#validateMixedUnits();
+		else if ( this.#smaller_units )	return this.#input.Validate();
+		else							return this.#input.Validate();
+	}
+
+	Validate_Weight()
+	{
+		const error = new Object();
+
+		if ( !this.Validate_Weight_Silent( error ) )
+		{
+			this.SetInvalid( error.error_message );
+			this.Select();
+
+			return false;
+		}
+
+		return true;
+	}
+
+	Validate_Weight_Silent( error /* optional */ )
+	{
+		const validate_options = { max_left_digits: 8, max_right_digits: 8, disallow_negative: true };
+
+		if ( ValidateFloatingPointNumber( this.#value, validate_options ) )
+		{
+			return true;
+		}
+
+		if ( getVariableType( error ) === 'object' )
+		{
+			error.error_message = validate_options.message;
+		}
+
+		return false;
+	}
+
+	//
+	// Events
+	//
+
+	#onFocus( e )
+	{
+		if ( this.#focused )
+		{
+			return;
+		}
+
+		this.#focused = true;
+		this.onFocus( e );
+	}
+
+	#onBlur( e )
+	{
+		if ( !this.#focused )
+		{
+			return;
+		}
+
+		this.#focused = false;
+		this.onBlur( e );
+	}
+
+	#onBlurMixedUnitHigh( e )
+	{
+		const input_high_value	= this.#input_high.GetValue();
+		const input_low_value	= this.#input_low.GetValue();
+
+		if ( !ValueIsEmpty( input_high_value ) && !isNaN( input_high_value ) && !ValueIsEmpty( input_low_value ) && !isNaN( input_low_value ) && String( input_high_value ).indexOf( '.' ) !== -1 )
+		{
+			this.#setDisplayValueMixedUnits( input_high_value );
+		}
+
+		return this.#onBlur( e );
+	}
+
+	#onBlurMixedUnitLow( e )
+	{
+		const input_high_value	= this.#input_high.GetValue();
+		const input_low_value	= this.#input_low.GetValue();
+
+		if ( !ValueIsEmpty( input_high_value ) && !isNaN( input_high_value ) && !ValueIsEmpty( input_low_value ) && !isNaN( input_low_value ) )
+		{
+			this.#setDisplayValueMixedUnits( this.#getConvertedValue() );
+		}
+
+		return this.#onBlur( e );
+	}
+
+	#onBlurSmallerUnits( e )
+	{
+		const input_value = this.#input.GetValue();
+
+		if ( this.#current_unit !== this.#weight_unit && !ValueIsEmpty( input_value ) && !isNaN( input_value ) )
+		{
+			this.#setDisplayValueSmallerUnits( this.#getConvertedValue(), true );
+		}
+
+		return this.#onBlur( e );
+	}
+
+	#onChange()
+	{
+		const value = this.#getConvertedValue();
+
+		if ( this.#value !== value )
+		{
+			this.#value					= value;
+			this.#element_input.value	= value;
+
+			this.onChange( value );
+		}
+	}
+
+	#validateMixedUnits()
+	{
+		this.#input_high.ClearInvalid();
+		this.#input_low.ClearInvalid();
+
+		if ( !this.#onValidateMixedUnits() )
+		{
+			return false;
+		}
+
+		return true;
+	}
+
+	#onValidateMixedUnits()
+	{
+		var valid, value, validate_options;
+
+		this.#input_high.ClearInvalid();
+		this.#input_low.ClearInvalid();
+
+		valid				= true;
+		validate_options	= {};
+
+		if ( !ValidateFloatingPointNumber( this.#input_high.GetValue(), validate_options ) )
+		{
+			this.#input_high.SetInvalid( validate_options.message );
+			valid = false;
+		}
+
+		if ( !ValidateFloatingPointNumber( this.#input_low.GetValue(), validate_options ) )
+		{
+			this.#input_low.SetInvalid( validate_options.message );
+			valid = false;
+		}
+
+		if ( !valid )
+		{
+			return false;
+		}
+
+		value = this.#getConvertedValue();
+
+		if ( isNaN( value ) )
+		{
+			this.#input_high.SetInvalid( `Weight '${value}' in ${this.#weight_unit} is not a number` );
+			this.#input_low.SetInvalid( `Weight '${value}' in ${this.#weight_unit} is not a number` );
+
+			return false;
+		}
+
+		const { integer, integer_length, decimal, decimal_length } = this.#splitNumber( value );
+
+		if ( integer_length > 8 )
+		{
+			this.#input_high.SetInvalid( `Weight '${value}' in ${this.#weight_unit} must be 8 digits or less to the left of the decimal point` );
+			this.#input_low.SetInvalid( `Weight '${value}' in ${this.#weight_unit} must be 8 digits or less to the left of the decimal point` );
+
+			return false;
+		}
+		else if ( decimal_length > 8 )
+		{
+			this.#input_high.SetInvalid( `Weight '${value}' in ${this.#weight_unit} must be 8 digits or less to the right of the decimal point` );
+			this.#input_low.SetInvalid( `Weight '${value}' in ${this.#weight_unit} must be 8 digits or less to the right of the decimal point` );
+
+			return false;
+		}
+
+		return this.#onValidateLowLevel( value );
+	}
+
+	#onValidateSmallerUnits()
+	{
+		const value = this.#getConvertedValue();
+
+		if ( ValueIsEmpty( value ) || isNaN( value ) )
+		{
+			this.#input.SetInvalid( `Please enter a number` );
+			return false;
+		}
+
+		const { integer, integer_length, decimal, decimal_length } = this.#splitNumber( value );
+
+		if ( integer_length > 8 )
+		{
+			this.#input.SetInvalid( `Weight '${value}' in ${this.#weight_unit} must be 8 digits or less to the left of the decimal point` );
+			return false;
+		}
+		else if ( decimal_length > 8 )
+		{
+			this.#input.SetInvalid( `Weight '${value}' in ${this.#weight_unit} must be 8 digits or less to the right of the decimal point` );
+			return false;
+		}
+
+		return this.#onValidateLowLevel( value );
+	}
+
+	#onValidateDefault()
+	{
+		const value				= this.#getConvertedValue();
+		const validate_options	= { disallow_negative: true, max_left_digits: 8, max_right_digits: 8 };
+
+		if ( !ValidateFloatingPointNumber( value, validate_options ) )
+		{
+			this.#input.SetInvalid( validate_options.message );
+			return false;
+		}
+
+		return this.#onValidateLowLevel( value );
+	}
+
+	#onValidateLowLevel( value )
+	{
+		this.ClearInvalid();
+
+		if ( !this.onValidate( this.#value ) )
+		{
+			if ( !this.GetInvalid() )
+			{
+				this.SetInvalid( '' );
+			}
+
+			return false;
+		}
+
+		return true;
+	}
+
+	//
+	// Helper Functions
+	//
+
+	#setDisplayValue( value )
+	{
+		if ( this.#mixed_units )		this.#setDisplayValueMixedUnits( value );
+		else if ( this.#smaller_units )	this.#setDisplayValueSmallerUnits( value );
+		else							this.#setDisplayValueDefault( value );
+	}
+
+	#setDisplayValueMixedUnits( raw_value )
+	{
+		const { value_high, value_low } = this.#valueInMixedUnits( raw_value );
+
+		this.#input_high.SetValue( value_high );
+		this.#input_low.SetValue( value_low );
+	}
+
+	#setDisplayValueSmallerUnits( raw_value, ignore_unit_shift )
+	{
+		const { unit, value } = this.#valueInSmallerUnits( raw_value, ignore_unit_shift );
+
+		this.#input.SetValue( value );
+
+		if ( !ignore_unit_shift && unit !== this.#current_unit )
+		{
+			this.#current_unit = unit;
+
+			this.#menubutton_units.SetText( this.#current_unit );
+			this.#menubutton_units.MenuItemList_Map( ( item, data ) =>
+			{
+				if ( data === this.#current_unit )	item.AddClassName( 'mm10_menubutton_menu_item_persistent_selected' );
+				else								item.RemoveClassName( 'mm10_menubutton_menu_item_persistent_selected' );
+			} );
+		}
+	}
+
+	#setDisplayValueDefault( raw_value )
+	{
+		const { value } = this.#valueInDefault( raw_value );
+
+		this.#input.SetValue( value );
+	}
+
+	#setTypeLowLevel()
+	{
+		if ( this.#mixed_units )
+		{
+			this.#input_high.SetType( this.#type );
+			this.#input_low.SetType( this.#type );
+		}
+		else if ( this.#smaller_units )
+		{
+			this.#input.SetType( this.#type );
+		}
+		else
+		{
+			this.#input.SetType( this.#type );
+		}
+	}
+
+	#redrawDisplay()
+	{
+		EmptyElement_NoResize( this.#element_container );
+
+		this.#element_input = newElement( 'input', { type: 'hidden', name: this.#name, value: this.#value }, null, this.#element_container );
+
+		if ( this.#mixed_units )		return this.#redrawDisplayMixedUnits();
+		else if ( this.#smaller_units )	return this.#redrawDisplaySmallerUnits();
+		else							return this.#redrawDisplayDefault();
+	}
+
+	#redrawDisplayMixedUnits()
+	{
+		this.#input_high						= new MMInput( this.#element_container, '', '' );
+		this.#input_high.Validate				= () => { return this.#validateMixedUnits(); };
+		this.#input_high.onAddKeyStackEntry		= ( keystackentry ) => { return this.onAddKeyStackEntry( keystackentry, this.#input_high ); };
+		this.#input_high.onRemoveKeyStackEntry	= ( keystackentry ) => { return this.onRemoveKeyStackEntry( keystackentry, this.#input_high ); };
+		this.#input_high.onRetrieveErrorParent	= () => { return this.onRetrieveErrorParent(); };
+		this.#input_high.SetClassName( 'mm_weight_input mm_weight_input_mixed_units_input' );
+		this.#input_high.SetOnFocusHandler( ( e ) => { return this.#onFocus( e ); } );
+		this.#input_high.SetOnBlurHandler( ( e ) => { return this.#onBlurMixedUnitHigh( e ); } );
+		this.#input_high.SetOnEnterHandler( ( e ) => { return this.onEnter( e, this.#input_high ); } );
+		this.#input_high.SetOnEscapeHandler( ( e ) => { return this.onEsc( e, this.#input_high ); } );
+		this.#input_high.SetOnChangeHandler( ( value ) => { return this.#onChange(); } );
+		this.#input_high.SetOnValidateHandler( ( value ) => { return this.#onValidateMixedUnits(); } );
+
+		if ( this.#unitIsMetric( this.#weight_unit ) )	this.#input_high.SetLabel( 'kg' );
+		else											this.#input_high.SetLabel( 'lb' );
+
+		this.#input_low							= new MMInput( this.#element_container, '', '' );
+		this.#input_low.Validate				= () => { return this.#validateMixedUnits(); };
+		this.#input_low.onAddKeyStackEntry		= ( keystackentry ) => { return this.onAddKeyStackEntry( keystackentry, this.#input_low ); };
+		this.#input_low.onRemoveKeyStackEntry	= ( keystackentry ) => { return this.onRemoveKeyStackEntry( keystackentry, this.#input_low ); };
+		this.#input_low.onRetrieveErrorParent	= () => { return this.onRetrieveErrorParent(); };
+		this.#input_low.SetClassName( 'mm_weight_input mm_weight_input_mixed_units_input' );
+		this.#input_low.SetOnFocusHandler( ( e ) => { return this.#onFocus( e ); } );
+		this.#input_low.SetOnBlurHandler( ( e ) => { return this.#onBlurMixedUnitLow( e ); } );
+		this.#input_low.SetOnEnterHandler( ( e ) => { return this.onEnter( e, this.#input_low ); } );
+		this.#input_low.SetOnEscapeHandler( ( e ) => { return this.onEsc( e, this.#input_low ); } );
+		this.#input_low.SetOnChangeHandler( ( value ) => { return this.#onChange(); } );
+		this.#input_low.SetOnValidateHandler( ( value ) => { return this.#onValidateMixedUnits(); } );
+
+		if ( this.#unitIsMetric( this.#weight_unit ) )	this.#input_low.SetLabel( 'g' );
+		else											this.#input_low.SetLabel( 'oz' );
+
+		this.SetValue( this.#value );
+		this.SetType( this.#type );
+	}
+
+	#redrawDisplaySmallerUnits()
+	{
+		this.#input											= new MMInput( this.#element_container, '', '' );
+		this.#input.onAddKeyStackEntry						= ( keystackentry ) => { return this.onAddKeyStackEntry( keystackentry, this.#input ); };
+		this.#input.onRemoveKeyStackEntry					= ( keystackentry ) => { return this.onRemoveKeyStackEntry( keystackentry, this.#input ); };
+		this.#input.onRetrieveErrorParent					= () => { return this.onRetrieveErrorParent(); };
+		this.#input.SetClassName( 'mm_weight_input mm_weight_input_smaller_units_input' );
+		this.#input.SetOnFocusHandler( ( e ) => { return this.#onFocus( e ); } );
+		this.#input.SetOnBlurHandler( ( e ) => { return this.#onBlurSmallerUnits( e ); } );
+		this.#input.SetOnEnterHandler( ( e ) => { return this.onEnter( e, this.#input ); } );
+		this.#input.SetOnEscapeHandler( ( e ) => { return this.onEsc( e, this.#input ); } );
+		this.#input.SetOnChangeHandler( ( value ) => { return this.#onChange(); } );
+		this.#input.SetOnValidateHandler( ( value ) => { return this.#onValidateSmallerUnits(); } );
+
+		this.#input.Event_OnMouseDown_Container = ( e ) =>
+		{
+			if ( e.target === this.#menubutton_units.Container() || containsChild( this.#menubutton_units.Container(), e.target ) )
+			{
+				return true;
+			}
+
+			return MMInput.prototype.Event_OnMouseDown_Container.call( this.#input, e );
+		}
+
+		this.#menubutton_units								= new MMMenuButton( this.#weight_unit, this.#input.Container() );
+		this.#menubutton_units.ContainedButton().onFocus	= ( e ) => { this.#input.AddClassName( 'focus' ); return this.#onFocus( e ); };
+		this.#menubutton_units.ContainedButton().onBlur		= ( e ) => { this.#input.RemoveClassName( 'focus' ); return this.#onBlur( e ); };
+		this.#menubutton_units.SetClassName( 'mm_weight_input_units' );
+		this.#menubutton_units.SetMenuClassName( 'mm_weight_input_units_menu mm10_menubutton_container_style_common_menu' );
+		this.#menubutton_units.SetButtonClassName( 'mm_weight_input_units_button' );
+		this.#menubutton_units.SetAnimateMenu( true );
+		this.#menubutton_units.SetMenuAsRootMenu( true );
+		this.#menubutton_units.SetMenuAsRootMenu_AutosizesConditionally( true );
+
+		if ( this.#unitIsMetric( this.#weight_unit ) )
+		{
+			this.#menubutton_units.Menu_Append_Item( 'kg', ( e, data ) => { this.#setCurrentUnit( data ); }, 'kg' );
+			this.#menubutton_units.Menu_Append_Item( 'g', ( e, data ) => { this.#setCurrentUnit( data ); }, 'g' );
+		}
+		else
+		{
+			this.#menubutton_units.Menu_Append_Item( 'lb', ( e, data ) => { this.#setCurrentUnit( data ); }, 'lb' );
+			this.#menubutton_units.Menu_Append_Item( 'oz', ( e, data ) => { this.#setCurrentUnit( data ); }, 'oz' );
+		}
+
+		this.#menubutton_units.MenuItemList_Map( ( item, data ) =>
+		{
+			if ( data === this.#current_unit )	item.AddClassName( 'mm10_menubutton_menu_item_persistent_selected' );
+			else								item.RemoveClassName( 'mm10_menubutton_menu_item_persistent_selected' );
+		} );
+
+		this.SetValue( this.#value );
+		this.SetType( this.#type );
+	}
+
+	#redrawDisplayDefault()
+	{
+		this.#input							= new MMInput( this.#element_container, this.#name, this.#value );
+		this.#input.onAddKeyStackEntry		= ( keystackentry ) => { return this.onAddKeyStackEntry( keystackentry, this.#input ); };
+		this.#input.onRemoveKeyStackEntry	= ( keystackentry ) => { return this.onRemoveKeyStackEntry( keystackentry, this.#input ); };
+		this.#input.onRetrieveErrorParent	= () => { return this.onRetrieveErrorParent(); };
+		this.#input.SetClassName( 'mm_weight_input' );
+		this.#input.SetOnFocusHandler( ( e ) => { return this.#onFocus( e ); } );
+		this.#input.SetOnBlurHandler( ( e ) => { return this.#onBlur( e ); } );
+		this.#input.SetOnEnterHandler( ( e ) => { return this.onEnter( e, this.#input ); } );
+		this.#input.SetOnEscapeHandler( ( e ) => { return this.onEsc( e, this.#input ); } );
+		this.#input.SetOnChangeHandler( ( value ) => { return this.#onChange(); } );
+		this.#input.SetOnValidateHandler( ( value ) => { return this.#onValidateDefault(); } );
+
+		this.SetValue( this.#value );
+		this.SetType( this.#type );
+	}
+
+	#setCurrentUnit( unit )
+	{
+		if ( this.#mixed_units || !this.#smaller_units )									return;
+		else if ( this.#current_unit === unit )												return;
+		else if ( this.#unitIsMetric( this.#current_unit ) !== this.#unitIsMetric( unit ) )	return;
+
+		const value = this.#getConvertedValue( true );
+
+		this.#menubutton_units.SetText( unit );
+		this.#menubutton_units.MenuItemList_Map( ( item, data ) =>
+		{
+			if ( data === unit )	item.AddClassName( 'mm10_menubutton_menu_item_persistent_selected' );
+			else					item.RemoveClassName( 'mm10_menubutton_menu_item_persistent_selected' );
+		} );
+
+		this.#current_unit = unit;
+
+		if ( !ValueIsEmpty( value ) && !isNaN( value ) )
+		{
+			this.#input.ClearInvalid();
+			this.#setDisplayValueSmallerUnits( value, true );
+			this.Validate();
+		}
+	}
+
+	#unitIsMetric( unit )
+	{
+		return ( unit === 'kg' || unit === 'g' );
+	}
+
+	#valueInMixedUnits( raw_value )
+	{
+		var value_low, value_high;
+
+		if ( ValueIsEmpty( raw_value ) )
+		{
+			value_high	= '';
+			value_low	= '';
+		}
+		else if ( isNaN( raw_value ) )
+		{
+			value_high	= raw_value;
+			value_low	= '';
+		}
+		else if ( this.#weight_unit === 'lb' )
+		{
+			const { integer, decimal } = this.#splitNumber( raw_value );
+
+			value_high	= integer;
+			value_low	= decimal * 16;
+		}
+		else if ( this.#weight_unit === 'oz' )
+		{
+			const converted_value		= raw_value / 16;
+			const { integer, decimal }	= this.#splitNumber( converted_value );
+
+			value_high	= integer;
+			value_low	= decimal * 16;
+		}
+		else if ( this.#weight_unit === 'kg' )
+		{
+			const { integer, decimal } = this.#splitNumber( raw_value );
+
+			value_high	= integer;
+			value_low	= decimal * 1000;
+		}
+		else if ( this.#weight_unit === 'g' )
+		{
+			const converted_value		= raw_value / 1000;
+			const { integer, decimal }	= this.#splitNumber( converted_value );
+
+			value_high	= integer;
+			value_low	= decimal * 1000;
+		}
+
+		return {
+			value_high:	value_high,
+			value_low:	value_low
+		};
+	}
+
+	#valueInSmallerUnits( raw_value, ignore_unit_shift )
+	{
+		var unit, value;
+
+		unit = this.#current_unit;
+
+		if ( ValueIsEmpty( raw_value ) || isNaN( raw_value ) )
+		{
+			value = raw_value;
+		}
+		else
+		{
+			if ( !ignore_unit_shift )
+			{
+				if ( raw_value >= 1 )
+				{
+					unit = this.#weight_unit;
+				}
+				else
+				{
+					if ( this.#weight_unit === 'lb' )
+					{
+						unit = 'oz';
+					}
+					else if ( this.#weight_unit === 'kg' )
+					{
+						unit = 'g';
+					}
+					else
+					{
+						//
+						// Do nothing. Weight is already in the smallest unit
+						//
+					}
+				}
+			}
+
+			value = raw_value;
+
+			//
+			// Standard
+			//
+
+			if ( unit === 'lb' && this.#weight_unit === 'lb' )		value = raw_value;
+			else if ( unit === 'lb' && this.#weight_unit === 'oz' )	value = raw_value / 16;
+			else if ( unit === 'oz' && this.#weight_unit === 'lb' )	value = raw_value * 16;
+			else if ( unit === 'oz' && this.#weight_unit === 'oz' )	value = raw_value;
+
+			//
+			// Metric
+			//
+
+			else if ( unit === 'kg' && this.#weight_unit === 'kg' )	value = raw_value;
+			else if ( unit === 'kg' && this.#weight_unit === 'g' )	value = raw_value / 1000;
+			else if ( unit === 'g' && this.#weight_unit === 'kg' )	value = raw_value * 1000;
+			else if ( unit === 'g' && this.#weight_unit === 'g' )	value = raw_value;
+
+			const { integer, decimal, decimal_length } = this.#splitNumber( value );
+			value = decimal_length < this.#min_precision ? stod( value ).toFixed( this.#min_precision ) : value;
+		}
+
+		return {
+			unit:	unit,
+			value:	value
+		};
+	}
+
+	#valueInDefault( raw_value )
+	{
+		var value;
+
+		if ( ValueIsEmpty( raw_value ) || isNaN( raw_value ) )
+		{
+			value = raw_value;
+		}
+		else
+		{
+			const { integer, decimal, decimal_length } = this.#splitNumber( raw_value );
+			value = decimal_length < this.#min_precision ? stod( raw_value ).toFixed( this.#min_precision ) : raw_value;
+		}
+
+		return {
+			value: value
+		};
+	}
+
+	#getConvertedValue( force_truncate )
+	{
+		var value, value_low, value_high, input_value;
+
+		if ( this.#mixed_units )
+		{
+			value_high	= this.#input_high.GetValue();
+			value_low	= this.#input_low.GetValue();
+
+			if ( ValueIsEmpty( value_high ) && ValueIsEmpty( value_low ) )
+			{
+				return '';
+			}
+
+			if ( ( !ValueIsEmpty( value_high ) && isNaN( value_high ) ) || ( !ValueIsEmpty( value_low ) && isNaN( value_low ) ) )
+			{
+				return `${value_high}${value_low}`; // Allow validation of non-numeric values
+			}
+
+			if ( this.#weight_unit === 'lb' )					value = stod_def( value_high, 0 ) + ( stod_def( value_low, 0 ) / 16 );
+			else if ( this.#weight_unit === 'oz' )				value = ( stod_def( value_high, 0 ) * 16 ) + stod_def( value_low, 0 );
+			else if ( this.#weight_unit === 'kg' )				value = stod_def( value_high, 0 ) + ( stod_def( value_low, 0 ) / 1000 );
+			else if ( this.#weight_unit === 'g' )				value = ( stod_def( value_high, 0 ) * 1000 ) + stod_def( value_low, 0 );
+
+			//
+			// Always truncate to 8 decimal places since this is always a converted value
+			//
+
+			value = this.#getTruncatedValue( value );
+		}
+		else if ( this.#smaller_units )
+		{
+			input_value	= this.#input.GetValue();
+
+			//
+			// Non-Numeric Value
+			//
+
+			if ( ValueIsEmpty( input_value ) || isNaN( input_value ) )
+			{
+				return input_value;
+			}
+
+			//
+			// Standard
+			//
+
+			else if ( this.#current_unit === 'lb' && this.#weight_unit === 'lb' )	value = stod_def( input_value, 0 );
+			else if ( this.#current_unit === 'lb' && this.#weight_unit === 'oz' )	value = stod_def( input_value, 0 ) * 16;
+			else if ( this.#current_unit === 'oz' && this.#weight_unit === 'lb' )	value = stod_def( input_value, 0 ) / 16;
+			else if ( this.#current_unit === 'oz' && this.#weight_unit === 'oz' )	value = stod_def( input_value, 0 );
+
+			//
+			// Metric
+			//
+
+			else if ( this.#current_unit === 'kg' && this.#weight_unit === 'kg' )	value = stod_def( input_value, 0 );
+			else if ( this.#current_unit === 'kg' && this.#weight_unit === 'g' )	value = stod_def( input_value, 0 ) * 1000;
+			else if ( this.#current_unit === 'g' && this.#weight_unit === 'kg' )	value = stod_def( input_value, 0 ) / 1000;
+			else if ( this.#current_unit === 'g' && this.#weight_unit === 'g' )		value = stod_def( input_value, 0 );
+
+			//
+			// Truncate value to 8 decimal places if the current unit is not the same as
+			// the weight unit. Otherwise, allow longer decimal values to be returned
+			// and validated.
+			//
+
+			if ( force_truncate || this.#current_unit !== this.#weight_unit )
+			{
+				value = this.#getTruncatedValue( value );
+			}
+		}
+		else
+		{
+			input_value	= this.#input.GetValue();
+
+			if ( ValueIsEmpty( input_value ) || isNaN( input_value ) )
+			{
+				return input_value;
+			}
+
+			value = stod( input_value );
+
+			if ( force_truncate )
+			{
+				value = this.#getTruncatedValue( value );
+			}
+		}
+
+		return value;
+	}
+
+	#getTruncatedValue( value )
+	{
+		if ( ValueIsEmpty( value ) || isNaN( value ) )
+		{
+			return value;
+		}
+
+		const value_split	= value.toString().split( '.' );
+		const integer		= value_split[ 0 ] ?? '0';
+		const decimal		= value_split[ 1 ] ?? '';
+
+		if ( decimal.length === 0 )
+		{
+			return stoi( integer );
+		}
+
+		return stod( `${integer}.${decimal.substring( 0, 8 )}` );
+	}
+
+	#splitNumber( value )
+	{
+		const integer			= Math.floor( value );
+		const decimal_length	= value.toString().split( '.' )?.[ 1 ]?.length ?? 0;
+		const decimal			= ( value - integer ).toFixed( decimal_length );
+
+		return {
+			integer:		integer,
+			integer_length:	integer.toString().length,
+			decimal:		decimal,
+			decimal_length:	decimal_length
+		}
+	}
+
+	//
+	// Public Override Functions
+	//
+
+	onRetrieveErrorParent() { return document.body; }
+	onValidate( value ) { return !isNaN( value ); }
+	onEnter( e, input ) { return KeyDownHandlerStackEntry_ManualBubbleKeyCode( e, input.GetKeyStackEntry(), 13 ); }
+	onEsc( e, input ) { input.Blur(); }
+	onFocus( e ) { return true; }
+	onBlur( e ) { return true; }
+	onChange( value ) { ; }
+	onSetInvalid() { ; }
+	onClearInvalid() { ; }
+	onAddKeyStackEntry( keystackentry, input ) { ; }
+	onRemoveKeyStackEntry( keystackentry, input ) { ; }
 }
 
 // MMMultiLineInput
@@ -6386,34 +7952,35 @@ function MMAutoCompleteInput( parent, name, value )
 
 	MMInput.call( this, parent, name, value );
 
-	this.element_wrapper				= newElement( 'span', { 'class': 'mm_autocompleteinput_wrapper' },	null, null );
-	this.element_autocomplete			= newElement( 'span', { 'class': 'mm_autocompleteinput_menu' },		null, this.element_wrapper );
+	this.element_wrapper							= newElement( 'span', { 'class': 'mm_autocompleteinput_wrapper' },	null, null );
+	this.element_autocomplete						= newElement( 'span', { 'class': 'mm_autocompleteinput_menu' },		null, this.element_wrapper );
 
 	this.element_container.parentNode.insertBefore( this.element_wrapper, this.element_container );
 	this.element_wrapper.insertBefore( this.element_container, this.element_autocomplete );
 
-	this.entrylist						= new Array();
-	this.render_id						= null;
-	this.load_delegator					= null;
-	this.search_timeout					= null;
-	this.selected_index					= -1;
-	this.menu_as_root_menu				= false;
-	this.menu_as_root_menu_match_width	= false;
-	this.autocomplete_visible			= false;
-	this.search_timeout_ms				= 200;
+	this.entrylist									= new Array();
+	this.render_id									= null;
+	this.load_delegator								= null;
+	this.search_timeout								= null;
+	this.selected_index								= -1;
+	this.menu_as_root_menu							= false;
+	this.menu_as_root_menu_match_width				= false;
+	this.menu_as_root_menu_match_width_as_min_width	= false;
+	this.autocomplete_visible						= false;
+	this.search_timeout_ms							= 200;
 
-	this.animation_id					= GenerateUniqueID();
-	this.animation_duration				= 150;
-	this.animation_delta				= animationLinear;
-	this.animation_item_delay			= 20;
-	this.animation_item_duration		= 50;
-	this.animation_item_delta			= animationLinear;
+	this.animation_id								= GenerateUniqueID();
+	this.animation_duration							= 150;
+	this.animation_delta							= animationLinear;
+	this.animation_item_delay						= 20;
+	this.animation_item_duration					= 50;
+	this.animation_item_delta						= animationLinear;
 
-	this.menu_animating					= false;
-	this.menu_animating_height			= 0;
+	this.menu_animating								= false;
+	this.menu_animating_height						= 0;
 
-	this.event_render					= function() { self.Render(); self.render_id = requestAnimationFrame( self.event_render ); };
-	this.event_mousedown				= function( event ) { return self.Event_MouseDown_Document( event ? event : window.event ); };
+	this.event_render								= function() { self.Render(); self.render_id = requestAnimationFrame( self.event_render ); };
+	this.event_mousedown							= function( event ) { return self.Event_MouseDown_Document( event ? event : window.event ); };
 
 	this.element_input.setAttribute( 'autocomplete', 'off' ); /* required to turn off Chrome's input suggestions dropdown */
 }
@@ -6450,6 +8017,14 @@ MMAutoCompleteInput.prototype.SetMenuAsRootMenu = function( enabled, match_width
 
 	this.menu_as_root_menu				= enabled;
 	this.menu_as_root_menu_match_width	= match_width;
+
+	return this;
+}
+
+MMAutoCompleteInput.prototype.SetMenuAsRootMenu_MatchWidth = function( enabled, match_as_min_width /* optional */ )
+{
+	this.menu_as_root_menu_match_width				= enabled ? true : false;
+	this.menu_as_root_menu_match_width_as_min_width	= match_as_min_width ? true : false;
 
 	return this;
 }
@@ -6965,7 +8540,11 @@ MMAutoCompleteInput.prototype.Redraw_AutoComplete_Position = function()
 		this.element_autocomplete.style.visibility			= '';
 	}
 
-	if ( this.menu_as_root_menu_match_width && rect_menu.width !== rect_container.width )
+	if ( this.menu_as_root_menu_match_width && this.menu_as_root_menu_match_width_as_min_width && rect_menu.width < rect_container.width )
+	{
+		this.element_autocomplete.style.minWidth		= rect_container.width + 'px';
+	}
+	else if ( this.menu_as_root_menu_match_width && !this.menu_as_root_menu_match_width_as_min_width && rect_menu.width !== rect_container.width )
 	{
 		this.element_autocomplete.style.minWidth		= rect_container.width + 'px';
 		this.element_autocomplete.style.maxWidth		= rect_container.width + 'px';

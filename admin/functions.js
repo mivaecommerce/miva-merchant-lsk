@@ -476,13 +476,12 @@ function v10_OrderItem_Add( order_id, data, callback, delegator )
 	}, delegator );
 }
 
-function OrderItem_DetermineSKU( code, attributes, options, callback, delegator )
+function OrderItem_DetermineSKU( product_code, attributes, callback, delegator )
 {
 	return AJAX_Call_JSON( callback, 'admin', 'OrderItem_DetermineSKU',
 	{
-		Product_Code:		code,
-		Attribute_Codes:	attributes,
-		Attribute_Options:	options
+		Product_Code:	product_code,
+		Attributes:		attributes
 	}, delegator );
 }
 
@@ -820,18 +819,28 @@ function ProductInventoryList_Load_ProductVariants_Filter( product_id, filter, c
 					  delegator );
 }
 
-function ProductVariant_Insert( product_id,
-								attr_ids, attmpat_ids, option_ids,
-								part_ids, quantities,
-								callback )											{ return AJAX_Call( callback, 'admin', 'ProductVariant_Insert',					'Product_ID=' + encodeURIComponent( product_id ) +
-																																									'&Attribute_IDs=' + EncodeArray( attr_ids ) + '&AttributeTemplateAttribute_IDs=' + EncodeArray( attmpat_ids ) + '&Option_IDs=' + EncodeArray( option_ids ) +
-																																									'&Part_IDs=' + EncodeArray( part_ids ) + '&Quantities=' + EncodeArray( quantities ) ); }
-function ProductVariant_Update( product_id, variant_id,
-								attr_ids, attmpat_ids, option_ids,
-								part_ids, quantities,
-								callback )											{ return AJAX_Call( callback, 'admin', 'ProductVariant_Update',					'Product_ID=' + encodeURIComponent( product_id ) + '&Variant_ID=' + encodeURIComponent( variant_id ) +
-																																									'&Attribute_IDs=' + EncodeArray( attr_ids ) + '&AttributeTemplateAttribute_IDs=' + EncodeArray( attmpat_ids ) + '&Option_IDs=' + EncodeArray( option_ids ) +
-																																									'&Part_IDs=' + EncodeArray( part_ids ) + '&Quantities=' + EncodeArray( quantities ) ); }
+function ProductVariant_Insert( product_id, data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'ProductVariant_Insert',
+	{
+		Product_ID: product_id,
+		Attributes:	data.attributes,
+		Parts:		data.parts,
+		Pricing:	data.pricing
+	}, delegator );
+}
+
+function ProductVariant_Update( product_id, variant_id, data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'ProductVariant_Update',
+	{
+		Product_ID: product_id,
+		Variant_ID: variant_id,
+		Attributes:	data.attributes,
+		Parts:		data.parts,
+		Pricing:	data.pricing
+	}, delegator );
+}
 
 function ProductVariantPricing_Load( product_id, variant_id, callback )				{ return AJAX_Call( callback, 'admin', 'ProductVariantPricing_Load',			'Product_ID=' + encodeURIComponent( product_id ) + '&Variant_ID=' + encodeURIComponent( variant_id ) ); }
 function ProductVariantPricing_Update( product_id, variant_id,

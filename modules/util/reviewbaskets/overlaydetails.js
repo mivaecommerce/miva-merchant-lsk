@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -661,10 +661,10 @@ ReviewBasketsListDetailOverlayDetails.prototype.LayoutPrice = function( base_pri
 	if ( base_price != price )
 	{
 		span_base	= newElement( 'span', { 'class': 'reviewbasketslist_basketdetail_itemlist_base_price' },	null, td );
-		newTextNode( base_price.toFixed( 2 ), span_base );
+		newTextNode( Price_Pad( base_price ), span_base );
 	}
 
-	newTextNode( price.toFixed( 2 ), td );
+	newTextNode( Price_Pad( price ), td );
 }
 
 ReviewBasketsListDetailOverlayDetails.prototype.ItemList_SelectAll = function( selected )
@@ -719,10 +719,10 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Load_Callback = functio
 		basketitem.element_checkbox.basketdetail	= this;
 		basketitem.element_checkbox.offset			= i;
 
-		newTextNode( this.basketitemlist[ i ].name,					item_row.td_name );
-		newTextNode( this.basketitemlist[ i ].sku,					item_row.td_sku );
-		newTextNode( this.basketitemlist[ i ].quantity,				item_row.td_quantity );
-		newTextNode( this.basketitemlist[ i ].weight.toFixed( 2 ),	item_row.td_weight );
+		newTextNode( this.basketitemlist[ i ].name,				item_row.td_name );
+		newTextNode( this.basketitemlist[ i ].sku,				item_row.td_sku );
+		newTextNode( this.basketitemlist[ i ].quantity,			item_row.td_quantity );
+		newTextNode( this.basketitemlist[ i ].formatted_weight,	item_row.td_weight );
 
 		item_anchor						= newElement( 'a', { 'href': '#' }, null, item_row.td_code );
 		item_anchor.basketdetail		= this;
@@ -733,7 +733,7 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Load_Callback = functio
 		
 		this.LayoutPrice( this.basketitemlist[ i ].base_price, this.basketitemlist[ i ].price, item_row.td_price );
 
-		newTextNode( this.basketitemlist[ i ].total.toFixed( 2 ),	item_row.td_total );
+		newTextNode( Price_Pad( this.basketitemlist[ i ].total ),	item_row.td_total );
 		newTextNode( this.basketitemlist[ i ].code, item_anchor );
 
 		if ( this.basketitemlist[ i ].subterm_id && this.basketitemlist[ i ].productsubscriptionterm )
@@ -763,7 +763,7 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Load_Callback = functio
 				if ( this.basketitemlist[ i ].options[ j ].value.length )	newTextNode( this.basketitemlist[ i ].options[ j ].attribute + ': ' + this.basketitemlist[ i ].options[ j ].value, option_row.td_name );
 				else														newTextNode( this.basketitemlist[ i ].options[ j ].attribute, option_row.td_name );
 
-				if ( this.basketitemlist[ i ].options[ j ].weight )			newTextNode( this.basketitemlist[ i ].options[ j ].weight.toFixed( 2 ),		option_row.td_weight );
+				if ( this.basketitemlist[ i ].options[ j ].weight )			newTextNode( this.basketitemlist[ i ].options[ j ].formatted_weight, option_row.td_weight );
 
 				if ( this.basketitemlist[ i ].options[ j ].base_price || this.basketitemlist[ i ].options[ j ].price )
 				{
@@ -807,7 +807,7 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Add = function()
 	var basketitem_dialog;
 
 	basketitem_dialog		= new ReviewBaskets_BasketItemAddEditDialog( this.basket, null );
-	basketitem_dialog.onadd	= function()
+	basketitem_dialog.onAdd	= function()
 	{
 		self.Reload();
 	}
@@ -821,7 +821,7 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Edit = function( basket
 	var basketitem_dialog;
 
 	basketitem_dialog			= new ReviewBaskets_BasketItemAddEditDialog( this.basket, basketitem );
-	basketitem_dialog.onupdate	= function()
+	basketitem_dialog.onUpdate	= function()
 	{
 		self.Reload();
 	}

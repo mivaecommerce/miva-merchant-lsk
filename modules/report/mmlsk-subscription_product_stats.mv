@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-report_subscription_product_stats">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Subscription Product Statistics">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0901">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.62">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "report">
 </MvFUNCTION>
@@ -464,35 +464,6 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "SubscriptionProductStats_Create_Subtotal_TempTable" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.attempt"						VALUE = 1>
-	<MvWHILE EXPR = "{ l.attempt LE 5 }">
-		<MvASSIGN NAME = "l.query:subtotal_temp_table"	VALUE = "{ g.Store_Table_Prefix $ 'TempSPS_Subtotal' $ l.attempt }">
-
-		<MvQUERY NAME	= "Merchant"
-				 QUERY	= "{ 'CREATE TABLE ' $ l.query:subtotal_temp_table $ '
-							  (
-								prod_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
-								prod_code	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )		$ ',
-								prod_name	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )		$ ',
-								line_id		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
-								quantity	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
-								price		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
-							  )' }">
-		<MvIF EXPR = "{ NOT g.MvQUERY_Error }">
-			<MvWHILESTOP>
-		</MvIF>
-
-		<MvASSIGN NAME = "l.attempt"					VALUE = "{ l.attempt + 1 }">
-	</MvWHILE>
-
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00021', g.MvQUERY_Error ) }">
-	</MvIF>
-
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
 <MvFUNCTION NAME = "SubscriptionProductStats_Index_Subtotal_TempTable" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'CREATE INDEX ' $ l.query:subtotal_temp_table $ '_1 ON ' $ l.query:subtotal_temp_table $ ' ( prod_id, prod_code, prod_name )' }">
@@ -504,16 +475,6 @@
 			 QUERY	= "{ 'CREATE INDEX ' $ l.query:subtotal_temp_table $ '_2 ON ' $ l.query:subtotal_temp_table $ ' ( line_id )' }">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00024', g.MvQUERY_Error ) }">
-	</MvIF>
-
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "SubscriptionProductStats_Drop_Subtotal_TempTable" PARAMETERS = "table_name" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME	= "Merchant"
-			 QUERY	= "{ 'DROP TABLE ' $ l.table_name }">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00025', g.MvQUERY_Error ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -701,104 +662,31 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SubscriptionProductStats_Populate_Product_TempTable_GrossRevenue" PARAMETERS = "report var, query var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT SubscriptionProductStats_Create_Subtotal_TempTable( l.query ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
-
-	<MvASSIGN NAME = "l.result" VALUE = "{ SubscriptionProductStats_Populate_Product_TempTable_GrossRevenue_LowLevel( l.report, l.query ) }">
-
-	<MvIF EXPR = "{ NOT ISNULL l.query:subtotal_temp_table }">
-		<MvASSIGN NAME = "l.result" VALUE = "{ l.result AND SubscriptionProductStats_Drop_Subtotal_TempTable( l.query:subtotal_temp_table ) }">
-	</MvIF>
-
-	<MvFUNCTIONRETURN VALUE = "{ l.result }">
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "SubscriptionProductStats_Populate_Product_TempTable_GrossRevenue_LowLevel" PARAMETERS = "report var, query var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'INSERT INTO ' $ l.query:subtotal_temp_table $ '
-						  SELECT
-							p.id			AS prod_id,
-							p.code			AS prod_code,
-							p.name			AS prod_name,
-							oi.line_id		AS line_id,
-							oi.quantity		AS quantity,
-							oi.price		AS price
-						  FROM
-							' $ g.Store_Table_Prefix $ 'Orders o,
-							' $ g.Store_Table_Prefix $ 'OrderItems oi,
-							' $ g.Store_Table_Prefix $ 'Subscriptions s,
-							' $ g.Store_Table_Prefix $ 'Products p
-						  WHERE
-							o.source		= \'subscription\'	AND
-							o.orderdate		>= ?				AND
-							o.orderdate		<= ?				AND
-							s.id			= o.source_id		AND
-							p.id			= s.product_id 		AND
-							oi.order_id		= o.id 				AND
-							oi.subscrp_id	= s.id' }"
-			 FIELDS = "l.query:time_t_start, l.query:time_t_end">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00026', g.MvQUERY_Error ) }">
-	</MvIF>
-
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'INSERT INTO ' $ l.query:subtotal_temp_table $ '
-						  SELECT
-							p.id			AS prod_id,
-							p.code			AS prod_code,
-							p.name			AS prod_name,
-							oi.line_id		AS line_id,
-							oi.quantity		AS quantity,
-							oi.price		AS price
-						  FROM
-							' $ g.Store_Table_Prefix $ 'Orders o,
-							' $ g.Store_Table_Prefix $ 'OrderSources os,
-							' $ g.Store_Table_Prefix $ 'OrderItems oi,
-							' $ g.Store_Table_Prefix $ 'Subscriptions s,
-							' $ g.Store_Table_Prefix $ 'Products p
-						  WHERE
-							o.source		= \'subscription\'	AND
-							o.orderdate		>= ?				AND
-							o.orderdate		<= ?				AND
-							o.source_id		= 0					AND
-							os.order_id		= o.id				AND
-							os.source		= \'subscription\'	AND
-							os.source_id	= s.id				AND
-							p.id			= s.product_id		AND
-							oi.order_id		= o.id				AND
-							oi.subscrp_id	= s.id' }"
-			 FIELDS = "l.query:time_t_start, l.query:time_t_end">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00027', g.MvQUERY_Error ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT SubscriptionProductStats_Index_Subtotal_TempTable( l.query ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
-
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'UPDATE 
-			 				' $ l.query:subtotal_temp_table $ '
-						  SET
-							price = price + ( SELECT ' $ [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'SUM( price )', '0.00' ) $ ' FROM ' $ g.Store_Table_Prefix $ 'OrderOptions WHERE ' $ g.Store_Table_Prefix $ 'OrderOptions.line_id = ' $ l.query:subtotal_temp_table $ '.line_id )' }">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00028', g.MvQUERY_Error ) }">
-	</MvIF>
+	<MvASSIGN NAME = "g.Session:cache:subscriptionproductstats:query" VALUE = "{ l.query }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'SubscriptionProductStats_GrossRevenue',
 																			 'SELECT
-																				prod_id						AS product_id,
-																				prod_code					AS product_code,
-																				prod_name					AS product_name,
-																				SUM( price * quantity )		AS gross_revenue
+																				p.id			AS product_id,
+																				p.code			AS product_code,
+																				p.name			AS product_name,
+																				SUM( oi.total )	AS subtotal
 																			  FROM
-																				' $ l.query:subtotal_temp_table $ '
+																				' $ g.Store_Table_Prefix $ 'Orders o,
+																				' $ g.Store_Table_Prefix $ 'OrderItems oi,
+																				' $ g.Store_Table_Prefix $ 'Subscriptions s,
+																				' $ g.Store_Table_Prefix $ 'Products p
+																			  WHERE
+																				o.source		= \'subscription\'  AND
+																				o.orderdate		>= ?				AND
+																				o.orderdate		<= ?				AND
+																				p.id			= s.product_id		AND
+																				oi.order_id		= o.id				AND
+																				oi.subscrp_id	= s.id
 																			  GROUP BY
-																				prod_id, prod_code, prod_name
+																				p.id, p.code, p.name
 																			  ORDER BY
-																				gross_revenue DESC',
-																			 '',
+																				subtotal DESC',
+																			 'g.Session:cache:subscriptionproductstats:query:time_t_start, g.Session:cache:subscriptionproductstats:query:time_t_end',
 																			 0, l.query:topn ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00029', g.MvOPENVIEW_Error ) }">
 	</MvIF>
@@ -811,7 +699,7 @@
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
-		<MvIF EXPR = "{ NOT SubscriptionProductStats_Insert_GrossRevenue( l.report, l.query, SubscriptionProductStats_GrossRevenue.d.product_id, SubscriptionProductStats_GrossRevenue.d.gross_revenue ) }">
+		<MvIF EXPR = "{ NOT SubscriptionProductStats_Insert_GrossRevenue( l.report, l.query, SubscriptionProductStats_GrossRevenue.d.product_id, SubscriptionProductStats_GrossRevenue.d.subtotal ) }">
 			<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionProductStats_GrossRevenue">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
@@ -1046,88 +934,34 @@
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "SubscriptionProductStats_GrossRevenue"
 				QUERY	= "{ 'SELECT
-								s.product_id		AS product_id,
-								oi.line_id			AS orderitem_line_id,
-								oi.price			AS orderitem_price,
-								oi.quantity			AS orderitem_quantity,
-								oo.price			AS orderoption_price,
-								oo.attr_id			AS orderoption_attr_id
+								s.product_id	AS product_id,
+								SUM( oi.total )	AS subtotal
 							  FROM
 								' $ g.Store_Table_Prefix $ 'Orders o,
-								' $ g.Store_Table_Prefix $ 'OrderItems oi
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderOptions oo ON oi.line_id = oo.line_id,
+								' $ g.Store_Table_Prefix $ 'OrderItems oi,
 								' $ g.Store_Table_Prefix $ 'Subscriptions s,
 								' $ l.query:product_temp_table $ ' p
 							  WHERE
-								o.source			= \'subscription\'	AND
-								o.orderdate			>= ?				AND
-								o.orderdate			<= ?				AND
-								s.id				= o.source_id		AND
-								p.product_id		= s.product_id		AND
-								oi.order_id			= o.id				AND
-								oi.subscrp_id		= s.id
-							  UNION ALL
-							  SELECT
-								s.product_id		AS product_id,
-								oi.line_id			AS orderitem_line_id,
-								oi.price			AS orderitem_price,
-								oi.quantity			AS orderitem_quantity,
-								oo.price			AS orderoption_price,
-								oo.attr_id			AS orderoption_attr_id
-							  FROM
-								' $ g.Store_Table_Prefix $ 'Orders o,
-								' $ g.Store_Table_Prefix $ 'OrderSources os,
-								' $ g.Store_Table_Prefix $ 'OrderItems oi
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderOptions oo ON oi.line_id = oo.line_id,
-								' $ g.Store_Table_Prefix $ 'Subscriptions s,
-								' $ l.query:product_temp_table $ ' p
-							  WHERE
-								o.source			= \'subscription\'	AND
-								o.orderdate			>= ?				AND
-								o.orderdate			<= ?				AND
-								o.source_id			= 0					AND
-								os.order_id			= o.id				AND
-								os.source			= \'subscription\'	AND
-								os.source_id		= s.id				AND
-								p.product_id		= s.product_id		AND
-								oi.order_id			= o.id				AND
-								oi.subscrp_id		= s.id
-							  ORDER BY
-							  	product_id ASC, orderitem_line_id ASC, orderoption_attr_id ASC' }"
-				FIELDS	= "l.query:time_t_start, l.query:time_t_end, l.query:time_t_start, l.query:time_t_end">
+								o.source		= \'subscription\'	AND
+								o.orderdate		>= ?				AND
+								o.orderdate		<= ?				AND
+								p.product_id	= s.product_id		AND
+								oi.order_id		= o.id				AND
+								oi.subscrp_id	= s.id
+							  GROUP BY
+								s.product_id' }"
+				FIELDS	= "l.query:time_t_start, l.query:time_t_end">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-SUB-PST-00030', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.subtotal"					VALUE = 0.00>
-	<MvASSIGN NAME = "l.last_line_id"				VALUE = -1>
-	<MvASSIGN NAME = "l.last_product_id"			VALUE = -1>
-
 	<MvWHILE EXPR = "{ NOT SubscriptionProductStats_GrossRevenue.d.EOF }">
-		<MvIF EXPR = "{ SubscriptionProductStats_GrossRevenue.d.product_id NE l.last_product_id }">
-			<MvASSIGN NAME = "l.last_product_id"	VALUE = "{ SubscriptionProductStats_GrossRevenue.d.product_id }">
-		</MvIF>
-
-		<MvIF EXPR = "{ SubscriptionProductStats_GrossRevenue.d.orderitem_line_id NE l.last_line_id }">
-			<MvASSIGN NAME = "l.subtotal"			VALUE = "{ l.subtotal + SubscriptionProductStats_GrossRevenue.d.orderitem_price * SubscriptionProductStats_GrossRevenue.d.orderitem_quantity }">
-			<MvASSIGN NAME = "l.last_line_id"		VALUE = "{ SubscriptionProductStats_GrossRevenue.d.orderitem_line_id }">
-		</MvIF>
-
-		<MvIF EXPR = "{ SubscriptionProductStats_GrossRevenue.d.orderoption_price GT 0 }">
-			<MvASSIGN NAME = "l.subtotal"			VALUE = "{ l.subtotal + ( SubscriptionProductStats_GrossRevenue.d.orderoption_price * SubscriptionProductStats_GrossRevenue.d.orderitem_quantity ) }">
+		<MvIF EXPR = "{ NOT SubscriptionProductStats_Insert_GrossRevenue( l.report, l.query, SubscriptionProductStats_GrossRevenue.d.product_id, SubscriptionProductStats_GrossRevenue.d.subtotal ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionProductStats_GrossRevenue">
+			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
 		<MvSKIP NAME = "Merchant" VIEW = "SubscriptionProductStats_GrossRevenue" ROWS = 1>
-
-		<MvIF EXPR = "{ SubscriptionProductStats_GrossRevenue.d.EOF OR SubscriptionProductStats_GrossRevenue.d.product_id NE l.last_product_id }">
-			<MvIF EXPR = "{ NOT SubscriptionProductStats_Insert_GrossRevenue( l.report, l.query, l.last_product_id, l.subtotal ) }">
-				<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionProductStats_GrossRevenue">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
-
-			<MvASSIGN NAME = "l.last_product_id"	VALUE = "{ SubscriptionProductStats_GrossRevenue.d.product_id }">
-			<MvASSIGN NAME = "l.subtotal"			VALUE = 0.00>
-		</MvIF>
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "SubscriptionProductStats_GrossRevenue">

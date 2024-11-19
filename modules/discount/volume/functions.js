@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2014 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -38,8 +38,8 @@ function Volume_Discount_Override_More( pgrp_id )
 		td_amount	= newElement( 'td', null, null, tr );
 		td_remove	= newElement( 'td', null, null, tr );
 
-		newElement( 'input',	{ 'name':	'Volume_Discount_Overrides[' + pgrp_id + '][' + count.value + ']:quantity',	'type':	'text', 'size':	5, 'value':	'' },		null, td_quantity );
-		newElement( 'input',	{ 'name':	'Volume_Discount_Overrides[' + pgrp_id + '][' + count.value + ']:amount',	'type':	'text',	'size':	5, 'value': '0.00' },	null, td_amount );
+		newElement( 'input',	{ 'name':	'Volume_Discount_Overrides[' + pgrp_id + '][' + count.value + ']:quantity',	'type':	'text', 'size':	5,	'value': '' },		null, td_quantity );
+		newElement( 'input',	{ 'name':	'Volume_Discount_Overrides[' + pgrp_id + '][' + count.value + ']:amount',	'type':	'text',	'size':	10,	'value': '0.00' },	null, td_amount );
 
 		select_type					= newElement( 'select',		{ 'name': 'Volume_Discount_Overrides[' + pgrp_id + '][' + count.value + ']:type' }, null, td_type );
 		select_type.options[ 0 ]	= new Option( 'Percent',	'P' );
@@ -73,8 +73,8 @@ function Volume_Discount_More()
 		td_amount	= newElement( 'td', null, null, tr );
 		td_remove	= newElement( 'td', null, null, tr );
 
-		newElement( 'input',	{ 'name':	'Volume_Discounts[' + count.value + ']:quantity',	'type':	'text', 'size':	5, 'value':	'' },		null, td_quantity );
-		newElement( 'input',	{ 'name':	'Volume_Discounts[' + count.value + ']:amount',		'type':	'text',	'size':	5, 'value': '0.00' },	null, td_amount );
+		newElement( 'input',	{ 'name':	'Volume_Discounts[' + count.value + ']:quantity',	'type':	'text', 'size':	5,	'value': '' },		null, td_quantity );
+		newElement( 'input',	{ 'name':	'Volume_Discounts[' + count.value + ']:amount',		'type':	'text',	'size':	10,	'value': '0.00' },	null, td_amount );
 
 		select_type					= newElement( 'select',		{ 'name': 'Volume_Discounts[' + count.value + ']:type' }, null, td_type );
 		select_type.options[ 0 ]	= new Option( 'Percent',	'P' );

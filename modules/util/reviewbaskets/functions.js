@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2019 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -112,6 +112,15 @@ function ReviewBaskets_BasketItem_DetermineSKU( code, attributes, callback, dele
 	{
 		Code: 				code,
 		Attributes: 		attributes
+	}, delegator );
+}
+
+function ReviewBaskets_BasketItem_DetermineVariant( product_code, attributes, callback, delegator )
+{
+	return AJAX_Call_Module_JSON( callback, 'admin', 'reviewbaskets', 'ReviewBaskets_BasketItem_DetermineVariant',
+	{
+		Product_Code: 	product_code,
+		Attributes: 	attributes
 	}, delegator );
 }
 

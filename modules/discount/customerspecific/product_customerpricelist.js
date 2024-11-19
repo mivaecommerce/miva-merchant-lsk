@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -138,7 +138,7 @@ Product_CustomerPriceList.prototype.onCreateRootColumnList = function()
 		columnlist[ i ].SetDefaultActive( arrayIndexOf( base_active, columnlist[ i ].GetCode() ) >= 0 );
 	}
 
-	columnlist.push( new MMList_Column_Currency_Default( 'Discounted Price', 'discounted_price', 'discounted_price', 'N/A' ) );
+	columnlist.push( new MMList_Column_Price_Default( 'Discounted Price', 'discounted_price', 'discounted_price', 'N/A' ) );
 
 	return columnlist;
 }

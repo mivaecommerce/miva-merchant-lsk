@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -562,9 +562,17 @@ AttributeMachine.prototype.AttributeList_Load_Possible_Callback = function( resp
 
 		if ( this.inv_div )					this.inv_div.innerHTML = this.settings.inv_long ? variant.inv_long : variant.inv_short;
 
+		const product_data =
+		{
+			product_code:	this.settings.product_code,
+			variant_id:		variant.variant_id
+		};
+
+		this.onVariantChanged( product_data );
+
 		if ( typeof MivaEvents !== 'undefined' )
 		{ 
-			MivaEvents.ThrowEvent( 'variant_changed', { 'product_code': this.settings.product_code, 'variant_id': variant.variant_id } );
+			MivaEvents.ThrowEvent( 'variant_changed', product_data );
 		}
 	}
 }
@@ -618,9 +626,18 @@ AttributeMachine.prototype.Pricing_Update = function( data )
 		}
 	}
 
+	const product_data =
+	{
+		product_code:		this.settings.product_code,
+		price:				price,
+		additional_price:	additional_price
+	};
+
+	this.onPriceChanged( product_data );
+
 	if ( typeof MivaEvents !== 'undefined' )
 	{ 
-		MivaEvents.ThrowEvent( 'price_changed', { 'product_code': this.settings.product_code, 'price': price, 'additional_price': additional_price } );
+		MivaEvents.ThrowEvent( 'price_changed', product_data );
 	}
 }
 
@@ -639,7 +656,7 @@ AttributeMachine.prototype.Weight_Update = function( data )
 {
 	if ( this.weight_div )
 	{
-		this.weight_div.textContent = data.weight.toFixed( 2 );
+		this.weight_div.textContent = this.weight_div.hasAttribute( 'data-mm-formatted' ) ? data.formatted_weight : data.padded_weight;
 	}
 }
 
@@ -1103,6 +1120,8 @@ AttributeMachine.prototype.Lookup_Attribute_Form_Index = function( form, attribu
 AttributeMachine.prototype.onerror				= function( error_message ) { console.log( error_message ); }
 AttributeMachine.prototype.getElementById		= function( id ) { return document.getElementById( id ); }
 AttributeMachine.prototype.getElementsByTagName	= function( tagName ) { return document.getElementsByTagName( tagName ); }
+AttributeMachine.prototype.onPriceChanged		= function( product_data ) { ; }
+AttributeMachine.prototype.onVariantChanged		= function( product_data ) { ; }
 
 // AttributeMachine_SubscriptionTerm
 ///////////////////////////////////////////////////////////////////

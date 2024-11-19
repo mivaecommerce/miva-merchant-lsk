@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-discount_volume">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Volume Pricing">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1001">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, discount, vis_product, not_prod, import, provision_store, component, component_prov, skins, json, clientside, clientside_sri, copy_prod">
 </MvFUNCTION>
@@ -43,7 +43,7 @@
 							low			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
 							high		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
 							type		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )			$ ',
-							amount		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 10, 2 )	$ '
+							amount		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 16, 8 )	$ '
 						  )' }">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DSC-VOL-00001', g.MvQUERY_Error ) }">
@@ -366,7 +366,7 @@
 		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.table_entry" ARRAY = "l.pricegroup:config:table">
 			<MvASSIGN NAME = "g.Volume_Discounts"	INDEX = "{ l.pos }"	MEMBER = "quantity"	VALUE = "{ l.table_entry:low }">
 			<MvASSIGN NAME = "g.Volume_Discounts"	INDEX = "{ l.pos }"	MEMBER = "type"		VALUE = "{ l.table_entry:type }">
-			<MvASSIGN NAME = "g.Volume_Discounts"	INDEX = "{ l.pos }"	MEMBER = "amount"	VALUE = "{ l.table_entry:amount ROUND 2 }">
+			<MvASSIGN NAME = "g.Volume_Discounts"	INDEX = "{ l.pos }"	MEMBER = "amount"	VALUE = "{ [ g.Module_Library_Utilities ].Price_Pad( l.table_entry:amount ) }">
 		</MvFOREACH>
 	<MvELSE>
 		<MvASSIGN NAME = "g.Volume_Discount_Grouping"			VALUE = "same_product">
@@ -440,7 +440,7 @@
 					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'F', l.discount:type, 'Fixed' ) }">
 					</select>
 				</td><td align="right">
-					<input type="text" size="5" name="{ 'Volume_Discounts[' $ l.discount_count $ ']:amount' }" value="{ encodeentities( l.discount:amount ) }">
+					<input type="text" size="10" name="{ 'Volume_Discounts[' $ l.discount_count $ ']:amount' }" value="{ encodeentities( l.discount:amount ) }">
 				</td><td>
 					<span onclick="this.parentNode.parentNode.parentNode.removeChild( this.parentNode.parentNode )">X</span>
 				</td></tr>
@@ -458,7 +458,7 @@
 						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'F', 'P', 'Fixed' ) }">
 						</select>
 					</td><td align="right">
-						<input type="text" size="5" name="{ 'Volume_Discounts[' $ l.discount_count $ ']:amount' }" value="0.00">
+						<input type="text" size="10" name="{ 'Volume_Discounts[' $ l.discount_count $ ']:amount' }" value="0.00">
 					</td><td>
 						<span onclick="this.parentNode.parentNode.parentNode.removeChild( this.parentNode.parentNode )">X</span>
 					</td></tr>
@@ -528,13 +528,16 @@
 			</MvIF>
 		</MvIF>
 
-		<MvIF EXPR = "{ ( l.discount:type NE 'P' )	AND
-						( l.discount:type NE 'F' ) }">
+		<MvIF EXPR = "{ l.discount:type EQ 'P' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_Optional( l.discount:amount ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Volume_Discounts[' $ l.pos $ ']:amount', g.Validation_Message ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.discount:type EQ 'F' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Price_Optional( l.discount:amount ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Volume_Discounts[' $ l.pos $ ']:amount', g.Validation_Message ) }">
+			</MvIF>	
+		<MvELSE>
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select a discount type' ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_Optional( l.discount:amount ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Volume_Discounts[' $ l.pos $ ']:amount', g.Validation_Message ) }">
 		</MvIF>
 	</MvFOREACH>
 
@@ -611,10 +614,19 @@
 			<MvASSIGN NAME = "l.entry"		VALUE = "">
 
 			<MvIF EXPR = "{ l.name EQ 'entry' }">
-				<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Integer(	l.child_xml, 'quantity',	l.entry:low )								OR
-								NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_List(		l.child_xml, 'type',		l.entry:type,	'fixed,percent', 'F,P' )	OR
-								NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number(	l.child_xml, 'amount',		l.entry:amount,	10, 2 ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Integer(	l.child_xml, 'quantity',	l.entry:low ) OR
+								NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_List(		l.child_xml, 'type',		l.entry:type, 'fixed,percent', 'F,P' ) }">
 					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.entry:type EQ 'P' }">
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number( l.child_xml, 'amount', l.entry:amount, 10, 2 ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				<MvELSE>
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number( l.child_xml, 'amount', l.entry:amount, 16, 8 ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
 				</MvIF>
 
 				<MvIF EXPR = "{ l.entry:low LE 0 }">
@@ -1089,15 +1101,25 @@
 
 			<MvIF EXPR = "{ l.discount_item_quantity }">
 				<MvIF EXPR = "{ l.discount:type EQ 'F' }">		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discount_item_quantity, l.discount:amount * l.discountable_item:multiplier ) }">
-				<MvELSEIF EXPR = "{ l.discount:type EQ 'P' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discount_item_quantity, ( ( l.discountable_item:price * ( l.discount:amount / 100.00 ) ) * l.discountable_item:multiplier ) ROUND 2 ) }">
 				<MvELSEIF EXPR = "{ l.discount:type EQ 'A' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discount_item_quantity, ( l.discountable_item:price - l.discount:amount ) * l.discountable_item:multiplier ) }">
+				<MvELSEIF EXPR = "{ l.discount:type EQ 'P' }">
+					<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Price_IsHighPrecision( l.discountable_item:price ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+					<MvELSE>																									<MvASSIGN NAME = "l.scale" VALUE = 8>
+					</MvIF>
+
+					<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discount_item_quantity, ( ( l.discountable_item:price * ( l.discount:amount / 100.00 ) ) * l.discountable_item:multiplier ) ROUND l.scale ) }">
 				</MvIF>
 			</MvIF>
 
 			<MvIF EXPR = "{ l.discount_remainder }">
 				<MvIF EXPR = "{ l.discount:type EQ 'F' }">		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, 1, l.discount:amount * l.discount_remainder ) }">
-				<MvELSEIF EXPR = "{ l.discount:type EQ 'P' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, 1, ( ( l.discountable_item:price * ( l.discount:amount / 100.00 ) ) * l.discount_remainder ) ROUND 2 ) }">
 				<MvELSEIF EXPR = "{ l.discount:type EQ 'A' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, 1, ( l.discountable_item:price - l.discount:amount ) * l.discount_remainder ) }">
+				<MvELSEIF EXPR = "{ l.discount:type EQ 'P' }">
+					<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Price_IsHighPrecision( l.discountable_item:price ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+					<MvELSE>																									<MvASSIGN NAME = "l.scale" VALUE = 8>
+					</MvIF>
+
+					<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, 1, ( ( l.discountable_item:price * ( l.discount:amount / 100.00 ) ) * l.discount_remainder ) ROUND l.scale ) }">
 				</MvIF>
 			</MvIF>
 
@@ -1133,8 +1155,13 @@
 	<MvIF EXPR = "{ miva_array_search( l.table, 1, l.discount, '( l.discount:low LE l.total_quantity ) AND ( ( l.discount:high EQ 0 ) OR ( l.discount:high GE l.total_quantity ) )' ) }">
 		<MvFOREACH ITERATOR = "l.discountable_item" ARRAY = "l.discountable_items" COUNT = "{ l.discountable_item_count }">
 			<MvIF EXPR = "{ l.discount:type EQ 'F' }">		<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discountable_item:quantity, l.discount:amount * l.discountable_item:multiplier ) }">
-			<MvELSEIF EXPR = "{ l.discount:type EQ 'P' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discountable_item:quantity, ( ( l.discountable_item:price * ( l.discount:amount / 100.0 ) ) * l.discountable_item:multiplier ) ROUND 2 ) }">
 			<MvELSEIF EXPR = "{ l.discount:type EQ 'A' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discountable_item:quantity, ( l.discountable_item:price - l.discount:amount ) * l.discountable_item:multiplier ) }">
+			<MvELSEIF EXPR = "{ l.discount:type EQ 'P' }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Price_IsHighPrecision( l.discountable_item:price ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+				<MvELSE>																									<MvASSIGN NAME = "l.scale" VALUE = 8>
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.discountable_item:item, l.discountable_item:quantity, ( ( l.discountable_item:price * ( l.discount:amount / 100.0 ) ) * l.discountable_item:multiplier ) ROUND l.scale ) }">
 			</MvIF>
 		</MvFOREACH>
 	</MvIF>
@@ -1216,7 +1243,7 @@
 
 				<MvASSIGN NAME = "l.discount:quantity"		VALUE = "{ l.override:low }">
 				<MvASSIGN NAME = "l.discount:type"			VALUE = "{ l.override:type }">
-				<MvASSIGN NAME = "l.discount:amount"		VALUE = "{ l.override:amount ROUND 2 }">
+				<MvASSIGN NAME = "l.discount:amount"		VALUE = "{ [ g.Module_Library_Utilities ].Price_Pad( l.override:amount ) }">
 			</MvFOREACH>
 		</MvFOREACH>
 	</MvIF>
@@ -1296,7 +1323,7 @@
 						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'A', l.override:type, 'Absolute' ) }">
 						</select>
 					</td><td align="right">
-						<input type="text" size="5" name="{ 'Volume_Discount_Overrides[' $ l.pricegroup:id $ '][' $ l.override_count $ ']:amount' }" value="{ encodeentities( l.override:amount ) }">
+						<input type="text" size="10" name="{ 'Volume_Discount_Overrides[' $ l.pricegroup:id $ '][' $ l.override_count $ ']:amount' }" value="{ encodeentities( l.override:amount ) }">
 					</td><td>
 						<MvIF EXPR = "{ l.can_modify_product }">
 							<span onclick="this.parentNode.parentNode.parentNode.removeChild( this.parentNode.parentNode )">X</span>
@@ -1319,7 +1346,7 @@
 							<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'A', 'P', 'Absolute' ) }">
 							</select>
 						</td><td align="right">
-							<input type="text" size="5" name="{ 'Volume_Discount_Overrides[' $ l.pricegroup:id $ '][' $ l.override_count $ ']:amount' }" value="0.00">
+							<input type="text" size="10" name="{ 'Volume_Discount_Overrides[' $ l.pricegroup:id $ '][' $ l.override_count $ ']:amount' }" value="0.00">
 						</td><td>
 							<MvIF EXPR = "{ l.can_modify_product }">
 								<span onclick="this.parentNode.parentNode.parentNode.removeChild( this.parentNode.parentNode )">X</span>
@@ -1369,14 +1396,16 @@
 				</MvIF>
 			</MvIF>
 
-			<MvIF EXPR = "{ ( l.override_data:type NE 'P' )	AND
-							( l.override_data:type NE 'F' )	AND
-							( l.override_data:type NE 'A' ) }">
+			<MvIF EXPR = "{ l.override_data:type EQ 'P' }">
+				<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_Optional( l.override_data:amount ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'VPGRP(' $ l.pgrp_id $ ')', 'Volume_Discount_Overrides[' $ l.pgrp_id $ '][' $ l.pos $ ']:amount', g.Validation_Message ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.override_data:type EQ 'F' OR l.override_data:type EQ 'A' }">
+				<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Price_Optional( l.override_data:amount ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'VPGRP(' $ l.pgrp_id $ ')', 'Volume_Discount_Overrides[' $ l.pgrp_id $ '][' $ l.pos $ ']:amount', g.Validation_Message ) }">
+				</MvIF>
+			<MvELSE>
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'VPGRP(' $ l.pgrp_id $ ')', '', 'Please select an override_data type' ) }">
-			</MvIF>
-
-			<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_Optional( l.override_data:amount ) }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'VPGRP(' $ l.pgrp_id $ ')', 'Volume_Discount_Overrides[' $ l.pgrp_id $ '][' $ l.pos $ ']:amount', g.Validation_Message ) }">
 			</MvIF>
 		</MvFOREACH>
 	</MvFOREACH>
@@ -1637,7 +1666,7 @@
 			<MvASSIGN NAME = "l.override:type"		VALUE = "P">
 			<MvASSIGN NAME = "l.override:amount"	VALUE = "{ substring_var( l.value, 1, len_var( l.value ) - 1 ) ROUND 2 }">
 		<MvELSE>
-			<MvASSIGN NAME = "l.value"				VALUE = "{ l.value ROUND 2 }">
+			<MvASSIGN NAME = "l.value"				VALUE = "{ l.value ROUND 8 }">
 
 			<MvIF EXPR = "{ l.value GE 0 }">
 				<MvASSIGN NAME = "l.override:type"	VALUE = "A">
@@ -1841,10 +1870,19 @@
 		<MvASSIGN NAME = "l.override:pgrp_id"		VALUE = "{ l.pricegroup:id }">
 
 		<MvIF EXPR = "{ l.name EQ 'entry' }">
-			<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Integer(	l.child_xml, 'quantity',	l.override:low )										OR
-							NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_List(		l.child_xml, 'type',		l.override:type,	'fixed,percent,absolute', 'F,P,A' )	OR
-							NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number(	l.child_xml, 'amount',		l.override:amount,	10, 2 ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Integer(	l.child_xml, 'quantity',	l.override:low ) OR
+							NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_List(		l.child_xml, 'type',		l.override:type, 'fixed,percent,absolute', 'F,P,A' ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.override:type EQ 'P' }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number(	l.child_xml, 'amount', l.override:amount, 10, 2 ) }">
+					<MvFUNCTIONRETURN>
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Attribute_Number(	l.child_xml, 'amount', l.override:amount, 16, 8 ) }">
+					<MvFUNCTIONRETURN>
+				</MvIF>	
 			</MvIF>
 
 			<MvIF EXPR = "{ l.override:low LE 0 }">
@@ -2159,8 +2197,8 @@
 	<MvASSIGN NAME = "l.product_code"	VALUE = "">
 	<MvASSIGN NAME = "l.variant_id"		VALUE = 0>
 
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',	'Product_Code', l.product_code )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o',	'Variant_ID',	l.variant_id ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R', 'Product_Code',	l.product_code ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Variant_ID',		l.variant_id ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
 	</MvIF>
 
@@ -2186,7 +2224,7 @@
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.count ) }">
 				"low":				<MvEVAL EXPR = "{ int( l.entry:low ) }">,
 				"high":				<MvEVAL EXPR = "{ int( l.entry:high ) }">,
-				"price":			<MvEVAL EXPR = "{ l.entry:price ROUND 2 }">,
+				"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.entry:price ) }">,
 				"formatted_price":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.entry:formatted_price ) }">"
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
 		</MvFOREACH>

@@ -7,92 +7,66 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2020 Miva, Inc.  All rights reserved.
+// Copyright 1998-2024 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
 // Quote Item Dialog
 ////////////////////////////////////////////////////
 
-function Quote_ItemDialog( quote, quoteitem )
+var Quote_ItemDialog = class extends BaseItemAddEditDialog
 {
-	this.quote						= quote;
-	this.quoteitem					= quoteitem;
+	#quote;
+	#quoteitem;
 
-	Order_ItemDialog.call( this, quote, quoteitem );
-}
-
-DeriveFrom( Order_ItemDialog, Quote_ItemDialog );
-
-Quote_ItemDialog.prototype.Add = function( plus )
-{
-	var self = this;
-
-	if ( !this.Validate() )
+	constructor( quote, quoteitem )
 	{
-		return;
+		super( quoteitem );
+
+		this.#quote		= quote;
+		this.#quoteitem	= quoteitem;
 	}
 
-	if ( plus )	this.ActionItem_Processing_Start( this.button_addplus );
-	else		this.ActionItem_Processing_Start( this.button_save );
-
-	QuoteItem_Add( this.quote.id, this.BuildItemData(), function( response )
+	onProcessAdd( data, callback )
 	{
-		self.ActionItem_Processing_End();
-
-		if ( !response.success )
+		QuoteItem_Add( this.#quote.id, data, ( response ) =>
 		{
-			return self.onerror( response.error_message );
-		}
+			if ( response.success && this.#quote.total !== response.data.total )
+			{
+				this.#quote.total			= response.data.total;
+				this.#quote.formatted_total	= response.data.formatted_total;
+			}
 
-		if ( self.quote.total != response.data.total )
-		{
-			self.quote.total			= response.data.total;
-			self.quote.formatted_total	= response.data.formatted_total;
-		}
-
-		self.ClearAdd();
-		self.Recalculate();
-
-		self.edit_code.focus();
-
-		self.onadd();
-
-		if ( !plus )
-		{
-			self.Hide();
-			self.onclose();
-		}
-	} );
-}
-
-Quote_ItemDialog.prototype.Update = function()
-{
-	var self = this;
-
-	if ( !this.Validate() )
-	{
-		return;
+			callback( response );
+		} );
 	}
 
-	this.ActionItem_Processing_Start( this.button_save );
-
-	QuoteItem_Update( this.quote.id, this.quoteitem.line_id, this.BuildItemData(), function( response )
+	onProcessUpdate( data, callback )
 	{
-		self.ActionItem_Processing_End();
-
-		if ( !response.success )
+		QuoteItem_Update( this.#quote.id, this.#quoteitem.line_id, data, ( response ) =>
 		{
-			return self.onerror( response.error_message );
-		}
+			if ( response.success && this.#quote.total !== response.data.total )
+			{
+				this.#quote.total			= response.data.total;
+				this.#quote.formatted_total	= response.data.formatted_total;
+			}
 
-		if ( self.quote.total != response.data.total )
-		{
-			self.quote.total			= response.data.total;
-			self.quote.formatted_total	= response.data.formatted_total;
-		}
+			callback( response );
+		} );
+	}
 
-		self.Hide();
-		self.onupdate();
-	} );
+	onProcessDetermineSKU( product_code, attributes, callback )
+	{
+		OrderItem_DetermineSKU( product_code, attributes, callback );
+	}
+
+	onProcessDetermineVariant( product_code, attributes, callback )
+	{
+		OrderItem_DetermineVariant( product_code, attributes, callback );
+	}
+
+	onRetrieveCustomerID()
+	{
+		return this.#quote.cust_id;
+	}
 }
