@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2020 Miva, Inc.  All rights reserved.
+| Copyright 1998-2024 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DSC-PRD-
-| Next Error Code: 1    
+| Next Error Code: 1
 |
 </MvCOMMENT>
 
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-discount_product">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Product Discount">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.0000">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1102">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.01">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "discount">
 </MvFUNCTION>
@@ -38,11 +38,11 @@
 
 <MvFUNCTION NAME = "DiscountModule_Fields" PARAMETERS = "module var, pricegroup var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ l.pricegroup:id }">
-		<MvASSIGN NAME = "g.Product_Discount"		VALUE = "{ l.pricegroup:config:discount ROUND 2 }">
+		<MvASSIGN NAME = "g.Product_Discount"		VALUE = "{ [ g.Module_Library_Utilities ].Price_Pad( l.pricegroup:config:discount ) }">
 		<MvASSIGN NAME = "g.Product_Type"			VALUE = "{ l.pricegroup:config:type }">
 		<MvASSIGN NAME = "g.Product_Selection"		VALUE = "{ l.pricegroup:config:selection }">
 		<MvASSIGN NAME = "g.Product_MaxQuantity"	VALUE = "{ l.pricegroup:config:maxquantity }">
-		<MvASSIGN NAME = "g.Product_MaxDiscount"	VALUE = "{ l.pricegroup:config:maxdiscount ROUND 2 }">
+		<MvASSIGN NAME = "g.Product_MaxDiscount"	VALUE = "{ [ g.Module_Library_Utilities ].Price_Pad( l.pricegroup:config:maxdiscount ) }">
 	<MvELSE>
 		<MvASSIGN NAME = "g.Product_Discount"		VALUE = 0.00>
 		<MvASSIGN NAME = "g.Product_Type"			VALUE = "percent">
@@ -70,7 +70,7 @@
 
 <MvFUNCTION NAME = "DiscountModule_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvIF EXPR = "{ l.field_id EQ 'discount' }">
-		<input type="text" size="5" name="Product_Discount" value="{ encodeentities( g.Product_Discount ) }">
+		<input type="text" size="10" name="Product_Discount" value="{ encodeentities( g.Product_Discount ) }">
 
 		<select name="Product_Type">
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'fixed',	g.Product_Type, 'Fixed' ) }">
@@ -86,7 +86,7 @@
 	<MvELSEIF EXPR = "{ l.field_id EQ 'maxquantity' }">
 		<input type="text" size="5" name="Product_MaxQuantity" value="{ encodeentities( g.Product_MaxQuantity ) }"> (0 = unlimited)
 	<MvELSEIF EXPR = "{ l.field_id EQ 'maxdiscount' }">
-		<input type="text" size="5" name="Product_MaxDiscount" value="{ encodeentities( g.Product_MaxDiscount ) }"> (0 = unlimited)
+		<input type="text" size="10" name="Product_MaxDiscount" value="{ encodeentities( g.Product_MaxDiscount ) }"> (0 = unlimited)
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -99,8 +99,14 @@
 	<MvASSIGN NAME = "g.Product_MaxQuantity"	VALUE = "{ trim( g.Product_MaxQuantity ) }">
 	<MvASSIGN NAME = "g.Product_MaxDiscount"	VALUE = "{ trim( g.Product_MaxDiscount ) }">
 
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( g.Product_Discount ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Product_Discount', g.Validation_Message ) }">
+	<MvIF EXPR = "{ g.Product_Type EQ 'percent' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( g.Product_Discount ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Product_Discount', g.Validation_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Price_NonNegative_Required( g.Product_Discount ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Product_Discount', g.Validation_Message ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ ( g.Product_Type NE 'fixed' )	AND
@@ -117,7 +123,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Product_MaxQuantity', g.Validation_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( g.Product_MaxDiscount ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Price_NonNegative_Required( g.Product_MaxDiscount ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'Product_MaxDiscount', g.Validation_Message ) }">
 	</MvIF>
 
@@ -158,17 +164,23 @@
 			<MvELSEIF EXPR = "{ l.pricegroup:config:type EQ 'percent' }">	<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Percent( l.discount_state, l.item, l.item_discount_quantity, l.pricegroup:config:discount ) }">
 			</MvIF>
 		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Price_IsHighPrecision( l.item:eligible_price ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+			<MvELSE>																								<MvASSIGN NAME = "l.scale" VALUE = 8>
+			</MvIF>
+
 			<MvIF EXPR = "{ l.pricegroup:config:type EQ 'fixed' }">
 				<MvIF EXPR = "{ l.item:eligible_price GT l.pricegroup:config:discount }">	<MvASSIGN NAME = "l.item_discount"	VALUE = "{ l.pricegroup:config:discount }">
 				<MvELSE>																	<MvASSIGN NAME = "l.item_discount"	VALUE = "{ l.item:eligible_price }">
 				</MvIF>
 			<MvELSEIF EXPR = "{ l.pricegroup:config:type EQ 'percent' }">
-				<MvASSIGN NAME = "l.item_discount"			VALUE = "{ l.item:eligible_price * ( l.pricegroup:config:discount / 100 ) }">
+				<MvASSIGN NAME = "l.item_discount"			VALUE = "{ ( l.item:eligible_price * ( l.pricegroup:config:discount / 100 ) ) ROUND l.scale }">
 			</MvIF>
 
 			<MvFOR COUNT = "{ l.item_discount_quantity }">
 				<MvIF EXPR = "{ l.item_discount GT l.discount_remaining }">
-					<MvASSIGN NAME = "l.item_discount"		VALUE = "{ l.discount_remaining }">
+					<MvIF EXPR = "{ l.scale EQ 2 }">	<MvASSIGN NAME = "l.item_discount" VALUE = "{ floor( l.discount_remaining * 100 ) / 100 }">
+					<MvELSE>							<MvASSIGN NAME = "l.item_discount" VALUE = "{ l.discount_remaining }">
+					</MvIF>
 				</MvIF>
 
 				<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Discount_Item_Fixed( l.discount_state, l.item, 1, l.item_discount ) }">
@@ -179,7 +191,7 @@
 				</MvIF>
 			</MvFOR>
 		</MvIF>
-			
+
 		<MvIF EXPR = "{ l.pricegroup:config:maxquantity }">
 			<MvASSIGN NAME = "l.discount_quantity"			VALUE = "{ l.discount_quantity - l.item_discount_quantity }">
 			<MvIF EXPR = "{ l.discount_quantity EQ 0 }">
@@ -200,24 +212,21 @@
 		<MvASSIGN NAME = "l.pricegroup:config:maxdiscount"	VALUE = 0.00>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(		'o', l.provide_xml, 'Discount',		l.pricegroup:config:discount,		10, 2 )									OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'o', l.provide_xml, 'Type',			l.pricegroup:config:type,			'Fixed,Percent',	'fixed,percent' )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'o', l.provide_xml, 'Selection',	l.pricegroup:config:selection,		'Lowest,Highest',	'lowest,highest' )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer(	'o', l.provide_xml, 'MaxQuantity',	l.pricegroup:config:maxquantity )											OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number(		'o', l.provide_xml, 'MaxDiscount',	l.pricegroup:config:maxdiscount,	10, 2 ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'o',		l.provide_xml, 'Type',			l.pricegroup:config:type,		'Fixed,Percent',	'fixed,percent' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'o',		l.provide_xml, 'Selection',		l.pricegroup:config:selection,	'Lowest,Highest',	'lowest,highest' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Integer(	'o:nonneg',	l.provide_xml, 'MaxQuantity',	l.pricegroup:config:maxquantity )										OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Price(		'o:nonneg', l.provide_xml, 'MaxDiscount',	l.pricegroup:config:maxdiscount ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( l.pricegroup:config:discount ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Discount must be a non-negative number' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( l.pricegroup:config:maxquantity ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'MaxQuantity must be a non-negative whole number' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Currency_NonNegative_Required( l.pricegroup:config:maxdiscount ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'MaxDiscount must be a non-negative number' ) }">
+	<MvIF EXPR = "{ l.pricegroup:config:type EQ 'percent' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Number( 'o:nonneg', l.provide_xml, 'Discount', l.pricegroup:config:discount, 10, 2 ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Price( 'o:nonneg', l.provide_xml, 'Discount', l.pricegroup:config:discount ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>

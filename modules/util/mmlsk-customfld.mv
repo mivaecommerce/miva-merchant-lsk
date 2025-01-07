@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1001">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1102">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -8965,6 +8965,11 @@
 				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( ( ' $ l.element:alias $ '.value = \'0\' OR ' $ l.element:alias $ '.value IS NULL ) AND ' $ l.element:alias $ '.value_long IS NULL )', '' ) }">
 				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '( ( ' $ l.element:alias $ '.value_long = \'0\' OR ' $ l.element:alias $ '.value_long IS NULL ) AND ' $ l.element:alias $ '.value IS NULL )' , '' ) }">
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
+		<MvELSEIF EXPR = "{ ( l.operator EQ 'IN' ) OR
+							( l.operator EQ 'NOT_IN' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+				<MvEVAL EXPR = "{ CustomFields_Query_Search_CommaSeparatedList_With_Type( l.query, ternary( l.is_conjunctive, 'CHAR', 'NULL_CHAR' ), l.element:alias $ '.value', l.element:alias $ '.value_long', l.operator, l.value ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.query, 'AND', l.inner_joining_clause ) }">
 		<MvELSEIF EXPR = "{ l.operator EQ 'FULLTEXT'			OR
 							l.operator EQ 'FULLTEXT_NATURAL'	OR
 							l.operator EQ 'FULLTEXT_BOOLEAN' }">
@@ -8983,6 +8988,26 @@
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.query, 'OR', 'AND' ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_Query_Search_CommaSeparatedList_With_Type" PARAMETERS = "query var, type, column, column_long, operator, value" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+	<MvFOREACH ITERATOR = "l.in_value" ARRAY = "l.in_values" COUNT = "{ miva_splitstring( l.value, ',', l.in_values, 'trim' ) }">
+		<MvIF EXPR = "{ ISNULL l.in_value }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.operator EQ 'IN' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_EQ( l.type, ternary( len_var( l.in_value ) GT 254, l.column_long, l.column ), l.in_value ) }">
+		<MvELSE>								<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Filter_NE( l.type, ternary( len_var( l.in_value ) GT 254, l.column_long, l.column ), l.in_value ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.where_sql, [ g.Module_Library_DB ].SQL_Query_Field( l.in_value ) ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.operator EQ 'IN' }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
+	<MvELSE>								<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CustomFields_Generic_Query_OrderBy" PARAMETERS = "data var, query var, code, direction" STANDARDOUTPUTLEVEL = "">

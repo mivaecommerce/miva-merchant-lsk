@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-mv-flex">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Flex Component">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1102">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.10">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, util, component, component_frag, component_prov, provision_store, json, json_upload, clientside, clientside_sri, pagebuilder_cmp, json_changeset, skins">
 </MvFUNCTION>
@@ -400,6 +400,12 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
+	<MvIF EXPR = "{ NOT ISNULL l.managedproperty:version:settings:advanced_properties }">
+		<MvIF EXPR = "{ NOT ComponentModule_Initialize_Properties( l.module, l.flex_item:item_code, l.all_settings, l.flex_item:settings:advanced, l.managedproperty:version:settings:advanced_properties ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -742,7 +748,7 @@
 
 <MvFUNCTION NAME = "ComponentModule_Initialize_JSON_Callback_Property_Slider" PARAMETERS = "property_settings var, property var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvIF EXPR = "{ l.property:scale EQ -1 OR l.property:precision EQ -1 }">	"value": <MvEVAL EXPR = "{ int( l.property_settings:value ) }">
-	<MvELSE>																	"value": <MvEVAL EXPR = "{ l.property_settings:value ROUND l.property:precision }">
+	<MvELSE>																	"value": <MvEVAL EXPR = "{ l.property_settings:value ROUND l.property:scale }">
 	</MvIF>
 </MvFUNCTION>
 
@@ -1597,6 +1603,10 @@
 			</MvFOREACH>
 		</MvFOREACH>
 
+		<MvASSIGN NAME = "l.images"			VALUE = "">
+		<MvASSIGN NAME = "l.image_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.image_lookup"	VALUE = "">
+
 		<MvFOREACH ITERATOR = "l.page" ARRAY = "l.pages" COUNT = "{ [ g.Module_Feature_TUI_DB ].PageList_Load_Item_Runtime( l.item:id, l.pages ) }">
 			<MvREFERENCEARRAY NAME = "l.settings" VARIABLE = "l.page:settings">
 				<MvMEMBER NAME = "{ l.item:code }">
@@ -1620,12 +1630,128 @@
 								<Component_Code><MvEVAL EXPR = "{ miva_cdata_encode( l.flex_item:component_code ) }"></Component_Code>
 								<Settings><MvEVAL EXPR = "{ miva_cdata_encode( miva_json_encode( l.flex_item:settings, 'pretty' ) ) }"></Settings>
 							</FlexItem_Add>
+
+							<MvCOMMENT>
+							|
+							| Find images referenced in this flex item and add to global list
+							|
+							</MvCOMMENT>
+
+							<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_Images( l.managedproperty, l.flex_item, l.image_lookup, l.images, l.image_count ) }">
 						</MvIF>
 					</MvFOREACH>
 				</Item>
 			</Page_Update>
 		</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Output unique list of images found in flex components across all pages. This tag is not used anywhere
+		| except by the framework export process, which scrapes the contents and includes each referenced image
+		| file into the packaged framework.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.image_count }">
+			<FlexFrameworkImages><![CDATA[
+				<MvFOREACH ITERATOR = "l.image" ARRAY = "l.images" COUNT = "{ l.image_count }">
+					<img src="{ encodeentities( l.image ) }" />
+				</MvFOREACH>
+			]]></FlexFrameworkImages>
+		</MvIF>
 	</MvCAPTURE>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_FlexItem_Images" PARAMETERS = "managedproperty var, flex_item var, image_lookup var, images var, image_count var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages( l.managedproperty:version:settings:properties, l.flex_item:settings, l.image_lookup, l.images, l.image_count ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.managedproperty:version:settings:advanced_properties }">
+		<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages( l.managedproperty:version:settings:advanced_properties, l.flex_item:settings:advanced, l.image_lookup, l.images, l.image_count ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_FlexItem_FindImages" PARAMETERS = "properties var, settings var, image_lookup var, images var, image_count var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.property" ARRAY = "l.properties">
+		<MvIF EXPR = "{ ISNULL l.property:code }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.property_settings" VARIABLE = "l.settings">
+			<MvMEMBER NAME = "{ l.property:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL l.property:visibility_conditions AND NOT l.property_settings:visible }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.property:type EQ 'image' }">		<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_Property_Image( l.property, l.property_settings, l.image_lookup, l.images, l.image_count ) }">
+		<MvELSEIF EXPR = "{ l.property:type EQ 'group' }">	<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_Property_Group( l.property, l.property_settings, l.image_lookup, l.images, l.image_count ) }">
+		<MvELSEIF EXPR = "{ l.property:type EQ 'list' }">	<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_Property_List( l.property, l.property_settings, l.image_lookup, l.images, l.image_count ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_FlexItem_FindImages_Property_Image" PARAMETERS = "property var, property_settings var, image_lookup var, images var, image_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.property_settings:image }">
+		<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_AppendImage( l.property_settings:image, l.image_lookup, l.images, l.image_count ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.responsive_image" ARRAY = "l.property:responsive_images">
+		<MvREFERENCEARRAY NAME = "l.image" VARIABLE = "l.property_settings">
+			<MvMEMBER NAME = "responsive_images">
+			<MvMEMBER NAME = "{ l.responsive_image:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL l.image }">
+			<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_AppendImage( l.image, l.image_lookup, l.images, l.image_count ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_FlexItem_FindImages_Property_Group" PARAMETERS = "property var, property_settings var, image_lookup var, images var, image_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.property:can_disable }">
+		<MvIF EXPR = "{ NOT l.property_settings:settings:enabled }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages( l.property:properties, l.property_settings, l.image_lookup, l.images, l.image_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_FlexItem_FindImages_Property_List" PARAMETERS = "property var, property_settings var, image_lookup var, images var, image_count var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.property:list_type EQ 'group' }">
+		<MvFOREACH ITERATOR = "l.item_settings" ARRAY = "l.property_settings:children">
+			<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages( l.property:properties, l.item_settings, l.image_lookup, l.images, l.image_count ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ l.property:list_type EQ 'image' }">
+		<MvFOREACH ITERATOR = "l.item_settings" ARRAY = "l.property_settings:children">
+			<MvIF EXPR = "{ NOT ISNULL l.item_settings:image }">
+				<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_AppendImage( l.item_settings:image, l.image_lookup, l.images, l.image_count ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.responsive_image" ARRAY = "l.property:responsive_images">
+				<MvREFERENCEARRAY NAME = "l.image" VARIABLE = "l.item_settings">
+					<MvMEMBER NAME = "responsive_images">
+					<MvMEMBER NAME = "{ l.responsive_image:code }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT ISNULL l.image }">
+					<MvEVAL EXPR = "{ SkinsComponentModule_Export_Item_FlexItem_FindImages_AppendImage( l.image, l.image_lookup, l.images, l.image_count ) }">
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SkinsComponentModule_Export_Item_FlexItem_FindImages_AppendImage" PARAMETERS = "image, image_lookup var, images var, image_count var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.image_added" VARIABLE = "l.image_lookup">
+		<MvMEMBER NAME = "{ l.image }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT l.image_added }">
+		<MvASSIGN NAME = "l.image_added" VALUE = 1>
+		<MvASSIGN NAME = "l.image_count" VALUE = "{ miva_array_insert_var( l.images, l.image, -1 ) }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SkinsComponentModule_Export_Item_Managed" PARAMETERS = "managedproperty var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">

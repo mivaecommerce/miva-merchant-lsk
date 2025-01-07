@@ -628,9 +628,11 @@ AttributeMachine.prototype.Pricing_Update = function( data )
 
 	const product_data =
 	{
-		product_code:		this.settings.product_code,
-		price:				price,
-		additional_price:	additional_price
+		product_code:				this.settings.product_code,
+		price:						price,
+		additional_price:			additional_price,
+		formatted_price:			formatted_price,
+		formatted_additional_price:	formatted_additional_price
 	};
 
 	this.onPriceChanged( product_data );

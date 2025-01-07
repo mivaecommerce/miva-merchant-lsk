@@ -215,8 +215,8 @@
 					<MvFOREACHCONTINUE>
 				</MvIF>
 
-				<MvASSIGN NAME = "l.retail"			VALUE = "{ l.retail + l.selected_attribute:price }">
-				<MvASSIGN NAME = "l.base_price"		VALUE = "{ l.base_price + [ g.Library_Utilities ].Adjusted_Price( l.product, l.selected_attribute:price, l.selected_attribute:cost ) }">
+				<MvASSIGN NAME = "l.retail"			VALUE = "{ l.retail + l.selected_attribute:retail }">
+				<MvASSIGN NAME = "l.base_price"		VALUE = "{ l.base_price + l.selected_attribute:price }">
 				<MvASSIGN NAME = "l.weight"			VALUE = "{ l.weight + l.selected_attribute:weight }">
 			</MvFOREACH>
 		</MvIF>
@@ -235,6 +235,7 @@
 					<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Load( l.discount_signature, l.complete_variant:product_id, l.complete_variant:variant_id, l.discountprice ) }">
 						<MvASSIGN NAME = "l.use_discount_state"	VALUE = 1>
 					<MvELSE>
+						<MvASSIGN NAME = "l.base_price"			VALUE = "{ l.discountprice:base_price }">
 						<MvASSIGN NAME = "l.price"				VALUE = "{ l.discountprice:price }">
 					</MvIF>
 				</MvIF>
@@ -2693,7 +2694,6 @@
 	<MvASSIGN NAME = "l.sort"					VALUE = "">
 	<MvASSIGN NAME = "l.offset"					VALUE = 0>
 	<MvASSIGN NAME = "l.count"					VALUE = 0>
-	<MvASSIGN NAME = "l.parent_id"				VALUE = 0>
 	<MvASSIGN NAME = "l.available_filters"		VALUE = "">
 	<MvASSIGN NAME = "l.search_query" 			VALUE = "">
 	<MvASSIGN NAME = "l.catlimit_module_count"	VALUE = "{ [ g.Library_DB ].StoreModuleList_Load_Features_Cached( 'catlimit', l.catlimit_modules ) }">
@@ -2702,18 +2702,25 @@
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'cat.code',	'code' ) }">
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'cat.name',	'name' ) }">
 
-	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
-					NOT JSON_Input_Text(	'o', 'Sort',		l.sort )		OR
-					NOT JSON_Input_Integer(	'o', 'Offset',		l.offset )		OR
-					NOT JSON_Input_Integer(	'o', 'Count',		l.count )		OR
-					NOT JSON_Input_Integer(	'o', 'Parent_ID',	l.parent_id ) }">
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
 
 	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'cat.id, cat.parent_id, cat.code, cat.name, cat.page_title, cat.disp_order' ) }">
 	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Categories', 'cat' ) }">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'cat.active = 1 AND cat.parent_id = ?', [ g.Library_DB ].SQL_Query_Field( l.parent_id ) ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'cat.active = 1', '' ) }">
 	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, '( ' $ [ g.Library_DB ].Runtime_Category_AvailabilityGroup_Where( l.agrp_fields ) $ ' )', l.agrp_fields ) }">
+
+	<MvIF EXPR = "{ JSON_Input_Exists( 'Parent_ID' ) }">
+		<MvIF EXPR = "{ NOT JSON_Input_Integer(	'O', 'Parent_ID', l.parent_id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'cat.parent_id = ?', [ g.Library_DB ].SQL_Query_Field( l.parent_id ) ) }">
+	</MvIF>
 
 	<MvEVAL EXPR = "{ JSON_Filter_Callback_With_FilteredCustomFields( l.search_query, l.filter, l.available_filters, g.Module_JSON, 'JSON_Runtime_CategoryList_Load_Query_Filter', '', 'JSON_Category_CustomFields_Query_Filter', 'JSON_Runtime_Category_CustomField_Filter', l.data ) }">
 
