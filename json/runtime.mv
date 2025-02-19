@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-RTM-
@@ -375,11 +375,11 @@
 			</MvREFERENCEARRAY>
 
 			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_count ) }">
-			"id":				<MvEVAL EXPR = "{ l.output_attribute:attr_id }">,
-			"attmpat_id":		<MvEVAL EXPR = "{ l.output_attribute:attmpat_id }">,
+			"id":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.output_attribute:attr_id ) }">,
+			"attmpat_id":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.output_attribute:attmpat_id ) }">,
 
 			<MvIF EXPR = "{ len( l.output_attribute:selected_id ) }">
-				"selected_id":	<MvEVAL EXPR = "{ l.output_attribute:selected_id }">,
+				"selected_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.output_attribute:selected_id ) }">,
 			</MvIF>
 
 			"options":
@@ -390,7 +390,7 @@
 						,
 					</MvIF>
 
-					<MvEVAL EXPR = "{ l.output_attribute:options[ l.output_option_pos ] }">
+					<MvEVAL EXPR = "{ encodejavascriptnumber( l.output_attribute:options[ l.output_option_pos ] ) }">
 
 					<MvASSIGN NAME = "l.output_option_pos"	VALUE = "{ l.output_option_pos + 1 }">
 				</MvWHILE>
@@ -1110,7 +1110,30 @@
 	<MvASSIGN NAME = "l.unselected_count"			VALUE = "{ JSON_Array_Coalesce_Integer( g.Unselected_Attribute_IDs,						l.unselected_attributes,	'attr_id' ) }">
 	<MvASSIGN NAME = "l.null"						VALUE = "{ JSON_Array_Coalesce_Integer( g.Unselected_AttributeTemplateAttribute_IDs,	l.unselected_attributes,	'attmpat_id' ) }">
 
-	<MvASSIGN NAME = "l.applied_facet_count"		VALUE = "{ JSON_Runtime_Product_AppliedFacets( l.applied_facets ) }">
+	<MvCOMMENT>
+	|
+	| Force all numeric input array elements to have a default value.  This is necsssary as the array inputs may be different lengths.
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.selected_attribute" ARRAY = "l.selected_attributes" COUNT = "{ l.selected_count }">
+		<MvASSIGN NAME = "l.selected_attribute:attr_id"		VALUE = "{ int( l.selected_attribute:attr_id ) }">
+		<MvASSIGN NAME = "l.selected_attribute:attmpat_id"	VALUE = "{ int( l.selected_attribute:attmpat_id ) }">
+		<MvASSIGN NAME = "l.selected_attribute:option_id"	VALUE = "{ int( l.selected_attribute:option_id ) }">
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.unselected_attribute" ARRAY = "l.unselected_attributes" COUNT = "{ l.unselected_count }">
+		<MvASSIGN NAME = "l.unselected_attribute:attr_id"		VALUE = "{ int( l.unselected_attribute:attr_id ) }">
+		<MvASSIGN NAME = "l.unselected_attribute:attmpat_id"	VALUE = "{ int( l.unselected_attribute:attmpat_id ) }">
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Load facet and product information
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.applied_facet_count" VALUE = "{ JSON_Runtime_Product_AppliedFacets( l.applied_facets ) }">
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_Code( g.Product_Code, l.product ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
@@ -3286,27 +3309,7 @@
 		</MvIF>
 	</MvFOREACH>
 
-	<MvASSIGN NAME = "l.facet_search_query" VALUE = "{ l.search_query }">
-
-	<MvIF EXPR = "{ l.data:query_facet_count }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Facets( l.search_query, l.data:query_facets, l.data:query_facet_count ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ l.data:ondemandcolumns:page }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_INTEGER( l.search_query,	'pv.page_id',	'page_id' ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 		'pv.code',		'alt_page_code' ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 		'pv.title',		'alt_page_title' ) }">
-
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'PageBranchVersions', 'pbv', 'prod.page_code <> \'\' AND pbv.branch_id = ? AND pbv.head = 1 AND ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pbv.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prod.page_code' ), [ g.Module_Library_DB ].SQL_Query_Field( [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() ) ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'PageVersions', 'pv', 'pv.id = pbv.version_id', '' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ l.data:ondemandcolumns:category }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'cat.code', 'cancat_code' ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'cat.name', 'cancat_name' ) }">
-
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'Categories', 'cat', 'prod.cancat_id = cat.id', '' ) }">
-	</MvIF>
+	<MvEVAL EXPR = "{ JSON_Runtime_Product_OrderBy( l.search_query, l.sort ) }">
 
 	<MvIF EXPR = "{ l.data:ondemandcolumns:sale_price }">
 		<MvIF EXPR = "{ [ g.Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.discount_signature ) }">
@@ -3314,14 +3317,12 @@
 		</MvIF>
 	</MvIF>
 
-	<MvEVAL EXPR = "{ JSON_Runtime_Product_OrderBy( l.search_query, l.sort ) }">
-
-	<MvASSIGN NAME = "l.enabled_facets" 		VALUE = "">
-	<MvASSIGN NAME = "l.enabled_facet_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.facets_with_values"			VALUE = "">
+	<MvASSIGN NAME = "l.facets_with_values_count"	VALUE = 0>
 
 	<MvIF EXPR = "{ l.data:ondemandcolumns:facets }">
-		<MvIF EXPR = "{ l.query_params:data:category }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Category_Query_Cached( l.query_params:data:category, l.facet_search_query, l.possible_facets ) }">
-		<MvELSE>											<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Query_Cached( l.facet_search_query, l.possible_facets ) }">
+		<MvIF EXPR = "{ l.query_params:data:category }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Category_Query_Cached( l.query_params:data:category, l.search_query, l.possible_facets ) }">
+		<MvELSE>											<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Query_Cached( l.search_query, l.possible_facets ) }">
 		</MvIF>
 
 		<MvASSIGN NAME = "l.enabled_facet_count" VALUE = "{ miva_array_filter_ref( l.possible_facets, 1, l.facet, 'l.facet:handle EQ \'show\'', l.enabled_facets ) }">
@@ -3332,6 +3333,12 @@
 				<MvASSIGN NAME = "l.facet:input_value_count" 	VALUE = "{ l.search_facet:input_value_count }">
 			</MvIF>
 		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.facets_with_values_count" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Values_Query( l.search_query, l.enabled_facets, l.enabled_facet_count, l.facets_with_values ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.data:query_facet_count }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Facets( l.search_query, l.data:query_facets, l.data:query_facet_count ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.data:inventorysettings ) }">
@@ -3350,6 +3357,22 @@
 		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_Inventory( l.search_query ) }">
 		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_DiscountPrices( l.search_query ) }">
 		<MvEVAL EXPR = "{ JSON_Query_Callback_With_FilteredCustomFields( l.search_query, l.filter, g.Module_JSON, 'JSON_Runtime_Product_CustomFields_Query', 'JSON_Runtime_Product_CustomField_Filter' ) }">
+
+		<MvIF EXPR = "{ l.data:ondemandcolumns:page }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_INTEGER( l.search_query,	'pv.page_id',	'page_id' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 		'pv.code',		'alt_page_code' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 		'pv.title',		'alt_page_title' ) }">
+
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'PageBranchVersions', 'pbv', 'prod.page_code <> \'\' AND pbv.branch_id = ? AND pbv.head = 1 AND ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pbv.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prod.page_code' ), [ g.Module_Library_DB ].SQL_Query_Field( [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() ) ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'PageVersions', 'pv', 'pv.id = pbv.version_id', '' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.data:ondemandcolumns:category }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'cat.code', 'cancat_code' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'cat.name', 'cancat_name' ) }">
+
+			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'prod', g.Store_Table_Prefix $ 'Categories', 'cat', 'prod.cancat_id = cat.id', '' ) }">
+		</MvIF>
 
 		<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
 	<MvELSE>
@@ -3376,12 +3399,6 @@
 		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_Inventory( l.cached_query ) }">
 		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_DiscountPrices( l.cached_query ) }">
 		<MvEVAL EXPR = "{ JSON_Query_Callback_With_FilteredCustomFields( l.cached_query, l.filter, g.Module_JSON, 'JSON_Runtime_Product_CustomFields_Query', 'JSON_Runtime_Product_CustomField_Filter' ) }">
-
-		<MvCOMMENT>
-		|
-		| Reselect the necessary tables
-		|
-		</MvCOMMENT>
 
 		<MvIF EXPR = "{ l.data:ondemandcolumns:page }">
 			<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_INTEGER( l.cached_query,	'pv.page_id',	'page_id' ) }">
@@ -3485,18 +3502,18 @@
 			<MvSKIP NAME = "Merchant" VIEW = "RuntimeProducts" ROWS = 1>
 		</MvWHILE>
 		]
-		<MvIF EXPR = "{ l.enabled_facet_count }">
-			,<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Facets( l.facet_search_query, l.enabled_facets, l.enabled_facet_count ) }">
+		<MvIF EXPR = "{ l.facets_with_values_count }">
+			,<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Facets( l.facets_with_values, l.facets_with_values_count ) }">
 		</MvIF>
 	}
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "RuntimeProducts">
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "JSON_Runtime_ProductList_Facets" PARAMETERS = "query var, enabled_facets var, enabled_facet_count" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+<MvFUNCTION NAME = "JSON_Runtime_ProductList_Facets" PARAMETERS = "facets_with_values var, facets_with_values_count" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	"facets":
 	{
-	<MvFOREACH ITERATOR = "l.facet" ARRAY = "l.facets_with_values" INDEX = "l.pos" COUNT = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Values_Query( l.query, l.enabled_facets, l.enabled_facet_count, l.facets_with_values ) }">
+	<MvFOREACH ITERATOR = "l.facet" ARRAY = "l.facets_with_values" INDEX = "l.pos" COUNT = "{ l.facets_with_values_count }">
 		<MvIF EXPR = "{ l.pos GT 1 }">
 			,
 		</MvIF>
@@ -3513,7 +3530,7 @@
 				"value_high": 			<MvEVAL EXPR = "{ gettoken( l.facet:values[ 1 ]:value, '-', 2 ) ROUND 2 }">,
 				"selected_value_low": 	<MvEVAL EXPR = "{ gettoken( l.facet:input_values[ 1 ], '-', 1 ) ROUND 2 }">,
 				"selected_value_high": 	<MvEVAL EXPR = "{ gettoken( l.facet:input_values[ 1 ], '-', 2 ) ROUND 2 }">
-			<MvELSEIF EXPR = "{ l.facet:type EQ 'nested' AND miva_array_search( l.enabled_facets, 1, l.search_facet, 'l.search_facet:code EQ l.facet:code AND l.search_facet:input_value_count GT 0' ) }">
+			<MvELSEIF EXPR = "{ l.facet:type EQ 'nested' AND miva_array_search( l.facets_with_values, 1, l.search_facet, 'l.search_facet:code EQ l.facet:code AND l.search_facet:input_value_count GT 0' ) }">
 				,"applied_prompts":
 				[
 				<MvFOREACH ITERATOR = "l.value" ARRAY = "l.search_facet:input_values" INDEX = "l.pos_2" COUNT = "{ l.search_facet:input_value_count }">

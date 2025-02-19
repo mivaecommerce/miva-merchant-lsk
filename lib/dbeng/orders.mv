@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-ORD-
@@ -409,6 +409,16 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "OrderInfo_InsertOrUpdate" PARAMETERS = "orderinfo var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ OrderInfo_Insert( l.orderinfo ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ OrderInfo_Update( l.orderinfo ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderItem_Copy_Basket" PARAMETERS = "basket var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -1222,6 +1232,8 @@
 	<MvASSIGN NAME = "l.split_orderitem_new:line_id"		VALUE = "{ StoreKey_Generate( 'BasketItems' ) }">
 	<MvASSIGN NAME = "l.split_orderitem_new:group_id"		VALUE = ""> <MvCOMMENT> NULL group_id gets assigned to the value of line_id in OrderItem_Insert_LowLevel, line_id generated in OrderItem_Insert </MvCOMMENT>
 	<MvASSIGN NAME = "l.split_orderitem_new:quantity"		VALUE = "{ l.quantity }">
+	<MvASSIGN NAME = "l.split_orderitem_new:total"			VALUE = ""> <MvCOMMENT> NULL total gets assigned to the value of 0.00 in OrderItem_Insert_LowLevel, then it will be updated once the item and options have been inserted </MvCOMMENT>
+	<MvASSIGN NAME = "l.split_orderitem_new_total"			VALUE = "{ l.split_orderitem_new:price }">
 
 	<MvASSIGN NAME = "l.split_orderitem_new:tax"			VALUE = "{ ( l.split_orderitem_original:tax * ( l.split_orderitem_new:quantity / l.orderitem:quantity ) ) ROUND 2 }">
 	<MvASSIGN NAME = "l.split_orderitem_original:tax"		VALUE = "{ ( l.split_orderitem_original:tax - l.split_orderitem_new:tax ) ROUND 2 }">
@@ -1242,8 +1254,9 @@
 	<MvFOREACH ITERATOR = "l.orderoption" ARRAY = "l.orderoptions" COUNT = "{ OrderOptionList_Load_Line( l.split_orderitem_original:line_id, l.orderoptions ) }">
 		<MvASSIGN NAME = "l.discount_count"					VALUE = "{ OrderOptionDiscountList_Load_LineOption_ID( l.orderoption:id, l.discounts ) }">
 		<MvASSIGN NAME = "l.orderoption:line_id"			VALUE = "{ l.split_orderitem_new:line_id }">
+		<MvASSIGN NAME = "l.split_orderitem_new_total"		VALUE = "{ l.split_orderitem_new_total + l.orderoption:price }">
 
-		<MvIF EXPR = "{ NOT v10_OrderOption_Insert( l.split_orderitem_new, l.orderoption ) }">
+		<MvIF EXPR = "{ NOT OrderOption_Insert_LowLevel( l.orderoption ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
@@ -1256,6 +1269,12 @@
 			</MvIF>
 		</MvFOREACH>
 	</MvFOREACH>
+
+	<MvASSIGN NAME = "l.split_orderitem_new:total"			VALUE = "{ [ g.Module_Library_Utilities ].Round_Item_Total( l.split_orderitem_new_total * l.split_orderitem_new:quantity ) }">
+
+	<MvIF EXPR = "{ NOT OrderItem_Update_Pricing_LowLevel( l.split_orderitem_new ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
 
 	<MvIF EXPR = "{ NOT OrderItem_Split_Children( l.split_orderitem_original, l.split_orderitem_new ) }">
 		<MvFUNCTIONRETURN VALUE = 0>

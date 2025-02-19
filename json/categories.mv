@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-CAT-
-| Next Error Code: 48   
+| Next Error Code: 50   
 |
 </MvCOMMENT>
 
@@ -1795,4 +1795,180 @@
 	<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Action( 'MER-JSN-CAT-00024', 'Child category sort order updated' ) }">
 	
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CategoryPriceGroupList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PGRP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.offset"			VALUE = "">
+	<MvASSIGN NAME = "l.count"			VALUE = "">
+	<MvASSIGN NAME = "l.assigned"		VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Category_Load( l.category ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT JSON_Input_Text(	'o', 'Sort',		l.sort )		OR
+					NOT JSON_Input_Integer(	'o', 'Offset',		l.offset )		OR
+					NOT JSON_Input_Integer(	'o', 'Count',		l.count )		OR
+					NOT JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query,	'pg.*,
+																				 m.id			AS module_id,
+																				 m.code			AS module_code,
+																				 m.name			AS module_name,
+																				 m.provider		AS module_provider,
+																				 m.api_ver		AS module_api_ver,
+																				 m.version		AS module_version,
+																				 m.module		AS module_module,
+																				 m.refcount		AS module_refcount,
+																				 m.active		AS module_active,
+																				 m.priority		AS module_priority,
+																				 pgxc.pgrp_id	AS assigned' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.search_query, 'm.name', 'type' ) }">
+
+	<MvIF EXPR = "{ l.assigned AND ( NOT l.unassigned ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'PriceGroupXCategory',	'pgxc' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'PriceGroups',			'pg' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'pgxc.cat_id = ? AND pg.id = pgxc.pgrp_id', [ g.Module_Library_DB ].SQL_Query_Field( l.category:id ) ) }">
+	<MvELSEIF EXPR = "{ l.assigned OR l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'PriceGroups',			'pg' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pg', g.Store_Table_Prefix $ 'PriceGroupXCategory', 'pgxc', 'pgxc.cat_id = ? AND pg.id = pgxc.pgrp_id', [ g.Module_Library_DB ].SQL_Query_Field( l.category:id ) ) }">
+
+		<MvIF EXPR = "{ NOT l.assigned }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'pgxc.pgrp_id IS NULL', '' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'pg', 'Modules', 'm', 'pg.module_id = m.id', '' ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, [ g.Module_Feature_PGR_JSON ].JSON_BasePriceGroupList_Filters() ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort,
+									'id:pg.id,name:pg.name,type:m.name:null_char,custscope:pg.custscope,rate:pg.rate,discount:pg.discount,markup:pg.markup,
+									 dt_start:pg.dt_start,dt_end:pg.dt_end,priority:pg.priority;-pg.id,descrip:pg.descrip,display:pg.display,
+									 qualifying_subtotal:pg.qmn_subtot,qualifying_quantity:pg.qmn_quan,qualifying_weight:pg.qmn_weight,
+									 basket_quantity:pg.bmn_quan,basket_subtotal:pg.bmn_subtot,basket_weight:pg.bmn_weight',
+									'-pg.priority;pg.id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'PriceGroups', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-CAT-00048', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.pricegroup_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT PriceGroups.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.pricegroup_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_DB ].PriceGroupAndModule_Read( l.pricegroup ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.pricegroup_count ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_PGR_JSON ].JSON_PriceGroup( l.pricegroup ) }">
+			, "assigned":	<MvEVAL EXPR = "{ encodejavascriptboolean( PriceGroups.d.assigned ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "PriceGroups" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroups">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_CategoryAvailabilityGroupList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'AGRP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.offset"			VALUE = "">
+	<MvASSIGN NAME = "l.count"			VALUE = "">
+	<MvASSIGN NAME = "l.assigned"		VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Category_Load( l.category ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT JSON_Input_Text(	'o', 'Sort',		l.sort )		OR
+					NOT JSON_Input_Integer(	'o', 'Offset',		l.offset )		OR
+					NOT JSON_Input_Integer(	'o', 'Count',		l.count )		OR
+					NOT JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query,	'ag.*,
+																				 agxc.agrp_id AS assigned' ) }">
+
+	<MvIF EXPR = "{ l.assigned AND ( NOT l.unassigned ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'AvailGroupXCategory',	'agxc' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'AvailabilityGroups',	'ag' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'agxc.cat_id = ? AND ag.id = agxc.agrp_id', [ g.Module_Library_DB ].SQL_Query_Field( l.category:id ) ) }">
+	<MvELSEIF EXPR = "{ l.assigned OR l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'AvailabilityGroups',	'ag' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ag', g.Store_Table_Prefix $ 'AvailGroupXCategory', 'agxc', 'agxc.cat_id = ? AND ag.id = agxc.agrp_id', [ g.Module_Library_DB ].SQL_Query_Field( l.category:id ) ) }">
+
+		<MvIF EXPR = "{ NOT l.assigned }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'agxc.agrp_id IS NULL', '' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, [ g.Module_Feature_AGR_JSON ].JSON_BaseAvailabilityGroupList_Filters() ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, [ g.Module_Feature_AGR_JSON ].JSON_BaseAvailabilityGroupList_OrderBy(), 'ag.id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'AvailabilityGroups', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-CAT-00049', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.availabilitygroup_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT AvailabilityGroups.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.availabilitygroup_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_DB ].AvailabilityGroup_Read( l.availabilitygroup ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.availabilitygroup_count ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_JSON ].JSON_AvailabilityGroup( l.availabilitygroup ) }">
+				, "assigned": <MvEVAL EXPR = "{ encodejavascriptboolean( AvailabilityGroups.d.assigned ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "AvailabilityGroups" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailabilityGroups">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>

@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-TUI-MGR-
-| Next Error Code: 118   
+| Next Error Code: 119   
 |
 </MvCOMMENT>
 
@@ -911,7 +911,13 @@
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_Reuse( l.managedtemplate:filename, l.managedtemplate:parent_id, l.managedtemplate:item_id, l.managedtemplate:prop_id, l.managedtemplate:sync, l.managedtemplate ) }">
+	<MvASSIGN NAME = "l.filename" VALUE = "{ l.managedtemplate:filename }">
+
+	<MvIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_Reuse( l.filename, l.managedtemplate:parent_id, l.managedtemplate:item_id, l.managedtemplate:prop_id, l.managedtemplate:sync, l.managedtemplate ) }">
+		<MvIF EXPR = "{ strcmp( l.filename, l.managedtemplate:filename ) NE 0 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-TUI-MGR-00118', 'A managed template with the same filename but a differing case already exists' ) }">
+		</MvIF>
+	<MvELSE>
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
@@ -954,11 +960,13 @@
 		</MvIF>
 
 		<MvIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_Reuse( l.output_file, l.managedtemplate:parent_id, l.managedtemplate:item_id, l.managedtemplate:prop_id, l.managedtemplate:sync, l.managedtemplate ) }">
-			<MvASSIGN NAME = "l.managedtemplate_reused" VALUE = 1>
-			<MvWHILESTOP>
+			<MvIF EXPR = "{ strcmp( l.output_file, l.managedtemplate:filename ) EQ 0 }">
+				<MvASSIGN NAME = "l.managedtemplate_reused" VALUE = 1>
+				<MvWHILESTOP>
+			</MvIF>
 		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ NOT [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_Branchless_Filename( l.output_file, l.template ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_Branchless_Filename( l.output_file, l.managedtemplate ) }">
 			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
@@ -966,7 +974,7 @@
 			<MvWHILESTOP>
 		</MvIF>
 
-		<MvASSIGN NAME = "l.output_file" VALUE = "{ l.template:id $ '_' $ l.template:filename }">
+		<MvASSIGN NAME = "l.output_file" VALUE = "{ l.managedtemplate:id $ '_' $ l.output_file }">
 	</MvWHILE>
 
 	<MvASSIGN NAME = "l.managedtemplate:filename" VALUE = "{ l.output_file }">
@@ -1036,7 +1044,18 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvFUNCTIONRETURN VALUE = "{ TemplateManager_Changeset_Record_ManagedTemplateVersion_Branch( l.branch_id, l.managedtemplate:id, l.managedtemplateversion:id, 0, 'Managed Template Deleted' ) }">
+	<MvIF EXPR = "{ NOT TemplateManager_Changeset_Record_ManagedTemplateVersion_Branch( l.branch_id, l.managedtemplate:id, l.managedtemplateversion:id, 0, 'Managed Template Deleted' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.branch_id EQ TemplateManager_Working_Branch_ID() }">									<MvASSIGN NAME = "l.branch_tmpldir" VALUE = "{ g.Store:branch:tmpldir }">
+	<MvELSEIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].Branch_Load_ID_Cached( l.branch_id, l.branch ) }">	<MvASSIGN NAME = "l.branch_tmpldir" VALUE = "{ l.branch:tmpldir }">
+	<MvELSE>																								<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ sdelete( g.Module_Root $ 'templates/s' $ padl( g.Store:id, 2, '0' ) $ '/' $ l.branch_tmpldir $ l.managedtemplate:filename ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "TemplateManager_GlobalDelete_ManagedTemplate_Filename" PARAMETERS = "filename" STANDARDOUTPUTLEVEL = "">
@@ -9849,5 +9868,5 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "TemplateManager_Session_Recycle_Recommended" STANDARDOUTPUTLEVEL = "">
-	<MvFUNCTIONRETURN VALUE = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">
+<MvFUNCTIONRETURN VALUE = "{ ( ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) ) OR ( ( s.dyn_time_t - s.time_t ) GT 30 ) }">
 </MvFUNCTION>

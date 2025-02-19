@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-CSSUI-CMP-WSHLI-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-cssui-wishlistitems">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "CSSUI Wish List Items">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1103">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "component, component_prov, skins">
 </MvFUNCTION>
@@ -843,24 +843,15 @@
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
+		<MvASSIGN NAME = "l.wishlistitem:product:base_price"					VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.wishlistitem:product, l.wishlistitem:product:price, l.wishlistitem:product:cost ) }">
+		<MvASSIGN NAME = "l.wishlistitem:product:price"        					VALUE = "{ l.wishlistitem:product:base_price }"> 
+
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_Runtime( l.wishlistitem:product ) OR
 						NOT [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_CustomFields( l.wishlistitem:product:id, l.wishlistitem:product, l.all_settings, l.settings:fields_custom ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
 		<MvASSIGN NAME = "l.null" 												VALUE = "{ [ g.Module_Feature_TUI_UT ].CommonComponentFields_Initialize_Product_ImageTypes( l.wishlistitem:product:id, 0, l.wishlistitem:product, l.all_settings, l.settings:imagetypes, l.settings:constrain, l.settings:b_width, l.settings:b_height ) }">
-
-		<MvIF EXPR = "{ l.settings:predictdiscounts }">
-			<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].DiscountState_Predict_Product_Discounts( l.discount_state, l.wishlistitem:product, l.variant_id, l.wishlistitem:quantity, l.wishlistitem:product:price, l.wishlistitem:product:discounts, l.wishlistitem:product:discount_count ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
-
-			<MvASSIGN NAME = "l.wishlistitem:product:formatted_price" 			VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.wishlistitem:product:price ) }">
-
-			<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.wishlistitem:product:discounts" COUNT = "{ l.wishlistitem:product:discount_count }">
-				<MvASSIGN NAME = "l.discount:formatted_discount" 				VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.discount:discount ) }">
-			</MvFOREACH>
-		</MvIF>
 
 		<MvASSIGN NAME = "l.wishlistitem:product:link" 							VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Product_URL( l.wishlistitem:product, l.null ) }">
 		<MvASSIGN NAME = "l.wishlistitem:product:subtotal_retail"				VALUE = "{ l.wishlistitem:product:retail * l.wishlistitem:quantity }">
@@ -872,6 +863,9 @@
 		<MvASSIGN NAME = "l.item_total"											VALUE = "{ l.wishlistitem:product:price }">
 
 		<MvFOREACH ITERATOR = "l.wishlistoption" ARRAY = "l.wishlistitem:product:options" COUNT = "{ l.wishlistitem:product:option_count }">
+			<MvASSIGN NAME = "l.wishlistoption:base_price"         				VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.wishlistitem:product, l.wishlistoption:price, l.wishlistoption:cost ) }">
+			<MvASSIGN NAME = "l.wishlistoption:price"              				VALUE = "{ l.wishlistoption:base_price }">
+
 			<MvIF EXPR = "{ NOT ISNULL l.wishlistoption:data }">
 				<MvASSIGN NAME = "l.wishlistoption:data"						VALUE = "{ encodeentities( l.wishlistoption:data ) }">
 				<MvASSIGN NAME = "l.wishlistoption:data"						VALUE = "{ glosub( l.wishlistoption:data, asciichar( 10 ), '<br />' ) }">
@@ -898,6 +892,33 @@
 			<MvASSIGN NAME = "l.wishlistoption:formatted_subtotal"				VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.wishlistoption:subtotal ) }">
 			<MvASSIGN NAME = "l.item_total"										VALUE = "{ l.item_total + l.wishlistoption:price }">
 		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.settings:predictdiscounts }">
+			<MvCOMMENT>
+			|
+			| For backwards compatibility, discounts are calculated twice.  Once using the product and options
+			| in order to generate the :total token and once again using only the product in order to generate
+			| the :price token.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].DiscountState_Predict_Product_Discounts_WithProductSubscriptionTermAndOptions( l.discount_state, l.wishlistitem:product, 0, l.variant_id, 1, l.wishlistitem:product:options, l.wishlistitem:product:option_count, l.predicted_product_and_options_price, l.null, l.null ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.item_total"										VALUE = "{ l.predicted_product_and_options_price }">
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].DiscountState_Predict_Product_Discounts( l.discount_state, l.wishlistitem:product, l.variant_id, 1, l.predicted_product_price, l.wishlistitem:product:discounts, l.wishlistitem:product:discount_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.wishlistitem:product:price"						VALUE = "{ l.predicted_product_price }">
+			<MvASSIGN NAME = "l.wishlistitem:product:formatted_price"			VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.wishlistitem:product:price ) }">
+
+			<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.wishlistitem:product:discounts" COUNT = "{ l.wishlistitem:product:discount_count }">
+				<MvASSIGN NAME = "l.discount:formatted_discount" 				VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.discount:discount ) }">
+			</MvFOREACH>
+		</MvIF>
 
 		<MvASSIGN NAME = "l.wishlistitem:total"									VALUE = "{ [ g.Module_Library_Utilities ].Round_Item_Total( l.item_total * l.wishlistitem:quantity ) }">
 		<MvASSIGN NAME = "l.wishlistitem:formatted_total"						VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.wishlistitem:total ) }">

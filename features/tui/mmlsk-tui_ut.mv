@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-TUI-UT-
@@ -1978,6 +1978,12 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CommonComponentFields_Initialize_OrderItem" PARAMETERS = "orderitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.orderitem:_initialized }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.orderitem:_initialized"							VALUE = 1>
+
 	<MvCOMMENT>
 	|
 	| This code mirrors OrderItem_Status() in admin/ui.js
@@ -2147,6 +2153,29 @@
 	<MvASSIGN NAME = "l.orderitem:formatted_subtotal_base_price_comprehensive"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderitem:subtotal_base_price_comprehensive ) }">
 	<MvASSIGN NAME = "l.orderitem:formatted_subtotal_retail_comprehensive"		VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderitem:subtotal_retail_comprehensive ) }">
 	<MvASSIGN NAME = "l.orderitem:formatted_subtotal_comprehensive"				VALUE = "{ l.orderitem:formatted_total }">
+
+	<MvCOMMENT>
+	|
+	| Generate combined parent / child totals tokens only for items that have a :child_count value
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.orderitem:parent_id EQ 0 ) AND ( NOT ISNULL l.orderitem:child_count ) }">
+		<MvASSIGN NAME = "l.orderitem:total_with_children"											VALUE = "{ l.orderitem:total }">
+		<MvASSIGN NAME = "l.orderitem:subtotal_base_price_comprehensive_with_children"				VALUE = "{ l.orderitem:subtotal_base_price_comprehensive }">
+
+		<MvFOREACH ITERATOR = "l.child_orderitem" ARRAY = "l.orderitem:children" COUNT = "{ l.orderitem:child_count }">
+			<MvIF EXPR = "{ NOT CommonComponentFields_Initialize_OrderItem( l.child_orderitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.orderitem:total_with_children"										VALUE = "{ l.orderitem:total_with_children + l.child_orderitem:total }">
+			<MvASSIGN NAME = "l.orderitem:subtotal_base_price_comprehensive_with_children"			VALUE = "{ l.orderitem:subtotal_base_price_comprehensive_with_children + l.child_orderitem:subtotal_base_price_comprehensive }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.orderitem:formatted_total_with_children"								VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderitem:total_with_children ) }">
+		<MvASSIGN NAME = "l.orderitem:formatted_subtotal_base_price_comprehensive_with_children"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.orderitem:subtotal_base_price_comprehensive_with_children ) }">
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -2599,6 +2628,17 @@
 			<MvASSIGN NAME = "l.group:subtotal_comprehensive"				VALUE = "{ l.group:subtotal_comprehensive + l.item:subtotal_comprehensive }">
 			<MvASSIGN NAME = "l.group:total"								VALUE = "{ l.group:total + l.item:total }">
 
+			<MvCOMMENT>
+			|
+			| Generate combined parent / child totals tokens only for items that have a :child_count value
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ ( l.group:parent_id EQ 0 ) AND ( NOT ISNULL l.group:child_count ) }">
+				<MvASSIGN NAME = "l.group:total_with_children"								VALUE = "{ l.group:total_with_children + l.item:total_with_children }">
+				<MvASSIGN NAME = "l.group:subtotal_base_price_comprehensive_with_children"	VALUE = "{ l.group:subtotal_base_price_comprehensive_with_children + l.item:subtotal_base_price_comprehensive_with_children }">
+			</MvIF>
+
 			<MvFOREACH ITERATOR = "l.discount" ARRAY = "l.item:discounts" COUNT = "{ l.item:discount_count }">
 				<MvIF EXPR = "{ miva_array_search( l.group:discounts, 1, l.groupdiscount, 'l.groupdiscount:pgrp_id EQ l.discount:pgrp_id' ) }">
 					<MvASSIGN NAME = "l.groupdiscount:discount"				VALUE = "{ l.groupdiscount:discount + ( l.discount:discount * l.item:quantity ) }">
@@ -2668,6 +2708,17 @@
 		<MvASSIGN NAME = "l.group:formatted_subtotal_retail_comprehensive"		VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.group:subtotal_retail_comprehensive ) }">
 		<MvASSIGN NAME = "l.group:formatted_subtotal_comprehensive"				VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.group:subtotal_comprehensive ) }">
 		<MvASSIGN NAME = "l.group:formatted_total"								VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.group:total ) }">
+
+		<MvCOMMENT>
+		|
+		| Generate combined parent / child totals tokens only for items that have a :child_count value
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ ( l.group:parent_id EQ 0 ) AND ( NOT ISNULL l.group:child_count ) }">
+			<MvASSIGN NAME = "l.group:formatted_total_with_children"								VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.group:total_with_children ) }">
+			<MvASSIGN NAME = "l.group:formatted_subtotal_base_price_comprehensive_with_children"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.group:subtotal_base_price_comprehensive_with_children ) }">
+		</MvIF>
 	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = "{ l.group_count }">
@@ -2757,6 +2808,11 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CommonComponentFields_Initialize_BasketItem" PARAMETERS = "basketitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.basketitem:_initialized }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem:_initialized"								VALUE = 1>
 	<MvASSIGN NAME = "l.basketitem:subtotal_retail"								VALUE = "{ l.basketitem:retail * l.basketitem:quantity }">
 	<MvASSIGN NAME = "l.basketitem:subtotal_base_price"							VALUE = "{ l.basketitem:base_price * l.basketitem:quantity }">
 	<MvASSIGN NAME = "l.basketitem:subtotal"									VALUE = "{ l.basketitem:price * l.basketitem:quantity }">
@@ -2825,6 +2881,29 @@
 	<MvASSIGN NAME = "l.basketitem:formatted_subtotal_base_price_comprehensive"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketitem:subtotal_base_price_comprehensive ) }">
 	<MvASSIGN NAME = "l.basketitem:formatted_subtotal_retail_comprehensive"		VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketitem:subtotal_retail_comprehensive ) }">
 	<MvASSIGN NAME = "l.basketitem:formatted_subtotal_comprehensive"			VALUE = "{ l.basketitem:formatted_total }">
+
+	<MvCOMMENT>
+	|
+	| Generate combined parent / child totals tokens only for items that have a :child_count value
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( l.basketitem:parent_id EQ 0 ) AND ( NOT ISNULL l.basketitem:child_count ) }">
+		<MvASSIGN NAME = "l.basketitem:total_with_children"											VALUE = "{ l.basketitem:total }">
+		<MvASSIGN NAME = "l.basketitem:subtotal_base_price_comprehensive_with_children"				VALUE = "{ l.basketitem:subtotal_base_price_comprehensive }">
+
+		<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.basketitem:children" COUNT = "{ l.basketitem:child_count }">
+			<MvIF EXPR = "{ NOT CommonComponentFields_Initialize_BasketItem( l.child_basketitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketitem:total_with_children"										VALUE = "{ l.basketitem:total_with_children + l.child_basketitem:total }">
+			<MvASSIGN NAME = "l.basketitem:subtotal_base_price_comprehensive_with_children"			VALUE = "{ l.basketitem:subtotal_base_price_comprehensive_with_children + l.child_basketitem:subtotal_base_price_comprehensive }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.basketitem:formatted_total_with_children"								VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketitem:total_with_children ) }">
+		<MvASSIGN NAME = "l.basketitem:formatted_subtotal_base_price_comprehensive_with_children"	VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.basketitem:subtotal_base_price_comprehensive_with_children ) }">
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>

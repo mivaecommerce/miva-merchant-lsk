@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2023 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-PGR-RNT-
@@ -20,16 +20,30 @@
 </MvCOMMENT>
 
 <MvFUNCTION NAME = "Action_ApplyCouponToBasket" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "g.Coupon_Code"				VALUE = "{ trim( g.Coupon_Code ) }">
+	<MvASSIGN NAME = "g.Coupon_Code"	VALUE = "{ trim( g.Coupon_Code ) }">
+	<MvASSIGN NAME = "l.ui_exception"	VALUE = "">
 
-	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_DB ].Runtime_Coupon_Load_Code( g.Basket:cust_id, g.Basket:bill_email, g.Coupon_Code, l.coupon ) }">
+	<MvLOCKFILE FILE = "{ [ g.Feature_Filename_PGR_UT ].Basket_Discount_LockFile( g.Basket ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ Action_ApplyCouponToBasket_LowLevel( g.Coupon_Code, l.ui_exception ) }">
+	</MvLOCKFILE>
+
+	<MvIF EXPR = "{ NOT ISNULL l.ui_exception }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( l.ui_exception ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Action_ApplyCouponToBasket_LowLevel" PARAMETERS = "coupon_code, ui_exception var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_DB ].Runtime_Coupon_Load_Code( g.Basket:cust_id, g.Basket:bill_email, l.coupon_code, l.coupon ) }">
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
 
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_invalid' ) }">
+		<MvASSIGN NAME = "l.ui_exception" VALUE = "coupon_invalid">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvCOMMENT>
@@ -62,7 +76,8 @@
 	<MvEVAL EXPR = "{ [ g.Feature_Filename_PGR_UT ].Discount_Merge_PriceGroups( l.pricegroups, l.pricegroup_count, l.coupon_pricegroups, l.coupon_pricegroup_count, l.discarded_pricegroups, l.discarded_pricegroup_count ) }">
 
 	<MvIF EXPR = "{ l.discarded_pricegroup_count EQ l.coupon_pricegroup_count }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_ineligible' ) }">
+		<MvASSIGN NAME = "l.ui_exception" VALUE = "coupon_ineligible">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvCOMMENT>
@@ -95,7 +110,8 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_Coupon_Applies( l.discount_state, l.coupon:id ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_ineligible' ) }">
+		<MvASSIGN NAME = "l.ui_exception" VALUE = "coupon_ineligible">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_ApplyToBasket( l.discount_state ) }">
@@ -111,7 +127,8 @@
 	<MvIF EXPR = "{ NOT [ g.Feature_Filename_PGR_UT ].DiscountState_RemoveUnusedCoupons( l.discount_state, l.deleted_coupons, l.deleted_coupon_count ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	<MvELSEIF EXPR = "{ l.deleted_coupon_count }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'coupon_removed' ) }">
+		<MvASSIGN NAME = "l.ui_exception" VALUE = "coupon_removed">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>

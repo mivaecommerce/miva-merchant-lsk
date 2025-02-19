@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-PRD-
-| Next Error Code: 111   
+| Next Error Code: 112   
 |
 </MvCOMMENT>
 
@@ -4153,6 +4153,85 @@
 		]
 	}
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "PriceGroups">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductAvailabilityGroupList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'AGRP', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.search_query"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.offset"			VALUE = "">
+	<MvASSIGN NAME = "l.count"			VALUE = "">
+	<MvASSIGN NAME = "l.assigned"		VALUE = 1>
+	<MvASSIGN NAME = "l.unassigned"		VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',		l.filter )		OR
+					NOT JSON_Input_Text(	'o', 'Sort',		l.sort )		OR
+					NOT JSON_Input_Integer(	'o', 'Offset',		l.offset )		OR
+					NOT JSON_Input_Integer(	'o', 'Count',		l.count )		OR
+					NOT JSON_Input_Boolean(	'o', 'Assigned',	l.assigned )	OR
+					NOT JSON_Input_Boolean(	'o', 'Unassigned',	l.unassigned ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query,	'ag.*,
+																				 agxp.agrp_id AS assigned' ) }">
+
+	<MvIF EXPR = "{ l.assigned AND ( NOT l.unassigned ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'AvailGroupXProduct',	'agxp' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'AvailabilityGroups',	'ag' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'agxp.product_id = ? AND ag.id = agxp.agrp_id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+	<MvELSEIF EXPR = "{ l.assigned OR l.unassigned }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query,	g.Store_Table_Prefix $ 'AvailabilityGroups',	'ag' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ag', g.Store_Table_Prefix $ 'AvailGroupXProduct', 'agxp', 'agxp.product_id = ? AND ag.id = agxp.agrp_id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
+
+		<MvIF EXPR = "{ NOT l.assigned }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query,	'agxp.agrp_id IS NULL', '' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, [ g.Module_Feature_AGR_JSON ].JSON_BaseAvailabilityGroupList_Filters() ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, [ g.Module_Feature_AGR_JSON ].JSON_BaseAvailabilityGroupList_OrderBy(), 'ag.id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'AvailabilityGroups', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PRD-00111', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.availabilitygroup_count" VALUE = 0>
+	
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT AvailabilityGroups.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.availabilitygroup_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_DB ].AvailabilityGroup_Read( l.availabilitygroup ) }">
+
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.availabilitygroup_count ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_AGR_JSON ].JSON_AvailabilityGroup( l.availabilitygroup ) }">
+				, "assigned": <MvEVAL EXPR = "{ encodejavascriptboolean( AvailabilityGroups.d.assigned ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "AvailabilityGroups" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailabilityGroups">
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
 

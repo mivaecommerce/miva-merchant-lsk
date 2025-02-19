@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 // Prefix         : MER-ADM-FCN-
@@ -1919,6 +1919,34 @@ function CategoryProductList_Update_Assigned( category_id, product_ids, assigned
 	}, delegator );
 }
 
+function CategoryPriceGroupList_Load_Query( category_id, assigned, unassigned, filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'CategoryPriceGroupList_Load_Query',
+	{
+		Category_ID:	category_id,
+		Assigned:		assigned,
+		Unassigned:		unassigned,
+		Filter:			filter,
+		Sort:			sort,
+		Offset:			offset,
+		Count:			count
+	}, delegator );
+}
+
+function CategoryAvailabilityGroupList_Load_Query( category_id, assigned, unassigned, filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'CategoryAvailabilityGroupList_Load_Query',
+	{
+		Category_ID:	category_id,
+		Assigned:		assigned,
+		Unassigned:		unassigned,
+		Filter:			filter,
+		Sort:			sort,
+		Offset:			offset,
+		Count:			count
+	}, delegator );
+}
+
 function CategoryProductList_BatchSort( category_id, sort_by, callback )			{ return AJAX_Call( callback, 'admin', 'CategoryProductList_BatchSort',									'Category_ID=' + encodeURIComponent( category_id ) + '&Product_Sort_By=' + encodeURIComponent( sort_by ) ); }
 function CategoryProductList_DisplayOrder_Update( category_id, fieldlist, callback ){ return AJAX_Call_FieldList( callback, 'admin', 'CategoryProductList_DisplayOrder_Update',				'Category_ID=' + encodeURIComponent( category_id ), fieldlist ); }
 function ChildCategoryIndex_Load_ID( parentcategory_id, category_id, assigned, unassigned, filter, sort, callback, delegator )
@@ -2059,6 +2087,20 @@ function ProductPriceGroupList_Load_Query( product_id, assigned, unassigned, fil
 					  '&Offset='		+ encodeURIComponent( offset )		+
 					  '&Count='			+ encodeURIComponent( count ),
 					  delegator );
+}
+
+function ProductAvailabilityGroupList_Load_Query( product_id, assigned, unassigned, filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'ProductAvailabilityGroupList_Load_Query',
+	{
+		Product_ID:	product_id,
+		Assigned:	assigned,
+		Unassigned:	unassigned,
+		Filter:		filter,
+		Sort:		sort,
+		Offset:		offset,
+		Count:		count
+	}, delegator );
 }
 
 function StoreModuleList_Load( module_type, callback ) { return AJAX_Call( callback, 'admin', 'StoreModuleList_Load', 'Module_Type=' + encodeURIComponent( module_type ) ); }

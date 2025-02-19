@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DSC-VOL-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-discount_volume">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Volume Pricing">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1103">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, discount, vis_product, not_prod, import, provision_store, component, component_prov, skins, json, clientside, clientside_sri, copy_prod">
 </MvFUNCTION>
@@ -399,6 +399,7 @@
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'all',				g.Volume_Discount_Grouping, 'All Eligible Products' ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'same_product',	g.Volume_Discount_Grouping, 'Same Product' ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'same_variant',	g.Volume_Discount_Grouping, 'Same Product Variant' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'identical_items',	g.Volume_Discount_Grouping, 'Identical Items' ) }">
 		</select>
 	<MvELSEIF EXPR = "{ l.field_id EQ 'method' }">
 		<select name="Volume_Discount_Method" onchange="Volume_Discount_Enable_ProgressiveMode( this.value === 'progressive' ? true : false );">
@@ -499,7 +500,8 @@
 
 	<MvIF EXPR = "{ ( g.Volume_Discount_Grouping NE 'all' )				AND
 					( g.Volume_Discount_Grouping NE 'same_product' )	AND
-					( g.Volume_Discount_Grouping NE 'same_variant' ) }">
+					( g.Volume_Discount_Grouping NE 'same_variant' )	AND
+					( g.Volume_Discount_Grouping NE 'identical_items' ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select how products are grouped for quantity determination' ) }">
 	</MvIF>
 
@@ -600,9 +602,9 @@
 		<MvASSIGN NAME = "l.pricegroup:config:progmode"	VALUE = "highest_first">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'Grouping',			l.pricegroup:config:grouping,	'All,SameProduct,SameVariant',	'all,same_product,same_variant' )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'Method',				l.pricegroup:config:method,		'Cumulative,Progressive',		'cumulative,progressive' )			OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'ProgressiveMode',	l.pricegroup:config:progmode,	'HighestFirst,LowestFirst',		'highest_first,lowest_first' ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'Grouping',			l.pricegroup:config:grouping,	'All,SameProduct,SameVariant,IdenticalItems',	'all,same_product,same_variant,identical_items' )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'Method',				l.pricegroup:config:method,		'Cumulative,Progressive',						'cumulative,progressive' )							OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 'o', l.provide_xml, 'ProgressiveMode',	l.pricegroup:config:progmode,	'HighestFirst,LowestFirst',						'highest_first,lowest_first' ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -728,6 +730,34 @@
 
 	<MvELSEIF EXPR = "{ l.left:variant_id LT l.right:variant_id }">		<MvFUNCTIONRETURN VALUE = -1>
 	<MvELSEIF EXPR = "{ l.left:variant_id GT l.right:variant_id }">		<MvFUNCTIONRETURN VALUE = 1>
+
+	<MvELSEIF EXPR = "{ l.left:line_id LT l.right:line_id }">			<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:line_id GT l.right:line_id }">			<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Volume_Item_Sort_Identical_ItemsDescending" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:group_id GT l.right:group_id }">				<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:group_id LT l.right:group_id }">			<MvFUNCTIONRETURN VALUE = 1>
+
+	<MvELSEIF EXPR = "{ l.left:total_price GT l.right:total_price }">	<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:total_price LT l.right:total_price }">	<MvFUNCTIONRETURN VALUE = 1>
+
+	<MvELSEIF EXPR = "{ l.left:line_id LT l.right:line_id }">			<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:line_id GT l.right:line_id }">			<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Volume_Item_Sort_Identical_ItemsAscending" PARAMETERS = "left var, right var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.left:group_id LT l.right:group_id }">				<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:group_id GT l.right:group_id }">			<MvFUNCTIONRETURN VALUE = 1>
+
+	<MvELSEIF EXPR = "{ l.left:total_price LT l.right:total_price }">	<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left:total_price GT l.right:total_price }">	<MvFUNCTIONRETURN VALUE = 1>
 
 	<MvELSEIF EXPR = "{ l.left:line_id LT l.right:line_id }">			<MvFUNCTIONRETURN VALUE = -1>
 	<MvELSEIF EXPR = "{ l.left:line_id GT l.right:line_id }">			<MvFUNCTIONRETURN VALUE = 1>
@@ -973,6 +1003,12 @@
 			</MvIF>
 
 			<MvASSIGN NAME = "l.search"				VALUE = "( l.next_item:product_id NE l.item:product_id ) OR ( l.next_item:variant_id NE l.item:variant_id )">
+		<MvELSEIF EXPR = "{ l.pricegroup:config:grouping EQ 'identical_items' }">
+			<MvIF EXPR = "{ l.pricegroup:config:progmode EQ 'highest_first' }">		<MvASSIGN NAME = "l.item_count" VALUE = "{ miva_array_sort( l.items, 'Volume_Item_Sort_Identical_ItemsDescending', l.null ) }">
+			<MvELSEIF EXPR = "{ l.pricegroup:config:progmode EQ 'lowest_first' }">	<MvASSIGN NAME = "l.item_count" VALUE = "{ miva_array_sort( l.items, 'Volume_Item_Sort_Identical_ItemsAscending', l.null ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.search"				VALUE = "l.next_item:group_id NE l.item:group_id">
 		<MvELSE>
 			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
@@ -1264,9 +1300,10 @@
 		<tr><td nowrap>
 			<b>Grouping:</b>
 		</td><td width="100%">
-			<MvIF EXPR = "{ l.pricegroup:config:grouping EQ 'all' }">				All Eligible Products
-			<MvELSEIF EXPR = "{ l.pricegroup:config:grouping EQ 'same_product' }">	Same Product
-			<MvELSEIF EXPR = "{ l.pricegroup:config:grouping EQ 'same_variant' }">	Same Product Variant
+			<MvIF EXPR = "{ l.pricegroup:config:grouping EQ 'all' }">					All Eligible Products
+			<MvELSEIF EXPR = "{ l.pricegroup:config:grouping EQ 'same_product' }">		Same Product
+			<MvELSEIF EXPR = "{ l.pricegroup:config:grouping EQ 'same_variant' }">		Same Product Variant
+			<MvELSEIF EXPR = "{ l.pricegroup:config:grouping EQ 'identical_items' }">	Identical Items
 			<MvELSE>																Unknown (<MvEVAL EXPR = "{ encodeentities( l.pricegroup:config:grouping ) }">)
 			</MvIF>
 		</td></tr>
