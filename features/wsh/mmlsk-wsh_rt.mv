@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-WSH-RNT-
@@ -39,13 +39,13 @@
 	<MvIF EXPR = "{ l.wishlist_count EQ 1 }">
 		<MvASSIGN NAME = "l.wishlist" 			VALUE = "{ l.wishlists[ 1 ] }">
 		<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ l.wishlist:id }">
-		
+
 		<MvFUNCTIONRETURN VALUE = 1>
 	<MvELSEIF EXPR = "{ l.wishlist_count EQ 0 }">
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].CustomerSettings_Load_Cached( l.customersettings ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
-		
+
 		<MvASSIGN NAME = "l.wishlist" 			VALUE = "">
 		<MvASSIGN NAME = "l.wishlist:cust_id" 	VALUE = "{ g.Basket:cust_id }">
 		<MvASSIGN NAME = "l.wishlist:title" 	VALUE = "{ l.customersettings:def_wshlst }">
@@ -64,11 +64,240 @@
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Merchant ].UIException( 'wishlist_pick' ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Runtime_WishListItemList_Process_AppendItem_Insert" PARAMETERS = "destination_wishlist var, wishlistitem var, items var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.item"						VALUE = "">
+	<MvASSIGN NAME = "l.item:insert"				VALUE = 1>
+	<MvASSIGN NAME = "l.item:destination_wishlist"	VALUE = "{ l.destination_wishlist }">
+	<MvASSIGN NAME = "l.item:wishlistitem"			VALUE = "{ l.wishlistitem }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListItemList_Process_AppendItem_Insert_WithChildren" PARAMETERS = "destination_wishlist var, wishlistitem var, child_items var, child_item_count, items var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.item"						VALUE = "">
+	<MvASSIGN NAME = "l.item:insert"				VALUE = 1>
+	<MvASSIGN NAME = "l.item:destination_wishlist"	VALUE = "{ l.destination_wishlist }">
+	<MvASSIGN NAME = "l.item:wishlistitem"			VALUE = "{ l.wishlistitem }">
+	<MvASSIGN NAME = "l.item:child_items"			VALUE = "{ l.child_items }">
+	<MvASSIGN NAME = "l.item:child_item_count"		VALUE = "{ l.child_item_count }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListList_Process_AppendItem_Update" PARAMETERS = "original_wishlistitem var, wishlistitem var, items var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.item"						VALUE = "">
+	<MvASSIGN NAME = "l.item:update"				VALUE = 1>
+	<MvASSIGN NAME = "l.item:wishlistitem"			VALUE = "{ l.wishlistitem }">
+	<MvASSIGN NAME = "l.item:original_wishlistitem"	VALUE = "{ l.original_wishlistitem }">
+	<MvASSIGN NAME = "l.item:child_items"			VALUE = "">
+	<MvASSIGN NAME = "l.item:child_item_count"		VALUE = 0>
+
+	<MvIF EXPR = "{ l.original_wishlistitem:quantity NE l.wishlistitem:quantity }">
+		<MvFOREACH ITERATOR = "l.child_wishlistitem" ARRAY = "l.child_wishlistitems" COUNT = "{ [ g.Module_Feature_WSH_DB ].WishListItemList_Load_Parent( l.original_wishlistitem:wshlst_id, l.original_wishlistitem:id, l.child_wishlistitems ) }">
+			<MvIF EXPR = "{ ( l.child_wishlistitem:quantity LT l.original_wishlistitem:quantity ) OR ( fmod( l.child_wishlistitem:quantity, l.original_wishlistitem:quantity ) NE 0 ) }">
+				<MvCOMMENT>
+				|
+				| Skip processing. Child-parent quantity ratio is less than 1:1, or the ratio is not a whole number.
+				|
+				</MvCOMMENT>
+
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.original_child_wishlistitem"	VALUE = "{ l.child_wishlistitem }">
+			<MvASSIGN NAME = "l.child_wishlistitem:quantity"	VALUE = "{ l.wishlistitem:quantity * ( l.child_wishlistitem:quantity / l.original_wishlistitem:quantity ) }">
+			<MvASSIGN NAME = "l.item:child_item_count"			VALUE = "{ Runtime_WishListList_Process_AppendItem_Update( l.original_child_wishlistitem, l.child_wishlistitem, l.item:child_items ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListItemList_Process_AppendItem_Delete" PARAMETERS = "wishlistitem var, items var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.item"						VALUE = "">
+	<MvASSIGN NAME = "l.item:delete"				VALUE = 1>
+	<MvASSIGN NAME = "l.item:wishlistitem"			VALUE = "{ l.wishlistitem }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListItemList_Process_Items" PARAMETERS = "items var, item_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.rt_wishlistitem_module_count"	VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'rt_wishlistitem', l.rt_wishlistitem_modules ) }">
+
+	<MvCOMMENT>
+	|
+	| When the parent item action is "insert", children are validated / processed after
+	| the parent to ensure the parent_id is available for the child items. For "update"
+	| and "delete" actions, we validate and process before modifying the parent to follow
+	| our convention / guidelines that by the time the update notification is triggered
+	| on the parent item, all moving pieces have been finalized for that item (which
+	| includes modifications to all of its children).
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvIF EXPR = "{ l.item:insert }">
+			<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+				<MvIF EXPR = "{ NOT [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Insert_Validate( l.rt_wishlistitem_module, l.item:wishlistitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ NOT Runtime_WishListItem_Module_Validate_Children( l.item, l.rt_wishlistitem_modules, l.rt_wishlistitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT Runtime_WishListItem_Module_Validate_Children( l.item, l.rt_wishlistitem_modules, l.rt_wishlistitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+				<MvIF EXPR = "{ l.item:update }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Update_Validate( l.rt_wishlistitem_module, l.item:original_wishlistitem, l.item:wishlistitem ) }">
+				<MvELSEIF EXPR = "{ l.item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Delete_Validate( l.rt_wishlistitem_module, l.item:wishlistitem ) }">
+				<MvELSE>
+					<MvFOREACHSTOP>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT l.result }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvIF EXPR = "{ l.item:insert }">
+			<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+				<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Insert( l.rt_wishlistitem_module, l.item:wishlistitem ) }">
+
+				<MvIF EXPR = "{ l.result EQ 0 }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSEIF EXPR = "{ l.result EQ -1 }">
+					<MvASSIGN NAME = "l.item:skip" VALUE = 1>
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.item:skip }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT WishListItemAndOptions_Insert( l.item:destination_wishlist, l.item:wishlistitem, l.item:wishlistitem:options, l.item:wishlistitem:option_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT Runtime_WishListItem_Process_Children( l.item, l.rt_wishlistitem_modules, l.rt_wishlistitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT Runtime_WishListItem_Process_Children( l.item, l.rt_wishlistitem_modules, l.rt_wishlistitem_module_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+				<MvIF EXPR = "{ l.item:update }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Update( l.rt_wishlistitem_module, l.item:original_wishlistitem, l.item:wishlistitem ) }">
+				<MvELSEIF EXPR = "{ l.item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Delete( l.rt_wishlistitem_module, l.item:wishlistitem ) }">
+				<MvELSE>
+					<MvFOREACHSTOP>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.result EQ 0 }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				<MvELSEIF EXPR = "{ l.result EQ -1 }">
+					<MvASSIGN NAME = "l.item:skip" VALUE = 1>
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvIF EXPR = "{ l.item:skip }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.item:update }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update( l.item:wishlistitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.item:delete }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Delete( l.item:wishlistitem ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListItem_Module_Validate_Children" PARAMETERS = "item var, rt_wishlistitem_modules var, rt_wishlistitem_module_count" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+		<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Insert_Validate( l.rt_wishlistitem_module, l.child_item:wishlistitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:update }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Update_Validate( l.rt_wishlistitem_module, l.child_item:original_wishlistitem, l.child_item:wishlistitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Delete_Validate( l.rt_wishlistitem_module, l.child_item:wishlistitem ) }">
+			<MvELSE>
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.result }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListItem_Process_Children" PARAMETERS = "item var, rt_wishlistitem_modules var, rt_wishlistitem_module_count" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_item" ARRAY = "l.item:child_items" COUNT = "{ l.item:child_item_count }">
+		<MvASSIGN NAME = "l.child_item:wishlistitem:parent_id" VALUE = "{ l.item:wishlistitem:id }">
+
+		<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+			<MvIF EXPR = "{ l.child_item:insert }">		<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Insert( l.rt_wishlistitem_module, l.child_item:wishlistitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:update }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Update( l.rt_wishlistitem_module, l.child_item:original_wishlistitem, l.child_item:wishlistitem ) }">
+			<MvELSEIF EXPR = "{ l.child_item:delete }">	<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Delete( l.rt_wishlistitem_module, l.child_item:wishlistitem ) }">
+			<MvELSE>
+				<MvFOREACHSTOP>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.result EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ l.result EQ -1 }">
+				<MvASSIGN NAME = "l.child_item:skip" VALUE = 1>
+
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.child_item:skip }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.child_item:insert }">
+			<MvIF EXPR = "{ NOT WishListItemAndOptions_Insert( l.child_item:destination_wishlist, l.child_item:wishlistitem, l.child_item:wishlistitem:options, l.child_item:wishlistitem:option_count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.child_item:update }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update( l.child_item:wishlistitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.child_item:delete }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Delete( l.child_item:wishlistitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Action_AddProductToWishList" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "g.WishList_ID"		VALUE = "{ int( g.WishList_ID ) }">
 	<MvASSIGN NAME = "g.Product_Code"		VALUE = "{ trim( g.Product_Code ) }">
 	<MvASSIGN NAME = "g.Quantity"			VALUE = "{ trim( g.Quantity ) }">
 	<MvASSIGN NAME = "g.Attributes"			VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Attributes ) }">
+	<MvASSIGN NAME = "l.wishlistitem_found"	VALUE = 0>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( g.Quantity ) }">
 		<MvFUNCTIONRETURN VALUE = 1>
@@ -99,7 +328,50 @@
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT WishListItemAndOptions_InsertOrUpdate( l.destination_wishlist, l.product:id, g.Quantity, l.item_wishlistoptions, l.item_wishlistoption_count ) }">
+	<MvFOREACH ITERATOR = "l.existing_wishlistitem" ARRAY = "l.wishlistitems" COUNT = "{ [ g.Module_Feature_WSH_DB ].WishListItemList_Load_WishList_Product( l.destination_wishlist:id, l.product:id, l.wishlistitems ) }">
+		<MvIF EXPR = "{ l.existing_wishlistitem:parent_id }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.wishlistoption_count" VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.existing_wishlistitem:id, l.wishlistoptions ) }">
+
+		<MvIF EXPR = "{ l.wishlistoption_count NE l.item_wishlistoption_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH INDEX = "l.wishlistoption_pos" ITERATOR = "l.wishlistoption" ARRAY = "l.wishlistoptions" COUNT = "{ l.wishlistoption_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.item_wishlistoptions, 1, l.option,
+												   '( l.wishlistoption:attr_id 		EQ l.option:attr_id ) 		AND
+													( l.wishlistoption:attmpat_id 	EQ l.option:attmpat_id ) 	AND
+													( l.wishlistoption:option_id 	EQ l.option:option_id ) 	AND
+													( l.wishlistoption:data 		EQ l.option:data ) 			AND
+													( l.wishlistoption:data_long 	EQ l.option:data_long )' ) }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.wishlistoption_pos GT l.wishlistoption_count }">
+			<MvASSIGN NAME = "l.original_wishlistitem"			VALUE = "{ l.existing_wishlistitem }">
+			<MvASSIGN NAME = "l.updated_wishlistitem"			VALUE = "{ l.existing_wishlistitem }">
+			<MvASSIGN NAME = "l.updated_wishlistitem:quantity"	VALUE = "{ l.existing_wishlistitem:quantity + g.Quantity }">
+			<MvASSIGN NAME = "l.item_count"						VALUE = "{ Runtime_WishListList_Process_AppendItem_Update( l.original_wishlistitem, l.updated_wishlistitem, l.items ) }">
+			<MvASSIGN NAME = "l.wishlistitem_found"				VALUE = 1>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.wishlistitem_found }">
+		<MvASSIGN NAME = "l.wishlistitem"				VALUE = "">
+		<MvASSIGN NAME = "l.wishlistitem:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.wishlistitem:quantity"		VALUE = "{ g.Quantity }">
+		<MvASSIGN NAME = "l.wishlistitem:dtadded" 		VALUE = "{ s.dyn_time_t }">
+		<MvASSIGN NAME = "l.wishlistitem:options"		VALUE = "{ l.item_wishlistoptions }">
+		<MvASSIGN NAME = "l.wishlistitem:option_count"	VALUE = "{ l.item_wishlistoption_count }">
+		<MvASSIGN NAME = "l.wishlistitem:notes" 		VALUE = "">
+
+		<MvASSIGN NAME = "l.item_count"					VALUE = "{ Runtime_WishListItemList_Process_AppendItem_Insert( l.destination_wishlist, l.wishlistitem, l.items ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT Runtime_WishListItemList_Process_Items( l.items, l.item_count ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -412,7 +684,9 @@
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Delete( l.wishlistitem ) }">
+	<MvASSIGN NAME = "l.item_count" VALUE = "{ Runtime_WishListItemList_Process_AppendItem_Delete( l.wishlistitem, l.items ) }">
+
+	<MvIF EXPR = "{ NOT Runtime_WishListItemList_Process_Items( l.items, l.item_count ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -442,7 +716,9 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ g.Quantity EQ 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Delete( l.wishlistitem ) }">
+		<MvASSIGN NAME = "l.item_count" VALUE = "{ Runtime_WishListItemList_Process_AppendItem_Delete( l.wishlistitem, l.items ) }">
+
+		<MvIF EXPR = "{ NOT Runtime_WishListItemList_Process_Items( l.items, l.item_count ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
@@ -454,13 +730,9 @@
 	<MvASSIGN NAME = "l.wishlistitem:quantity"	VALUE = "{ g.Quantity }">
 	<MvASSIGN NAME = "l.wishlistitem:notes"	 	VALUE = "{ g.Notes }">
 
-	<MvIF EXPR = "{ l.original_wishlistitem:quantity NE l.wishlistitem:quantity }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update_Child_Quantity( l.wishlistitem, l.original_wishlistitem:quantity, l.wishlistitem:quantity ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
-	</MvIF>
+	<MvASSIGN NAME = "l.item_count" VALUE = "{ Runtime_WishListList_Process_AppendItem_Update( l.original_wishlistitem, l.wishlistitem, l.items ) }">
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update( l.wishlistitem ) }">
+	<MvIF EXPR = "{ NOT Runtime_WishListItemList_Process_Items( l.items, l.item_count ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -510,15 +782,52 @@
 			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
 
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update_WishList( l.wishlistitem:id, l.destination_wishlist:id ) }">
+		<MvASSIGN NAME = "l.item"							VALUE = "">
+		<MvASSIGN NAME = "l.item:update"					VALUE = 1>
+		<MvASSIGN NAME = "l.item:original_wishlistitem"		VALUE = "{ l.wishlistitem }">
+		<MvASSIGN NAME = "l.item:wishlistitem"				VALUE = "{ l.wishlistitem }">
+		<MvASSIGN NAME = "l.item:wishlistitem:wshlst_id"	VALUE = "{ l.destination_wishlist:id }">
+
+		<MvASSIGN NAME = "l.rt_wishlistitem_module_count"	VALUE = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'rt_wishlistitem', l.rt_wishlistitem_modules ) }">
+
+		<MvCOMMENT>
+		|
+		| We validate and process children before modifying the parent to follow
+		| our convention / guidelines that by the time the update notification is triggered
+		| on the parent item, all moving pieces have been finalized for that item (which
+		| includes modifications to all of its children).
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT Runtime_WishListItem_Module_Validate_Children( l.item, l.rt_wishlistitem_modules, l.rt_wishlistitem_module_count ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Update_Validate( l.rt_wishlistitem_module, l.item:original_wishlistitem, l.item:wishlistitem ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
 
 		<MvFOREACH ITERATOR = "l.child_wishlistitem" ARRAY = "l.child_wishlistitems" COUNT = "{ [ g.Module_Feature_WSH_DB ].Runtime_WishListProductList_Load_Parent( l.wishlistitem:wshlst_id, l.wishlistitem:id, l.child_wishlistitems ) }">
 			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update_WishList( l.child_wishlistitem:id, l.destination_wishlist:id ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.rt_wishlistitem_module" ARRAY = "l.rt_wishlistitem_modules" COUNT = "{ l.rt_wishlistitem_module_count }">
+			<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Root $ l.rt_wishlistitem_module:module ].Module_Runtime_WishListItem_Update( l.rt_wishlistitem_module, l.item:original_wishlistitem, l.item:wishlistitem ) }">
+
+			<MvIF EXPR = "{ l.result EQ 0 }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			<MvELSEIF EXPR = "{ l.result EQ -1 }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Update_WishList( l.wishlistitem:id, l.destination_wishlist:id ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
 	<MvELSEIF EXPR = "{ g.Group_ID }">
 		<MvASSIGN NAME = "l.update_basket_subcount"	VALUE = 0>
 		<MvASSIGN NAME = "l.basketitem_count"		VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket_Group( g.Basket:basket_id, g.Group_ID, l.basketitems ) }">
@@ -782,6 +1091,30 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "WishListItemAndOptions_Insert" PARAMETERS = "wishlist var, wishlistitem var, options var, option_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.wishlistitem:wshlst_id" VALUE = "{ l.wishlist:id }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Insert( l.wishlistitem ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ l.option_count }">
+		<MvASSIGN NAME = "l.wishlistoption"				VALUE = "">
+		<MvASSIGN NAME = "l.wishlistoption:wish_id"		VALUE = "{ l.wishlistitem:id }">
+		<MvASSIGN NAME = "l.wishlistoption:attr_id"		VALUE = "{ l.option:attr_id }">
+		<MvASSIGN NAME = "l.wishlistoption:attmpat_id"	VALUE = "{ l.option:attmpat_id }">
+		<MvASSIGN NAME = "l.wishlistoption:option_id"	VALUE = "{ l.option:option_id }">
+		<MvASSIGN NAME = "l.wishlistoption:data"		VALUE = "{ l.option:data }">
+		<MvASSIGN NAME = "l.wishlistoption:data_long"	VALUE = "{ l.option:data_long }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListOption_Insert( l.wishlistoption ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Action_WishList_Insert" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "g.WishList_Title"		VALUE = "{ trim( g.WishList_Title ) }">
 	<MvASSIGN NAME = "g.WishList_Notes"		VALUE = "{ trim( g.WishList_Notes ) }">
@@ -862,9 +1195,13 @@
 </MvCOMMENT>
 
 <MvFUNCTION NAME = "Runtime_BasketItemListMoveToWishList_Process" PARAMETERS = "wishlist var, items var, item_count" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.update_basket_subcount" VALUE = 0>
+	<MvASSIGN NAME = "l.update_basket_subcount"	VALUE = 0>
+	<MvASSIGN NAME = "l.wishlistitem_count"		VALUE = 0>
 
 	<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" COUNT = "{ l.item_count }">
+		<MvASSIGN NAME = "l.new_wishlistitems"		VALUE = "">
+		<MvASSIGN NAME = "l.new_wishlistitem_count"	VALUE = 0>
+
 		<MvCOMMENT>
 		|
 		| Update quantity of existing wish list items if:
@@ -912,7 +1249,12 @@
 						<MvFUNCTIONRETURN VALUE = 0>
 					</MvIF>
 
-					<MvASSIGN NAME = "l.item:skip" VALUE = 1>
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Load_ID( l.wishlistitem:id, l.updated_wishlistitem ) }">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.item:wishlistitem"	VALUE = "{ l.updated_wishlistitem }">
+					<MvASSIGN NAME = "l.item:skip"			VALUE = 1>
 
 					<MvFOREACHSTOP>
 				</MvIF>
@@ -937,51 +1279,50 @@
 		<MvASSIGN NAME = "l.wishlistitem:quantity" 				VALUE = "{ l.item:basketitem:quantity }">
 		<MvASSIGN NAME = "l.wishlistitem:notes" 				VALUE = "">
 
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Insert( l.wishlistitem ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
-
 		<MvFOREACH ITERATOR = "l.option" ARRAY = "l.item:basketitem:options" COUNT = "{ l.item:basketitem:option_count }">
 			<MvASSIGN NAME = "l.wishlistoption" 				VALUE = "">
-			<MvASSIGN NAME = "l.wishlistoption:wish_id" 		VALUE = "{ l.wishlistitem:id }">
 			<MvASSIGN NAME = "l.wishlistoption:attr_id" 		VALUE = "{ l.option:attr_id }">
 			<MvASSIGN NAME = "l.wishlistoption:attmpat_id" 		VALUE = "{ l.option:attmpat_id }">
 			<MvASSIGN NAME = "l.wishlistoption:option_id" 		VALUE = "{ l.option:option_id }">
 			<MvASSIGN NAME = "l.wishlistoption:data" 			VALUE = "{ l.option:data }">
 			<MvASSIGN NAME = "l.wishlistoption:data_long" 		VALUE = "{ l.option:data_long }">
 
-			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListOption_Insert( l.wishlistoption ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
+			<MvASSIGN NAME = "l.wishlistitem:option_count" VALUE = "{ miva_array_insert_var( l.wishlistitem:options, l.wishlistoption, -1 ) }">
 		</MvFOREACH>
 
-		<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.item:child_basketitems" COUNT = "{ l.item:child_basketitem_count }">
-			<MvASSIGN NAME = "l.child_wishlistitem" 				VALUE = "">
-			<MvASSIGN NAME = "l.child_wishlistitem:wshlst_id" 		VALUE = "{ l.wishlist:id }">
-			<MvASSIGN NAME = "l.child_wishlistitem:parent_id" 		VALUE = "{ l.wishlistitem:id }">
-			<MvASSIGN NAME = "l.child_wishlistitem:product_id" 		VALUE = "{ l.child_basketitem:product_id }">
-			<MvASSIGN NAME = "l.child_wishlistitem:dtadded" 		VALUE = "{ s.dyn_time_t }">
-			<MvASSIGN NAME = "l.child_wishlistitem:quantity" 		VALUE = "{ l.child_basketitem:quantity }">
-			<MvASSIGN NAME = "l.child_wishlistitem:notes" 			VALUE = "">
+		<MvIF EXPR = "{ NOT l.item:child_basketitem_count }">
+			<MvASSIGN NAME = "l.new_wishlistitem_count" VALUE = "{ Runtime_WishListItemList_Process_AppendItem_Insert( l.wishlist, l.wishlistitem, l.new_wishlistitems ) }">
+		<MvELSE>
+			<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.item:child_basketitems" COUNT = "{ l.item:child_basketitem_count }">
+				<MvASSIGN NAME = "l.child_wishlistitem" 				VALUE = "">
+				<MvASSIGN NAME = "l.child_wishlistitem:wshlst_id" 		VALUE = "{ l.wishlist:id }">
+				<MvASSIGN NAME = "l.child_wishlistitem:product_id" 		VALUE = "{ l.child_basketitem:product_id }">
+				<MvASSIGN NAME = "l.child_wishlistitem:dtadded" 		VALUE = "{ s.dyn_time_t }">
+				<MvASSIGN NAME = "l.child_wishlistitem:quantity" 		VALUE = "{ l.child_basketitem:quantity }">
+				<MvASSIGN NAME = "l.child_wishlistitem:notes" 			VALUE = "">
 
-			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Insert( l.child_wishlistitem ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
+				<MvFOREACH ITERATOR = "l.option" ARRAY = "l.child_basketitem:options" COUNT = "{ l.child_basketitem:option_count }">
+					<MvASSIGN NAME = "l.wishlistoption" 				VALUE = "">
+					<MvASSIGN NAME = "l.wishlistoption:attr_id" 		VALUE = "{ l.option:attr_id }">
+					<MvASSIGN NAME = "l.wishlistoption:attmpat_id" 		VALUE = "{ l.option:attmpat_id }">
+					<MvASSIGN NAME = "l.wishlistoption:option_id" 		VALUE = "{ l.option:option_id }">
+					<MvASSIGN NAME = "l.wishlistoption:data" 			VALUE = "{ l.option:data }">
+					<MvASSIGN NAME = "l.wishlistoption:data_long" 		VALUE = "{ l.option:data_long }">
 
-			<MvFOREACH ITERATOR = "l.option" ARRAY = "l.child_basketitem:options" COUNT = "{ l.child_basketitem:option_count }">
-				<MvASSIGN NAME = "l.wishlistoption" 				VALUE = "">
-				<MvASSIGN NAME = "l.wishlistoption:wish_id" 		VALUE = "{ l.child_wishlistitem:id }">
-				<MvASSIGN NAME = "l.wishlistoption:attr_id" 		VALUE = "{ l.option:attr_id }">
-				<MvASSIGN NAME = "l.wishlistoption:attmpat_id" 		VALUE = "{ l.option:attmpat_id }">
-				<MvASSIGN NAME = "l.wishlistoption:option_id" 		VALUE = "{ l.option:option_id }">
-				<MvASSIGN NAME = "l.wishlistoption:data" 			VALUE = "{ l.option:data }">
-				<MvASSIGN NAME = "l.wishlistoption:data_long" 		VALUE = "{ l.option:data_long }">
+					<MvASSIGN NAME = "l.child_wishlistitem:option_count" VALUE = "{ miva_array_insert_var( l.child_wishlistitem:options, l.wishlistoption, -1 ) }">
+				</MvFOREACH>
 
-				<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListOption_Insert( l.wishlistoption ) }">
-					<MvFUNCTIONRETURN VALUE = 0>
-				</MvIF>
+				<MvASSIGN NAME = "l.child_item_count" VALUE = "{ Runtime_WishListItemList_Process_AppendItem_Insert( l.wishlist, l.child_wishlistitem, l.child_items ) }">
 			</MvFOREACH>
-		</MvFOREACH>
+
+			<MvASSIGN NAME = "l.new_wishlistitem_count" VALUE = "{ Runtime_WishListItemList_Process_AppendItem_Insert_WithChildren( l.wishlist, l.wishlistitem, l.child_items, l.child_item_count, l.new_wishlistitems ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT Runtime_WishListItemList_Process_Items( l.new_wishlistitems, l.new_wishlistitem_count ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.item:wishlistitem" VALUE = "{ l.new_wishlistitems[ 1 ]:wishlistitem }">
 
 		<MvCOMMENT>
 		|

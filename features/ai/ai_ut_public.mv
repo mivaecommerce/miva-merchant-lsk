@@ -1,0 +1,373 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-AI-UT-PUB-
+| Next Error Code: 12
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AISearchIndex_Default_Template" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.template" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+		<mvt:eval expr="miva_html_strip( l.settings:product:name, '' )" /> <mvt:eval expr="miva_html_strip( l.settings:product:descrip, '' )" />
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.template }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Template_Filename" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ g.Module_Root $ 'templates/aisearchindexes/' $ int( g.Store:id ) $ '_' $ tolower( l.index:code ) $ '.mvc' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Template_Compile" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT miva_template_compile_itemlist( l.null, l.index:idx_templ, l.null, AISearchIndex_Template_Filename( l.index ), l.compile_error ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00001', l.compile_error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Template_Delete" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.template_filename"	VALUE = "{ AISearchIndex_Template_Filename( l.index ) }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ fdelete( l.template_filename ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Template_Render" PARAMETERS = "index var, product var, hash var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings"						VALUE = "">
+	<MvASSIGN NAME = "l.settings:CustomField_Values"	VALUE = "">
+	<MvASSIGN NAME = "l.template_filename"				VALUE = "{ AISearchIndex_Template_Filename( l.index ) }">
+
+	<MvEVAL EXPR = "{ miva_struct_member_callback( l.settings:CustomField_Values, 'AISearchIndex_Render_CustomField_Module', l.product ) }">
+	
+	<MvREFERENCE NAME = "l.settings:product" VARIABLE = "l.product">
+	
+	<MvCAPTURE VARIABLE = "l.result">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ l.template_filename ].Template_Render( l.null, l.settings ) }">		
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ trim( l.result ) }">
+	<MvASSIGN NAME = "l.hash"	VALUE = "{ crypto_md5( l.result ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Render_CustomField_Module" PARAMETERS = "struct var, member, product var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"				VALUE = "">
+	<MvASSIGN NAME = "l.data:module" 		VALUE = "">
+
+	<MvREFERENCE NAME = "l.data:product"	VARIABLE = "l.product">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.member, l.data:module )	OR
+					NOT l.data:module:active																	OR
+					NOT l.data:module:feature_hash:fields_prod }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.ref" VARIABLE = "l.struct">
+		<MvMEMBER NAME = "{ l.data:module:code }">
+	</MvREFERENCEARRAY>
+
+	<MvEVAL EXPR = "{ miva_struct_member_callback( l.ref, 'AISearchIndex_Render_CustomField_Value', l.data ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.ref }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Render_CustomField_Value" PARAMETERS = "struct var, member, data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.data:module:module ].Module_Product_Field_Value( l.data:module, l.data:product:id, l.member ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Redis Functions
+|	
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Connect" PARAMETERS = "conn_id var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.options"				VALUE = "">
+
+	<MvIF EXPR = "{ l.aisettings:vector_db EQ 'redis' }">
+		<MvASSIGN NAME = "l.options:host"		VALUE = "{ l.aisettings:redishost }">
+		<MvASSIGN NAME = "l.options:port"		VALUE = "{ l.aisettings:redisport }">
+		<MvASSIGN NAME = "l.options:timeout"	VALUE = "{ l.aisettings:redisto }">
+		<MvASSIGN NAME = "l.options:password"	VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.aisettings:redispwd ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.options:host"		VALUE = "{ g.Store:redishost }">
+		<MvASSIGN NAME = "l.options:port"		VALUE = "{ g.Store:redisport }">
+		<MvASSIGN NAME = "l.options:timeout"	VALUE = "{ g.Store:redisto }">
+		<MvASSIGN NAME = "l.options:password"	VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( g.Store:redispwd ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ AISearchIndex_Redis_Connect_LowLevel( l.options, l.conn_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Connect_LowLevel" PARAMETERS = "options var, conn_id var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ substring_var( l.options:host, 1, 1 ) EQ '/' }">	<MvASSIGN NAME = "l.connected" VALUE = "{ redis_connect_unix( l.options:host, l.conn_id ) }">
+	<MvELSE>															<MvASSIGN NAME = "l.connected" VALUE = "{ redis_connect_with_timeout( l.options:host, l.options:port, l.options:timeout, l.conn_id ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.connected }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00002', redis_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.options:password }">
+		<MvIF EXPR = "{ NOT redis_auth( l.conn_id, l.options:password ) }">
+			<MvASSIGN NAME = "l.redis_last_error" 	VALUE = "{ redis_last_error() }">
+			<MvASSIGN NAME = "l.conn_id"			VALUE = 0>
+			<MvASSIGN NAME = "l.null" 				VALUE = "{ redis_disconnect( l.conn_id ) }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00003', l.redis_last_error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Disconnect" PARAMETERS = "conn_id" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.null" VALUE = "{ redis_disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Index_Name" PARAMETERS = "aisettings var, index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.aisettings:redis_pfx }">
+		<MvFUNCTIONRETURN VALUE = "{ 'product_embedding_' $ int( l.index:id ) }">
+	</MvIF>
+
+    <MvFUNCTIONRETURN VALUE = "{ l.aisettings:redis_pfx $ '_product_embedding_' $ int( l.index:id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Product_Hash_Name" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.aisettings:redis_pfx }">
+		<MvFUNCTIONRETURN VALUE = "product_embeddings">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.aisettings:redis_pfx $ '_product_embeddings' }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Product_Hash_Key_Name" PARAMETERS = "aisettings var, product_id" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ AISearchIndex_Redis_Product_Hash_Name( l.aisettings ) $ ':' $ int( l.product_id ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Create_Index" PARAMETERS = "index var, embedding_source var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT AISearchIndex_Redis_Connect( l.conn_id ) }">						<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndex_Redis_Create_Index_LowLevel( l.conn_id, l.aisettings, l.index, l.embedding_source ) }">
+	<MvASSIGN NAME = "l.null"	VALUE = "{ AISearchIndex_Redis_Disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Create_Index_LowLevel" PARAMETERS = "conn_id, aisettings var, index var, embedding_source var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|	
+	|	FT.CREATE product_embedding_[id]
+	|	ON HASH
+	|	PREFIX 1 product_embeddings:
+	|	SCHEMA 1 VECTOR HNSW 6
+	|		TYPE FLOAT32
+	|		DIM [DIMENSIONS]
+	|		DISTANCE_METRIC COSINE
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.index_name"						VALUE = "{ AISearchIndex_Redis_Index_Name( l.aisettings, l.index ) }">
+
+	<MvASSIGN NAME = "l.options"						VALUE = "">
+	<MvASSIGN NAME = "l.options:ON"						VALUE = "HASH">
+	<MvASSIGN NAME = "l.options:PREFIX" INDEX = 1		VALUE = "{ AISearchIndex_Redis_Product_Hash_Name( l.aisettings ) }">
+
+	<MvASSIGN NAME = "l.schema"							VALUE = "">
+	<MvASSIGN NAME = "l.schema:field_name"				VALUE = "{ l.index:id }">
+	<MvASSIGN NAME = "l.schema:type"					VALUE = "VECTOR">
+	<MvASSIGN NAME = "l.schema:options:algorithm"		VALUE = "HNSW">
+	<MvASSIGN NAME = "l.schema:options:type"			VALUE = "FLOAT32">
+	<MvASSIGN NAME = "l.schema:options:dim"				VALUE = "{ l.embedding_source:dimensions }">
+	<MvASSIGN NAME = "l.schema:options:distance_metric"	VALUE = "COSINE">
+
+	<MvIF EXPR = "{ NOT redis_ft_create( l.conn_id, l.index_name, l.schema, l.options ) }">
+		<MvASSIGN NAME = "l.create_error" VALUE = "{ redis_last_error() }">
+
+		<MvIF EXPR = "{ AISearchIndex_Redis_Search_Version( l.conn_id, l.search_version ) }">
+			<MvIF EXPR = "{ l.search_version LT 20400 }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00011', 'The configured Redis server does not support VECTOR indexes. Redis v6.0.0 or newer with RediSearch v2.4 is required.' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00004', l.create_error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Delete_Index" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT AISearchIndex_Redis_Connect( l.conn_id ) }">						<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndex_Redis_Delete_Index_LowLevel( l.conn_id, l.aisettings, l.index ) }">
+	<MvASSIGN NAME = "l.null"	VALUE = "{ AISearchIndex_Redis_Disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Delete_Index_LowLevel" PARAMETERS = "conn_id, aisettings var, index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT redis_ft_dropindex( l.conn_id, AISearchIndex_Redis_Index_Name( l.aisettings, l.index ), l.null ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00005', redis_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Index_Info" PARAMETERS = "conn_id, index var, info var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT redis_ft_info( l.conn_id, AISearchIndex_Redis_Index_Name( l.aisettings, l.index ), l.redis_info ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00006', redis_last_error() ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.info"				VALUE = "">
+	<MvASSIGN NAME = "l.info:num_docs"		VALUE = 0>
+	<MvASSIGN NAME = "l.null"				VALUE = "{ AISearchIndex_Redis_Info_Field( l.redis_info, 'num_docs', l.info:num_docs ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Search_Index" PARAMETERS = "index var, query, options var, results var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT AISearchIndex_Redis_Connect( l.conn_id ) }">						<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndex_Redis_Search_Index_LowLevel( l.conn_id, l.aisettings, l.index, l.query, l.options, l.results ) }">
+	<MvASSIGN NAME = "l.null"	VALUE = "{ AISearchIndex_Redis_Disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Search_Index_LowLevel" PARAMETERS = "conn_id, aisettings var, index var, query, options var, results var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT redis_ft_search( l.conn_id, AISearchIndex_Redis_Index_Name( l.aisettings, l.index ), l.query, l.options, l.results ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00007', redis_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Index_Recreate" PARAMETERS = "index var, embedding_source var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT AISearchIndex_Redis_Connect( l.conn_id ) }">						<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"	VALUE = "{ AISearchIndex_Redis_Delete_Index_LowLevel( l.conn_id, l.aisettings, l.index ) }">
+	<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndex_Redis_Create_Index_LowLevel( l.conn_id, l.aisettings, l.index, l.embedding_source ) }">
+	<MvASSIGN NAME = "l.null"	VALUE = "{ AISearchIndex_Redis_Disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Set_Hash_Value" PARAMETERS = "conn_id, aisettings var, index_id, product_id, value var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| redis_hset returns 0 if an error occurs while also returning 0 if no new fields were added and the
+	| existing value was overwritten.  Since we cannot distinguish between the errors the return value is
+	| ignored.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ redis_hset( l.conn_id, AISearchIndex_Redis_Product_Hash_Key_Name( l.aisettings, l.product_id ), l.index_id, redis_pack_f32( l.value ) ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Delete_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT AISearchIndex_Redis_Connect( l.conn_id ) }">						<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndex_Redis_Delete_Hash( l.conn_id, l.aisettings, l.product_id ) }">
+	<MvASSIGN NAME = "l.null"	VALUE = "{ AISearchIndex_Redis_Disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Delete_Hash_Key" PARAMETERS = "conn_id, index_id, product_id" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| redis_hdel returns 0 if an error occurs while also returning 0 if no fields were deleted. 
+	| Since we cannot distinguish between the errors the return value is ignored.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ redis_hdel( l.conn_id, AISearchIndex_Redis_Product_Hash_Name( l.product_id ), l.index_id )  }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Delete_Hash" PARAMETERS = "conn_id, aisettings var, product_id" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| redis_del returns 0 if an error occurs while also returning 0 if no fields were deleted.
+	| Since we cannot distinguish between the errors the return value is ignored.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ redis_del( l.conn_id, AISearchIndex_Redis_Product_Hash_Key_Name( l.aisettings, l.product_id ) ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Info_Field" PARAMETERS = "data var, field_name, field_value var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.index"	VALUE = "{ miva_array_search( l.data, 1, l.element, 'strcasecmp( l.element, l.field_name ) EQ 0' ) }">
+
+	<MvIF EXPR = "{ NOT l.index }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.field_value" VALUE = "{ l.data[ l.index + 1 ] }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Search_Version" PARAMETERS = "conn_id, version var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.version"		VALUE = "">
+	<MvASSIGN NAME = "l.search"			VALUE = "module:name=search,">
+	<MvASSIGN NAME = "l.module_info"	VALUE = "{ redis_info_section( l.conn_id, 'modules' ) }">
+	<MvASSIGN NAME = "l.null"			VALUE = "{ miva_splitstring( l.module_info, asciichar( 10 ), l.lines, 'trim,noempty' ) }">
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.lines, 1, l.line, '( \'module:name=search,\' CIN l.line ) EQ 1' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.entry" ARRAY = "l.entries" COUNT = "{ miva_splitstring( l.line, ',', l.entries, 'trim,noempty' ) }">
+		<MvASSIGN NAME = "l.name"			VALUE = "{ gettoken( l.entry, '=', 1 ) }">
+		<MvASSIGN NAME = "l.value"			VALUE = "{ gettoken( l.entry, '=', 2 ) }">
+	    
+	    <MvIF EXPR = "{ l.name EQ 'ver' }">
+	        <MvASSIGN NAME = "l.version"	VALUE = "{ l.value }">
+
+	        <MvFUNCTIONRETURN VALUE = 1>
+	    </MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>

@@ -11,13 +11,54 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-AI-JSON-
-| Next Error Code: 5   
+| Next Error Code: 18   
 |
 </MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex" PARAMETERS = "aisearchindex var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:id ) }">,
+	"active":		<MvEVAL EXPR = "{ encodejavascriptboolean( l.aisearchindex:active ) }">,
+	"code":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:code ) }">",
+	"source":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:source ) }">",
+	"srch_range":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:srch_range ) }">,
+	"idx_templ":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:idx_templ ) }">"
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex_Load" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'AISearchIndex_ID', l.index_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_ID( l.index_id, l.index ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-JSON-00005', 'AI Search Index not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_AISearchIndex', l.edit_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.edit_code, l.index ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-JSON-00006', 'AI Search Index not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'AISearchIndex_Code', l.index_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index_code, l.index ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-JSON-00007', 'AI Search Index not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-JSON-00008', 'Unable to load AI Search Index: One of AISearchIndex_ID, Edit_AISearchIndex, or AISearchIndex_Code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_AIGenerateText" PARAMETERS = "" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
@@ -79,4 +120,317 @@
 		"content": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.response:choices[ 1 ]:message:content ) }">"
 	}
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndexList_Load_Query" PARAMETERS = "" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER( l.available_filters,	'id',			'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(	  l.available_filters, 	'code',			'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(	  l.available_filters, 	'source',		'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(  l.available_filters, 	'srch_range',	'' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(	  l.available_filters,	'active',		'' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'AISearchIndexes', '' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'id,code,source,srch_range,active', 'code' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'AISearchIndexes', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00009', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.index_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.record_count_error"		VALUE = "">
+	
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Connect( l.conn_id ) }">
+		<MvASSIGN NAME = "l.record_count_error"	VALUE = "{ g.Error_Message }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"total_count": <MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( NOT AISearchIndexes.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.index_count LT l.count ) ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Read( l.index ) }">
+
+			<MvASSIGN NAME = "l.info"						VALUE = "">
+			<MvASSIGN NAME = "l.record_count"				VALUE = 0>
+
+			<MvIF EXPR = "{ l.conn_id }">
+				<MvASSIGN NAME = "l.record_count_error"		VALUE = "">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Info( l.conn_id, l.index, l.info ) }">
+					<MvASSIGN NAME = "l.record_count_error"	VALUE = "{ g.Error_Message }">
+				<MvELSE>
+					<MvASSIGN NAME = "l.record_count"		VALUE = "{ l.info:num_docs }">
+				</MvIF>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.index_count ) }">
+				<MvEVAL EXPR = "{ JSON_AISearchIndex( l.index ) }">,
+				"count": 		<MvEVAL EXPR = "{ encodejavascriptnumber( l.record_count ) }">,
+				"count_error":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.record_count_error ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "AISearchIndexes" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Disconnect( l.conn_id ) }">
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Defaults( l.index ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',	'Code',			l.index:code )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:50',	'Source',		l.index:source )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',	'Template',		l.index:idx_templ )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',	'Active',		l.index:active )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'o',	'Search_Range',	l.index:srch_range, 4, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'An AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:srch_range, 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Search_Range', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Template', g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.embeddings, 1, l.embedding, 'strcasecmp( l.embedding:code, l.index:source ) EQ 0' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Source', 'Invalid source' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Compile( l.index ) }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Insert( l.index ) }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Create_Index( l.index, l.embedding ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'aisearchindex' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-AI-JSON-00011', 'AI Search Index \'' $ l.index:code $ '\' created' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_AISearchIndex( l.index ) }">,
+		"count": 0
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_AISearchIndex_Load( l.index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.original_index" VALUE = "{ l.index }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'O',	'Code',			l.index:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:50',	'Source',		l.index:source )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',	'Template',		l.index:idx_templ )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',	'Active',		l.index:active )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',	'Search_Range',	l.index:srch_range, 4, 3 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) AND l.existing_index:id NE l.index:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'An AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:srch_range, 0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Search_Range', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Template', g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.embeddings, 1, l.embedding, 'strcasecmp( l.embedding:code, l.index:source ) EQ 0' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Source', 'Invalid source' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Compile( l.index ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Update( l.index ) }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ strcasecmp( l.original_index:source, l.index:source ) NE 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Recreate( l.index, l.embedding ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ strcasecmp( l.original_index:code, l.index:code ) NE 0  }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Delete( l.original_index )  }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-AI-JSON-00013', 'AI Search Index \'' $ l.index:code $ '\' updated' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndexList_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Load( l.searchsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer_Array( 'R', 'AISearchIndex_IDs', l.index_ids, l.index_id_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.processed" 		VALUE = 0>
+	<MvASSIGN NAME = "l.error_count" 	VALUE = 0>
+	<MvASSIGN NAME = "l.errors" 		VALUE = "">
+	<MvASSIGN NAME = "l.start_time" 	VALUE = "{ s.dyn_time_t }">
+
+	<MvFOREACH ITERATOR = "l.index_id" ARRAY = "l.index_ids" COUNT = "{ l.index_id_count }">
+		<MvASSIGN NAME = "l.processed" 	VALUE = "{ l.processed + 1 }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_ID( l.index_id, l.index ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Delete( l.index ) }">	<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.index_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Delete( l.index ) }">		<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.index_id, g.Error_Code, g.Error_Message, l.errors ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Delete_Index( l.index ) }">
+
+				<MvIF EXPR = "{ l.index:id EQ l.searchsettings:index_id }">
+					<MvASSIGN NAME = "l.searchsettings:index_id" VALUE = 0>
+
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Update( l.searchsettings ) }">
+						<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.index_id, g.Error_Code, g.Error_Message, l.errors ) }">
+					</MvIF>
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-AI-JSON-00015', 'AI Search Index \'' $ l.index:code $ '\' deleted' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ ( s.dyn_time_t - l.start_time ) GE 60 }">								<MvFOREACHSTOP>
+		<MvELSEIF EXPR = "{ ( s.dyn_time_remaining GE 0 ) AND ( s.dyn_time_remaining LE 3 ) }">	<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.error_count }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Errors( l.processed, l.errors ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Success( l.processed ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndexEmbeddingList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.embedding_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"data":
+		[
+		<MvFOREACH ITERATOR = "l.embedding" ARRAY = "l.embeddings">				
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.embedding_count ) }">
+			"code":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.embedding:code ) }">",
+			"model":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.embedding:model ) }">",
+			"dimensions":	"<MvEVAL EXPR = "{ encodejavascriptnumber( l.embedding:dimensions ) }">",
+			"max_tokens":	"<MvEVAL EXPR = "{ encodejavascriptnumber( l.embedding:max_tokens ) }">"
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+		</MvFOREACH>
+		],
+		"total_count": <MvEVAL EXPR = "{ int( l.embedding_count ) }">
+	}
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex_Rebuild" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_AISearchIndex_Load( l.index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.embeddings, 1, l.embedding, 'strcasecmp( l.embedding:code, l.index:source ) EQ 0' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00016', 'Invalid source' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Recreate( l.index, l.embedding ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.index:active }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Queue_Active( l.index:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'aisearchindex' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-AI-JSON-00017', 'AI Search Index \'' $ l.index:code $ '\' rebuilt' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
 </MvFUNCTION>

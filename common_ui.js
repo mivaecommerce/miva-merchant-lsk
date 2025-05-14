@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -1171,6 +1171,25 @@ function cloneObject( obj )
 	}
 
 	return obj;
+}
+
+function objectDeepAssign( target, ...sources )
+{
+	if ( typeof target !== 'object' )
+	{
+		target = new Object();
+	}
+
+	for ( const source of sources )
+	{
+		for ( const key in source )
+		{
+			if ( typeof source[ key ] !== 'object' || Array.isArray( source[ key ] ) || !target.hasOwnProperty( key ) )	Object.assign( target, { [ key ]: source[ key ] } );
+			else																										target[ key ] = objectDeepAssign( target[ key ], source[ key ] );
+		}
+	}
+
+	return target;
 }
 
 function encodeentities( input )

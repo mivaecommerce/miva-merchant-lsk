@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2023 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -82,6 +82,26 @@ function Runtime_ProductImageList_Load_Product_Variant( product_code, variant_id
 																																													'&Variant_ID=' + encodeURIComponent( variant_id ) +
 																																													'&Image_Sizes=' + EncodeArray( image_sizes ) ); }
 
+function Runtime_BasketItem_Insert( data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_BasketItem_Insert',
+	{
+		Product_ID:				data.product_id ?? undefined,
+		Product_Code:			data.product_code ?? undefined,
+		Quantity:				data.quantity,
+		Subscription_Term_ID:	data.subterm_id,
+		Attributes:				data.attributes
+	}, delegator );
+}
+
+function Runtime_BasketItemList_Insert( products, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_BasketItemList_Insert',
+	{
+		Products: products
+	}, delegator );
+}
+
 function Runtime_BasketItem_Update( line_id, data, callback, delegator )
 {
 	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_BasketItem_Update',
@@ -117,6 +137,77 @@ function Runtime_BasketGroup_Delete( group_id, callback, delegator )
 	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_BasketItem_Delete',
 	{
 		Group_ID: group_id
+	}, delegator );
+}
+
+function Runtime_Customer_Login( data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_Customer_Login',
+	{
+		Customer_LoginEmail:	data.email,
+		Customer_Login:			data.login,
+		Customer_Password:		data.password
+	}, delegator );
+}
+
+function Runtime_WishList_Insert( data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_WishList_Insert',
+	{
+		WishList_Title:		data.title,
+		WishList_Notes:		data.notes,
+		WishList_Shared:	data.shared
+	}, delegator );
+}
+
+function Runtime_WishListItemList_Insert( data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_WishListItemList_Insert',
+	{
+		WishList_ID:	data.wishlist_id,
+		Products:		data.products
+	}, delegator );
+}
+
+function Runtime_WishListItem_Delete( wish_id, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_WishListItem_Delete',
+	{
+		Wish_ID: wish_id
+	}, delegator );
+}
+
+function Runtime_BasketItemList_MoveToWishlist( data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_BasketItemList_MoveToWishlist',
+	{
+		WishList_ID:	data.wishlist_id,
+		MoveAll:		data.moveall,
+		Line_IDs:		data.line_ids,
+		Group_IDs:		data.group_ids
+	}, delegator );
+}
+
+function Runtime_WishListList_Load_Query( filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_WishListList_Load_Query',
+	{
+		Filter:	filter,
+		Sort:	sort,
+		Offset:	offset,
+		Count:	count
+	}, delegator );
+}
+
+function Runtime_WishListItemList_Load_Query( wishlist_id, filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'runtime', 'Runtime_WishListItemList_Load_Query',
+	{
+		WishList_ID:	wishlist_id,
+		Filter:			filter,
+		Sort:			sort,
+		Offset:			offset,
+		Count:			count
 	}, delegator );
 }
 

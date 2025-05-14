@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -504,6 +504,23 @@ function hex2rgb( hex )
 	var result = /^([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec( hex.replace( new RegExp( '^#' ), '' ) );
 
 	return { 'r': parseInt( result[ 1 ], 16 ), 'g': parseInt( result[ 2 ], 16 ), 'b': parseInt( result[ 3 ], 16 ) };
+}
+
+function slugify( value )
+{
+	if ( typeof value !== 'string' )
+	{
+		return '';
+	}
+
+	return value.toLowerCase()						// Lowercase
+				.trim()								// Remove surrounding whitespace
+				.normalize( 'NFD' )					// Normalize accent characters
+				.replace( /[\u0300-\u036f]/g, '' )	// Remove diacritics
+				.replace( /[^a-z0-9\s-_]/g, '' )	// Strip non-alphanumeric characters
+				.replace( /\s+/g, '-' )				// Replace space with hyphen
+				.replace( /-+/g, '-' )				// Replace two or more hyphens with single hyphen
+				.replace( /^-+|-+$/g, '' )			// Remove leading / trailing hyphen
 }
 
 function FunctionExists( func )
@@ -2066,16 +2083,23 @@ function isJavaScriptWordChar( c )
 	return false;
 }
 
-function calculateScrollBarDimensions()
+function calculateScrollBarDimensions( { doc = document } = {} )
 {
 	var dimensions, element_scrollbar;
 
-	element_scrollbar	= newElement( 'div', { 'class': 'mm10_scrollbar_dimension_calculator' }, null, document.body );
+	if ( doc.hasOwnProperty( 'mm_cached_scrollbar_dimensions' ) )
+	{
+		return doc.mm_cached_scrollbar_dimensions;
+	}
+
+	element_scrollbar	= newElement( 'div', { 'class': 'mm10_scrollbar_dimension_calculator' }, null, doc.body );
 	dimensions			= new Object();
 	dimensions.width	= element_scrollbar.offsetWidth - element_scrollbar.clientWidth;
 	dimensions.height	= element_scrollbar.offsetHeight - element_scrollbar.clientHeight;
 
 	element_scrollbar.parentNode.removeChild( element_scrollbar );
+
+	doc.mm_cached_scrollbar_dimensions = dimensions;
 
 	return dimensions;
 }
@@ -2344,51 +2368,32 @@ AddEvent( document, 'DOMContentLoaded', function( event )
 	}
 } );
 
-var mm9_uniqueid_list = new Array();
-
-function GenerateUniqueID()
+(() =>
 {
-	var i, id, chars, count;
+	var counter = 0;
 
-	try
+	window.GenerateUniqueID = () =>
 	{
-		//
-		// We must wrap this in a try-catch so that if the window doesn't have
-		// access (cross-origin) to the top window, we can still generate a unique id
-		//
-
-		if ( window !== top && typeof top.GenerateUniqueID === 'function' )
+		try
 		{
-			return top.GenerateUniqueID();
+			//
+			// We must wrap this in a try-catch so that if the window doesn't have
+			// access (cross-origin) to the top window, we can still generate a unique id
+			//
+
+			if ( window !== top && typeof top.GenerateUniqueID === 'function' )
+			{
+				return top.GenerateUniqueID();
+			}
 		}
-	}
-	catch ( e )
-	{
-		;
-	}
-
-	chars		= 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-	count		= 0;
-
-	while ( count++ < 100 )
-	{
-		id		= '';
-
-		for ( i = 0; i < 32; i++ )
+		catch ( e )
 		{
-			id	+= chars.charAt( Math.floor( Math.random() * ( chars.length - 1 ) ) );
+			;
 		}
 
-		if ( arrayIndexOf( mm9_uniqueid_list, id ) == -1 )
-		{
-			mm9_uniqueid_list.push( id );
-
-			return id;
-		}
+		return `mm_unique_id_${counter++}`;
 	}
-
-	return null;
-}
+})();
 
 function RandomIntegerRange( min, max )
 {
@@ -5991,11 +5996,11 @@ MMInput.prototype.Validate_WholeNumber_NonNegative_Silent = function( error /* o
 	return false;
 }
 
-MMInput.prototype.Validate_FloatingPointNumber = function()
+MMInput.prototype.Validate_FloatingPointNumber = function( options /* optional */ )
 {
 	var error = new Object();
 
-	if ( !this.Validate_FloatingPointNumber_Silent( error ) )
+	if ( !this.Validate_FloatingPointNumber_Silent( error, options ) )
 	{
 		this.SetInvalid( error.error_message );
 		this.Select();
@@ -6006,9 +6011,15 @@ MMInput.prototype.Validate_FloatingPointNumber = function()
 	return true;
 }
 
-MMInput.prototype.Validate_FloatingPointNumber_Silent = function( error /* optional */ )
+MMInput.prototype.Validate_FloatingPointNumber_Silent = function( error /* optional */, options /* optional */ )
 {
 	var validate_options = { max_left_digits: 8, max_right_digits: 2 };
+
+	if ( getVariableType( options ) === 'object' )
+	{
+		validate_options.max_left_digits	= options.max_left_digits  ?? validate_options.max_left_digits;
+		validate_options.max_right_digits	= options.max_right_digits ?? validate_options.max_right_digits;
+	}
 
 	if ( ValidateFloatingPointNumber( this.element_input.value, validate_options ) )
 	{
@@ -10418,6 +10429,12 @@ function MivaSVGIconMap( icon )
 				<path class="mm10_svg_icon_color" d="M5.5,0H1.21C.54,0,0,.54,0,1.21h0v4.59c0,.67.54,1.21,1.21,1.21h4.58c.67,0,1.21-.54,1.21-1.21V1.5c0-.83-.67-1.5-1.5-1.5M14.5,0h-4.29c-.67,0-1.21.54-1.21,1.21v4.59c0,.67.54,1.21,1.21,1.21h4.58c.67,0,1.21-.54,1.21-1.21V1.5c0-.83-.67-1.5-1.5-1.5M5.5,8.99H1.21c-.67,0-1.21.54-1.21,1.21v4.59c0,.67.54,1.21,1.21,1.21,0,0,0,0,0,0h4.58c.67,0,1.21-.54,1.21-1.21h0v-4.3c0-.83-.67-1.5-1.5-1.5M14.5,8.99h-4.29c-.67,0-1.21.54-1.21,1.21v4.59c0,.67.54,1.21,1.21,1.21,0,0,0,0,0,0h4.58c.67,0,1.21-.54,1.21-1.21h0v-4.3c0-.83-.67-1.5-1.5-1.5" />
 			</svg>`;
 		}
+		case 'component-product-display':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+				<path class="mm10_svg_icon_color" d="M6.5,6.5H1.5V1.5h5v5ZM6.8,0H1.2C.5,0,0,.6,0,1.2v5.6c0,.7.5,1.2,1.2,1.2h5.6c.7,0,1.2-.5,1.2-1.2V1.2C8,.6,7.5,0,6.8,0M15.2,10.5H.8c-.4,0-.8.3-.8.8s.3.8.8.8h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M15.2,14.5H.8c-.4,0-.8.3-.8.8s.3.8.8.8h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M10.8,1.5h4.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-4.5c-.4,0-.8.3-.8.8s.3.8.8.8M10.8,5h4.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-4.5c-.4,0-.8.3-.8.8s.3.8.8.8M10.8,8.6h1.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-1.5c-.4,0-.8.3-.8.8s.3.8.8.8" />
+			</svg>`;
+		}
 		case 'component-contact-form':
 		{
 			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
@@ -10586,6 +10603,12 @@ function MivaSVGIconMap( icon )
 				<path class="mm10_svg_icon_color" d="M15950.564,20839a3.566,3.566,0,0,1-3.562-3.562v-8.875a3.561,3.561,0,0,1,3.562-3.561h8.875a3.562,3.562,0,0,1,3.562,3.561v8.875a3.567,3.567,0,0,1-3.562,3.563Zm-2.191-12.437v8.875a2.194,2.194,0,0,0,2.191,2.191h8.875a2.194,2.194,0,0,0,2.191-2.191v-8.875a2.195,2.195,0,0,0-2.191-2.191h-8.875A2.195,2.195,0,0,0,15948.373,20826.563Zm3.148,7-1.443-2.166a.238.238,0,0,1-.042-.068.578.578,0,0,1-.053-.125.673.673,0,0,1-.031-.2.641.641,0,0,1,.031-.2.479.479,0,0,1,.053-.121.292.292,0,0,1,.042-.072l1.443-2.166a.684.684,0,1,1,1.14.758l-.742,1.115h6.166l-.748-1.119a.685.685,0,1,1,1.14-.76l1.444,2.166a.471.471,0,0,1,.063.1.725.725,0,0,1,.063.289v.02a.7.7,0,0,1-.142.408l-1.428,2.135a.676.676,0,0,1-.569.3.739.739,0,0,1-.382-.109.688.688,0,0,1-.188-.951l.742-1.115h-6.16l.742,1.115a.688.688,0,0,1-.188.951.683.683,0,0,1-.951-.193Z" transform="translate(-15947.003 -20823.002)" />
 			</svg>`;
 		}
+		case 'pagebuilderui-screensizes-default':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="15.998" height="15.998" viewBox="0 0 15.998 15.998">
+				<path class="mm10_svg_icon_color" d="M15951,20839a.751.751,0,0,1,0-1.5h8a.751.751,0,0,1,0,1.5Zm-1.255-2.662a2.745,2.745,0,0,1-2.74-2.746v-7.85a2.742,2.742,0,0,1,2.74-2.74h10.512a2.747,2.747,0,0,1,2.746,2.74v7.85a2.75,2.75,0,0,1-2.746,2.746Zm-1.245-2.746a1.252,1.252,0,0,0,1.245,1.25h10.512a1.252,1.252,0,0,0,1.245-1.25v-.842h-13Zm0-7.85v5.512h13v-5.512a1.244,1.244,0,0,0-1.245-1.24h-10.512A1.244,1.244,0,0,0,15948.5,20825.742Z" transform="translate(-15947.003 -20823.002)" />
+			</svg>`;
+		}
 		case 'cancel-icon-small':
 		{
 			return `<svg xmlns="http://www.w3.org/2000/svg" width="5.973" height="5.939" viewBox="0 0 5.973 5.939">
@@ -10656,6 +10679,144 @@ function MivaSVGIconMap( icon )
 		{
 			return `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">
 				<path class="mm10_svg_icon_color" d="M28296,2506a6,6,0,1,1,6,6A6.017,6.017,0,0,1,28296,2506Zm2.551-3.524-.078.078a4.932,4.932,0,1,0,7.049,6.9,5.043,5.043,0,0,0,0-7.048,4.955,4.955,0,0,0-6.971.071Zm2.771,6.153v-2.778a.675.675,0,1,1,1.35,0v2.778a.675.675,0,1,1-1.35,0Zm-.15-5.1a.824.824,0,1,1,.824.824A.834.834,0,0,1,28301.174,2503.524Z" transform="translate(-28296.002 -2500.001)" />
+			</svg>`;
+		}
+		case 'pagebuilder-theme-reset':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="14.498" height="11.416" viewBox="0 0 14.498 11.416">
+				<path class="mm10_svg_icon_color" d="M16613.137,21021.418h-9.475a.662.662,0,1,1,0-1.324h9.459a3.132,3.132,0,0,0,0-6.262h-7.855l1.377,1.377a.661.661,0,0,1,0,.938.655.655,0,0,1-.934,0l-2.516-2.516c-.027-.031-.053-.059-.08-.1l-.047-.062v-.031c0-.006-.006-.016-.006-.021l-.021-.047v-.037a.077.077,0,0,0-.01-.027v-.016a.715.715,0,0,1,0-.258v-.021a.039.039,0,0,0,.01-.027v-.031l.021-.047c0-.01.006-.016.006-.021v-.031l.047-.059a.428.428,0,0,1,.08-.1l2.516-2.506a.661.661,0,0,1,.465-.189.641.641,0,0,1,.469.2.657.657,0,0,1,0,.934l-1.371,1.371h8.088v.01a4.459,4.459,0,0,1-.217,8.906Z" transform="translate(-16602.998 -21010.002)" />
+			</svg>`;
+		}
+		case 'theme-field-cornerradius-common':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+				<path class="mm10_svg_icon_color" d="M3,1.3A1.7,1.7,0,0,0,1.3,3V13A1.7,1.7,0,0,0,3,14.7H13A1.7,1.7,0,0,0,14.7,13V3A1.7,1.7,0,0,0,13,1.3H3M3,0H13a3,3,0,0,1,3,3V13a3,3,0,0,1-3,3H3a3,3,0,0,1-3-3V3A3,3,0,0,1,3,0Z" />
+			</svg>`;
+		}
+		case 'theme-field-cornerradius-individual':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+				<path class="mm10_svg_icon_color" d="M10299,20773v-1.25h3a1.749,1.749,0,0,0,1.747-1.752v-3H10305v3c0,.01,0,.02,0,.031a2.99,2.99,0,0,1-2.722,2.945c-.094,0-.177.025-.271.025Zm-7,0c-.094,0-.178-.021-.271-.025a2.989,2.989,0,0,1-2.721-2.945c0-.012-.006-.021-.006-.031v-3h1.252v3a1.748,1.748,0,0,0,1.746,1.752h3v1.25Zm11.751-10v-3a1.746,1.746,0,0,0-1.747-1.746h-3V20757h3a3,3,0,0,1,3,3v3Zm-14.749,0v-3a3,3,0,0,1,3-3h3v1.252h-3a1.745,1.745,0,0,0-1.746,1.746v3Z" transform="translate(-10289 -20757)" />
+			</svg>`;
+		}
+		case 'theme-field-cornerradius-top-left':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+				<path class="mm10_svg_icon_color" d="M0,3V8H1.25V3A1.752,1.752,0,0,1,3,1.25H8V0H3A3,3,0,0,0,0,3" />
+			</svg>`;
+		}
+		case 'theme-field-cornerradius-top-right':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+				<path class="mm10_svg_icon_color" d="M5,0H0V1.25H5A1.752,1.752,0,0,1,6.75,3V8H8V3A3,3,0,0,0,5,0" />
+			</svg>`;
+		}
+		case 'theme-field-cornerradius-bottom-right':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+				<path class="mm10_svg_icon_color" d="M6.75,5A1.752,1.752,0,0,1,5,6.75H0V8H5a2.713,2.713,0,0,0,.273-.028A2.991,2.991,0,0,0,8,5.028C8,5.018,8,5.009,8,5V0H6.75Z" />
+			</svg>`;
+		}
+		case 'theme-field-cornerradius-bottom-left':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="8" height="8" viewBox="0 0 8 8">
+				<path class="mm10_svg_icon_color" d="M1.25,5V0H0V5c0,.009,0,.018,0,.028A2.991,2.991,0,0,0,2.727,7.972,2.713,2.713,0,0,0,3,8H8V6.75H3A1.752,1.752,0,0,1,1.25,5" />
+			</svg>`;
+		}
+		case 'theme-field-padding-none':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 12 12">
+				<path class="mm10_svg_icon_color" d="M34,31.643V24.357A2.357,2.357,0,0,0,31.643,22H24.357A2.357,2.357,0,0,0,22,24.357v7.286A2.357,2.357,0,0,0,24.357,34h7.286A2.357,2.357,0,0,0,34,31.643ZM23.286,24.357a1.071,1.071,0,0,1,1.071-1.071h7.286a1.111,1.111,0,0,1,.148.015l-8.49,8.49a1.111,1.111,0,0,1-.015-.148Zm.923,8.342,8.49-8.49a1.111,1.111,0,0,1,.015.148v7.286a1.072,1.072,0,0,1-1.071,1.071H24.357a1.111,1.111,0,0,1-.148-.015Z" transform="translate(-22 -22)" />
+			</svg>`;
+		}
+		case 'theme-field-padding-custom':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="17.997" height="4.002" viewBox="0 0 17.997 4.002">
+				<path class="mm10_svg_icon_color" d="M10683.059,20759a1.97,1.97,0,1,1,1.97,2A1.985,1.985,0,0,1,10683.059,20759Zm-7.023,0a1.969,1.969,0,1,1,1.97,2A1.985,1.985,0,0,1,10676.035,20759Zm-7.034,0a1.97,1.97,0,1,1,1.97,2A1.985,1.985,0,0,1,10669,20759Z" transform="translate(-10669.001 -20756.998)" />
+			</svg>`;
+		}
+		case 'theme-field-padding-top':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="12.002" height="12.002" viewBox="0 0 12.002 12.002">
+				<path class="mm10_svg_icon_color" d="M10237.5,20622a.5.5,0,0,1-.5-.5v-5a.5.5,0,0,1,.5-.5h5a.5.5,0,0,1,.5.5v5a.5.5,0,0,1-.5.5Zm.75-1.252h3.5v-3.5h-3.5Zm-3.747-8.746a.5.5,0,0,1-.5-.5v-1a.5.5,0,0,1,.5-.5h11a.506.506,0,0,1,.5.5v1a.506.506,0,0,1-.5.5Z" transform="translate(-10234 -20609.998)" />
+			</svg>`;
+		}
+		case 'theme-field-padding-right':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="12.002" height="12" viewBox="0 0 12.002 12">
+				<path class="mm10_svg_icon_color" d="M20634.5,40392a.5.5,0,0,1-.5-.5v-11a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v11a.5.5,0,0,1-.5.5Zm6-3a.5.5,0,0,1-.5-.5v-5.008a.5.5,0,0,1,.5-.5h5a.505.505,0,0,1,.506.5v5.008a.505.505,0,0,1-.506.5Zm.75-1.246h3.5v-3.508h-3.5Z" transform="translate(20646.004 40392) rotate(180)" />
+			</svg>`;
+		}
+		case 'theme-field-padding-bottom':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12.002" viewBox="0 0 12 12.002">
+				<path class="mm10_svg_icon_color" d="M20634.5,40392a.5.5,0,0,1-.5-.5v-11a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v11a.5.5,0,0,1-.5.5Zm6-3a.5.5,0,0,1-.5-.5v-5.008a.5.5,0,0,1,.5-.5h5a.505.505,0,0,1,.506.5v5.008a.505.505,0,0,1-.506.5Zm.75-1.246h3.5v-3.508h-3.5Z" transform="translate(-40380 20646.004) rotate(-90)" />
+			</svg>`;
+		}
+		case 'theme-field-padding-left':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="11.998" height="11.998" viewBox="0 0 11.998 11.998">
+				<path class="mm10_svg_icon_color" d="M10371.5,20625a.5.5,0,0,1-.5-.5v-11a.5.5,0,0,1,.5-.5h1a.5.5,0,0,1,.5.5v11a.5.5,0,0,1-.5.5Zm6-3a.5.5,0,0,1-.5-.5v-5a.5.5,0,0,1,.5-.5h5a.5.5,0,0,1,.5.5v5a.5.5,0,0,1-.5.5Zm.75-1.246h3.5v-3.5h-3.5Z" transform="translate(-10371.002 -20613.002)" />
+			</svg>`;
+		}
+		case 'theme-field-drop-shadow-x':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="7.452" height="8.928" viewBox="0 0 7.452 8.928">
+				<path class="mm10_svg_icon_color" d="M.276,0H1.668L3.132-2.328c.372-.576.876-1.488.876-1.488h.024s.468.912.816,1.488L6.264,0H7.728l-3-4.572L7.62-8.928H6.276L4.932-6.78c-.36.564-.84,1.464-.84,1.464H4.068s-.468-.9-.816-1.464L1.92-8.928H.5L3.348-4.584Z" transform="translate(-0.276 8.928)" />
+			</svg>`;
+		}
+		case 'theme-field-drop-shadow-y':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="7.692" height="8.928" viewBox="0 0 7.692 8.928">
+				<path class="mm10_svg_icon_color" d="M3.432,0H4.656V-3.684L7.908-8.928H6.6L4.98-6.24c-.372.636-.888,1.668-.888,1.668H4.068S3.564-5.6,3.192-6.24L1.584-8.928H.216L3.432-3.744Z" transform="translate(-0.216 8.928)" />
+			</svg>`;
+		}
+		case 'theme-field-border-thickness-common':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16.001" height="16.002" viewBox="0 0 16.001 16.002">
+				<path class="mm10_svg_icon_color" d="M10799,20687a1,1,0,0,1-1-1v-14a1,1,0,0,1,1-1h14a1,1,0,0,1,1,1v14a1,1,0,0,1-1,1Zm.249-1.252h13.5v-13.5h-13.5Zm2.752-1.75a1,1,0,0,1-1-1v-8a1,1,0,0,1,1-1h8a1,1,0,0,1,1,1v8a1,1,0,0,1-1,1Zm.249-1.246h7.5v-7.5h-7.5Z" transform="translate(-10798.001 -20670.998)" />
+			</svg>`;
+		}
+		case 'theme-field-border-thickness-individual':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16.001" height="16.002" viewBox="0 0 16.001 16.002">
+				<path class="mm10_svg_icon_color" d="M10812,20686.35a.652.652,0,1,1,.654.65A.651.651,0,0,1,10812,20686.35Zm-2,0a.649.649,0,1,1,.648.65A.649.649,0,0,1,10810,20686.35Zm-2,0a.649.649,0,1,1,.648.65A.649.649,0,0,1,10808,20686.35Zm-2,0a.649.649,0,1,1,.648.65A.649.649,0,0,1,10806,20686.35Zm-2,0a.651.651,0,1,1,.654.65A.651.651,0,0,1,10804,20686.35Zm-2,0a.651.651,0,1,1,.649.65A.65.65,0,0,1,10802,20686.35Zm-3,.65a1,1,0,0,1-1-1v-14a1,1,0,0,1,1-1h1a1,1,0,0,1,1,1v14a1,1,0,0,1-1,1Zm13.7-1.953a.651.651,0,1,1,.649.654A.65.65,0,0,1,10812.7,20685.047Zm0-2a.651.651,0,1,1,.649.648A.648.648,0,0,1,10812.7,20683.049Zm0-2a.651.651,0,1,1,.649.65A.65.65,0,0,1,10812.7,20681.049Zm0-2a.651.651,0,1,1,.649.648A.651.651,0,0,1,10812.7,20679.051Zm0-2a.651.651,0,1,1,.649.654A.65.65,0,0,1,10812.7,20677.047Zm0-2a.651.651,0,1,1,.649.648A.65.65,0,0,1,10812.7,20675.049Zm0-2a.651.651,0,1,1,.649.648A.65.65,0,0,1,10812.7,20673.049Zm-.7-1.4a.652.652,0,1,1,.654.648A.652.652,0,0,1,10812,20671.652Zm-2,0a.649.649,0,1,1,.648.648A.65.65,0,0,1,10810,20671.652Zm-2,0a.649.649,0,1,1,.648.648A.65.65,0,0,1,10808,20671.652Zm-2,0a.649.649,0,1,1,.648.648A.651.651,0,0,1,10806,20671.652Zm-2,0a.651.651,0,1,1,.654.648A.652.652,0,0,1,10804,20671.652Zm-2,0a.651.651,0,1,1,.649.648A.651.651,0,0,1,10802,20671.652Z" transform="translate(-10798.001 -20670.998)" />
+			</svg>`;
+		}
+		case 'theme-field-border-thickness-left':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="10.002" height="10.002" viewBox="0 0 10.002 10.002">
+				<path class="mm10_svg_icon_color" d="M10298,20766.5a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20766.5Zm-3.1.5a.5.5,0,0,1-.5-.5v-9a.5.5,0,0,1,.5-.5h2a.5.5,0,0,1,.5.5v9a.5.5,0,0,1-.5.5Zm8.5-2.3a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20764.7Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20762.9Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20761.1Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20759.3Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20757.5Z" transform="translate(-10288.999 -20756.998)" />
+			</svg>`;
+		}
+		case 'theme-field-border-thickness-top':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="10.002" height="10.002" viewBox="0 0 10.002 10.002">
+				<path class="mm10_svg_icon_color" d="M10298,20766.5a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20766.5Zm-3.1.5a.5.5,0,0,1-.5-.5v-9a.5.5,0,0,1,.5-.5h2a.5.5,0,0,1,.5.5v9a.5.5,0,0,1-.5.5Zm8.5-2.3a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20764.7Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20762.9Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20761.1Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20759.3Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20757.5Z" transform="translate(20767 -10288.999) rotate(90)" />
+			</svg>`;
+		}
+		case 'theme-field-border-thickness-right':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="10.002" height="10.002" viewBox="0 0 10.002 10.002">
+				<path class="mm10_svg_icon_color" d="M10298,20766.5a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20766.5Zm-3.1.5a.5.5,0,0,1-.5-.5v-9a.5.5,0,0,1,.5-.5h2a.5.5,0,0,1,.5.5v9a.5.5,0,0,1-.5.5Zm8.5-2.3a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20764.7Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20762.9Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20761.1Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20759.3Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20757.5Z" transform="translate(10299.001 20767) rotate(180)" />
+			</svg>`;
+		}
+		case 'theme-field-border-thickness-bottom':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="10.002" height="10.002" viewBox="0 0 10.002 10.002">
+				<path class="mm10_svg_icon_color" d="M10298,20766.5a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20766.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20766.5Zm-3.1.5a.5.5,0,0,1-.5-.5v-9a.5.5,0,0,1,.5-.5h2a.5.5,0,0,1,.5.5v9a.5.5,0,0,1-.5.5Zm8.5-2.3a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20764.7Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20762.9Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20761.1Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20759.3Zm0-1.8a.5.5,0,1,1,.5.5A.5.5,0,0,1,10298,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10296.2,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10294.4,20757.5Zm-1.8,0a.5.5,0,1,1,.5.5A.5.5,0,0,1,10292.6,20757.5Z" transform="translate(-20756.998 10299.001) rotate(-90)" />
+			</svg>`;
+		}
+		case 'theme-editor-section-arrow':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="15.998" height="11.98" viewBox="0 0 15.998 11.98">
+				<path class="mm10_svg_icon_color" d="M32096.006,38467.785l3.844-3.844h-12.6v-1.785h12.607l-3.852-3.844,1.256-1.254,5.986,5.984-5.986,6Z" transform="translate(-32087.25 -38457.059)" />
+			</svg>`;
+		}
+		case 'dropdown-arrow-one':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="7.43" height="3.998" viewBox="0 0 7.43 3.998">
+				<path class="mm10_svg_icon_color" d="M3.648,4a.711.711,0,0,1-.4-.169L.266,1.266A.711.711,0,1,1,1.191.186L3.715,2.351,6.239.186a.711.711,0,1,1,.924,1.08L4.177,3.826A.711.711,0,0,1,3.648,4Z" />
 			</svg>`;
 		}
 		default:
@@ -11821,6 +11982,38 @@ function MMCopyTextToClipboard( text, callback /* optional */ )
 	}
 
 	document.body.removeChild( element_textarea );
+}
+
+// Font Embed Generator Functions
+////////////////////////////////////////////////////
+
+function FontEmbedGenerator_Google( fonts )
+{
+	if ( !Array.isArray( fonts ) || fonts.length === 0 )
+	{
+		return '';
+	}
+
+	const query_params = fonts.map( font =>
+	{
+		var family = `family=${encodeURIComponent( font.google_font_name )}:`;
+
+		if ( font.styles.italic )
+		{
+			family += 'ital,';
+		}
+
+		const weight_map = new Array();
+
+		if ( font.styles.normal )	weight_map.push( ...Object.keys( font.weights ).filter( key => font.weights[ key ] ).map( weight => `${font.styles.italic ? '0,' : '' }${weight}` ) );
+		if ( font.styles.italic )	weight_map.push( ...Object.keys( font.weights ).filter( key => font.weights[ key ] ).map( weight => `1,${weight}` ) );
+
+		family += `wght@${weight_map.join( ';' )}`;
+
+		return family;
+	} ).join( '&' );
+
+	return `<link rel="preconnect" href="https://fonts.googleapis.com">\n<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>\n<link href="https://fonts.googleapis.com/css2?${query_params}&display=swap" rel="stylesheet">`;
 }
 
 // Animation Functions

@@ -1174,11 +1174,6 @@ function MMTextEditor_FontSizeList_Load_All( callback, delegator )
 	return AJAX_Call_Domain( callback, 'admin', 'MMTextEditor_FontSizeList_Load_All', '', delegator );
 }
 
-function MMTextEditor_FontFamilyList_Load_All( callback, delegator )
-{
-	return AJAX_Call_Domain( callback, 'admin', 'MMTextEditor_FontFamilyList_Load_All', '', delegator );
-}
-
 function MMScreen_Load_MMScreenContext( callback, delegator )
 {
 	return AJAX_Call( callback,

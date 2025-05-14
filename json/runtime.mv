@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-RTM-
-| Next Error Code: 28    
+| Next Error Code: 57    
 |
 </MvCOMMENT>
 
@@ -34,7 +34,11 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Runtime_Product_AttributeAndOption" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvASSIGN NAME = "l.attribute_output_count" VALUE = 0>
+	<MvASSIGN NAME = "l.attribute_output_count"				VALUE = 0>
+
+	<MvIF EXPR = "{ l.product:variant_id AND ( ISNULL l.product:productvariant_count ) }">
+		<MvASSIGN NAME = "l.product:productvariant_count"	VALUE = "{ [ g.Module_Library_DB ].ProductVariantList_Load_Variant( l.product:id, l.product:variant_id, l.product:productvariants ) }">
+	</MvIF>
 
 	[
 	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ [ g.Library_DB ].AttributeList_Load_Product( l.product:id, l.attributes ) }">
@@ -81,6 +85,16 @@
 					<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 				</MvFOREACH>
 				]
+			</MvIF>
+
+			<MvIF EXPR = "{ ( l.attribute:type NE 'text' ) AND ( l.attribute:type NE 'memo' ) AND l.product:variant_id }">
+				<MvIF EXPR = "{ miva_array_search( l.product:productvariants, 1, l.productvariant, '( l.productvariant:attr_id EQ l.attribute:id ) AND ( l.productvariant:attmpat_id EQ l.attribute:attmpat_id )' ) }">
+					<MvIF EXPR = "{ l.attribute:type EQ 'checkbox' }">
+						,"value": <MvEVAL EXPR = "{ encodejavascriptboolean( l.productvariant:option_id ) }">
+					<MvELSEIF EXPR = "{ miva_array_search( l.options, 1, l.option, 'l.option:id EQ l.productvariant:option_id' ) }">
+						,"value": "<MvEVAL EXPR = "{ encodejavascriptstring( l.option:code ) }">"
+					</MvIF>
+				</MvIF>
 			</MvIF>
 		<MvELSE>
 			<MvASSIGN NAME = "l.template_attr_output_count"	VALUE = 0>
@@ -130,6 +144,17 @@
 					</MvFOREACH>
 					]
 				</MvIF>
+
+				<MvIF EXPR = "{ ( l.template_attr:type NE 'text' ) AND ( l.template_attr:type NE 'memo' ) AND l.product:variant_id }">
+					<MvIF EXPR = "{ miva_array_search( l.product:productvariants, 1, l.productvariant, '( l.productvariant:attr_id EQ l.attribute:id ) AND ( l.productvariant:attmpat_id EQ l.template_attr:id )' ) }">
+						<MvIF EXPR = "{ l.template_attr:type EQ 'checkbox' }">
+							,"value": <MvEVAL EXPR = "{ encodejavascriptboolean( l.productvariant:option_id ) }">
+						<MvELSEIF EXPR = "{ miva_array_search( l.options, 1, l.option, 'l.option:id EQ l.productvariant:option_id' ) }">
+							,"value": "<MvEVAL EXPR = "{ encodejavascriptstring( l.option:code ) }">"
+						</MvIF>
+					</MvIF>
+				</MvIF>
+
 				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 			</MvFOREACH>
 			]
@@ -1400,6 +1425,509 @@
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].DiscountState_RemoveUnusedCoupons( l.discount_state, l.null, l.null ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_BasketItem_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.variant_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.subterm_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.items"						VALUE = "">
+	<MvASSIGN NAME = "l.item_count"					VALUE = 0>
+	<MvASSIGN NAME = "l.product_attributes"			VALUE = "">
+	<MvASSIGN NAME = "l.product_attribute_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'R:positive',	'Quantity',				l.quantity ) OR
+					NOT JSON_Input_Integer( 'O',			'Subscription_Term_ID',	l.subterm_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.input_attribute" ARRAY = "l.input_attributes" COUNT = "{ JSON_Input_Array( 'Attributes', l.input_attributes ) }">
+		<MvASSIGN NAME = "l.product_attribute"					VALUE = "">
+		<MvASSIGN NAME = "l.product_attribute:code"				VALUE = "">
+		<MvASSIGN NAME = "l.product_attribute:template_code"	VALUE = "">
+		<MvASSIGN NAME = "l.product_attribute:value"			VALUE = "">
+
+		<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'code',			l.product_attribute:code )			OR
+						NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'template_code',	l.product_attribute:template_code )	OR
+						NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'value',			l.product_attribute:value ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product_attribute_count"			VALUE = "{ miva_array_insert_var( l.product_attributes, l.product_attribute, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.subterm_id }">
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( l.subterm_id, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'invalid_subscription', 'Invalid subscription' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'subscription_required', 'Subscription is required for this product' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_Attributes_DetermineVariant( l.product, 0, l.product_attributes, l.product_attribute_count, l.basketoptions, l.basketoption_count, l.variant_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'product_attributes', 'One or more required attributes are missing, or an invalid combination of attributes was specified' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'invalid_variant', 'Invalid variant' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Library_DB ].Basket_Is_Provisional( g.Basket ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Register( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Check to see if there is already an entry that has the same options as this add request, and if so,
+	| update the quantity of the existing record rather than inserting a new one.
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Product( g.Basket:basket_id, l.product:id, l.basketitems ) }">
+		<MvIF EXPR = "{ l.basketitem:parent_id						OR
+						l.basketitem:wish_id						OR
+						l.basketitem:upsold							OR
+						( l.basketitem:type NE 'product' )			OR
+						( l.basketitem:variant_id NE l.variant_id )	OR
+						( l.basketitem:subterm_id NE l.subterm_id ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:option_count" VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+
+		<MvIF EXPR = "{ l.basketitem:option_count NE l.basketoption_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketoptions_match" VALUE = 1>
+
+		<MvFOREACH ITERATOR = "l.existing_basketoption" ARRAY = "l.basketitem:options" COUNT = "{ l.basketitem:option_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.basketoptions, 1, l.basketoption, '( l.basketoption:attr_id EQ l.existing_basketoption:attr_id )		AND
+																						( l.basketoption:attmpat_id EQ l.existing_basketoption:attmpat_id )	AND
+																						( l.basketoption:option_id EQ l.existing_basketoption:option_id )	AND
+																						( l.basketoption:data EQ l.existing_basketoption:data )				AND
+																						( l.basketoption:data_long EQ l.existing_basketoption:data_long )' ) }">
+				<MvASSIGN NAME = "l.basketoptions_match" VALUE = 0>
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT l.basketoptions_match }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Found a matching item
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.basketitem:quantity"	VALUE = "{ l.original_basketitem:quantity + l.quantity }">
+		<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+
+		<MvFOREACHSTOP>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.item_count }">
+		<MvCOMMENT>
+		|
+		| Nothing matched, so add a new item to the basket
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.attr_price_override" VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem"							VALUE = "">
+		<MvASSIGN NAME = "l.basketitem:basket_id"				VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketitem:line_id"					VALUE = "">							<MvCOMMENT> Allow database code to generate line_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:group_id"				VALUE = "">							<MvCOMMENT> Allow database code to assign to group_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:product_id" 				VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.basketitem:variant_id"				VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.basketitem:wish_id"					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:subterm_id"				VALUE = "{ l.subterm_id }">
+		<MvASSIGN NAME = "l.basketitem:code" 					VALUE = "{ l.product:code }">
+		<MvASSIGN NAME = "l.basketitem:name" 					VALUE = "{ l.product:name }">
+		<MvASSIGN NAME = "l.basketitem:type" 					VALUE = "product">
+
+		<MvASSIGN NAME = "l.part_count"							VALUE = "{ [ g.Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.parts ) }">
+
+		<MvIF EXPR = "{ l.variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.product:sku }">
+		<MvELSEIF EXPR = "{ l.part_count EQ 1 }">					<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+		<MvELSE>													<MvASSIGN NAME = "l.basketitem:sku" VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:retail"					VALUE = "{ l.product:price }">
+		<MvASSIGN NAME = "l.basketitem:base_price"				VALUE = "{ [ g.Library_Utilities ].Adjusted_Price( l.product, l.product:price, l.product:cost ) }">
+		<MvASSIGN NAME = "l.basketitem:price"					VALUE = "{ l.basketitem:base_price }">
+		<MvASSIGN NAME = "l.basketitem:weight" 					VALUE = "{ l.product:weight }">
+		<MvASSIGN NAME = "l.basketitem:taxable" 				VALUE = "{ l.product:taxable }">
+		<MvASSIGN NAME = "l.basketitem:upsold" 					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:quantity" 				VALUE = "{ l.quantity }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ l.basketoption_count }">
+			<MvASSIGN NAME = "l.basketoption:basket_id"			VALUE = "{ l.basketitem:basket_id }">
+			<MvASSIGN NAME = "l.basketoption:line_id"			VALUE = "{ l.basketitem:line_id }">
+
+			<MvIF EXPR = "{ l.attr_price_override }">
+				<MvASSIGN NAME = "l.basketoption:retail"		VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:base_price"	VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:price"			VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:weight"		VALUE = 0.00>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketitem:option_count"		VALUE = "{ miva_array_insert_var( l.basketitem:options, l.basketoption, -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Insert( l.product, l.basketitem, l.items ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Validate inventory
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Is_Available_Inventory( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'inventory_out', ternary( NOT ISNULL g.Error_Messages, g.Error_Messages, g.Error_Message ) ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply Updates
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Basket:total" 				VALUE = "{ [ g.Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+	<MvASSIGN NAME = "g.Basket:subtotal" 			VALUE = "{ [ g.Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+	<MvASSIGN NAME = "g.Basket:formatted_total" 	VALUE = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, g.Basket:total ) }">
+	<MvASSIGN NAME = "g.Basket:formatted_subtotal" 	VALUE = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, g.Basket:subtotal ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total":				<MvEVAL EXPR = "{ encodejavascriptnumber( g.Basket:total ) }">,
+		"subtotal":				<MvEVAL EXPR = "{ encodejavascriptnumber( g.Basket:subtotal ) }">,
+		"formatted_total":		"<MvEVAL EXPR = "{ encodejavascriptstring( g.Basket:formatted_total ) }">",
+		"formatted_subtotal":	"<MvEVAL EXPR = "{ encodejavascriptstring( g.Basket:formatted_subtotal ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_BasketItemList_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_lookup"	VALUE = "">
+	<MvASSIGN NAME = "l.products"		VALUE = "">
+	<MvASSIGN NAME = "l.items"			VALUE = "">
+	<MvASSIGN NAME = "l.item_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.errors"			VALUE = "">
+	<MvASSIGN NAME = "l.error_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.field_prefix"	VALUE = "">
+
+	<MvIF EXPR = "{ [ g.Library_DB ].Basket_Is_Provisional( g.Basket ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Basket_Register( g.Basket ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Exists( 'Products' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00029', 'Missing required parameter' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load products and merge duplicate product entries into a new list
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.input_product" ARRAY = "l.input_products" INDEX = "l.pos" COUNT = "{ JSON_Input_Array( 'Products', l.input_products ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_Product_Load_Element( l.input_product, l.product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product:quantity"	VALUE = 0>
+		<MvASSIGN NAME = "l.product:subterm_id"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_product, 'R:positive',	'quantity',						l.product:quantity ) OR
+						NOT JSON_Input_Element_Integer( l.input_product, 'O',			'product_subscription_term_id',	l.product:subterm_id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.input_attribute" ARRAY = "l.input_attributes" COUNT = "{ JSON_Input_Element_Array( l.input_product, 'Attributes', l.input_attributes ) }">
+			<MvASSIGN NAME = "l.product_attribute"					VALUE = "">
+			<MvASSIGN NAME = "l.product_attribute:code"				VALUE = "">
+			<MvASSIGN NAME = "l.product_attribute:template_code"	VALUE = "">
+			<MvASSIGN NAME = "l.product_attribute:value"			VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'code',			l.product_attribute:code )			OR
+							NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'template_code',	l.product_attribute:template_code )	OR
+							NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'value',			l.product_attribute:value ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.product_attribute_count"			VALUE = "{ miva_array_insert_var( l.product:attributes, l.product_attribute, -1 ) }">
+		</MvFOREACH>
+
+		<MvREFERENCEARRAY NAME = "l.reference_product" VARIABLE = "l.product_lookup">
+			<MvMEMBER NAME = "{ l.product:code $ ':' $ l.product:subterm_id $ ':' $ crypto_md5( miva_array_serialize( l.product:attributes ) ) }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL l.reference_product }">
+			<MvASSIGN NAME = "l.reference_product:quantity"	VALUE = "{ l.reference_product:quantity + l.product:quantity }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.reference_product"			VALUE = "{ l.product }">
+			<MvASSIGN NAME = "l.null"						VALUE = "{ miva_array_insert_ref( l.products, l.reference_product, l.pos ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Process merged products and build list of basket item changes
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.product" ARRAY = "l.products" INDEX = "l.pos">
+		<MvASSIGN NAME = "l.field_prefix" VALUE = "{ 'Products[' $ l.pos $ ']' }">
+
+		<MvIF EXPR = "{ NOT Runtime_BasketItemList_Insert_ProcessProduct( l.field_prefix, l.product, l.items, l.item_count, l.errors, l.error_count ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Validate inventory
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Is_Available_Inventory_Filter( l.items, l.item_count, l.filtered_items, l.filtered_item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply Updates
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_BasketItemList_Process( l.filtered_items, l.filtered_item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Basket:total"				VALUE = "{ [ g.Library_DB ].Basket_Total( g.Basket:basket_id ) }">
+	<MvASSIGN NAME = "g.Basket:subtotal"			VALUE = "{ [ g.Library_DB ].Basket_SubTotal( g.Basket:basket_id ) }">
+	<MvASSIGN NAME = "g.Basket:formatted_total"		VALUE = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, g.Basket:total ) }">
+	<MvASSIGN NAME = "g.Basket:formatted_subtotal"	VALUE = "{ [ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, g.Basket:subtotal ) }">
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total":				<MvEVAL EXPR = "{ encodejavascriptnumber( g.Basket:total ) }">,
+		"subtotal":				<MvEVAL EXPR = "{ encodejavascriptnumber( g.Basket:subtotal ) }">,
+		"formatted_total":		"<MvEVAL EXPR = "{ encodejavascriptstring( g.Basket:formatted_total ) }">",
+		"formatted_subtotal":	"<MvEVAL EXPR = "{ encodejavascriptstring( g.Basket:formatted_subtotal ) }">"
+
+		<MvIF EXPR = "{ l.error_count }">
+			,"skipped_products":
+			[
+				<MvFOREACH ITERATOR = "l.error" ARRAY = "l.errors" INDEX = "l.pos" COUNT = "{ l.error_count }">
+					<MvIF EXPR = "{ l.pos GT 1 }">
+						,
+					</MvIF>
+					{
+						"identifier":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:identifier ) }">",
+						"error_code":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_code ) }">",
+						"error_message":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_message ) }">"
+					}
+				</MvFOREACH>
+			]
+		</MvIF>
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_BasketItemList_Insert_ProcessProduct" PARAMETERS = "field_prefix, product var, items var, item_count var, errors var, error_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.basketitem_found" VALUE = 0>
+
+	<MvIF EXPR = "{ l.product:subterm_id }">
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( l.product:subterm_id, l.productsubscriptionterm ) }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix $ ':subterm_id', g.Error_Code, 'Invalid subscription', l.errors ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id" VALUE = "{ l.productsubscriptionterm:id }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix $ ':subterm_id', g.Error_Code, g.Error_Message, l.errors ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix, g.Error_Code, 'Subscription is required for this product', l.errors ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.subterm_id" VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketoptions"			VALUE = "">
+	<MvASSIGN NAME = "l.basketoption_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.attribute_count"		VALUE = "{ miva_array_elements( l.product:attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_Attributes_DetermineVariant( l.product, 0, l.product:attributes, l.attribute_count, l.basketoptions, l.basketoption_count, l.variant_id ) }">
+		<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix, 'MER-JSN-RTM-00032', 'One or more required attributes are missing, or an invalid combination of attributes was specified', l.errors ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix, 'MER-JSN-RTM-00033', 'Invalid variant', l.errors ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Check to see if there is already an entry that has the same options as this add request, and if so,
+	| update the quantity of the existing record rather than inserting a new one.
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Library_DB ].BasketItemList_Load_Basket_Product( g.Basket:basket_id, l.product:id, l.basketitems ) }">
+		<MvIF EXPR = "{ l.basketitem:parent_id						OR
+						l.basketitem:wish_id						OR
+						l.basketitem:upsold							OR
+						( l.basketitem:type NE 'product' )			OR
+						( l.basketitem:variant_id NE l.variant_id )	OR
+						( l.basketitem:subterm_id NE l.subterm_id ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:option_count" VALUE = "{ [ g.Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+
+		<MvIF EXPR = "{ l.basketitem:option_count NE l.basketoption_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketoptions_match" VALUE = 1>
+
+		<MvFOREACH ITERATOR = "l.existing_basketoption" ARRAY = "l.basketitem:options" COUNT = "{ l.basketitem:option_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.basketoptions, 1, l.basketoption, '( l.basketoption:attr_id EQ l.existing_basketoption:attr_id )		AND
+																						( l.basketoption:attmpat_id EQ l.existing_basketoption:attmpat_id )	AND
+																						( l.basketoption:option_id EQ l.existing_basketoption:option_id )	AND
+																						( l.basketoption:data EQ l.existing_basketoption:data )				AND
+																						( l.basketoption:data_long EQ l.existing_basketoption:data_long )' ) }">
+				<MvASSIGN NAME = "l.basketoptions_match" VALUE = 0>
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ NOT l.basketoptions_match }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Found a matching item
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.basketitem:quantity"	VALUE = "{ l.original_basketitem:quantity + l.product:quantity }">
+		<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+		<MvASSIGN NAME = "l.basketitem_found"		VALUE = 1>
+
+		<MvFOREACHSTOP>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.basketitem_found }">
+		<MvCOMMENT>
+		|
+		| Nothing matched, so add a new item to be inserted into the basket
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.attr_price_override" VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.variant_id, l.attr_price_override ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem"							VALUE = "">
+		<MvASSIGN NAME = "l.basketitem:basket_id"				VALUE = "{ g.Basket:basket_id }">
+		<MvASSIGN NAME = "l.basketitem:line_id"					VALUE = "">							<MvCOMMENT> Allow database code to generate line_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:group_id"				VALUE = "">							<MvCOMMENT> Allow database code to assign to group_id </MvCOMMENT>
+		<MvASSIGN NAME = "l.basketitem:product_id"				VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.basketitem:variant_id"				VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.basketitem:wish_id"					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:subterm_id"				VALUE = "{ l.subterm_id }">
+		<MvASSIGN NAME = "l.basketitem:code"					VALUE = "{ l.product:code }">
+		<MvASSIGN NAME = "l.basketitem:name"					VALUE = "{ l.product:name }">
+		<MvASSIGN NAME = "l.basketitem:type"					VALUE = "product">
+
+		<MvASSIGN NAME = "l.part_count"							VALUE = "{ [ g.Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.parts ) }">
+
+		<MvIF EXPR = "{ l.variant_id EQ 0 AND l.part_count EQ 0 }">	<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.product:sku }">
+		<MvELSEIF EXPR = "{ l.part_count EQ 1 }">					<MvASSIGN NAME = "l.basketitem:sku" VALUE = "{ l.parts[ 1 ]:sku }">
+		<MvELSE>													<MvASSIGN NAME = "l.basketitem:sku" VALUE = "">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.basketitem:retail"					VALUE = "{ l.product:price }">
+		<MvASSIGN NAME = "l.basketitem:base_price"				VALUE = "{ [ g.Library_Utilities ].Adjusted_Price( l.product, l.product:price, l.product:cost ) }">
+		<MvASSIGN NAME = "l.basketitem:price"					VALUE = "{ l.basketitem:base_price }">
+		<MvASSIGN NAME = "l.basketitem:weight"					VALUE = "{ l.product:weight }">
+		<MvASSIGN NAME = "l.basketitem:taxable"					VALUE = "{ l.product:taxable }">
+		<MvASSIGN NAME = "l.basketitem:upsold"					VALUE = 0>
+		<MvASSIGN NAME = "l.basketitem:quantity"				VALUE = "{ l.product:quantity }">
+
+		<MvFOREACH ITERATOR = "l.basketoption" ARRAY = "l.basketoptions" COUNT = "{ l.basketoption_count }">
+			<MvASSIGN NAME = "l.basketoption:basket_id"			VALUE = "{ l.basketitem:basket_id }">
+			<MvASSIGN NAME = "l.basketoption:line_id"			VALUE = "{ l.basketitem:line_id }">
+
+			<MvIF EXPR = "{ l.attr_price_override }">
+				<MvASSIGN NAME = "l.basketoption:retail"		VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:base_price"	VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:price"			VALUE = 0.00>
+				<MvASSIGN NAME = "l.basketoption:weight"		VALUE = 0.00>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketitem:option_count"		VALUE = "{ miva_array_insert_var( l.basketitem:options, l.basketoption, -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.item_count"							VALUE = "{ [ g.Library_DB ].Runtime_BasketItemList_Process_AppendItem_Insert( l.product, l.basketitem, l.items ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -3072,6 +3600,30 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "JSON_Runtime_Product_Load_Element" PARAMETERS = "input_element var, product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Element_Retrieve( l.input_element, 'product_id', l.product_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_ID( l.product_id, l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_element, 'product_id', g.Error_Code $ ': ' $ g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_element, 'product_id', 'Product not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ JSON_Input_Element_Retrieve( l.input_element, 'product_code', l.product_code ) }">
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_Code( l.product_code, l.product ) }">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_element, 'product_code', g.Error_Code $ ': ' $ g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_element, 'product_code', 'Product not found' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_element, '', 'One of product_id or product_code must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "JSON_Runtime_ProductList_Build_Query" PARAMETERS = "search_query var" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query( l.search_query ) }">
 	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'prod.disp_order AS output_disp_order' ) }">
@@ -3309,11 +3861,37 @@
 		</MvIF>
 	</MvFOREACH>
 
+	<MvCOMMENT>
+	|
+	| Handle runtime_search filter
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.data:runtime_search }">
+		<MvIF EXPR = "{ l.data:runtime_search:type EQ 'system' }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search( l.search_query, l.data:runtime_search:search ) }">
+		<MvELSEIF EXPR = "{ l.data:runtime_search:type EQ 'relational' }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_Relational( l.search_query, l.data:runtime_search:search ) }">
+		<MvELSEIF EXPR = "{ l.data:runtime_search:type EQ 'ai' }">
+			<MvIF EXPR = "{ ( NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.data:runtime_search:index, l.ai_index ) ) OR ( NOT l.ai_index:active ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00034', 'Invalid or inactive runtime_search index' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_AI( l.search_query, l.data:runtime_search:search, l.ai_index ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00035', 'Unsupported runtime_search type' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_Origin( l.search_query, l.data:runtime_search:origin ) }">
+	</MvIF>
+
 	<MvEVAL EXPR = "{ JSON_Runtime_Product_OrderBy( l.search_query, l.sort ) }">
 
 	<MvIF EXPR = "{ l.data:ondemandcolumns:sale_price }">
-		<MvIF EXPR = "{ [ g.Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.discount_signature ) }">
-			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_DiscountSignature( l.search_query, l.discount_signature ) }">
+		<MvIF EXPR = "{ [ g.Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.data:discount_signature ) }">
+			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_DiscountSignature( l.search_query, l.data:discount_signature ) }">
 		</MvIF>
 	</MvIF>
 
@@ -3447,7 +4025,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search AND l.offset EQ 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Runtime_Search( l.query_params:data:search, l.total_count, l.query_params:data:search_origin ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Runtime_Search( l.query_params:data:search, l.total_count, l.query_params:data:search_origin, int( l.query_params:data:ai_index_id ) ) }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvIF>
@@ -3611,23 +4189,83 @@
 
 	<MvASSIGN NAME = "l.product:output_disp_order"	VALUE = "{ RuntimeProducts.d.output_disp_order }">
 
-	<MvASSIGN NAME = "l.product:retail"				VALUE = "{ l.product:price }">
-
-	<MvIF EXPR = "{ ISNULL RuntimeProducts.d.base_price }">
-		<MvASSIGN NAME = "l.product:base_price"		VALUE = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Adjusted_Price( l.data:discount_state, l.product, l.product:price, l.product:cost ) }">	
+	<MvIF EXPR = "{ ISNULL l.data:variant_ids }">
+		<MvASSIGN NAME = "l.product:variant_id"		VALUE = 0>
 	<MvELSE>
-		<MvASSIGN NAME = "l.product:base_price"		VALUE = "{ RuntimeProducts.d.base_price }">
+		<MvREFERENCEARRAY NAME = "l.variant_id" VARIABLE = "l.data:variant_ids">
+			<MvMEMBER NAME = "{ l.product:code }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.product:variant_id"		VALUE = "{ int( l.variant_id ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ ISNULL RuntimeProducts.d.sale_price }">
-		<MvASSIGN NAME = "l.product:price"			VALUE = "{ l.product:base_price }">
-	<MvELSE>
-		<MvASSIGN NAME = "l.product:price"			VALUE = "{ RuntimeProducts.d.sale_price }">
-		<MvASSIGN NAME = "l.product:sale_price"		VALUE = "{ RuntimeProducts.d.sale_price }">
-	</MvIF>
+	<MvIF EXPR = "{ l.product:variant_id EQ 0 }">
+		<MvASSIGN NAME = "l.product:retail"				VALUE = "{ l.product:price }">
 
-	<MvIF EXPR = "{ l.data:ondemandcolumns:inventory }">
-		<MvEVAL EXPR = "{ JSON_Runtime_Product_InventoryFields_Read_WithInventorySettings( l.data:inventorysettings, l.product ) }">
+		<MvIF EXPR = "{ ISNULL RuntimeProducts.d.base_price }">
+			<MvASSIGN NAME = "l.product:base_price"		VALUE = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Adjusted_Price( l.data:discount_state, l.product, l.product:price, l.product:cost ) }">	
+		<MvELSE>
+			<MvASSIGN NAME = "l.product:base_price"		VALUE = "{ RuntimeProducts.d.base_price }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL RuntimeProducts.d.sale_price }">
+			<MvASSIGN NAME = "l.product:price"			VALUE = "{ l.product:base_price }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.product:price"			VALUE = "{ RuntimeProducts.d.sale_price }">
+			<MvASSIGN NAME = "l.product:sale_price"		VALUE = "{ RuntimeProducts.d.sale_price }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.data:ondemandcolumns:inventory }">
+			<MvEVAL EXPR = "{ JSON_Runtime_Product_InventoryFields_Read_WithInventorySettings( l.data:inventorysettings, l.product ) }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.calculate_prices"			VALUE = 1>
+		<MvASSIGN NAME = "l.attr_price_override"		VALUE = 0>
+		<MvASSIGN NAME = "l.null"						VALUE = "{ [ g.Module_Feature_INV_RT ].Inventory_Adjust_VariantPricing( l.product, l.product:variant_id, l.attr_price_override ) }">
+
+		<MvCOMMENT>
+		|
+		| If we are able to load base_price, price and sale_price from DiscountVariantPrices, there is no need
+		| to go through long form calculation of price.
+		|
+		| If the Inventory_Adjust_VariantPricing call above failed for any reason, the output will reflect the master product only.
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ NOT ISNULL l.data:discount_signature }">
+			<MvIF EXPR = "{ [ g.Module_Feature_PGR_DB ].DiscountVariantPrice_Load( l.data:discount_signature, l.product:id, l.product:variant_id, l.discountprice ) }">
+				<MvASSIGN NAME = "l.product:retail"		VALUE = "{ l.product:price }">
+				<MvASSIGN NAME = "l.product:base_price"	VALUE = "{ l.discountprice:base_price }">
+				<MvASSIGN NAME = "l.product:price"		VALUE = "{ l.discountprice:price }">
+				<MvASSIGN NAME = "l.product:sale_price"	VALUE = "{ l.discountprice:price }">
+
+				<MvASSIGN NAME = "l.calculate_prices"	VALUE = 0>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.calculate_prices }">
+			<MvASSIGN NAME = "l.product:retail"			VALUE = "{ l.product:price }">
+			<MvASSIGN NAME = "l.product:base_price"		VALUE = "{ [ g.Module_Feature_PGR_UT ].DiscountState_Adjusted_Price( l.data:discount_state, l.product, l.product:price, l.product:cost ) }">	
+
+			<MvIF EXPR = "{ NOT l.attr_price_override }">
+				<MvEVAL EXPR = "{ JSON_Runtime_Product_Read_AddVariantAttributePriceAndWeight( l.product, l.data ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.product:price"			VALUE = "{ l.product:base_price }">
+			<MvASSIGN NAME = "l.product:sale_price"		VALUE = "">								<MvCOMMENT> Force long-form calculation, if being output </MvCOMMENT>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.data:ondemandcolumns:inventory }">
+			<MvIF EXPR = "{ NOT [ g.Feature_INV_RT ].Inventory_Load_Variant( l.product, l.product:variant_id ) }">
+				<MvCOMMENT>
+				|
+				| Fall back to master product inventory values if variant load fails
+				|
+				</MvCOMMENT>
+
+				<MvEVAL EXPR = "{ JSON_Runtime_Product_InventoryFields_Read_WithInventorySettings( l.data:inventorysettings, l.product ) }">
+			</MvIF>
+		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ l.data:ondemandcolumns:category }">
@@ -3640,6 +4278,60 @@
 		<MvASSIGN NAME = "l.product:alt_page_code"	VALUE = "{ RuntimeProducts.d.alt_page_code }">
 		<MvASSIGN NAME = "l.product:alt_page_title"	VALUE = "{ RuntimeProducts.d.alt_page_title }">
 	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_Product_Read_AddVariantAttributePriceAndWeight" PARAMETERS = "product var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.product:productvariant_count }">
+		<MvASSIGN NAME = "l.product:productvariant_count"	VALUE = "{ [ g.Module_Library_DB ].ProductVariantList_Load_Variant( l.product:id, l.product:variant_id, l.product:productvariants ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.productvariant" ARRAY = "l.product:productvariants" COUNT = "{ l.product:productvariant_count }">
+		<MvASSIGN NAME = "l.price"				VALUE = 0.00>
+		<MvASSIGN NAME = "l.cost"				VALUE = 0.00>
+		<MvASSIGN NAME = "l.weight"				VALUE = 0.00>
+
+		<MvIF EXPR = "{ l.productvariant:attmpat_id }">
+			<MvIF EXPR = "{ NOT [ g.Feature_ATT_DB ].AttributeTemplateAttr_Load_ID( l.productvariant:attmpat_id, l.attributetemplateattr ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( l.attributetemplateattr:type EQ 'checkbox' ) OR ( l.attributetemplateattr:type EQ 'text' ) OR ( l.attributetemplateattr:type EQ 'memo' ) }">
+				<MvASSIGN NAME = "l.price"		VALUE = "{ l.attributetemplateattr:price }">
+				<MvASSIGN NAME = "l.cost"		VALUE = "{ l.attributetemplateattr:cost }">
+				<MvASSIGN NAME = "l.weight"		VALUE = "{ l.attributetemplateattr:weight }">
+			<MvELSEIF EXPR = "{ ( l.attributetemplateattr:type EQ 'radio' ) OR ( l.attributetemplateattr:type EQ 'select' ) OR ( l.attributetemplateattr:type EQ 'swatch-select' ) }">
+				<MvIF EXPR = "{ NOT [ g.Feature_ATT_DB ].AttributeTemplateOption_Load_ID( l.productvariant:option_id, l.attributetemplateoption ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.price"		VALUE = "{ l.attributetemplateoption:price }">
+				<MvASSIGN NAME = "l.cost"		VALUE = "{ l.attributetemplateoption:cost }">
+				<MvASSIGN NAME = "l.weight"		VALUE = "{ l.attributetemplateoption:weight }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].Attribute_Load_ID( l.productvariant:attr_id, l.attribute ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( l.attribute:type EQ 'checkbox' ) OR ( l.attribute:type EQ 'text' ) OR ( l.attribute:type EQ 'memo' ) }">
+				<MvASSIGN NAME = "l.price"		VALUE = "{ l.attribute:price }">
+				<MvASSIGN NAME = "l.cost"		VALUE = "{ l.attribute:cost }">
+				<MvASSIGN NAME = "l.weight"		VALUE = "{ l.attribute:weight }">
+			<MvELSEIF EXPR = "{ ( l.attribute:type EQ 'radio' ) OR ( l.attribute:type EQ 'select' ) OR ( l.attribute:type EQ 'swatch-select' ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Option_Load_ID( l.productvariant:option_id, l.option ) }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.price"		VALUE = "{ l.option:price }">
+				<MvASSIGN NAME = "l.cost"		VALUE = "{ l.option:cost }">
+				<MvASSIGN NAME = "l.weight"		VALUE = "{ l.option:weight }">
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product:retail"		VALUE = "{ l.product:retail + l.price }">
+		<MvASSIGN NAME = "l.product:base_price"	VALUE = "{ l.product:base_price + [ g.Module_Feature_PGR_UT ].DiscountState_Adjusted_Price( l.data:discount_state, l.product, l.price, l.cost ) }">
+		<MvASSIGN NAME = "l.product:weight"		VALUE = "{ l.product:weight + l.weight }">
+	</MvFOREACH>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Runtime_Product_InventoryFields_Read_WithInventorySettings" PARAMETERS = "inventorysettings var, product var" STANDARDOUTPUTLEVEL = "">
@@ -3738,7 +4430,7 @@
 
 		<MvASSIGN NAME = "l.original_price"	VALUE = "{ l.product:price }">
 		<MvASSIGN NAME = "l.product:price"	VALUE = "{ l.product:base_price }">
-		<MvASSIGN NAME = "l.result"			VALUE = "{ [ g.Feature_PGR_UT ].DiscountState_Predict_Product_Discounts_WithProductSubscriptionTerm( l.data:discount_state, l.product, 0, 0, 1, l.predicted_price, l.discounts, l.discount_count ) }">
+		<MvASSIGN NAME = "l.result"			VALUE = "{ [ g.Feature_PGR_UT ].DiscountState_Predict_Product_Discounts_WithProductSubscriptionTerm( l.data:discount_state, l.product, 0, l.product:variant_id, 1, l.predicted_price, l.discounts, l.discount_count ) }">
 		<MvASSIGN NAME = "l.product:price"	VALUE = "{ l.original_price }">
 
 		<MvIF EXPR = "{ l.data:ondemandcolumns:sale_price }">
@@ -3873,58 +4565,61 @@
 		]
 	</MvIF>
 
+	<MvIF EXPR = "{ l.data:ondemandcolumns:quantity_in_wishlists }">
+		<MvASSIGN NAME = "l.quantity_in_wishlists" VALUE = 0>
+
+		<MvIF EXPR = "{ g.Basket:cust_id AND g.Customer_Session_Verified }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListItemQuantity_Load_Customer_And_Product( g.Basket:cust_id, l.product:id, l.quantity_in_wishlists ) }">
+		</MvIF>
+
+		,"quantity_in_wishlists": <MvEVAL EXPR = "{ encodejavascriptnumber( l.quantity_in_wishlists ) }">
+	</MvIF>
+
 	<MvIF EXPR = "{ l.data:filters:images }">
 		<MvASSIGN NAME = "l.image_output_count" VALUE = 0>
 
 		,"images":
 		[
-			<MvIF EXPR = "{ l.data:images:size_count GT 0 }">
-				<MvFOREACH ITERATOR = "l.productimage" ARRAY = "l.productimages" COUNT = "{ [ g.Library_DB ].ProductImageList_Load_Product( l.product:id, l.productimages ) }">
-					<MvASSIGN NAME = "l.imagetype"	VALUE = "">
-
-					<MvIF EXPR = "{ NOT [ g.Library_DB ].Image_Load_ID( l.productimage:image_id, l.image ) }">
-						<MvFOREACHCONTINUE>
-					</MvIF>
-
-					<MvIF EXPR = "{ l.productimage:type_id }">
-						<MvIF EXPR = "{ NOT [ g.Library_DB ].ImageType_Load_ID( l.productimage:type_id, l.imagetype ) }">
-							<MvFOREACHCONTINUE>
-						</MvIF>
-					</MvIF>
-
+			<MvIF EXPR = "{ l.data:images:original OR l.data:images:constraint_count GT 0 }">
+				<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ [ g.Library_DB ].ProductImageDataList_Load_Product_Variant_Constrained( l.product:id, l.product:variant_id, l.data:images:constraints, l.data:images:constraint_count, l.productimagedatalist ) }">
 					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.image_output_count ) }">
-					"code":		"<MvEVAL EXPR = "{ JSON_Encode( l.imagetype:code ) }">",
-					"descrip":	"<MvEVAL EXPR = "{ JSON_Encode( l.imagetype:descrip ) }">",
+					"code":		"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:code ) }">",
+					"descrip":	"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:descrip ) }">",
 					"sizes":
 					{
-						<MvASSIGN NAME = "l.size_image_count" VALUE = 0>
+						<MvASSIGN NAME = "l.size_image_count"		VALUE = 0>
 
-						<MvFOREACH ITERATOR = "l.size" ARRAY = "l.data:images:sizes" COUNT = "{ l.data:images:size_count }">
-							<MvIF EXPR = "{ l.size:width EQ 0 AND l.size:height EQ 0 }">
-								<MvASSIGN NAME = "l.size_name"		VALUE = "original">
-								<MvASSIGN NAME = "l.size_width"		VALUE = "{ l.image:width }">
-								<MvASSIGN NAME = "l.size_height"	VALUE = "{ l.image:height }">
-								<MvASSIGN NAME = "l.size_image"		VALUE = "{ l.image:image }">
-							<MvELSE>
-								<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.image, l.size:width, l.size:height, l.generatedimage ) }">
+						<MvIF EXPR = "{ l.data:images:original }">
+							"original":
+							{
+								"url":		"<MvEVAL EXPR = "{ encodejavascriptstring( g.basehref $ l.productimagedata:image:image ) }">",
+								"width":	<MvEVAL EXPR = "{ int( l.productimagedata:image:width ) }">,
+								"height":	<MvEVAL EXPR = "{ int( l.productimagedata:image:height ) }">
+							}
+
+							<MvASSIGN NAME = "l.size_image_count"	VALUE = "{ l.size_image_count + 1 }">
+						</MvIF>
+
+						<MvFOREACH INDEX = "l.pos" ITERATOR = "l.constraint" ARRAY = "l.data:images:constraints" COUNT = "{ l.data:images:constraint_count }">
+							<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+								<MvDIMENSION INDEX = "{ l.pos }">
+							</MvREFERENCEARRAY>
+
+							<MvIF EXPR = "{ ISNULL l.generatedimages:image }">
+								<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
 									<MvFOREACHCONTINUE>
 								</MvIF>
-
-								<MvASSIGN NAME = "l.size_name"		VALUE = "{ l.size:width $ 'x' $ l.size:height }">
-								<MvASSIGN NAME = "l.size_width"		VALUE = "{ l.generatedimage:width }">
-								<MvASSIGN NAME = "l.size_height"	VALUE = "{ l.generatedimage:height }">
-								<MvASSIGN NAME = "l.size_image"		VALUE = "{ l.generatedimage:image }">
 							</MvIF>
 
 							<MvIF EXPR = "{ ++l.size_image_count GT 1 }">
 								,
 							</MvIF>
 
-							"<MvEVAL EXPR = "{ JSON_Encode( l.size_name ) }">":
+							"<MvEVAL EXPR = "{ encodejavascriptstring( l.constraint:width $ 'x' $ l.constraint:height ) }">":
 							{
-								"url":		"<MvEVAL EXPR = "{ JSON_Encode( g.basehref $ l.size_image ) }">",
-								"width":	<MvEVAL EXPR = "{ int( l.size_width ) }">,
-								"height":	<MvEVAL EXPR = "{ int( l.size_height ) }">
+								"url":		"<MvEVAL EXPR = "{ JSON_Encode( g.basehref $ l.generatedimage:image ) }">",
+								"width":	<MvEVAL EXPR = "{ int( l.generatedimage:width ) }">,
+								"height":	<MvEVAL EXPR = "{ int( l.generatedimage:height ) }">
 							}
 						</MvFOREACH>
 					}
@@ -3940,49 +4635,49 @@
 		,"imagetypes":
 		{
 			<MvFOREACH ITERATOR = "l.imagetype" ARRAY = "l.data:imagetypes" COUNT = "{ l.data:imagetype_count }">
-				<MvFOREACH ITERATOR = "l.imagetype_code" ARRAY = "l.imagetype:types">
-					<MvASSIGN NAME = "l.size_image_count" VALUE = 0>
-
-					<MvIF EXPR = "{ NOT [ g.Library_DB ].ImageType_Load_Code( l.imagetype_code, l.loaded_imagetype ) }">						<MvFOREACHCONTINUE>
-					<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].ProductImage_Load_Type( l.product:id, l.loaded_imagetype:id, l.productimage ) }">	<MvFOREACHCONTINUE>
-					<MvELSEIF EXPR = "{ NOT [ g.Library_DB ].Image_Load_ID( l.productimage:image_id, l.image ) }">								<MvFOREACHCONTINUE>
-					</MvIF>
-
+				<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ [ g.Library_DB ].ProductImageDataList_Load_Product_Variant_TypeCodes_Constrained( l.product:id, l.product:variant_id, l.imagetype:types, l.imagetype:type_count, l.imagetype:constraints, l.imagetype:constraint_count, l.productimagedatalist ) }">
 					<MvIF EXPR = "{ ++l.imagetype_output_count GT 1 }">
 						,
 					</MvIF>
 
-					"<MvEVAL EXPR = "{ JSON_Encode( l.loaded_imagetype:code ) }">":
+					"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:code ) }">":
 					{
-						"descrip": "<MvEVAL EXPR = "{ JSON_Encode( l.loaded_imagetype:descrip ) }">",
+						"descrip": "<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:descrip ) }">",
 						"sizes":
 						{
-							<MvFOREACH ITERATOR = "l.size" ARRAY = "l.imagetype:sizes" COUNT = "{ l.imagetype:size_count }">
-								<MvIF EXPR = "{ l.size:width EQ 0 AND l.size:height EQ 0 }">
-									<MvASSIGN NAME = "l.size_name"		VALUE = "original">
-									<MvASSIGN NAME = "l.size_width"		VALUE = "{ l.image:width }">
-									<MvASSIGN NAME = "l.size_height"	VALUE = "{ l.image:height }">
-									<MvASSIGN NAME = "l.size_image"		VALUE = "{ l.image:image }">
-								<MvELSE>
-									<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.image, l.size:width, l.size:height, l.generatedimage ) }">
+							<MvASSIGN NAME = "l.size_image_count"		VALUE = 0>
+
+							<MvIF EXPR = "{ l.imagetype:original }">
+								"original":
+								{
+									"url":		"<MvEVAL EXPR = "{ encodejavascriptstring( g.basehref $ l.productimagedata:image:image ) }">",
+									"width":	<MvEVAL EXPR = "{ int( l.productimagedata:image:width ) }">,
+									"height":	<MvEVAL EXPR = "{ int( l.productimagedata:image:height ) }">
+								}
+
+								<MvASSIGN NAME = "l.size_image_count"	VALUE = "{ l.size_image_count + 1 }">
+							</MvIF>
+
+							<MvFOREACH INDEX = "l.pos" ITERATOR = "l.constraint" ARRAY = "l.imagetype:constraints" COUNT = "{ l.imagetype:constraint_count }">
+								<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+									<MvDIMENSION INDEX = "{ l.pos }">
+								</MvREFERENCEARRAY>
+
+								<MvIF EXPR = "{ ISNULL l.generatedimages:image }">
+									<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
 										<MvFOREACHCONTINUE>
 									</MvIF>
-
-									<MvASSIGN NAME = "l.size_name"		VALUE = "{ l.size:width $ 'x' $ l.size:height }">
-									<MvASSIGN NAME = "l.size_width"		VALUE = "{ l.generatedimage:width }">
-									<MvASSIGN NAME = "l.size_height"	VALUE = "{ l.generatedimage:height }">
-									<MvASSIGN NAME = "l.size_image"		VALUE = "{ l.generatedimage:image }">
 								</MvIF>
 
 								<MvIF EXPR = "{ ++l.size_image_count GT 1 }">
 									,
 								</MvIF>
 
-								"<MvEVAL EXPR = "{ JSON_Encode( l.size_name ) }">":
+								"<MvEVAL EXPR = "{ encodejavascriptstring( l.constraint:width $ 'x' $ l.constraint:height ) }">":
 								{
-									"url":		"<MvEVAL EXPR = "{ JSON_Encode( g.basehref $ l.size_image ) }">",
-									"width":	<MvEVAL EXPR = "{ int( l.size_width ) }">,
-									"height":	<MvEVAL EXPR = "{ int( l.size_height ) }">
+									"url":		"<MvEVAL EXPR = "{ JSON_Encode( g.basehref $ l.generatedimage:image ) }">",
+									"width":	<MvEVAL EXPR = "{ int( l.generatedimage:width ) }">,
+									"height":	<MvEVAL EXPR = "{ int( l.generatedimage:height ) }">
 								}
 							</MvFOREACH>
 						}
@@ -4142,8 +4837,18 @@
 
 <MvFUNCTION NAME = "JSON_Runtime_ProductList_Load_Query_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ l.filter_name EQ 'runtime_search' }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search( l.query, l.filter_value ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_Origin( l.query, 'Runtime API' ) }">
+		<MvASSIGN NAME = "l.data:runtime_search"			VALUE = "">
+
+		<MvIF EXPR = "{ miva_variable_type( l.filter_value ) NE 'STRUCTURE' }">
+			<MvASSIGN NAME = "l.data:runtime_search:search"	VALUE = "{ l.filter_value }">
+			<MvASSIGN NAME = "l.data:runtime_search:origin"	VALUE = "Runtime API">
+			<MvASSIGN NAME = "l.data:runtime_search:type"	VALUE = "system">
+		<MvELSE>
+			<MvASSIGN NAME = "l.data:runtime_search:search"	VALUE = "{ l.filter_value:search }">
+			<MvASSIGN NAME = "l.data:runtime_search:origin"	VALUE = "{ ternary( ISNULL l.filter_value:origin, 'Runtime API', l.filter_value:origin ) }">
+			<MvASSIGN NAME = "l.data:runtime_search:type"	VALUE = "{ ternary( ISNULL l.filter_value:type, 'system', l.filter_value:type ) }">
+			<MvASSIGN NAME = "l.data:runtime_search:index"	VALUE = "{ l.filter_value:index }">
+		</MvIF>
 
 		<MvFUNCTIONRETURN VALUE = 1>
 	<MvELSEIF EXPR = "{ l.filter_name EQ 'facets' }">
@@ -4189,37 +4894,32 @@
 
 		<MvFUNCTIONRETURN VALUE = 1>
 	<MvELSEIF EXPR = "{ l.filter_name EQ 'images' }">
-		<MvASSIGN NAME = "l.data:filters:images"		VALUE = 1>
-		<MvASSIGN NAME = "l.data:images:sizes"			VALUE = "">
-		<MvASSIGN NAME = "l.data:images:size_count"		VALUE = 0>
+		<MvASSIGN NAME = "l.data:filters:images"							VALUE = 1>
+		<MvASSIGN NAME = "l.data:image:original"							VALUE = 0>
+		<MvASSIGN NAME = "l.data:images:constraints"						VALUE = "">
+		<MvASSIGN NAME = "l.data:images:constraint_count"					VALUE = 0>
 		
 		<MvIF EXPR = "{ ISNULL l.filter_value }">
-			<MvASSIGN NAME = "l.entry"					VALUE = "">
-			<MvASSIGN NAME = "l.entry:width"			VALUE = 0>
-			<MvASSIGN NAME = "l.entry:height"			VALUE = 0>
-
-			<MvASSIGN NAME = "l.data:images:size_count"	VALUE = "{ miva_array_insert_var( l.data:images:sizes, l.entry, -1 ) }">
+			<MvASSIGN NAME = "l.data:images:original"						VALUE = 1>
 		<MvELSE>
 			<MvFOREACH ITERATOR = "l.size" ARRAY = "l.filter_value:sizes">
 				<MvIF EXPR = "{ l.size EQ 'original' }">
-					<MvASSIGN NAME = "l.entry"			VALUE = "">
-					<MvASSIGN NAME = "l.entry:width"	VALUE = 0>
-					<MvASSIGN NAME = "l.entry:height"	VALUE = 0>
+					<MvASSIGN NAME = "l.data:images:original"				VALUE = 1>
 				<MvELSE>
-					<MvASSIGN NAME = "l.width"			VALUE = "{ int( trim( gettoken( l.size, 'x', 1 ) ) ) }">
-					<MvASSIGN NAME = "l.height"			VALUE = "{ int( trim( gettoken( l.size, 'x', 2 ) ) ) }">
+					<MvASSIGN NAME = "l.width"								VALUE = "{ int( trim( gettoken( l.size, 'x', 1 ) ) ) }">
+					<MvASSIGN NAME = "l.height"								VALUE = "{ int( trim( gettoken( l.size, 'x', 2 ) ) ) }">
 
 					<MvIF EXPR = "{ l.width LE 0 OR l.height LE 0 }">
 						<MvFOREACHCONTINUE>
 					</MvIF>
 
-					<MvASSIGN NAME = "l.entry"			VALUE = "">
-					<MvASSIGN NAME = "l.entry:width"	VALUE = "{ l.width }">
-					<MvASSIGN NAME = "l.entry:height"	VALUE = "{ l.height }">
-				</MvIF>
+					<MvASSIGN NAME = "l.constraint"							VALUE = "">
+					<MvASSIGN NAME = "l.constraint:width"					VALUE = "{ l.width }">
+					<MvASSIGN NAME = "l.constraint:height"					VALUE = "{ l.height }">
 
-				<MvIF EXPR = "{ NOT miva_array_search( l.data:images:sizes, 1, l.element, 'l.element:width EQ l.entry:width AND l.element:height EQ l.entry:height' ) }">
-					<MvASSIGN NAME = "l.data:images:size_count" VALUE = "{ miva_array_insert_var( l.data:images:sizes, l.entry, -1 ) }">
+					<MvIF EXPR = "{ NOT miva_array_search( l.data:images:constraints, 1, l.existing_constraint, 'l.existing_constraint:width EQ l.constraint:width AND l.existing_constraint:height EQ l.constraint:height' ) }">
+						<MvASSIGN NAME = "l.data:images:constraint_count"	VALUE = "{ miva_array_insert_var( l.data:images:constraints, l.constraint, -1 ) }">
+					</MvIF>
 				</MvIF>
 			</MvFOREACH>
 		</MvIF>
@@ -4236,54 +4936,51 @@
 		</MvCOMMENT>
 
 		<MvIF EXPR = "{ ISNULL l.data:filters:imagetypes }">
-			<MvASSIGN NAME = "l.data:filters:imagetypes"	VALUE = 1>
-			<MvASSIGN NAME = "l.data:imagetypes"			VALUE = "">
-			<MvASSIGN NAME = "l.data:imagetype_count"		VALUE = 0>
+			<MvASSIGN NAME = "l.data:filters:imagetypes"				VALUE = 1>
+			<MvASSIGN NAME = "l.data:imagetypes"						VALUE = "">
+			<MvASSIGN NAME = "l.data:imagetype_count"					VALUE = 0>
 		</MvIF>
 
-		<MvASSIGN NAME = "l.imagetype"				VALUE = "">
-		<MvASSIGN NAME = "l.imagetype:types"		VALUE = "">
-		<MvASSIGN NAME = "l.imagetype:sizes"		VALUE = "">
-		<MvASSIGN NAME = "l.imagetype:size_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.imagetype"									VALUE = "">
+		<MvASSIGN NAME = "l.imagetype:types"							VALUE = "">
+		<MvASSIGN NAME = "l.imagetype:original"							VALUE = 0>
+		<MvASSIGN NAME = "l.imagetype:constraints"						VALUE = "">
+		<MvASSIGN NAME = "l.imagetype:constraint_count"					VALUE = 0>
 
 		<MvIF EXPR = "{ NOT ISNULL l.filter_value:type }">		<MvASSIGN NAME = "l.imagetype:types[ 1 ]"	VALUE = "{ l.filter_value:type }">
 		<MvELSEIF EXPR = "{ NOT ISNULL l.filter_value:types }">	<MvASSIGN NAME = "l.imagetype:types"		VALUE = "{ l.filter_value:types }">
 		<MvELSE>												<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
 
-		<MvIF EXPR = "{ ISNULL l.filter_value:sizes }">
-			<MvASSIGN NAME = "l.entry"					VALUE = "">
-			<MvASSIGN NAME = "l.entry:width"			VALUE = 0>
-			<MvASSIGN NAME = "l.entry:height"			VALUE = 0>
+		<MvASSIGN NAME = "l.imagetype:type_count"						VALUE = "{ miva_array_elements( l.imagetype:types ) }">
 
-			<MvASSIGN NAME = "l.imagetype:size_count"	VALUE = "{ miva_array_insert_var( l.imagetype:sizes, l.entry, -1 ) }">
+		<MvIF EXPR = "{ ISNULL l.filter_value:sizes }">
+			<MvASSIGN NAME = "l.imagetype:original"						VALUE = 1>
 		<MvELSE>
 			<MvFOREACH ITERATOR = "l.size" ARRAY = "l.filter_value:sizes">
 				<MvIF EXPR = "{ l.size EQ 'original' }">
-					<MvASSIGN NAME = "l.entry"			VALUE = "">
-					<MvASSIGN NAME = "l.entry:width"	VALUE = 0>
-					<MvASSIGN NAME = "l.entry:height"	VALUE = 0>
+					<MvASSIGN NAME = "l.imagetype:original"				VALUE = 1>
 				<MvELSE>
-					<MvASSIGN NAME = "l.width"			VALUE = "{ int( trim( gettoken( l.size, 'x', 1 ) ) ) }">
-					<MvASSIGN NAME = "l.height"			VALUE = "{ int( trim( gettoken( l.size, 'x', 2 ) ) ) }">
+					<MvASSIGN NAME = "l.width"							VALUE = "{ int( trim( gettoken( l.size, 'x', 1 ) ) ) }">
+					<MvASSIGN NAME = "l.height"							VALUE = "{ int( trim( gettoken( l.size, 'x', 2 ) ) ) }">
 
 					<MvIF EXPR = "{ l.width LE 0 OR l.height LE 0 }">
 						<MvFOREACHCONTINUE>
 					</MvIF>
 
-					<MvASSIGN NAME = "l.entry"			VALUE = "">
-					<MvASSIGN NAME = "l.entry:width"	VALUE = "{ l.width }">
-					<MvASSIGN NAME = "l.entry:height"	VALUE = "{ l.height }">
-				</MvIF>
+					<MvASSIGN NAME = "l.constraint"						VALUE = "">
+					<MvASSIGN NAME = "l.constraint:width"				VALUE = "{ l.width }">
+					<MvASSIGN NAME = "l.constraint:height"				VALUE = "{ l.height }">
 
-				<MvIF EXPR = "{ NOT miva_array_search( l.imagetype:sizes, 1, l.element, 'l.element:width EQ l.entry:width AND l.element:height EQ l.entry:height' ) }">
-					<MvASSIGN NAME = "l.imagetype:size_count" VALUE = "{ miva_array_insert_var( l.imagetype:sizes, l.entry, -1 ) }">
+					<MvIF EXPR = "{ NOT miva_array_search( l.imagetype:constraints, 1, l.existing_constraint, 'l.existing_constraint:width EQ l.constraint:width AND l.existing_constraint:height EQ l.constraint:height' ) }">
+						<MvASSIGN NAME = "l.imagetype:constraint_count"	VALUE = "{ miva_array_insert_var( l.imagetype:constraints, l.constraint, -1 ) }">
+					</MvIF>
 				</MvIF>
 			</MvFOREACH>
 		</MvIF>
 
-		<MvIF EXPR = "{ l.imagetype:size_count GT 0 }">
-			<MvASSIGN NAME = "l.data:imagetype_count" VALUE = "{ miva_array_insert_var( l.data:imagetypes, l.imagetype, -1 ) }">
+		<MvIF EXPR = "{ l.imagetype:original OR l.imagetype:constraint_count GT 0 }">
+			<MvASSIGN NAME = "l.data:imagetype_count"					VALUE = "{ miva_array_insert_var( l.data:imagetypes, l.imagetype, -1 ) }">
 		</MvIF>
 
 		<MvFUNCTIONRETURN VALUE = 1>
@@ -4303,6 +5000,8 @@
 		</MvFOREACH>
 
 		<MvASSIGN NAME = "l.data:filters:fragments"		VALUE = "{ l.data:fragment_code_count GT 0 }">
+	<MvELSEIF EXPR = "{ l.filter_name EQ 'variant_ids' }">
+		<MvASSIGN NAME = "l.data:variant_ids"			VALUE = "{ l.filter_value }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 0>
@@ -4373,7 +5072,7 @@
 
 <MvFUNCTION NAME = "JSON_Runtime_Cache_Connect" PARAMETERS = "conn_id var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ g.Store:cache_type EQ 'redis' }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_CHE_UT ].Cache_Redis_Connect( g.Store:redishost, g.Store:redisport, g.Store:redisto, [ g.Module_Library_Crypto ].Decrypt_Payment_Password( g.Store:redispwd ), l.conn_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_CHE_UT ].Store_Cache_Redis_Connect( l.conn_id ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 0>
@@ -4512,4 +5211,795 @@
 
 <MvFUNCTION NAME = "JSON_Runtime_Cache_Redis_Set_Response_Load_LUA" PARAMETERS = "sha1 var, script var" STANDARDOUTPUTLEVEL = "">
 	<MvINCLUDE FILE = "json/rediscacheset_lua.mv">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_Customer_Login" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'R', 'Customer_Password', l.password ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Retrieve( 'Customer_LoginEmail', l.pw_email ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Email( l.pw_email, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Login( l.pw_email, l.customer ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'customer_invalid_login', 'The username or password you entered is incorrect.' ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSEIF EXPR = "{ JSON_Input_Retrieve( 'Customer_Login', l.login ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Login( l.login, l.customer ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_Email( l.login, l.customer ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'customer_invalid_login', 'The username or password you entered is incorrect.' ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00028', 'One of Customer_LoginEmail or Customer_Login must be specified' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].Customer_Password_Verify( l.password, l.customer:password ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Login_Failure( l.customer:login, 'Invalid password' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FailedLoginDelay() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'customer_invalid_login', 'The username or password you entered is incorrect.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Customer_Session_Verified"	VALUE = 1>
+	<MvASSIGN NAME = "g.Customer_Session_ID"		VALUE = "{ MakeSessionID() }">
+	<MvASSIGN NAME = "g.Basket:cussess_id"			VALUE = "{ g.Customer_Session_ID }">
+	<MvASSIGN NAME = "g.Basket:cust_id"				VALUE = "{ l.customer:id }">
+	<MvASSIGN NAME = "g.Customer" 					VALUE = "{ l.customer }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_UT ].TaxExempt_Load_Customer( l.customer, g.Basket:tax_exempt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Update_Customer_ID( g.Basket ) OR
+					NOT [ g.Module_Feature_CUS_DB ].Customer_Update_LastLogin( g.Customer ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].UpdateSessionID() }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Customer_Login( l.customer:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Customer_Login( g.Session_ID, l.customer:login ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishList" PARAMETERS = "wishlist var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlist:id ) }">,
+	"cust_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlist:cust_id ) }">,
+	"title":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.wishlist:title ) }">",
+	"notes":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.wishlist:notes ) }">",
+	"shared":	<MvEVAL EXPR = "{ encodejavascriptboolean( l.wishlist:shared ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishListItem_OnDemandColumns" PARAMETERS = "wishlistitem var, ondemandcolumns var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	"id":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlistitem:id ) }">,
+	"wshlst_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlistitem:wshlst_id ) }">,
+	"parent_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlistitem:parent_id ) }">,
+	"product_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlistitem:product_id ) }">,
+	"dtadded":		<MvEVAL EXPR = "{ JSON_DateTime( l.wishlistitem:dtadded ) }">,
+	"quantity":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.wishlistitem:quantity ) }">,
+	"notes":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.wishlistitem:notes ) }">"
+
+	<MvIF EXPR = "{ l.ondemandcolumns:options }">
+		<MvASSIGN NAME = "l.option_count"	VALUE = 0>
+
+		, "options":
+		[
+			<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.wishlistitem:id, l.options ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.option_count ) }">
+				"wish_id":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:wish_id ) }">,
+				"attr_id":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:attr_id ) }">,
+				"attmpat_id":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:attmpat_id ) }">,
+				"option_id":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:option_id ) }">,
+				"data":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:data ) }">",
+				"data_long":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:data_long ) }">",
+				"attr_code":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:attr_code ) }">",
+				"attr_type":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:attr_type ) }">",
+				"attr_prompt":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:attr_prompt ) }">",
+				"attr_price":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:attr_price ) }">,
+				"attr_cost":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:attr_cost ) }">,
+				"attr_weight":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:attr_weight ) }">,
+				"attr_required":	<MvEVAL EXPR = "{ encodejavascriptboolean( l.option:attr_required ) }">,
+				"attr_inventory":	<MvEVAL EXPR = "{ encodejavascriptboolean( l.option:attr_inventory ) }">,
+				"attr_image":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:attr_image ) }">",
+				"opt_code":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:opt_code ) }">",
+				"opt_prompt":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:opt_prompt ) }">",
+				"opt_price":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:opt_price ) }">,
+				"opt_cost":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:opt_cost ) }">,
+				"opt_weight":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:opt_weight ) }">,
+				"opt_image":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:opt_image ) }">",
+				"retail":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:retail ) }">,
+				"base_price":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:base_price ) }">,
+				"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:price ) }">,
+				"weight":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:weight ) }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		]
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishList_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_customer_login', 'You must have a customer account to create a wish list.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist" 			VALUE = "">
+	<MvASSIGN NAME = "l.wishlist:cust_id" 	VALUE = "{ g.Basket:cust_id }">
+	<MvASSIGN NAME = "l.wishlist:title" 	VALUE = "">
+	<MvASSIGN NAME = "l.wishlist:notes" 	VALUE = "">
+	<MvASSIGN NAME = "l.wishlist:shared" 	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Text(	'R:254',	'WishList_Title',	l.wishlist:title ) OR
+					NOT JSON_Input_Text(	'o',		'WishList_Notes',	l.wishlist:notes ) OR
+					NOT JSON_Input_Boolean(	'O',		'WishList_Shared',	l.wishlist:shared ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Insert( l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_Runtime_WishList( l.wishlist ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishListList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.filter"					VALUE = "">
+	<MvASSIGN NAME = "l.sort"					VALUE = "">
+	<MvASSIGN NAME = "l.offset"					VALUE = 0>
+	<MvASSIGN NAME = "l.count"					VALUE = 0>
+	<MvASSIGN NAME = "l.available_filters"		VALUE = "">
+	<MvASSIGN NAME = "l.search_query"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_customer_login', 'You must have a customer account to load wishlists.' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'title',	'title' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters, 'notes',	'notes' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_BOOL( l.available_filters, 'shared',	'shared' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'WishLists', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'cust_id = ?', [ g.Library_DB ].SQL_Query_Field( g.Basket:cust_id ) ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, 'id,title,notes,shared', 'id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'WishLists', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00043', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( ( l.count EQ 0 ) OR ( l.wishlist_count LT l.count ) ) AND ( NOT WishLists.d.EOF ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.wishlist_count ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_WSH_DB ].WishList_Read( l.wishlist ) }">
+			<MvEVAL EXPR = "{ JSON_Runtime_WishList( l.wishlist ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "WishLists" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "WishLists">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishListItemList_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.product_lookup"	VALUE = "">
+	<MvASSIGN NAME = "l.products"		VALUE = "">
+	<MvASSIGN NAME = "l.items"			VALUE = "">
+	<MvASSIGN NAME = "l.item_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.errors"			VALUE = "">
+	<MvASSIGN NAME = "l.error_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.field_prefix"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_customer_login', 'You must have a customer account to add items to a wish list.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Exists( 'Products' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00048', 'Missing required parameter' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_WishList_ValidateDestination( l.destination_wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load products and merge duplicate product entries into a new list
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.input_product" ARRAY = "l.input_products" INDEX = "l.pos" COUNT = "{ JSON_Input_Array( 'Products', l.input_products ) }">
+		<MvASSIGN NAME = "l.product"			VALUE = "">
+		<MvASSIGN NAME = "l.product_attribute"	VALUE = "">
+
+		<MvIF EXPR = "{ NOT JSON_Runtime_Product_Load_Element( l.input_product, l.product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.product:quantity" VALUE = 0>
+
+		<MvIF EXPR = "{ NOT JSON_Input_Element_Integer( l.input_product, 'R:positive', 'quantity', l.product:quantity ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.input_attribute" ARRAY = "l.input_attributes" COUNT = "{ JSON_Input_Element_Array( l.input_product, 'Attributes', l.input_attributes ) }">
+			<MvASSIGN NAME = "l.product_attribute"					VALUE = "">
+			<MvASSIGN NAME = "l.product_attribute:code"				VALUE = "">
+			<MvASSIGN NAME = "l.product_attribute:template_code"	VALUE = "">
+			<MvASSIGN NAME = "l.product_attribute:value"			VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'code',			l.product_attribute:code )			OR
+							NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'template_code',	l.product_attribute:template_code )	OR
+							NOT JSON_Input_Element_Text( l.input_attribute, 'o', 'value',			l.product_attribute:value ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.product_attribute_count"			VALUE = "{ miva_array_insert_var( l.product:attributes, l.product_attribute, -1 ) }">
+		</MvFOREACH>
+
+		<MvREFERENCEARRAY NAME = "l.reference_product" VARIABLE = "l.product_lookup">
+			<MvMEMBER NAME = "{ l.product:code $ ':' $ crypto_md5( miva_array_serialize( l.product_attribute ) ) }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT ISNULL l.reference_product }">
+			<MvASSIGN NAME = "l.reference_product:quantity"	VALUE = "{ l.reference_product:quantity + l.product:quantity }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.reference_product"			VALUE = "{ l.product }">
+			<MvASSIGN NAME = "l.null"						VALUE = "{ miva_array_insert_ref( l.products, l.reference_product, l.pos ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Process merged products and build list of wishlist item changes
+	|
+	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.product" ARRAY = "l.products" INDEX = "l.pos">
+		<MvASSIGN NAME = "l.field_prefix" VALUE = "{ 'Products[' $ l.pos $ ']' }">
+
+		<MvIF EXPR = "{ NOT Runtime_WishListItemList_Insert_ProcessProduct( l.field_prefix, l.destination_wishlist, l.product, l.items, l.item_count, l.errors, l.error_count ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_RT ].Runtime_WishListItemList_Process_Items( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"wishlistitems":
+		[
+			<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" INDEX = "l.pos" COUNT = "{ l.item_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					,
+				</MvIF>
+				{
+					<MvEVAL EXPR = "{ JSON_Runtime_WishListItem_OnDemandColumns( l.item:wishlistitem, l.null ) }">
+				}
+			</MvFOREACH>
+		]
+		<MvIF EXPR = "{ l.error_count }">
+			,"skipped_products":
+			[
+				<MvFOREACH ITERATOR = "l.error" ARRAY = "l.errors" INDEX = "l.pos" COUNT = "{ l.error_count }">
+					<MvIF EXPR = "{ l.pos GT 1 }">
+						,
+					</MvIF>
+					{
+						"identifier":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:identifier ) }">",
+						"error_code":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_code ) }">",
+						"error_message":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_message ) }">"
+					}
+				</MvFOREACH>
+			]
+		</MvIF>
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_WishListItemList_Insert_ProcessProduct" PARAMETERS = "field_prefix, wishlist var, product var, items var, item_count var, errors var, error_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.wishlistitem"		VALUE = "">
+	<MvASSIGN NAME = "l.wishlistitem_found"	VALUE = 0>
+
+	<MvASSIGN NAME = "l.product_attribute_count" VALUE = "{ miva_array_elements( l.product:attributes ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_Attributes_DetermineVariant( l.product, 0, l.product:attributes, l.product_attribute_count, l.item_wishlistoptions, l.item_wishlistoption_count, l.variant_id ) }">
+		<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix, 'product_attributes', 'One or more required attributes are missing, or an invalid combination of attributes was specified', l.errors ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+		<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix, 'invalid_variant', 'Invalid variant', l.errors ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+		<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.field_prefix, 'subscription_required', 'Product \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list', l.errors ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlistitem:options"		VALUE = "{ l.item_wishlistoptions }">
+	<MvASSIGN NAME = "l.wishlistitem:option_count"	VALUE = "{ l.item_wishlistoption_count }">
+
+	<MvFOREACH ITERATOR = "l.existing_wishlistitem" ARRAY = "l.existing_wishlistitems" COUNT = "{ [ g.Module_Feature_WSH_DB ].WishListItemList_Load_WishList_Product( l.wishlist:id, l.product:id, l.existing_wishlistitems ) }">
+		<MvIF EXPR = "{ l.existing_wishlistitem:parent_id }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.wishlistoption_count" VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.existing_wishlistitem:id, l.wishlistoptions ) }">
+
+		<MvIF EXPR = "{ l.wishlistoption_count NE l.wishlistitem:option_count }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH INDEX = "l.wishlistoption_pos" ITERATOR = "l.wishlistoption" ARRAY = "l.wishlistoptions" COUNT = "{ l.wishlistoption_count }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.wishlistitem:options, 1,	l.option,
+													'( l.wishlistoption:attr_id		EQ l.option:attr_id )		AND
+													( l.wishlistoption:attmpat_id	EQ l.option:attmpat_id )	AND
+													( l.wishlistoption:option_id	EQ l.option:option_id )		AND
+													( l.wishlistoption:data			EQ l.option:data )			AND
+													( l.wishlistoption:data_long	EQ l.option:data_long )' ) }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.wishlistoption_pos GT l.wishlistoption_count }">
+			<MvASSIGN NAME = "l.wishlistitem"			VALUE = "{ l.existing_wishlistitem }">
+			<MvASSIGN NAME = "l.wishlistitem:quantity"	VALUE = "{ l.existing_wishlistitem:quantity + l.product:quantity }">
+			<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Module_Feature_WSH_RT ].Runtime_WishListList_Process_AppendItem_Update( l.existing_wishlistitem, l.wishlistitem, l.items ) }">
+			<MvASSIGN NAME = "l.wishlistitem_found"		VALUE = 1>
+
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.wishlistitem_found }">
+		<MvCOMMENT>
+		|
+		| Nothing matched, so add a new item to be inserted into the wishlist
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.wishlistitem"				VALUE = "">
+		<MvASSIGN NAME = "l.wishlistitem:product_id"	VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.wishlistitem:quantity"		VALUE = "{ l.product:quantity }">
+		<MvASSIGN NAME = "l.wishlistitem:dtadded" 		VALUE = "{ s.dyn_time_t }">
+		<MvASSIGN NAME = "l.wishlistitem:options"		VALUE = "{ l.item_wishlistoptions }">
+		<MvASSIGN NAME = "l.wishlistitem:option_count"	VALUE = "{ l.item_wishlistoption_count }">
+		<MvASSIGN NAME = "l.wishlistitem:notes" 		VALUE = "">
+
+		<MvASSIGN NAME = "l.item_count"					VALUE = "{ [ g.Module_Feature_WSH_RT ].Runtime_WishListItemList_Process_AppendItem_Insert( l.wishlist, l.wishlistitem, l.items ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishListItemList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_customer_login', 'You must have a customer account to load wishlist items.' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_WishList_Load( l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER( l.available_filters,		'wshlst_id',	'wshlst_id' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER( l.available_filters,		'parent_id',	'parent_id' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER( l.available_filters,		'product_id',	'product_id' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_RFC3339( l.available_filters,	'dtadded',		'dtadded' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_INTEGER( l.available_filters,	'quantity',		'quantity' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR( l.available_filters,		'notes',		'notes' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort )	OR
+					NOT JSON_Input_Integer(	'o', 'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o', 'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'WishListItems', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.search_query, 'wshlst_id = ?', [ g.Library_DB ].SQL_Query_Field( l.wishlist:id ) ) }">
+
+	<MvEVAL EXPR = "{ JSON_Filter_Callback( l.search_query, l.filter, l.available_filters, g.Module_JSON, 'JSON_Runtime_WishListItemList_Load_Query_Filter', '', l.data ) }">
+	<MvEVAL EXPR = "{ JSON_OrderBy( l.search_query, l.sort, 'id,parent_id,product_id,dtadded,quantity,notes', 'id' ) }">
+
+	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].SQL_Query_Count( l.search_query, l.total_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'WishListItems', l.search_sql, l.search_fields, l.offset, l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00044', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist_item_count" VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"total_count":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
+		"data":
+		[
+		<MvWHILE EXPR = "{ ( ( l.count EQ 0 ) OR ( l.wishlist_item_count LT l.count ) ) AND ( NOT WishListItems.d.EOF ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.wishlist_item_count ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_WSH_DB ].WishListItem_Read( l.wishlistitem ) }">
+			<MvEVAL EXPR = "{ JSON_Runtime_WishListItem_OnDemandColumns( l.wishlistitem, l.data:ondemandcolumns ) }">
+			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+
+			<MvSKIP NAME = "Merchant" VIEW = "WishListItems" ROWS = 1>
+		</MvWHILE>
+		]
+	}
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "WishListItems">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishListItem_Delete" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_customer_login', 'You must have a customer account to remove items from a wish list.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.items"		VALUE = "">
+	<MvASSIGN NAME = "l.item_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Integer( 'R', 'Wish_ID', l.wish_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishListItem_Load_ID( l.wish_id, l.wishlistitem ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlistitem:wshlst_id, l.wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_invalid', 'Invalid wish list' ) }">
+	<MvELSEIF EXPR = "{ l.wishlist:cust_id NE g.Basket:cust_id }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_invalid', 'Invalid wish list' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.wishlistitem:parent_id }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00042', 'Child items cannot be removed directly from a wish list.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.item_count" VALUE = "{ [ g.Module_Feature_WSH_RT ].Runtime_WishListItemList_Process_AppendItem_Delete( l.wishlistitem, l.items ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_RT ].Runtime_WishListItemList_Process_Items( l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_BasketItemList_MoveToWishlist" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+
+	<MvIF EXPR = "{ NOT g.Basket:cust_id OR NOT g.Customer_Session_Verified }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_customer_login', 'You must have a customer account to add items to a wish list.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.moveall"	VALUE = "{ JSON_Input_Exists( 'MoveAll' ) }">
+	<MvASSIGN NAME = "l.line_ids"	VALUE = "{ JSON_Input_Exists( 'Line_IDs' ) }">
+	<MvASSIGN NAME = "l.group_ids"	VALUE = "{ JSON_Input_Exists( 'Group_IDs' ) }">
+	<MvASSIGN NAME = "l.sum"		VALUE = "{ l.moveall + l.line_ids + l.group_ids }">
+
+	<MvIF EXPR = "{ l.sum EQ 0 }">		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00049', 'One of MoveAll, Line_IDs, or Group_IDs must be specified.' ) }">
+	<MvELSEIF EXPR = "{ l.sum GT 1 }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00050', 'Only one of MoveAll, Line_IDs, or Group_IDs may be specified.' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.error_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.errors"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_WishList_ValidateDestination( l.destination_wishlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.basketitem_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.basketitems"		VALUE = "">
+
+	<MvIF EXPR = "{ l.moveall }">
+		<MvIF EXPR = "{ NOT JSON_Input_Boolean(	'R', 'MoveAll',	l.moveall ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.moveall }">
+			<MvASSIGN NAME = "l.basketitem_count" VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.line_ids }">
+		<MvIF EXPR = "{ NOT JSON_Input_Integer_Array( 'R', 'Line_IDs', l.input_line_ids, l.input_line_ids_count ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.line_id_lookup"			VALUE = "">
+		<MvASSIGN NAME = "l.filtered_line_id_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.filtered_line_ids"		VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.input_line_id" ARRAY = "l.input_line_ids" COUNT = "{ l.input_line_ids_count }" INDEX = "l.pos">
+			<MvREFERENCEARRAY NAME = "l.reference_line_id" VARIABLE = "l.line_id_lookup">
+				<MvMEMBER NAME = "{ l.input_line_id }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ ISNULL l.reference_line_id }">
+				<MvASSIGN NAME = "l.reference_line_id"		VALUE = "{ l.input_line_id }">
+				<MvASSIGN NAME = "l.filtered_line_id_count"	VALUE = "{ miva_array_insert_ref( l.filtered_line_ids, l.reference_line_id, l.pos ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.filtered_line_id" ARRAY = "l.filtered_line_ids" INDEX = "l.pos">
+			<MvIF EXPR = "{ NOT [ g.Library_DB ].BasketItem_Load_Line( g.Basket:basket_id, l.filtered_line_id, l.basketitem ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.line_prefix"	VALUE = "{ 'Items[' $ l.pos $ ']' }">
+				<MvASSIGN NAME = "l.error_count"	VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.line_prefix, 'MER-JSN-RTM-00051', 'Basket item does not exist.', l.errors ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.basketitem_count" VALUE = "{ miva_array_insert_var( l.basketitems, l.basketitem, l.pos ) }">
+		</MvFOREACH>
+	<MvELSEIF EXPR = "{ l.group_ids }">
+		<MvIF EXPR = "{ NOT JSON_Input_Integer_Array( 'R', 'Group_IDs', l.input_group_ids, l.input_group_ids_count ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.group_id_lookup"			VALUE = "">
+		<MvASSIGN NAME = "l.filtered_group_id_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.filtered_group_ids"			VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.input_group_id" ARRAY = "l.input_group_ids" COUNT = "{ l.input_group_ids_count }" INDEX = "l.pos">
+			<MvREFERENCEARRAY NAME = "l.reference_group_id" VARIABLE = "l.group_id_lookup">
+				<MvMEMBER NAME = "{ l.input_group_id }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ ISNULL l.reference_group_id }">
+				<MvASSIGN NAME = "l.reference_group_id"			VALUE = "{ l.input_group_id }">
+				<MvASSIGN NAME = "l.filtered_group_id_count"	VALUE = "{ miva_array_insert_ref( l.filtered_group_ids, l.reference_group_id, -1 ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.filtered_group_id" ARRAY = "l.filtered_group_ids" COUNT = "{ l.filtered_group_id_count }" INDEX = "l.pos">
+			<MvASSIGN NAME = "l.group_basketitem_count"	VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket_Group( g.Basket:basket_id, l.filtered_group_id, l.group_basketitems ) }">
+			<MvASSIGN NAME = "l.basketitem_count"		VALUE = "{ miva_array_merge( l.group_basketitems, 1, l.group_basketitem_count, l.basketitems, -1 ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.basketitem_count EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00052', 'Unable to load requested Basket Item(s). Some or all of the Basket Contents may no longer be available.' ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" INDEX = "l.pos">
+		<MvASSIGN NAME = "l.item_prefix"	VALUE = "{ 'Items[' $ l.pos $ ']' }">
+
+		<MvIF EXPR = "{ l.basketitem:parent_id }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.item_prefix, 'MER-JSN-RTM-00053', 'Child items cannot be moved directly to a wish list.', l.errors ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_BasketItem( l.basketitem, l.product ) }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.item_prefix, 'MER-JSN-RTM-00054', 'Item \'' $ l.basketitem:code $ '\' could not be added to the wish list.', l.errors ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionSettings_Load_ProductOrDefault( l.product:id, l.productsubscriptionsettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.productsubscriptionsettings:enabled AND l.productsubscriptionsettings:mandatory }">
+			<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.item_prefix, 'MER-JSN-RTM-00055', 'Item \'' $ l.product:code $ '\' requires a subscription and cannot be added to the wish list', l.errors ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.item"							VALUE = "">
+		<MvASSIGN NAME = "l.item:product"					VALUE = "{ l.product }">
+		<MvASSIGN NAME = "l.item:basketitem"				VALUE = "{ l.basketitem }">
+		<MvASSIGN NAME = "l.item:basketitem:option_count"	VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.item:basketitem:line_id, l.item:basketitem:options ) }">
+		<MvASSIGN NAME = "l.item:child_basketitems"			VALUE = "">
+		<MvASSIGN NAME = "l.item:child_basketitem_count"	VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.child_basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Parent( l.basketitem:basket_id, l.basketitem:line_id, l.child_basketitems ) }" INDEX = "l.child_pos">
+			<MvASSIGN NAME = "l.item_prefix"	VALUE = "{ l.item_prefix $ ':Child_Items[' $ l.child_pos $ ']' }">
+
+			<MvIF EXPR = "{ l.child_basketitem:type NE 'product' }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Runtime_Product_Load_BasketItem( l.child_basketitem, l.child_product ) }">
+				<MvASSIGN NAME = "l.error_count" VALUE = "{ [ g.Module_JSON ].JSON_Response_ListProcessed_Error( l.item_prefix, 'MER-JSN-RTM-00056', 'Item \'' $ l.child_basketitem:code $ '\' could not be added to the wish list.', l.errors ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.child_basketitem:option_count"	VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.child_basketitem:line_id, l.child_basketitem:options ) }">
+			<MvASSIGN NAME = "l.item:child_basketitem_count"	VALUE = "{ miva_array_insert_var( l.item:child_basketitems, l.child_basketitem, -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.item_count" VALUE = "{ miva_array_insert_var( l.items, l.item, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_RT ].Runtime_BasketItemListMoveToWishList_Process( l.destination_wishlist, l.items, l.item_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"wishlistitems":
+		[
+			<MvFOREACH ITERATOR = "l.item" ARRAY = "l.items" INDEX = "l.pos" COUNT = "{ l.item_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					,
+				</MvIF>
+
+				<MvASSIGN NAME = "l.ondemandcolumns"			VALUE = "">
+				<MvASSIGN NAME = "l.ondemandcolumns:options"	VALUE = "{ l.item:wishlistitem:option_count }">
+
+				{
+					<MvEVAL EXPR = "{ JSON_Runtime_WishListItem_OnDemandColumns( l.item:wishlistitem, l.ondemandcolumns ) }">
+				}
+			</MvFOREACH>
+		]
+		<MvIF EXPR = "{ l.error_count }">
+			,"skipped_products":
+			[
+				<MvFOREACH ITERATOR = "l.error" ARRAY = "l.errors" INDEX = "l.pos" COUNT = "{ l.error_count }">
+					<MvIF EXPR = "{ l.pos GT 1 }">
+						,
+					</MvIF>
+					{
+						"identifier":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:identifier ) }">",
+						"error_code":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_code ) }">",
+						"error_message":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_message ) }">"
+					}
+				</MvFOREACH>
+			]
+		</MvIF>
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishList_ValidateDestination" PARAMETERS = "wishlist var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Exists( 'WishList_ID' ) }">
+		<MvIF EXPR = "{ JSON_Input_Integer( 'O', 'WishList_ID', l.wishlist_id ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlist_id, l.wishlist ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_invalid', 'Invalid wish list' ) }">
+			<MvELSEIF EXPR = "{ l.wishlist:cust_id NE g.Basket:cust_id }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_invalid', 'Invalid wish list' ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.wishlist_count" VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListList_Load_Customer( g.Basket:cust_id, l.wishlists ) }">
+
+	<MvIF EXPR = "{ l.wishlist_count EQ 1 }">
+		<MvASSIGN NAME = "l.wishlist"		VALUE = "{ l.wishlists[ 1 ] }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.wishlist_count EQ 0 }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].CustomerSettings_Load_Cached( l.customersettings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.wishlist"			VALUE = "">
+		<MvASSIGN NAME = "l.wishlist:cust_id"	VALUE = "{ g.Basket:cust_id }">
+		<MvASSIGN NAME = "l.wishlist:title"		VALUE = "{ l.customersettings:def_wshlst }">
+		<MvASSIGN NAME = "l.wishlist:notes"		VALUE = "">
+		<MvASSIGN NAME = "l.wishlist:shared"	VALUE = 0>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Insert( l.wishlist ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'wishlist_pick', 'Please specify a wishlist' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishList_Load" PARAMETERS = "wishlist var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ JSON_Input_Retrieve_Integer( 'WishList_ID', l.wishlist_id ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_WSH_DB ].WishList_Load_ID_Cached( l.wishlist_id, l.wishlist ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'wishlist_invalid', 'Invalid wish list' ) }">
+		<MvELSEIF EXPR = "{ l.wishlist:cust_id NE g.Basket:cust_id }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'wishlist_invalid', 'Invalid wish list' ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-JSN-RTM-00047', 'WishList_ID must be specified' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_WishListItemList_Load_Query_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'ondemandcolumns' }">
+		<MvFOREACH ITERATOR = "l.column_code" ARRAY = "l.filter_value">
+			<MvIF EXPR = "{ ISNULL l.column_code }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.data:ondemandcolumns" MEMBER = "{ l.column_code }" VALUE = 1>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
 </MvFUNCTION>

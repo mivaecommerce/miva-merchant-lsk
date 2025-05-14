@@ -11,15 +11,15 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-AI-DB-
-| Next Error Code: 5
+| Next Error Code: 35
 |
 </MvCOMMENT>
 
-<MvFUNCTION NAME = "AI_Store_Create" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+<MvFUNCTION NAME = "AI_Store_Create" PARAMETERS = "store var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvCOMMENT>
 	|
 	| sNN_AISettings
@@ -29,27 +29,111 @@
 	<MvQUERY NAME   = "Merchant"
 			 QUERY  = "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AISettings
 						  (
-							enabled	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
-							token	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
-							engine	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ '
+							enabled		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							token		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
+							engine		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							mars_url	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							vector_db	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 20 )	$ ',
+							redishost	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							redisport	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							redisto		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							redispwd	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							redis_pfx	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ '
 						  )' }">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00001', g.MvQUERY_Error ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.aisettings:enabled"	VALUE = 0>
-	<MvASSIGN NAME = "l.aisettings:token"	VALUE = "">
-	<MvASSIGN NAME = "l.aisettings:engine"	VALUE = "gpt-3.5-turbo">
+	<MvASSIGN NAME = "l.aisettings:enabled"		VALUE = 0>
+	<MvASSIGN NAME = "l.aisettings:token"		VALUE = "">
+	<MvASSIGN NAME = "l.aisettings:engine"		VALUE = "gpt-3.5-turbo">
+	<MvASSIGN NAME = "l.aisettings:mars_url"	VALUE = "https://vexture.mivacdn.com">
+	<MvASSIGN NAME = "l.aisettings:vector_db"	VALUE = "store_redis">
+	<MvASSIGN NAME = "l.aisettings:redishost"	VALUE = "127.0.0.1">
+	<MvASSIGN NAME = "l.aisettings:redisport"	VALUE = 6379>
+	<MvASSIGN NAME = "l.aisettings:redisto"		VALUE = 1000>
+	<MvASSIGN NAME = "l.aisettings:redispwd"	VALUE = "">
+	<MvASSIGN NAME = "l.aisettings:redis_pfx"	VALUE = "{ l.store:code }">
 
 	<MvIF EXPR = "{ NOT AISettings_Insert( l.aisettings ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_AISearchIndexes
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME   = "Merchant"
+			 QUERY  = "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AISearchIndexes
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()			$ ',
+							active		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()			$ ',
+							code		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )		$ ',
+							source		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )		$ ',
+							srch_range	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_NUMBER( 4, 3 )	$ ',
+							idx_templ	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()			$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00005', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AISearchIndexes_1 ON ' $ g.Store_Table_Prefix $ 'AISearchIndexes ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00006', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AISearchIndexes_2 ON ' $ g.Store_Table_Prefix $ 'AISearchIndexes ( code )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00007', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreKey_Insert( 'AISearchIndexes', 1 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_AISearchIndexXProduct
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME   = "Merchant"
+			 QUERY  = "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+						  (
+							index_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							status		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )		$ ',
+							last_hash	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 32 )	$ '
+						  )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00008', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct_1 ON ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct ( index_id, product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00009', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	|	Create the template directory for search indexes
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ smkdir( g.Module_Root $ 'templates/aisearchindexes' ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "AI_Store_Delete" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AISettings' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AISearchIndexes' }">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct' }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -61,9 +145,16 @@
 </MvCOMMENT>
 
 <MvFUNCTION NAME = "AISettings_Read" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.aisettings:enabled"	VALUE = "{ AISettings.d.enabled }">
-	<MvASSIGN NAME = "l.aisettings:token"	VALUE = "{ AISettings.d.token }">
-	<MvASSIGN NAME = "l.aisettings:engine"	VALUE = "{ AISettings.d.engine }">
+	<MvASSIGN NAME = "l.aisettings:enabled"		VALUE = "{ AISettings.d.enabled }">
+	<MvASSIGN NAME = "l.aisettings:token"		VALUE = "{ AISettings.d.token }">
+	<MvASSIGN NAME = "l.aisettings:engine"		VALUE = "{ AISettings.d.engine }">
+	<MvASSIGN NAME = "l.aisettings:mars_url"	VALUE = "{ AISettings.d.mars_url }">
+	<MvASSIGN NAME = "l.aisettings:vector_db"	VALUE = "{ AISettings.d.vector_db }">
+	<MvASSIGN NAME = "l.aisettings:redishost"	VALUE = "{ AISettings.d.redishost }">
+	<MvASSIGN NAME = "l.aisettings:redisport"	VALUE = "{ AISettings.d.redisport }">
+	<MvASSIGN NAME = "l.aisettings:redisto"		VALUE = "{ AISettings.d.redisto }">
+	<MvASSIGN NAME = "l.aisettings:redispwd"	VALUE = "{ AISettings.d.redispwd }">
+	<MvASSIGN NAME = "l.aisettings:redis_pfx"	VALUE = "{ AISettings.d.redis_pfx }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "AISettings_Load" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -81,37 +172,25 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "AISettings_Load_Cached" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "">
-	<MvREFERENCE NAME = "l.cache"						VARIABLE = "g.Session:cache:aisettings_load_cached">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Reference( 'aisettings_load_cached', 'aisettings', l.ref ) }">
 
-	<MvIF EXPR = "{ ISNULL l.cache:result }">
-		<MvASSIGN NAME = "l.cache:result"				VALUE = "{ AISettings_Load( l.cache:aisettings ) }">
-		<MvIF EXPR = "{ NOT l.cache:result }">
-			<MvASSIGN NAME = "l.cache:error_code"		VALUE = "{ g.Error_Code }">
-			<MvASSIGN NAME = "l.cache:error_message"	VALUE = "{ g.Error_Message }">
-			<MvASSIGN NAME = "l.cache:error_db_eof"		VALUE = "{ g.Error_DB_EOF }">
-		</MvIF>
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Requires_Load( l.ref ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ AISettings_Load( l.aisettings ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Store_Result( l.ref, l.result, l.aisettings ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT l.cache:result }">
-		<MvIF EXPR = "{ NOT l.cache:error_db_eof }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.cache:error_code, l.cache:error_message ) }">
-		</MvIF>
-
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( l.cache:error_code ) }">
-	</MvIF>
-
-	<MvASSIGN NAME = "l.aisettings"					VALUE = "{ l.cache:aisettings }">
-
-	<MvFUNCTIONRETURN VALUE = "{ l.cache:result }">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].DB_Cache_Data_Result( l.ref, l.aisettings ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "AISettings_Insert" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISettings
-					      ( enabled, token, engine )
+						  ( enabled, token, engine, mars_url, vector_db, redishost, redisport, redisto, redispwd, redis_pfx )
 						  VALUES
-						  ( ?, ?, ? )' }"
-			 FIELDS	= "l.aisettings:enabled, l.aisettings:token, l.aisettings:engine">
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.aisettings:enabled, l.aisettings:token, l.aisettings:engine, l.aisettings:mars_url, l.aisettings:vector_db,
+			 		   l.aisettings:redishost, l.aisettings:redisport, l.aisettings:redisto, l.aisettings:redispwd, l.aisettings:redis_pfx">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00003', g.MvQUERY_Error ) }">
 	</MvIF>
@@ -122,13 +201,400 @@
 <MvFUNCTION NAME = "AISettings_Update" PARAMETERS = "aisettings var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AISettings
-					      SET
-							enabled	= ?,
-							token	= ?,
-							engine	= ?' }"
-			 FIELDS	= "l.aisettings:enabled, l.aisettings:token, l.aisettings:engine">
+						  SET
+							enabled		= ?,
+							token		= ?,
+							engine		= ?,
+							mars_url	= ?,
+							vector_db	= ?,
+							redishost	= ?,
+							redisport	= ?,
+							redisto		= ?,
+							redispwd	= ?,
+							redis_pfx	= ?' }"
+			 FIELDS	= "l.aisettings:enabled, l.aisettings:token, l.aisettings:engine, l.aisettings:mars_url, l.aisettings:vector_db,
+			 		   l.aisettings:redishost, l.aisettings:redisport, l.aisettings:redisto, l.aisettings:redispwd, l.aisettings:redis_pfx">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00004', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AISearchIndexes
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AISearchIndex_Read" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.index:id"			VALUE = "{ AISearchIndexes.d.id }">
+	<MvASSIGN NAME = "l.index:active"		VALUE = "{ AISearchIndexes.d.active }">
+	<MvASSIGN NAME = "l.index:code"			VALUE = "{ AISearchIndexes.d.code }">
+	<MvASSIGN NAME = "l.index:source"		VALUE = "{ AISearchIndexes.d.source }">
+	<MvASSIGN NAME = "l.index:srch_range"	VALUE = "{ AISearchIndexes.d.srch_range }">
+	<MvASSIGN NAME = "l.index:idx_templ"	VALUE = "{ AISearchIndexes.d.idx_templ }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Defaults" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.index:active"		VALUE = 1>
+	<MvASSIGN NAME = "l.index:code"			VALUE = "">
+	<MvASSIGN NAME = "l.index:source"		VALUE = "">
+	<MvASSIGN NAME = "l.index:srch_range"	VALUE = 1.0>
+	<MvASSIGN NAME = "l.index:idx_templ" 	VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Default_Template() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Insert" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.index:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'AISearchIndexes' ) }">
+
+	<MvIF EXPR = "{ NOT AISearchIndex_Insert_LowLevel( l.index ) OR
+					NOT AISearchIndexXProduct_Insert_All_Products_Queued( l.index ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Insert_LowLevel" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexes
+						  ( id, active, code, source, srch_range, idx_templ )
+						  VALUES
+						  ( ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.index:id, l.index:active, l.index:code, l.index:source, l.index:srch_range, l.index:idx_templ">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00011', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Update" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+		<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AISearchIndexes
+						  SET
+							active		= ?,
+							code		= ?,
+							source		= ?,
+							srch_range	= ?,
+							idx_templ	= ?
+						  WHERE
+							id = ?' }"
+			 FIELDS	= "l.index:active, l.index:code, l.index:source, l.index:srch_range, l.index:idx_templ,
+			 		   l.index:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00012', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Delete" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT AISearchIndexXProduct_Delete_All_Index( l.index:id ) OR
+					NOT AISearchIndex_Delete_LowLevel( l.index:id ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Delete_LowLevel" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexes WHERE id = ?' }"
+			 FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00010', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Load_ID" PARAMETERS = "id, index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AISearchIndexes"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexes WHERE id = ?' }"
+				FIELDS	= "l.id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00013', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ AISearchIndexes.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-AI-DB-00033' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AISearchIndex_Read( l.index ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Load_Code" PARAMETERS = "code, index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AISearchIndexes"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexes WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.code">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00014', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ AISearchIndexes.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-AI-DB-00034' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AISearchIndex_Read( l.index ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexList_Load_All_Cached" PARAMETERS = "indexes var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Reference( 'aisearchindexlist_load_all_cached', 'indexes', l.ref ) }">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Requires_Load( l.ref ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndexList_Load_All( l.indexes ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Store_Result( l.ref, l.result, l.indexes ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].DB_Cache_Data_Result( l.ref, l.indexes ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexList_Load_All" PARAMETERS = "indexes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AISearchIndexes"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexes ORDER BY id ASC' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00015', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.index_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT AISearchIndexes.d.EOF }">
+		<MvEVAL EXPR = "{ AISearchIndex_Read( l.indexes[ ++l.index_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "AISearchIndexes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-AI-DB-00016', l.index_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexList_Load_Active_Cached" PARAMETERS = "indexes var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Reference( 'aisearchindexlist_load_all_active_cached', 'indexes', l.ref ) }">
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Requires_Load( l.ref ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ AISearchIndexList_Load_Active( l.indexes ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Store_Result( l.ref, l.result, l.indexes ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].DB_Cache_Data_Result( l.ref, l.indexes ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexList_Load_Active" PARAMETERS = "indexes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AISearchIndexes"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexes WHERE active = 1 ORDER BY id ASC' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00017', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.index_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT AISearchIndexes.d.EOF }">
+		<MvEVAL EXPR = "{ AISearchIndex_Read( l.indexes[ ++l.index_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "AISearchIndexes" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-AI-DB-00018', l.index_count ) }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| sNN_AISearchIndexXProduct
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Read" PARAMETERS = "aisearchindexxproduct var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.aisearchindexxproduct:index_id"		VALUE = "{ AISearchIndexXProduct.d.index_id }">
+	<MvASSIGN NAME = "l.aisearchindexxproduct:product_id"	VALUE = "{ AISearchIndexXProduct.d.product_id }">
+	<MvASSIGN NAME = "l.aisearchindexxproduct:status"		VALUE = "{ AISearchIndexXProduct.d.status }">
+	<MvASSIGN NAME = "l.aisearchindexxproduct:last_hash"	VALUE = "{ AISearchIndexXProduct.d.last_hash }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Insert" PARAMETERS = "aisearchindexxproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+						  ( index_id, product_id, status, last_hash )
+						  VALUES
+						  ( ?, ?, ?, ? )' }"
+			 FIELDS	= "l.aisearchindexxproduct:index_id, l.aisearchindexxproduct:product_id, l.aisearchindexxproduct:status, l.aisearchindexxproduct:last_hash">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00022', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Update" PARAMETERS = "aisearchindexxproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+		 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+					  SET
+						status		= ?,
+						last_hash	= ?
+					  WHERE
+						index_id	= ? AND
+						product_id	= ?' }"
+		 FIELDS	= "l.aisearchindexxproduct:status, l.aisearchindexxproduct:last_hash,
+				   l.aisearchindexxproduct:index_id, l.aisearchindexxproduct:product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00023', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Delete" PARAMETERS = "index_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct WHERE index_id = ? AND product_id = ?' }"
+			 FIELDS	= "l.index_id, l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00024', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Delete_All_Index" PARAMETERS = "index_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct WHERE index_id = ?' }"
+			 FIELDS	= "l.index_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00025', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct WHERE product_id = ?' }"
+			 FIELDS	= "l.product_id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00026', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Load" PARAMETERS = "index_id, product_id, aisearchindexxproduct var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "AISearchIndexXProduct"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexes WHERE index_id = ? AND product_id = ?' }"
+				FIELDS	= "l.index_id, l.product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00027', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ AISearchIndexXProduct_Read( l.aisearchindexxproduct ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexXProduct">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Insert_All_Products_Queued" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+			 			  ( index_id, product_id, status, last_hash )
+			 			  SELECT
+			 				?, id, \'Q\', \'\'
+			 			  FROM ' $ 
+			 				g.Store_Table_Prefix $ 'Products
+			 			  WHERE
+			 				active = 1' }"
+			 FIELDS = "l.index:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00029', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Queue" PARAMETERS = "index_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME   = "Merchant"
+				 QUERY  = "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+								( index_id, product_id, status, last_hash )
+			 			      VALUES
+								( ?, ?, \'Q\', \'\' )
+			 			      ON DUPLICATE KEY UPDATE
+			 					status = \'Q\'' }"
+				 FIELDS = "l.index_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00019', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME   = "Merchant"
+				 QUERY  = "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+								( index_id, product_id, status, last_hash )
+			 			      VALUES
+								( ?, ?, \'Q\', \'\' )
+			 			   ON CONFLICT ( index_id, product_id ) DO UPDATE
+			 			   SET
+			 			   	status = \'Q\'' }"
+				 FIELDS = "l.index_id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00020', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00021', 'Unsupported DBAPI' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndexXProduct_Queue_Active" PARAMETERS = "index_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME   = "Merchant"
+				 QUERY  = "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+			 				  ( index_id, product_id, status, last_hash )
+							  SELECT
+								?, id, \'Q\', \'\'
+							  FROM ' $ 
+								g.Store_Table_Prefix $ 'Products
+							  WHERE
+								active = 1
+			 			      ON DUPLICATE KEY UPDATE
+			 			   		status		= \'Q\',
+			 			   		last_hash	= \'\'' }"
+				 FIELDS = "l.index_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00030', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME   = "Merchant"
+				 QUERY  = "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+			 				  ( index_id, product_id, status, last_hash )
+							  SELECT
+								?, id, \'Q\', \'\'
+							  FROM ' $ 
+								g.Store_Table_Prefix $ 'Products
+							  WHERE
+								active = 1
+							  ON CONFLICT ( index_id, product_id ) DO UPDATE
+							  SET
+							 	status		= \'Q\',
+			 			   		last_hash	= \'\'' }"
+				FIELDS = "l.index_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00031', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-DB-00032', 'Unsupported DBAPI' ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>

@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-CPD-UT-
-| Next Error Code: 33
+| Next Error Code: 40
 |
 </MvCOMMENT>
 
@@ -103,20 +103,11 @@
 
 	<MvIF EXPR = "{ l.copyproductrules:categories }">
 		<MvASSIGN NAME = "l.dest_product:cancat_id"		VALUE = "{ l.source_product:cancat_id }">
-		<MvASSIGN NAME = "l.dest_product:catcount"		VALUE = "{ l.source_product:catcount }">
 	</MvIF>
 
 	<MvIF EXPR = "{ l.copyproductrules:images }">
 		<MvASSIGN NAME = "l.dest_product:thumbnail"		VALUE = "{ l.source_product:thumbnail }">
 		<MvASSIGN NAME = "l.dest_product:image"			VALUE = "{ l.source_product:image }">
-	</MvIF>
-
-	<MvIF EXPR = "{ l.copyproductrules:availgroup }">
-		<MvASSIGN NAME = "l.dest_product:agrpcount"		VALUE = "{ l.source_product:agrpcount }">
-	</MvIF>
-
-	<MvIF EXPR = "{ l.copyproductrules:pricegroup }">
-		<MvASSIGN NAME = "l.dest_product:pgrpcount"		VALUE = "{ l.source_product:pgrpcount }">
 	</MvIF>
 
 	<MvQUERY NAME 	= "Merchant"
@@ -131,18 +122,14 @@
 						  	weight		= ?,
 						  	taxable		= ?,
 						  	active		= ?,
-						  	catcount	= ?,
 						  	cancat_id	= ?,
-						  	agrpcount	= ?,
-						  	pgrpcount	= ?,
 						  	thumbnail	= ?,
 						  	image		= ?,
 						  	dt_updated	= ?
 						  WHERE
 						  	id			= ?' }"
-			 FIELDS = "l.dest_product:sku, l.dest_product:page_code, l.dest_product:page_title, l.dest_product:price, l.dest_product:cost, l.dest_product:descrip,
-					   l.dest_product:weight, l.dest_product:taxable, l.dest_product:active, l.dest_product:catcount, l.dest_product:cancat_id, l.dest_product:agrpcount,
-					   l.dest_product:pgrpcount, l.dest_product:thumbnail, l.dest_product:image, s.dyn_time_t,
+			 FIELDS = "l.dest_product:sku, l.dest_product:page_code, l.dest_product:page_title, l.dest_product:price, l.dest_product:cost, l.dest_product:descrip, l.dest_product:weight, 
+			 		   l.dest_product:taxable, l.dest_product:active, l.dest_product:cancat_id, l.dest_product:thumbnail, l.dest_product:image, s.dyn_time_t,
 					   l.dest_product:id">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00001', g.MvQUERY_Error ) }">
@@ -404,8 +391,10 @@
 		<MvASSIGN NAME = "l.categoryxproduct:colcount"		VALUE = 0>
 
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].CategoryXProduct_Insert_LowLevel( l.categoryxproduct ) }">
-			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
-			<MvFUNCTIONRETURN VALUE = 0>
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "CategoryXProduct">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
 		</MvIF>
 
 		<MvIF EXPR = "{ CopyProduct_Reycle_Recommend() }">
@@ -420,6 +409,18 @@
 
 	<MvIF EXPR = "{ NOT l.eof }">
 		<MvFUNCTIONRETURN VALUE = -1>
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products
+			 			  SET 
+			 				catcount	= ( SELECT COUNT( * ) FROM ' $ g.Store_Table_Prefix $ 'CategoryXProduct WHERE product_id = ? )
+			 			  WHERE
+			 				id			= ?' }"
+			 FIELDS = "l.dest_product:id, 
+					   l.dest_product:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00033', g.MvQUERY_Error ) }">
 	</MvIF>
 
 	<MvQUERY NAME 	= "Merchant"
@@ -664,18 +665,49 @@
 
 	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
 
-	<MvQUERY NAME	= "Merchant"
-			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct ( agrp_id, product_id, automatic, colcount )
-						  SELECT
-							agrp_id, ?, 0, 0
-						  FROM ' $
-							g.Store_Table_Prefix $ 'AvailGroupXProduct
-						  WHERE
-							product_id = ?' }"
-			 FIELDS	= "l.dest_product:id,
-					   l.source_product:id">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY 	= "{ 'INSERT IGNORE INTO ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct ( agrp_id, product_id, automatic, colcount )
+							  SELECT
+								agrp_id, ?, 0, 0
+							  FROM ' $
+								g.Store_Table_Prefix $ 'AvailGroupXProduct
+							  WHERE
+								product_id = ?' }"
+				 FIELDS	= "l.dest_product:id,
+						   l.source_product:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00017', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct ( agrp_id, product_id, automatic, colcount )
+							  SELECT
+								agrp_id, ?, 0, 0
+							  FROM ' $
+								g.Store_Table_Prefix $ 'AvailGroupXProduct
+							  WHERE
+								product_id = ?
+							  ON CONFLICT DO NOTHING' }"
+				 FIELDS	= "l.dest_product:id,
+						   l.source_product:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00037', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00038', 'Unsupported DBAPI' ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products
+			 			  SET 
+			 				agrpcount	= ( SELECT COUNT( * ) FROM ' $ g.Store_Table_Prefix $ 'AvailGroupXProduct WHERE product_id = ? )
+			 			  WHERE
+			 				id			= ?' }"
+			 FIELDS = "l.dest_product:id, 
+					   l.dest_product:id">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00017', g.MvQUERY_Error ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00039', g.MvQUERY_Error ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ CopyProduct_Success_Or_Recycle() }">
@@ -688,18 +720,49 @@
 
 	<MvASSIGN NAME = "l.state:completed" VALUE = 1>
 
-	<MvQUERY NAME	= "Merchant"
-			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct ( pgrp_id, product_id, automatic, colcount )
-						  SELECT
-							pgrp_id, ?, 0, 0
-						  FROM ' $
-							g.Store_Table_Prefix $ 'PriceGroupXProduct
-						  WHERE
-							product_id = ?' }"
-			 FIELDS	= "l.dest_product:id,
-					   l.source_product:id">
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY 	= "{ 'INSERT IGNORE INTO ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct ( pgrp_id, product_id, automatic, colcount )
+							  SELECT
+								pgrp_id, ?, 0, 0
+							  FROM ' $
+								g.Store_Table_Prefix $ 'PriceGroupXProduct
+							  WHERE
+								product_id = ?' }"
+				 FIELDS	= "l.dest_product:id,
+						   l.source_product:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00018', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct ( pgrp_id, product_id, automatic, colcount )
+							  SELECT
+								pgrp_id, ?, 0, 0
+							  FROM ' $
+								g.Store_Table_Prefix $ 'PriceGroupXProduct
+							  WHERE
+								product_id = ?
+							  ON CONFLICT DO NOTHING' }"
+				 FIELDS	= "l.dest_product:id,
+						   l.source_product:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00035', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00036', 'Unsupported DBAPI' ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'Products
+			 			  SET 
+			 				pgrpcount	= ( SELECT COUNT( * ) FROM ' $ g.Store_Table_Prefix $ 'PriceGroupXProduct WHERE product_id = ? )
+			 			  WHERE
+			 				id			= ?' }"
+			 FIELDS = "l.dest_product:id, 
+					   l.dest_product:id">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00018', g.MvQUERY_Error ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CPD-UT-00034', g.MvQUERY_Error ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ CopyProduct_Success_Or_Recycle() }">
