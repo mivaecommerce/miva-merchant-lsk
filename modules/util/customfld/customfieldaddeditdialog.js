@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -293,14 +293,15 @@ CustomField_AddEditDialog.prototype.ClearAdd = function()
 
 CustomField_AddEditDialog.prototype.Delete = function()
 {
-	var self = this;
-
-	if ( !confirm( 'Deleting a custom field cannot be undone.  Continue?' ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		CustomField_Delete( this.customfield.id, this.customfield.type, ( response ) => { this.Delete_Callback( response ); } );
 	}
 
-	CustomField_Delete( this.customfield.id, this.customfield.type, function( response ) { self.Delete_Callback( response ); } );
+	confirm_dialog.SetTitle( 'Delete Custom Field?' );
+	confirm_dialog.SetMessage( 'Deleting a custom field cannot be undone.<br /><br />Continue?' );
+	confirm_dialog.Show();
 }
 
 CustomField_AddEditDialog.prototype.Delete_Callback = function( response )

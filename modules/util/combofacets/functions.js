@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -110,6 +110,15 @@ function CombinationFacetField_Update( field_id, fieldlist, callback, delegator 
 									   'CombinationFacetField_ID=' + encodeURIComponent( field_id ),
 									   fieldlist,
 									   delegator );
+}
+
+function CombinationFacetField_Update_SortDescending( field_id, sort_desc, callback, delegator )
+{
+	return AJAX_Call_Module_JSON( callback, 'admin', 'combofacets', 'CombinationFacetField_Update_SortDescending',
+	{
+		CombinationFacetField_ID:	field_id,
+		SortDescending: 			sort_desc
+	}, delegator );
 }
 
 function CombinationFacetField_Delete( field_id, callback, delegator )

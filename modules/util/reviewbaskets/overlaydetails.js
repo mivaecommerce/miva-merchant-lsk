@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -272,19 +272,23 @@ ReviewBasketsListDetailOverlayDetails.prototype.ReviewBaskets_BusinessAccount_Lo
 
 ReviewBasketsListDetailOverlayDetails.prototype.Basket_Delete = function()
 {
-	var self = this;
-
-	if ( !confirm( 'Deleting an basket cannot be undone.  Continue?' ) )	return;
-
-	ReviewBaskets_BasketList_Delete( [ this.basket.basket_id ], function( response )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		if ( !response.success )
+		ReviewBaskets_BasketList_Delete( [ this.basket.basket_id ], ( response ) =>
 		{
-			return self.onerror( response.error_message );
-		}
+			if ( !response.success )
+			{
+				return this.onerror( response.error_message );
+			}
 
-		self.ondelete();
-	} );
+			this.ondelete();
+		} );
+	}
+
+	confirm_dialog.SetTitle( 'Delete Basket?' );
+	confirm_dialog.SetMessage( 'Deleting a basket cannot be undone.<br /><br />Continue?' );
+	confirm_dialog.Show();
 }
 
 ReviewBasketsListDetailOverlayDetails.prototype.Reload = function()
@@ -831,16 +835,15 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Edit = function( basket
 
 ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Delete = function()
 {
-	var self = this;
-	var i, i_len, line_ids, delegator;
+	var i, i_len, line_ids, delegator, confirm_dialog;
 
 	line_ids				= new Array();
 	delegator				= new AJAX_ThreadPool( 3 );
-	delegator.onStart		= function() { self.SetProcessing_Start(); };
-	delegator.onComplete	= function()
+	delegator.onStart		= () => { this.SetProcessing_Start(); };
+	delegator.onComplete	= () =>
 	{
-		self.SetProcessing_End();
-		self.Reload();
+		this.SetProcessing_End();
+		this.Reload();
 	};
 
 	for ( i = 0, i_len = this.basketitemlist.length; i < i_len; i++ )
@@ -856,14 +859,17 @@ ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Delete = function()
 		return;
 	}
 
-	if ( !confirm( 'Delete selected item(s)?' ) )
+	confirm_dialog			= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		this.ItemList_Delete_LowLevel( line_ids, delegator );
+
+		delegator.Run();
 	}
 
-	this.ItemList_Delete_LowLevel( line_ids, delegator );
-
-	delegator.Run();
+	confirm_dialog.SetTitle( `Delete ${Plural( this.basketitemlist.length, 'Item', 'Items')}?` );
+	confirm_dialog.SetMessage( `Deleting the selected ${Plural( this.basketitemlist.length, 'item', 'items')} from the basket cannot be undone.<br /><br />Continue?` );
+	confirm_dialog.Show();
 }
 
 ReviewBasketsListDetailOverlayDetails.prototype.ItemList_Delete_LowLevel = function( line_ids, delegator )
@@ -1055,27 +1061,39 @@ ReviewBasketsListDetailOverlayDetails.prototype.Charges_Edit = function()
 
 ReviewBasketsListDetailOverlayDetails.prototype.Order_Create = function()
 {
-	var self = this;
-	var create_order_dialog;
+	const create_order_dialog = new ConfirmationDialog();
 
-	create_order_dialog = new ConfirmationDialog();
-	create_order_dialog.SetTitle( 'Confirm' );
-	create_order_dialog.SetMessage( 'Converting the basket to an order will reset the basket. Continue?' );
-	create_order_dialog.onYes = function()
+	if ( !this.basketitemlist.find( item => item.subterm_id ) )
 	{
-		ReviewBaskets_Order_Create( self.basket.basket_id, function( response ) 
-		{
-			var view_order_dialog;
+		create_order_dialog.SetTitle( 'Confirm' );
+		create_order_dialog.SetMessage( 'Converting the basket to an order will also reset the basket.<br /><br />Continue?' );
+	}
+	else 
+	{
+		create_order_dialog.SetTitle( 'Confirm' );
+		create_order_dialog.SetMessage( `The basket contains one or more items that are associated with subscriptions. However, when the<br />
+										 basket is converted to an order, these items will not be treated as subscriptions&mdash;they will be processed<br />
+										 as regular items without any associated subscription.<br /><br />
+										 If you intend for these items to remain active subscriptions, we recommend using the Shop As Customer<br />
+										 feature and completing the standard checkout process. This ensures that subscriptions can be correctly<br />
+										 linked to a Customer Payment Card and Shipping Method.<br /><br />
+										 Converting the basket to an order will also reset the basket.<br /><br />
+										 Continue?` );
+	}
 
+	create_order_dialog.onYes = () =>
+	{
+		ReviewBaskets_Order_Create( this.basket.basket_id, ( response ) =>
+		{
 			if ( !response.success )
 			{
-				return self.onerror( response.error_message );
+				return this.onerror( response.error_message );
 			}
 
-			view_order_dialog = new ConfirmationDialog();
+			const view_order_dialog = new ConfirmationDialog();
 			view_order_dialog.SetTitle( 'Order Created' );
 			view_order_dialog.SetMessage( 'Order ' + parseInt( response.data.order_id ) + ' created successfully. Would you like to view the order now?' );
-			view_order_dialog.onYes = function()
+			view_order_dialog.onYes = () =>
 			{
 				return OpenLinkHandler_CurrentWindow( adminurl, { 'Screen': 'MORD', 'Store_Code': Store_Code, 'Order_ID': response.data.order_id } );
 			}

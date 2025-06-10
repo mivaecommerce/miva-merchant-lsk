@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -49,7 +49,8 @@ function AdminURL( screen_code, tab_code )
 
 function DeleteItem( screen_code, action_code, button )
 {
-	if ( confirm( item_delete ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
 		DisableButtons( button );
 		DisableOnSubmitFormElements();
@@ -61,7 +62,9 @@ function DeleteItem( screen_code, action_code, button )
 		else										document.forms[ Screen ].submit();
 	}
 
-	return 1;
+	confirm_dialog.SetTitle( 'Delete Item?' );
+	confirm_dialog.SetMessage( item_delete );
+	confirm_dialog.Show();
 }
 
 function DisplayModifiedMessage()

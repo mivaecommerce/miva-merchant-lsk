@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -344,22 +344,23 @@ ReviewBasketsList.prototype.Filters_Reset = function()
 
 ReviewBasketsList.prototype.Delete_All = function()
 {
-	var self = this;
-
-	if ( !confirm( 'Deleting baskets cannot be undone. Are you sure you wish to delete all baskets?' ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		ReviewBaskets_Delete_All_Baskets( ( response ) =>
+		{
+			if ( !response.success )
+			{
+				Modal_Alert( response.error_message );
+			}
+
+			this.Refresh();
+		}, this.delegator );
 	}
 
-	ReviewBaskets_Delete_All_Baskets( function( response )
-	{
-		if ( !response.success )
-		{
-			Modal_Alert( response.error_message );
-		}
-
-		self.Refresh();
-	}, this.delegator );
+	confirm_dialog.SetTitle( 'Delete All Baskets?' );
+	confirm_dialog.SetMessage( 'Deleting all baskets cannot be undone.<br /><br />Continue?' );
+	confirm_dialog.Show();
 }
 
 ReviewBasketsList.prototype.onDeleteList = function( basket_ids, callback, delegator )
@@ -453,7 +454,8 @@ ReviewBasketsList.prototype.onCreateRootColumnList = function()
 		new MMList_Column_Text( 'Billing Country', 'bill_cntry', 'Billing Country' )
 			.SetDefaultActive( false ),
 		new ReviewBasketsList_Column_ProductCode( 'Product Code', 'product_code', 'Product Code' )
-			.SetDefaultActive( false ),
+			.SetDefaultActive( false )
+			.SetDisplayInList( false ),
 		new MMList_Column_Text( 'Order #', 'order_id' )
 			.SetDefaultActive( false )
 			.SetOnDisplayData( function( record ) { return DrawMMListString_Data( record.order_id == 0 ? '' : record.order_id ); } )

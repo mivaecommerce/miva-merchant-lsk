@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2014 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -170,14 +170,15 @@ TemplateBatchReport_AddEditDialog.prototype.Save_Callback = function( response )
 
 TemplateBatchReport_AddEditDialog.prototype.Delete = function()
 {
-	var self = this;
-
-	if ( !confirm( 'Deleting a batch report cannot be undone.  Continue?' ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		TemplateBatchReport_Delete( this.report.type, this.report.code, ( response ) => { this.Delete_Callback( response ); } );
 	}
 
-	TemplateBatchReport_Delete( this.report.type, this.report.code, function( response ) { self.Delete_Callback( response ); } );
+	confirm_dialog.SetTitle( 'Delete Batch Report?' );
+	confirm_dialog.SetMessage( 'Deleting a batch report cannot be undone. Continue?' );
+	confirm_dialog.Show();
 }
 
 TemplateBatchReport_AddEditDialog.prototype.Delete_Callback = function( response )

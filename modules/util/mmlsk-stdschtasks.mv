@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-UTIL-SST-
-| Next Error Code: 32    
+| Next Error Code: 33    
 |
 </MvCOMMENT>
 
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-stdschtasks">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Standard Scheduled Tasks">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1200">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1201">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.00">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "This module implements a set of standard scheduled tasks.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, util, scheduledtask">
@@ -1537,8 +1537,6 @@
 		</MvIF>
 
 		<MvIF EXPR = "{ UnpricedVariants.d.EOF }">
-			<MvCLOSEVIEW NAME = "Merchant" VIEW = "UnpricedVariants">
-
 			<MvASSIGN NAME = "l.task:state:variant_signature:previous"		VALUE = "{ l.task:state:variant_signature:current }">
 			<MvASSIGN NAME = "l.task:state:variant_signature:current"		VALUE = 0>
 		<MvELSE>
@@ -2110,122 +2108,121 @@
 		<MvASSIGN NAME = "l.task:state:processing_end_time" VALUE = "{ s.dyn_time_t + ( l.task:config:max_proc_min * 60 ) }">
 	</MvIF>
 
-	<MvREFERENCE NAME = "l.pending_queue" VARIABLE = "l.task:state:pending_queue">
-	<MvREFERENCE NAME = "l.last_index_id" VARIABLE = "l.task:state:last_index_id">	
-
-	<MvCOMMENT>
-	|
-	| Mark all queued (Q) products to processing (P)
-	|
-	</MvCOMMENT>
-
-	<MvQUERY NAME	= "Merchant"
-			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct SET status = \'P\' WHERE status = \'Q\'' }">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-SST-00028', g.MvQUERY_Error ) }">
-	</MvIF>
-
-	<MvWHILE EXPR = 1>
+	<MvFOREACH ITERATOR = "l.index" ARRAY = "l.indexes" COUNT = "{ [ g.Module_Feature_AI_DB ].AISearchIndexList_Load_Active_Cached( l.indexes ) }">
 		<MvCOMMENT>
 		|
-		| Load all products marked for processing sorted by index.
-		| Send the queued entries when:
-		|	- Queue has 100 or more entries
-		|	- Index changes
-		|	- EOF
+		| Mark all queued (Q) products to processing (P)
 		|
 		</MvCOMMENT>
 
-		<MvOPENVIEW NAME	= "Merchant"
-					VIEW 	= "Products"
-					QUERY 	= "{ 'SELECT
-									p.*,
-
-									aisxp.index_id		AS indexxproduct_index_id,
-									aisxp.product_id	AS indexxproduct_product_id,
-									aisxp.status		AS indexxproduct_status,
-									aisxp.last_hash		AS indexxproduct_last_hash,
-
-									aisi.id				AS index_id,
-									aisi.active			AS index_active,
-									aisi.code			AS index_code,
-									aisi.source			AS index_source
-								  FROM
-								  	' $ g.Store_Table_Prefix $ 'Products p,
-								  	' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct aisxp,
-								  	' $ g.Store_Table_Prefix $ 'AISearchIndexes aisi
-								  WHERE
-									p.id			= aisxp.product_id	AND
-									aisxp.index_id	= aisi.id			AND
-									aisi.active		= 1					AND
-									aisxp.status	= \'P\'
-								  ORDER BY
-									aisi.id' }">
-		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-SST-00029', g.MvOPENVIEW_Error ) }">
+		<MvQUERY NAME	= "Merchant"
+				QUERY	= "{ 'UPDATE
+								' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct
+							  SET
+								status		= \'P\'
+							  WHERE
+								status		= \'Q\' AND
+								index_id	= ?' }"
+				FIELDS	= "l.index:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-SST-00028', g.MvQUERY_Error ) }">
 		</MvIF>
 
-		<MvWHILE EXPR = "{ NOT Products.d.EOF }">
-			<MvIF EXPR = "{ ( l.last_index_id GT 0 ) AND ( ( l.pending_queue:count GE 100 ) OR ( l.last_index_id NE Products.d.index_id AND l.pending_queue:count GT 0 ) ) }">
+		<MvWHILE EXPR = 1>
+			<MvCOMMENT>
+			|
+			| Load all products marked for processing
+			| Send the queued entries for each index when EOF is reached (LIMIT 100 entries)
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Products',
+																					 'SELECT
+																						p.*,
+																						aisxp.index_id		AS indexxproduct_index_id,
+																						aisxp.product_id	AS indexxproduct_product_id,
+																						aisxp.status		AS indexxproduct_status,
+																						aisxp.last_hash		AS indexxproduct_last_hash
+																					  FROM
+																						' $ g.Store_Table_Prefix $ 'Products p,
+																						' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct aisxp
+																					  WHERE
+																						aisxp.index_id	= ?		AND
+																						aisxp.status	= \'P\'	AND
+																						p.id			= aisxp.product_id',
+																					 [ g.Module_Library_DB ].SQL_Query_Field( l.index:id ),
+																					 0, 100 ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-SST-00029', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ Products.d.EOF }">
+				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
 				<MvWHILESTOP>
 			</MvIF>
 
-			<MvASSIGN NAME = "l.last_index_id"							VALUE = "{ Products.d.index_id }">
+			<MvASSIGN NAME = "l.pending_queue:aisearchindex"		VALUE = "">
+			<MvASSIGN NAME = "l.pending_queue:aisearchindex:id"		VALUE = "{ l.index:id }">
+			<MvASSIGN NAME = "l.pending_queue:aisearchindex:active"	VALUE = "{ l.index:active }">
+			<MvASSIGN NAME = "l.pending_queue:aisearchindex:code"	VALUE = "{ l.index:code }">
+			<MvASSIGN NAME = "l.pending_queue:aisearchindex:source"	VALUE = "{ l.index:source }">
 
-			<MvIF EXPR = "{ ISNULL l.pending_queue }">
-				<MvASSIGN NAME = "l.pending_queue:aisearchindex"		VALUE = "">
-				<MvASSIGN NAME = "l.pending_queue:aisearchindex:id"		VALUE = "{ Products.d.index_id }">
-				<MvASSIGN NAME = "l.pending_queue:aisearchindex:active"	VALUE = "{ Products.d.index_active }">
-				<MvASSIGN NAME = "l.pending_queue:aisearchindex:code"	VALUE = "{ Products.d.index_code }">
-				<MvASSIGN NAME = "l.pending_queue:aisearchindex:source"	VALUE = "{ Products.d.index_source }">
-			</MvIF>
+			<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Product_Read( l.product ) }">
 
-			<MvASSIGN NAME = "l.aisearchindexxproduct"					VALUE = "">
-			<MvASSIGN NAME = "l.aisearchindexxproduct:index_id"			VALUE = "{ Products.d.indexxproduct_index_id }">
-			<MvASSIGN NAME = "l.aisearchindexxproduct:product_id"		VALUE = "{ Products.d.indexxproduct_product_id }">
-			<MvASSIGN NAME = "l.aisearchindexxproduct:status"			VALUE = "{ Products.d.indexxproduct_status }">
-			<MvASSIGN NAME = "l.aisearchindexxproduct:last_hash"		VALUE = "{ Products.d.indexxproduct_last_hash }">
+				<MvIF EXPR = "{ NOT l.product:active }">
+					<MvQUERY NAME 	= "Merchant"
+							 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct WHERE index_id = ? AND product_id = ? AND status = \'P\'' }"
+							 FIELDS = "l.index:id, l.product:id">
+					<MvIF EXPR = "{ g.MvQUERY_Error }">
+						<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-SST-00032', g.MvQUERY_Error ) }">
+					</MvIF>
 
-			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Product_Read( l.product ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Delete_Hash_Key( l.conn_id, l.index:id, l.product:id ) }">
+						<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+						<MvFUNCTIONRETURN VALUE = 0>
+					</MvIF>
+				<MvELSE>
+					<MvASSIGN NAME = "l.aisearchindexxproduct"				VALUE = "">
+					<MvASSIGN NAME = "l.aisearchindexxproduct:index_id"		VALUE = "{ Products.d.indexxproduct_index_id }">
+					<MvASSIGN NAME = "l.aisearchindexxproduct:product_id"	VALUE = "{ Products.d.indexxproduct_product_id }">
+					<MvASSIGN NAME = "l.aisearchindexxproduct:status"		VALUE = "{ Products.d.indexxproduct_status }">
+					<MvASSIGN NAME = "l.aisearchindexxproduct:last_hash"	VALUE = "{ Products.d.indexxproduct_last_hash }">
 
-			<MvASSIGN NAME = "l.input"									VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Render( l.pending_queue:aisearchindex, l.product, l.input_hash ) }">
+					<MvASSIGN NAME = "l.input"								VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Render( l.pending_queue:aisearchindex, l.product, l.input_hash ) }">
 
-			<MvIF EXPR = "{ strcmp( l.aisearchindexxproduct:last_hash, l.input_hash ) NE 0 }">
-				<MvASSIGN NAME = "l.null"								VALUE = "{ miva_array_insert_var( l.pending_queue:aisearchindexxproducts,	l.aisearchindexxproduct,	-1 ) }">
-				<MvASSIGN NAME = "l.null"								VALUE = "{ miva_array_insert_var( l.pending_queue:input_hashes,				l.input_hash,				-1 ) }">
-				<MvASSIGN NAME = "l.pending_queue:count"				VALUE = "{ miva_array_insert_var( l.pending_queue:inputs,					l.input,					-1 ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.aisearchindexxproduct:status"		VALUE = "I">
+					<MvIF EXPR = "{ strcmp( l.aisearchindexxproduct:last_hash, l.input_hash ) NE 0 }">
+						<MvASSIGN NAME = "l.null"							VALUE = "{ miva_array_insert_var( l.pending_queue:aisearchindexxproducts,	l.aisearchindexxproduct,	-1 ) }">
+						<MvASSIGN NAME = "l.null"							VALUE = "{ miva_array_insert_var( l.pending_queue:input_hashes,				l.input_hash,				-1 ) }">
+						<MvASSIGN NAME = "l.pending_queue:count"			VALUE = "{ miva_array_insert_var( l.pending_queue:inputs,					l.input,					-1 ) }">
+					<MvELSE>
+						<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Update_Indexed( l.aisearchindexxproduct ) }">
+							<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+					</MvIF>
+				</MvIF>
 
-				<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Update( l.aisearchindexxproduct ) }">
+				<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() OR StandardScheduledTasks_AISearchIndex_Process_TimeLimitReached( l.task ) }">
 					<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+					<MvFUNCTIONRETURN VALUE = -1>
+				</MvIF>
+
+				<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+			</MvWHILE>
+
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+
+			<MvIF EXPR = "{ l.pending_queue:count GT 0 }">
+				<MvIF EXPR = "{ NOT StandardScheduledTasks_AISearchIndex_ProcessQueue( l.conn_id, l.aisettings, l.pending_queue ) }">
 					<MvFUNCTIONRETURN VALUE = 0>
 				</MvIF>
+
+				<MvASSIGN NAME = "l.pending_queue" VALUE = "">
 			</MvIF>
 
-			<MvIF EXPR = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_RecycleRecommended() OR StandardScheduledTasks_AISearchIndex_Process_TimeLimitReached( l.task ) }">
-				<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
-				<MvFUNCTIONRETURN VALUE = -1>
-			</MvIF>
-
-			<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
 		</MvWHILE>
-
-		<MvASSIGN NAME = "l.eof" VALUE = "{ Products.d.EOF }">
-		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
-
-		<MvIF EXPR = "{ l.pending_queue:count GT 0 }">
-			<MvIF EXPR = "{ NOT StandardScheduledTasks_AISearchIndex_ProcessQueue( l.conn_id, l.aisettings, l.pending_queue ) }">
-				<MvFUNCTIONRETURN VALUE = 0>
-			</MvIF>
-
-			<MvASSIGN NAME = "l.pending_queue" VALUE = "">
-		</MvIF>
-
-		<MvIF EXPR = "{ l.eof }">
-			<MvWHILESTOP>
-		</MvIF>
-	</MvWHILE>
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -2252,10 +2249,9 @@
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
-		<MvASSIGN NAME = "l.aisearchindexxproduct:status"		VALUE = "I">
 		<MvASSIGN NAME = "l.aisearchindexxproduct:last_hash"	VALUE = "{ l.input_hash }">
 
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Update( l.aisearchindexxproduct ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Update_Indexed( l.aisearchindexxproduct ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvFOREACH>

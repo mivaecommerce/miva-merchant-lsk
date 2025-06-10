@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -109,50 +109,47 @@ ImageManagement_ImageDialog.prototype.Close = function()
 
 ImageManagement_ImageDialog.prototype.Delete_Selected = function()
 {
-	var self = this;
-	var selected = Checkbox_Selected_List( 'imagemanagement_imagedialog_generatedimage_select_' );
-
-	if ( !confirm( "This selected resized images will be deleted.\n" +
-				   "\n" +
-				   "The resized image files will be permanently removed from the server." ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		const selected 	= Checkbox_Selected_List( 'imagemanagement_imagedialog_generatedimage_select_' );
+
+		ImageManagement_GeneratedImageList_Delete( selected, ( response ) =>
+		{
+			if ( !response.success )
+			{
+				return this.onerror( response.error_message );
+			}
+
+			this.Refresh();
+		} );
 	}
 
-	ImageManagement_GeneratedImageList_Delete( selected, function( response )
-	{
-		if ( !response.success )
-		{
-			return self.onerror( response.error_message );
-		}
-
-		self.Refresh();
-	} );
+	confirm_dialog.SetTitle( 'Delete Resized Images?' );
+	confirm_dialog.SetMessage( 'The selected resized images will be deleted and their files will be permanently removed from the server. This cannot be undone.<br /><br />Continue?' );
+	confirm_dialog.Show();
 }
 
 ImageManagement_ImageDialog.prototype.Delete_Master = function()
 {
-	var self = this;
-
-	if ( !confirm( "This image will be removed from any products to which it is assigned.  Any resized " +
-				   "versions of the master image will also be deleted. The image files will be permanently " +
-				   "removed from the server.\n" +
-				   "\n" +
-				   "This cannot be undone." ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		ImageManagement_Image_Delete( this.image.id, ( response ) =>
+		{
+			if ( !response.success )
+			{
+				return this.onerror( response.error_message );
+			}
+
+			this.Hide();
+			this.ondeletemaster();
+		} );
 	}
 
-	ImageManagement_Image_Delete( this.image.id, function( response )
-	{
-		if ( !response.success )
-		{
-			return self.onerror( response.error_message );
-		}
-
-		self.Hide();
-		self.ondeletemaster();
-	} );
+	confirm_dialog.SetTitle( 'Delete Image?' );
+	confirm_dialog.SetMessage( 'This image will be removed from any products to which it is assigned. Any resized versions of the master image will also be deleted, and the image files permanently removed from the server. This cannot be undone.<br /><br />Continue?' );
+	confirm_dialog.Show();
 }
 
 ImageManagement_ImageDialog.prototype.ImageManagement_GeneratedImageList_Load_Callback = function( response )

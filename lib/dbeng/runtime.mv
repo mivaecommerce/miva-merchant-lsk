@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-RNT-
-| Next Error Code: 68   
+| Next Error Code: 71   
 |
 </MvCOMMENT>
 
@@ -1247,8 +1247,12 @@
 		<MvASSIGN NAME = "l.group_lookup"			VALUE = "">
 
 		<MvFOREACH ITERATOR = "l.child_basketitem" ARRAY = "l.child_basketitems" COUNT = "{ l.child_basketitem_count }">
+			<MvIF EXPR = "{ int( l.child_basketitem:group_id ) LE 0 }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
 			<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
-				<MvMEMBER NAME = "{ l.child_basketitem:group_id }">
+				<MvDIMENSION INDEX = "{ l.child_basketitem:group_id }">
 			</MvREFERENCEARRAY>
 
 			<MvIF EXPR = "{ ISNULL l.group }">
@@ -1266,11 +1270,7 @@
 			</MvIF>
 		</MvFOREACH>
 
-		<MvFOREACH ITERATOR = "l.group_id" ARRAY = "l.group_ids" COUNT = "{ miva_struct_members( l.group_lookup, l.group_ids ) }">
-			<MvREFERENCEARRAY NAME = "l.group" VARIABLE = "l.group_lookup">
-				<MvMEMBER NAME = "{ l.group_id }">
-			</MvREFERENCEARRAY>
-
+		<MvFOREACH ITERATOR = "l.group" ARRAY = "l.group_lookup">
 			<MvIF EXPR = "{ ( l.group:quantity LT l.original_basketitem:quantity ) OR ( fmod( l.group:quantity, l.original_basketitem:quantity ) NE 0 ) }">
 				<MvFOREACHCONTINUE>
 			</MvIF>
@@ -2458,10 +2458,10 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ l.searchsettings:index_id }">
-		<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_ID( l.searchsettings:index_id, l.index ) AND l.index:active }">
-			<MvIF EXPR = "{ Runtime_ProductList_Build_Query_Search_AI( l.query, l.search, l.index ) }">
-				<MvFUNCTIONRETURN>
-			</MvIF>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_ID( l.searchsettings:index_id, l.index ) }">	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-DBE-RNT-00068', 'Falling back to relational search: AI index does not exist' ) }">
+		<MvELSEIF EXPR = "{ NOT l.index:active }">																		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-DBE-RNT-00069', 'Falling back to relational search: AI index "' $ l.index:code $ '" is not active' ) }">
+		<MvELSEIF EXPR = "{ NOT Runtime_ProductList_Build_Query_Search_AI( l.query, l.search, l.index ) }">				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-DBE-RNT-00070', 'Falling back to relational search: AI search failed: ' $ g.Error_Code $ ': ' $ g.Error_Message ) }">
+		<MvELSE>																										<MvFUNCTIONRETURN>
 		</MvIF>
 	</MvIF>
 
@@ -2584,17 +2584,18 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.options"						VALUE = "">
-	<MvASSIGN NAME = "l.options:sortby"					VALUE = "vector_score">
-	<MvASSIGN NAME = "l.options:sortby_direction"		VALUE = "ASC">
-	<MvASSIGN NAME = "l.options:nocontent"				VALUE = 1>
-	<MvASSIGN NAME = "l.options:dialect"				VALUE = 2>
-	<MvASSIGN NAME = "l.options:limit_offset"			VALUE = 0>
-	<MvASSIGN NAME = "l.options:limit_num"				VALUE = "{ ternary( l.searchsettings:max_res GT 0, l.searchsettings:max_res, 10000 ) }">
-	<MvASSIGN NAME = "l.options:params:query_vector"	VALUE = "{ redis_pack_f32( l.embeddings[ 1 ] ) }">
-	<MvASSIGN NAME = "l.options:params:srch_range"		VALUE = "{ l.index:srch_range }">
+	<MvASSIGN NAME = "l.options"										VALUE = "">
+	<MvASSIGN NAME = "l.options:sortby"									VALUE = "vector_score">
+	<MvASSIGN NAME = "l.options:sortby_direction"						VALUE = "ASC">
+	<MvASSIGN NAME = "l.options:dialect"								VALUE = 2>
+	<MvASSIGN NAME = "l.options:limit_offset"							VALUE = 0>
+	<MvASSIGN NAME = "l.options:limit_num"								VALUE = "{ l.index:max_res }">
 
-	<MvASSIGN NAME = "l.query"							VALUE = "{ '@' $ int( l.index:id ) $ ':[VECTOR_RANGE $srch_range $query_vector]=>{$YIELD_DISTANCE_AS: vector_score}' }">
+	<MvASSIGN NAME = "l.options:params:query_vector"					VALUE = "{ redis_pack_f32( l.embeddings[ 1 ] ) }">
+
+	<MvASSIGN NAME = "l.options:return"	INDEX = 1 MEMBER = "identifier"	VALUE = "vector_score">
+
+	<MvASSIGN NAME = "l.query"											VALUE = "{ '(*) => [KNN ' $ int( l.index:max_res ) $ ' @' $ int( l.index:id ) $ ' $query_vector AS vector_score]' }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Search_Index( l.index, l.query, l.options, l.results ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
@@ -2602,21 +2603,82 @@
 
 	<MvCOMMENT>
 	|
-	| Populate CachedProductListXProduct. Iterate starting from the second entry as
-	| redis returns an array with the first entry being the count and then the data.
+	| Convert index similarity percentages to Redis cosine distance
 	|
 	</MvCOMMENT>
 
-	<MvFOREACH ITERATOR = "l.record" ARRAY = "l.results" INDEX = "l.pos" FIRST = 2>
-		<MvASSIGN NAME = "l.product_id"					VALUE = "{ gettoken( l.record, ':', 2 ) }">
+	<MvASSIGN NAME = "l.specific_threshold_distance"					VALUE = "{ 1 - ( l.index:specific_t / 100.0 ) }">
+	<MvASSIGN NAME = "l.specific_endpoint_distance"						VALUE = "{ 1 - ( l.index:specific_e / 100.0 ) }">
+	<MvASSIGN NAME = "l.broad_endpoint_distance"						VALUE = "{ 1 - ( l.index:broad_e / 100.0 ) }">
 
-		<MvQUERY NAME	= "Merchant"
-				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
-				 FIELDS	= "l.cachedproductlist:id, l.product_id, l.pos">
-		<MvIF EXPR = "{ g.MvQUERY_Error }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00067', g.MvQUERY_Error ) }">
+	<MvCOMMENT>
+	|
+	| Process results.  They are returned from Redis in this format:
+	|
+	|	[	
+	|		100,
+	|		"test_product_embeddings:1173",
+	|		[
+	|			"vector_score",
+	|			0.185165286064
+	|		],
+	|		"test_product_embeddings:1121",
+	|		[
+	|			"vector_score",
+	|			0.187774002552
+	|		],
+	|		...
+	|	]
+	|
+	</MvCOMMENT>
+	
+	<MvASSIGN NAME = "l.num_results"									VALUE = "{ int( l.results[ 1 ] ) }">
+
+	<MvIF EXPR = "{ l.num_results GT 0 }">
+		<MvCOMMENT>
+		|
+		| Determine which endpoints to use based on the relevance of the first result
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.first_result_distance"						VALUE = "{ l.results[ 3 ][ 2 ] }">
+
+		<MvIF EXPR = "{ l.first_result_distance LE l.specific_threshold_distance }">
+			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
+			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.specific_endpoint_distance }">
+		<MvELSEIF EXPR = "{ l.first_result_distance LE l.broad_endpoint_distance }">
+			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
+			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.broad_endpoint_distance }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.index:sparse_n }">
+			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = 1>
 		</MvIF>
-	</MvFOREACH>
+
+		<MvCOMMENT>
+		|
+		| Populate CachedProductListXProduct
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.disp_order"				VALUE = 0>
+
+		<MvFOR INDEX = "l.pos" FIRST = "{ 2 }" LAST = "{ 1 + ( l.cutoff_n * 2 ) }" NEXT = "{ l.pos + 2 }">
+			<MvASSIGN NAME = "l.disp_order"			VALUE = "{ l.disp_order + 1 }">
+			<MvASSIGN NAME = "l.product_id"			VALUE = "{ gettoken( l.results[ l.pos ], ':', 2 ) }">
+			<MvASSIGN NAME = "l.distance"			VALUE = "{ l.results[ l.pos + 1 ][ 2 ] }">
+
+			<MvIF EXPR = "{ l.distance GT l.cutoff_distance }">
+				<MvFORSTOP>
+			</MvIF>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
+					 FIELDS	= "l.cachedproductlist:id, l.product_id, l.disp_order">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00067', g.MvQUERY_Error ) }">
+			</MvIF>
+		</MvFOR>
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
 </MvFUNCTION>

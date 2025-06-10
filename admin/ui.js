@@ -5481,7 +5481,6 @@ MMInput.prototype.AddKeyStackEntry = function()
 	this.RemoveKeyStackEntry();
 
 	this.keystackentry = KeyDownHandlerStack_Add();
-	KeyDownHandlerStackEntry_BubbleUnsetKeyCodes( this.keystackentry );
 	KeyDownHandlerStackEntry_AddKeyCode( this.keystackentry, 13, function( e ) { return self.Event_OnEnter_Input( e ); } );
 	KeyDownHandlerStackEntry_AddKeyCode( this.keystackentry, 27, function( e ) { return self.Event_OnEsc_Input( e ); } );
 	KeyDownHandlerStackEntry_AddKeyCode( this.keystackentry, 85, function( e )
@@ -6064,6 +6063,41 @@ MMInput.prototype.Validate_FloatingPointNumber_NonNegative_Silent = function( er
 	}
 
 	return false;
+}
+
+MMInput.prototype.Validate_FloatingPointNumber_Range = function( min, max, options /* optional */ )
+{
+	var error = new Object();
+
+	if ( !this.Validate_FloatingPointNumber_Range_Silent( min, max, error, options ) )
+	{
+		this.SetInvalid( error.error_message );
+		this.Select();
+
+		return false;
+	}
+
+	return true;
+}
+
+MMInput.prototype.Validate_FloatingPointNumber_Range_Silent = function( min, max, error /* optional */, options /* optional */ )
+{
+	if ( !this.Validate_FloatingPointNumber_Silent( error, options ) )
+	{
+		return false;
+	}
+
+	if ( this.element_input.value < min || this.element_input.value > max )
+	{
+		if ( getVariableType( error ) === 'object' )
+		{
+			error.error_message = 'Please enter a value between ' + min + ' and ' + max;
+		}
+
+		return false;
+	}
+
+	return true;
 }
 
 MMInput.prototype.Validate_Price_NonNegative = function()

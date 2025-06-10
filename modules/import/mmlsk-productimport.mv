@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-IMP-PRO-
@@ -29,8 +29,8 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-productimport">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Product Import">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1100">
-	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.70">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1201">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.12">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "import">
 </MvFUNCTION>
 
@@ -72,8 +72,16 @@
 
 <MvFUNCTION NAME = "ImportModule_Delimited_Import_Begin" PARAMETERS = "module var, import var, session var, run_data var" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.inv_default ) }">
-	<MvASSIGN NAME = "l.inv_default:quantity"			VALUE = 0>
-	<MvASSIGN NAME = "l.inv_default:adjust_quantity"	VALUE = 0>
+	<MvASSIGN NAME = "l.inv_default:quantity"				VALUE = 0>
+	<MvASSIGN NAME = "l.inv_default:adjust_quantity"		VALUE = 0>
+
+	<MvASSIGN NAME = "l.total_columns"						VALUE = "{ Build_Column_Info( l.import, l.run_data:columns_all ) }">
+
+	<MvIF EXPR = "{ l.import:automap EQ 0 }">
+		<MvIF EXPR = "{ l.import:config:map_version NE Column_Map_Version() }">
+			<MvASSIGN NAME = "l.import:map"					VALUE = "{ Column_Map_Upgrade( l.import, l.run_data:columns_all, l.total_columns ) }">
+		</MvIF>
+	</MvIF>
 
 	<MvEVAL EXPR = "{ Create_Columns_Present( l.import, l.run_data:columns_present ) }">
 
@@ -84,16 +92,15 @@
 		</MvIF>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.list_pos"					VALUE = 0>
-	<MvASSIGN NAME = "l.total_columns" 				VALUE = "{ Build_Column_Info( l.import, l.run_data:columns_all ) }">
-	<MvASSIGN NAME = "l.original_columns_present" 	VALUE = "{ l.run_data:columns_present }">
+	<MvASSIGN NAME = "l.list_pos"							VALUE = 0>
+	<MvASSIGN NAME = "l.original_columns_present"	 		VALUE = "{ l.run_data:columns_present }">
 
 	<MvFOREACH ITERATOR = "l.column" ARRAY = "l.run_data:columns_all" INDEX = "l.index" COUNT = "{ l.total_columns }">
 		<MvASSIGN NAME = "l.column_value" VALUE = "{ miva_variable_value( 'l.original_columns_present:' $ l.column:field ) }">
 
 		<MvIF EXPR = "{ l.column_value }">
-			<MvASSIGN NAME = "l.column:present"		VALUE = 1>
-			<MvASSIGN NAME = "l.list_pos"			VALUE = "{ l.list_pos + 1 }">
+			<MvASSIGN NAME = "l.column:present"				VALUE = 1>
+			<MvASSIGN NAME = "l.list_pos"					VALUE = "{ l.list_pos + 1 }">
 
 			<MvREFERENCE NAME = "l.run_data:columns_list"		INDEX = "{ l.list_pos }"		VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
 			<MvREFERENCE NAME = "l.run_data:columns_present"	MEMBER = "{ l.column:field }"	VARIABLE = "{ 'l.run_data:columns_all[' $ l.index $ ']' }">
@@ -309,6 +316,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ImportModule_Persistent_Provision" PARAMETERS = "module var, import var, provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.import:config:map_version" VALUE = "{ Column_Map_Version() }">
+
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Products',				l.import:config:products,				'add,update,addupdate,replace,addreplace',
 																																						'add,update,addupdate,replace,addreplace' )	OR
 					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(	'R', l.provide_xml, 'Categories',			l.import:config:categories,				'replace_data, replace_empty, add',
@@ -331,6 +340,19 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delete" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ImportModule_Delimited_Column_Map" PARAMETERS = "module var, import var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.import:config:map_version EQ Column_Map_Version() }">
+		<MvFUNCTIONRETURN VALUE = "{ l.import:map }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.column_count" VALUE = "{ Build_Column_Info( l.import, l.columns ) }">
+	<MvFUNCTIONRETURN VALUE = "{ Column_Map_Upgrade( l.import, l.columns, l.column_count ) }">
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -1377,6 +1399,7 @@
 	<MvASSIGN NAME = "l.config:custom"					VALUE = "{ g.Import_Product_CustomFields }">
 	<MvASSIGN NAME = "l.config:attribute_templates"		VALUE = "{ g.Import_Product_AttributeTemplates }">
 	<MvASSIGN NAME = "l.config:canonicalurihandling"	VALUE = "{ g.Import_Product_CanonicalURIHandling }">
+	<MvASSIGN NAME = "l.config:map_version"				VALUE = "{ Column_Map_Version() }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Record_Skip" PARAMETERS = "session var, message" STANDARDOUTPUTLEVEL = "">

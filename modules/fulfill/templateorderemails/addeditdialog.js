@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2023 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -395,14 +395,15 @@ TemplateOrderEmail_AddEditDialog.prototype.Save_Callback = function( response )
 
 TemplateOrderEmail_AddEditDialog.prototype.Delete = function()
 {
-	var self = this;
-
-	if ( !confirm( 'Deleting an email cannot be undone.  Continue?' ) )
+	const confirm_dialog	= new ConfirmationDialog();
+	confirm_dialog.onYes	= () =>
 	{
-		return;
+		TemplateOrderEmail_Delete( this.email.code, ( response ) => { this.Delete_Callback( response ); } );
 	}
 
-	TemplateOrderEmail_Delete( this.email.code, function( response ) { self.Delete_Callback( response ); } );
+	confirm_dialog.SetTitle( 'Delete Email?' );
+	confirm_dialog.SetMessage( 'Deleting this email will only affect the current branch.<br /><br />Continue?' );
+	confirm_dialog.Show();
 }
 
 TemplateOrderEmail_AddEditDialog.prototype.Delete_Callback = function( response )

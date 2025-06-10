@@ -19,13 +19,33 @@
 |
 </MvCOMMENT>
 
-<MvFUNCTION NAME = "JSON_AISearchIndex" PARAMETERS = "aisearchindex var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+<MvFUNCTION NAME = "JSON_AISearchIndex" PARAMETERS = "aisearchindex var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_AISearchIndex_OnDemandColumns( l.aisearchindex, l.null ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex_OnDemandColumns" PARAMETERS = "aisearchindex var, ondemandcolumns var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	"id":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:id ) }">,
 	"active":		<MvEVAL EXPR = "{ encodejavascriptboolean( l.aisearchindex:active ) }">,
 	"code":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:code ) }">",
 	"source":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:source ) }">",
-	"srch_range":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:srch_range ) }">,
+	"max_res":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:max_res ) }">,
+	"specific_t":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:specific_t ) }">,
+	"specific_e":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:specific_e ) }">,
+	"broad_e":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:broad_e ) }">,
+	"sparse_n":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:sparse_n ) }">,
 	"idx_templ":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:idx_templ ) }">"
+
+	<MvIF EXPR = "{ l.ondemandcolumns:count_indexed }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Count_Indexed( l.aisearchindex:id, l.aisearchindex:count_indexed ) }">
+
+		, "count_indexed": <MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:count_indexed ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.ondemandcolumns:count_queued }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Count_Queued( l.aisearchindex:id, l.aisearchindex:count_queued ) }">
+
+		, "count_queued": <MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:count_queued ) }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_AISearchIndex_Load" PARAMETERS = "index var" STANDARDOUTPUTLEVEL = "">
@@ -127,7 +147,9 @@
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
 
+	<MvASSIGN NAME = "l.search_query"		VALUE = "">
 	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.data"				VALUE = "">
 	<MvASSIGN NAME = "l.filter"				VALUE = "">
 	<MvASSIGN NAME = "l.sort"				VALUE = "">
 	<MvASSIGN NAME = "l.offset"				VALUE = 0>
@@ -136,7 +158,6 @@
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER( l.available_filters,	'id',			'' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(	  l.available_filters, 	'code',			'' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(	  l.available_filters, 	'source',		'' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(  l.available_filters, 	'srch_range',	'' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(	  l.available_filters,	'active',		'' ) }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
@@ -149,8 +170,8 @@
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.search_query, '*' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'AISearchIndexes', '' ) }">
 
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'id,code,source,srch_range,active', 'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.search_query, l.filter, l.available_filters, g.Module_Feature_AI_JSON, 'JSON_AISearchIndexList_Load_Query_Filter', '', l.data ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'id,code,source,active', 'code' ) }">
 
 	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
 
@@ -160,12 +181,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-AI-JSON-00009', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.index_count"			VALUE = 0>
-	<MvASSIGN NAME = "l.record_count_error"		VALUE = "">
-	
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Connect( l.conn_id ) }">
-		<MvASSIGN NAME = "l.record_count_error"	VALUE = "{ g.Error_Message }">
-	</MvIF>
+	<MvASSIGN NAME = "l.index_count" VALUE = 0>
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
 	{
@@ -175,33 +191,30 @@
 		[
 		<MvWHILE EXPR = "{ ( NOT AISearchIndexes.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.index_count LT l.count ) ) }">
 			<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Read( l.index ) }">
-
-			<MvASSIGN NAME = "l.info"						VALUE = "">
-			<MvASSIGN NAME = "l.record_count"				VALUE = 0>
-
-			<MvIF EXPR = "{ l.conn_id }">
-				<MvASSIGN NAME = "l.record_count_error"		VALUE = "">
-
-				<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Info( l.conn_id, l.index, l.info ) }">
-					<MvASSIGN NAME = "l.record_count_error"	VALUE = "{ g.Error_Message }">
-				<MvELSE>
-					<MvASSIGN NAME = "l.record_count"		VALUE = "{ l.info:num_docs }">
-				</MvIF>
-			</MvIF>
-
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.index_count ) }">
-				<MvEVAL EXPR = "{ JSON_AISearchIndex( l.index ) }">,
-				"count": 		<MvEVAL EXPR = "{ encodejavascriptnumber( l.record_count ) }">,
-				"count_error":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.record_count_error ) }">"
+				<MvEVAL EXPR = "{ JSON_AISearchIndex_OnDemandColumns( l.index, l.data:ondemandcolumns ) }">
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
 
 			<MvSKIP NAME = "Merchant" VIEW = "AISearchIndexes" ROWS = 1>
 		</MvWHILE>
 		]
 	}
-	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Disconnect( l.conn_id ) }">
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AISearchIndexes">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndexList_Load_Query_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'ondemandcolumns' }">
+		<MvFOREACH ITERATOR = "l.column_code" ARRAY = "l.filter_value">
+			<MvIF EXPR = "{ ISNULL l.column_code }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.data:ondemandcolumns" MEMBER = "{ l.column_code }" VALUE = 1>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_AISearchIndex_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
@@ -211,11 +224,15 @@
 
 	<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Defaults( l.index ) }">
 
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',	'Code',			l.index:code )			OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:50',	'Source',		l.index:source )		OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',	'Template',		l.index:idx_templ )		OR
-					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',	'Active',		l.index:active )		OR
-					NOT [ g.Module_JSON ].JSON_Input_Number(	'o',	'Search_Range',	l.index:srch_range, 4, 3 ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',		'Code',					l.index:code )				OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:50',		'Source',				l.index:source )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',		'Template',				l.index:idx_templ )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Active',				l.index:active )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'MaximumResults',		l.index:max_res )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificThreshold',	l.index:specific_t,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificEndpoint',		l.index:specific_e,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'BroadEndpoint',		l.index:broad_e,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'SparseResults',		l.index:sparse_n ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
 	</MvIF>
 
@@ -223,8 +240,16 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'An AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:srch_range, 0, 1 ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Search_Range', g.Validation_Message ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_t, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'SpecificThreshold', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_e, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'SpecificEndpoint', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:broad_e, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'BroadEndpoint', g.Validation_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
@@ -250,8 +275,7 @@
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
 	{
-		<MvEVAL EXPR = "{ JSON_AISearchIndex( l.index ) }">,
-		"count": 0
+		<MvEVAL EXPR = "{ JSON_AISearchIndex( l.index ) }">
 	}
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>
@@ -267,11 +291,15 @@
 
 	<MvASSIGN NAME = "l.original_index" VALUE = "{ l.index }">
 
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'O',	'Code',			l.index:code )		OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:50',	'Source',		l.index:source )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',	'Template',		l.index:idx_templ )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',	'Active',		l.index:active )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',	'Search_Range',	l.index:srch_range, 4, 3 ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'O',		'Code',					l.index:code )				OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:50',		'Source',				l.index:source )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',		'Template',				l.index:idx_templ )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Active',				l.index:active )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'MaximumResults',		l.index:max_res )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificThreshold',	l.index:specific_t,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificEndpoint',		l.index:specific_e,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'BroadEndpoint',		l.index:broad_e,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'SparseResults',		l.index:sparse_n ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
 	</MvIF>
 
@@ -279,8 +307,16 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'An AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:srch_range, 0, 1 ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Search_Range', g.Validation_Message ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_t, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'SpecificThreshold', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_e, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'SpecificEndpoint', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:broad_e, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'BroadEndpoint', g.Validation_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
@@ -433,4 +469,96 @@
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-AI-JSON-00017', 'AI Search Index \'' $ l.index:code $ '\' rebuilt' ) }">
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductList_Load_AISearch_Filter" PARAMETERS = "query var, field_count var, filter_name, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.filter_name EQ 'ondemandcolumns' }">
+		<MvFOREACH ITERATOR = "l.column_code" ARRAY = "l.filter_value">
+			<MvIF EXPR = "{ ISNULL l.column_code }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ ( 'imagetype:' CIN l.column_code ) NE 1 }">
+				<MvASSIGN NAME = "l.data:ondemandcolumns" MEMBER = "{ l.column_code }" VALUE = 1>
+			<MvELSEIF EXPR = "{ [ g.Module_Admin ].CanI( 'IMGS', 1, 0, 0, 0 ) }">
+				<MvASSIGN NAME = "l.imagetype_code" VALUE = "{ substring_var( l.column_code, 11, len_var( l.column_code ) - 10 ) }">
+
+				<MvIF EXPR = "{ NOT miva_array_search( l.data:ondemandcolumns:imagetypes, 1, l.search_imagetype, 'strcasecmp( l.search_imagetype:code, l.imagetype_code ) EQ 0' ) }">
+					<MvIF EXPR = "{ [ g.Module_Library_DB ].ImageType_Load_Code( l.imagetype_code, l.imagetype ) }">
+						<MvASSIGN NAME = "l.data:ondemandcolumns:imagetype_count" VALUE = "{ miva_array_insert_var( l.data:ondemandcolumns:imagetypes, l.imagetype, -1 ) }">
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ProductList_Load_AISearch" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'PROD', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_AISearchIndex_Load( l.index ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+	<MvASSIGN NAME = "l.count"			VALUE = 1000>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'o', 'Count',	l.count )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R', 'Search',	l.search ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.null, l.filter, '', g.Module_Feature_AI_JSON, 'JSON_ProductList_Load_AISearch_Filter', '', l.data ) }">
+
+	<MvASSIGN NAME = "l.inputs" INDEX = 1 VALUE = "{ l.search }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings_Query( l.index, l.inputs, l.embeddings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.options"										VALUE = "">
+	<MvASSIGN NAME = "l.options:sortby"									VALUE = "vector_score">
+	<MvASSIGN NAME = "l.options:sortby_direction"						VALUE = "ASC">
+	<MvASSIGN NAME = "l.options:dialect"								VALUE = 2>
+	<MvASSIGN NAME = "l.options:limit_offset"							VALUE = 0>
+	<MvASSIGN NAME = "l.options:limit_num"								VALUE = "{ l.count }">
+
+	<MvASSIGN NAME = "l.options:params:query_vector"					VALUE = "{ redis_pack_f32( l.embeddings[ 1 ] ) }">
+
+	<MvASSIGN NAME = "l.options:return"	INDEX = 1 MEMBER = "identifier"	VALUE = "vector_score">
+
+	<MvASSIGN NAME = "l.query"											VALUE = "{ '(*) => [KNN ' $ int( l.count ) $ ' @' $ int( l.index:id ) $ ' $query_vector AS vector_score]' }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Search_Index( l.index, l.query, l.options, l.results ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.product_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.result_count"			VALUE = "{ miva_array_elements( l.results ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">	
+	[
+	<MvFOR INDEX = "l.pos" FIRST = "{ 2 }" LAST = "{ l.result_count }" NEXT = "{ l.pos + 2 }">
+		<MvASSIGN NAME = "l.product_id"			VALUE = "{ gettoken( l.results[ l.pos ], ':', 2 ) }">
+		<MvASSIGN NAME = "l.distance"			VALUE = "{ l.results[ l.pos + 1 ][ 2 ] }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_ID_WithRuntimeInventory( l.product_id, l.product ) }">
+			<MvFORCONTINUE>
+		<MvELSEIF EXPR = "{ NOT l.product:active }">
+			<MvFORCONTINUE>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.product_count ) }">
+			"similarity":	<MvEVAL EXPR = "{ ( ( 1 - l.distance ) * 100 ) ROUND 4 }">,
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Product_OnDemandColumns( l.product, l.data:ondemandcolumns ) }">
+		<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+	</MvFOR>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>

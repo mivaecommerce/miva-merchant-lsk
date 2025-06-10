@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2024 Miva, Inc.  All rights reserved.
+| Copyright 1998-2025 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-IMP-INC-
@@ -454,7 +454,7 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Add_Custom_Field_Column" PARAMETERS = "columns var, field var, module var" STANDARDOUTPUTLEVEL = "">
-    <MvASSIGN       NAME = "l.column:field"         VALUE = "{ 'custom-' $ l.field:code }">
+    <MvASSIGN       NAME = "l.column:field"         VALUE = "{ 'custom-' $ l.module:code $ '-' $ l.field:code }">
     <MvASSIGN       NAME = "l.column:name"          VALUE = "{ l.field:name }">
     <MvASSIGN       NAME = "l.column:header"        VALUE = "{ toupper( glosub( l.field:name, ' ', '_' ) ) }">
     <MvASSIGN       NAME = "l.column:required"      VALUE = 0>
@@ -473,4 +473,49 @@
     <MvASSIGN       NAME = "l.field:code"       VALUE = "{ l.code }">
     <MvASSIGN       NAME = "l.field:prompt"     VALUE = "{ l.prompt }">
     <MvASSIGN       NAME = "l.field:initial"    VALUE = "{ l.initial }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Column_Map_Version" STANDARDOUTPUTLEVEL = "">
+    <MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Column_Map_Upgrade" PARAMETERS = "import var, columns var, column_count" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.updated_map" VALUE = "">
+
+	<MvIF EXPR = "{ l.import:config:map_version LT 1 }">
+		<MvFOREACH ITERATOR = "l.map" ARRAY = "l.import:map" INDEX = "l.pos">
+			<MvIF EXPR = "{ ( 'custom-' IN l.map ) NE 1 }">
+				<MvASSIGN NAME = "l.updated_map" INDEX = "{ l.pos }" VALUE = "{ l.map }">
+
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.field_code"		VALUE = "{ substring_var( l.map, 8, len_var( l.map ) - 7 ) }">
+			<MvASSIGN NAME = "l.module_code"	VALUE = "">
+
+			<MvCOMMENT>
+			|
+			| Traverse the array backwards to preserve original module of the selected map code
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.index"			VALUE = "{ l.column_count }">
+
+			<MvWHILE EXPR = "{ l.index GT 0 }">
+				<MvIF EXPR = "{ NOT ISNULL l.columns[ l.index ]:module AND strcasecmp( l.field_code, l.columns[ l.index ]:code ) EQ 0 }">
+					<MvASSIGN NAME = "l.module_code"	VALUE = "{ l.columns[ l.index ]:module:code }">
+
+					<MvWHILESTOP>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.index" VALUE = "{ l.index - 1 }">
+			</MvWHILE>
+
+			<MvIF EXPR = "{ NOT ISNULL l.module_code }">	<MvASSIGN NAME = "l.updated_map" INDEX = "{ l.pos }" VALUE = "{ 'custom-' $ l.module_code $ '-' $ l.field_code }">
+			<MvELSE>										<MvASSIGN NAME = "l.updated_map" INDEX = "{ l.pos }" VALUE = "{ l.map }">
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.updated_map }">
 </MvFUNCTION>

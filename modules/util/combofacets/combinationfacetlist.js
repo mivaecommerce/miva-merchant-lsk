@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -266,10 +266,11 @@ CombinationFacetList.prototype.Field_Create = function()
 {
 	var record;
 
-	record			= new Object();
-	record.facet_id	= 0;
-	record.code		= '';
-	record.name		= '';
+	record				= new Object();
+	record.facet_id		= 0;
+	record.code			= '';
+	record.name			= '';
+	record.sort_desc	= false;
 
 	return record;
 }
@@ -301,6 +302,27 @@ CombinationFacetList.prototype.Field_Delete = function( item, callback, delegato
 	CombinationFacetField_Delete( item.record.id, callback, delegator );
 }
 
+CombinationFacetList.prototype.Field_Update_SortDescending = function( item, checked, delegator )
+{
+	const self = this;
+
+	CombinationFacetField_Update_SortDescending( item.record.id, checked, function( response )
+	{
+		if ( !response.success )
+		{
+			self.Record_Update_Error( response, item );
+			self.ReBindVisibleRows();
+
+			return;
+		}
+
+		item.record.sort_desc = checked;
+
+		self.ItemRecord_UpdateOriginalRecord( item, null );
+		self.ReBindVisibleRows();
+	}, delegator );
+}
+
 CombinationFacetList.prototype.onCreateRootColumnList = function()
 {
 	var self = this;
@@ -314,6 +336,10 @@ CombinationFacetList.prototype.onCreateRootColumnList = function()
 	this.rootcolumn_code		= new MMBatchList_Column_Code( 'Code', 'code', 'Code' )
 									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
 	this.rootcolumn_name		= new MMBatchList_Column_Name( 'Name', 'name', 'Name' )
+									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
+	this.rootcolumn_sort_desc	= new MMBatchList_Column_Text( 'Sort Descending', 'sort_desc', 'SortDescending' )
+									.SetSortByField( '' )
+									.SetFieldName( '' )
 									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
 	this.rootcolumn_variantsrc	= new MMBatchList_Column_MappedTextValues( 'Variant Source', 'variantsrc', [ 'master', 'parts' ], [ 'Master Product', 'Part Products' ], 'VariantSource' )
 									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
@@ -336,6 +362,7 @@ CombinationFacetList.prototype.onCreateRootColumnList = function()
 		this.rootcolumn_enabled,
 		this.rootcolumn_code,
 		this.rootcolumn_name,
+		this.rootcolumn_sort_desc,
 		this.rootcolumn_inclother,
 		this.rootcolumn_createfit,
 		this.rootcolumn_variantsrc
@@ -344,12 +371,27 @@ CombinationFacetList.prototype.onCreateRootColumnList = function()
 
 CombinationFacetList.prototype.CreateColumnList_Fields = function()
 {
-	return [
-		new MMBatchList_Column_Code( 'Code', 'code', 'Code' )
-				.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
-				.SetRootColumn( this.rootcolumn_code ),
-		new MMBatchList_Column_Name( 'Name', 'name', 'Name' )
-				.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
-				.SetRootColumn( this.rootcolumn_name )
+	const self = this;
+	var sort_desc_column;
+
+	if ( this.can_modify )	sort_desc_column = new MMBatchList_Column_CheckboxSlider(	'Sort Descending', 'sort_desc', 'SortDescending', function( item, checked, delegator ) { self.Field_Update_SortDescending( item, checked, delegator ); } );
+	else					sort_desc_column = new MMBatchList_Column_Checkbox(			'Sort Descending', 'sort_desc', 'SortDescending' );
+
+	this.field_code_column		= new MMBatchList_Column_Code( 'Code', 'code', 'Code' )
+									  .SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
+									  .SetRootColumn( this.rootcolumn_code );
+	this.field_name_column		= new MMBatchList_Column_Name( 'Name', 'name', 'Name' )
+									  .SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
+									  .SetRootColumn( this.rootcolumn_name );
+	this.field_sort_desc_column	= sort_desc_column
+									  .SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
+									  .SetRootColumn( this.rootcolumn_sort_desc );
+
+	const columnlist = [
+		this.field_code_column,
+		this.field_name_column,
+		this.field_sort_desc_column
 	];
+
+	return columnlist;
 }

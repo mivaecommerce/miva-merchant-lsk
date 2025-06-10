@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -126,7 +126,7 @@ function ReviewBaskets_BasketItem_DetermineVariant( product_code, attributes, ca
 
 function ReviewBaskets_SubscriptionAndBasketItem_Add( basket_id, data, callback, delegator )
 {
-	return AJAX_Call_Module_JSON( callback, 'admin', 'reviewbaskets', 'ReviewBaskets_SubscriptionBasketItem_Add',
+	return AJAX_Call_Module_JSON( callback, 'admin', 'reviewbaskets', 'ReviewBaskets_SubscriptionAndBasketItem_Add',
 	{
 		Basket_ID: 					basket_id,
 		Product_ID: 				data.product_id,
@@ -138,7 +138,7 @@ function ReviewBaskets_SubscriptionAndBasketItem_Add( basket_id, data, callback,
 
 function ReviewBaskets_SubscriptionAndBasketItem_Update( basket_id, line_id, data, callback, delegator )
 {
-	return AJAX_Call_Module_JSON( callback, 'admin', 'reviewbaskets', 'ReviewBaskets_SubscriptionBasketItem_Update',
+	return AJAX_Call_Module_JSON( callback, 'admin', 'reviewbaskets', 'ReviewBaskets_SubscriptionAndBasketItem_Update',
 	{
 		Basket_ID: 					basket_id,
 		Line_ID: 					line_id,
