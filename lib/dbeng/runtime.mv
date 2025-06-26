@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-RNT-
-| Next Error Code: 71   
+| Next Error Code: 78   
 |
 </MvCOMMENT>
 
@@ -2520,12 +2520,8 @@
 <MvFUNCTION NAME = "Runtime_ProductList_Cache_AI_Search" PARAMETERS = "searchsettings var, search, index var, cachedproductlist var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.signature_data"							VALUE = "">
 	<MvASSIGN NAME = "l.signature_data:type"					VALUE = "ai_search">
-	<MvASSIGN NAME = "l.signature_data:index_id"				VALUE = "{ l.index:id }">
+	<MvASSIGN NAME = "l.signature_data:index"					VALUE = "{ l.index }">
 	<MvASSIGN NAME = "l.signature_data:search"					VALUE = "{ l.search }">
-
-	<MvIF EXPR = "{ l.searchsettings:max_res GT 0 }">
-		<MvASSIGN NAME = "l.signature_data:max_res"				VALUE = "{ l.searchsettings:max_res }">
-	</MvIF>
 
 	<MvASSIGN NAME = "l.signature"								VALUE = "{ crypto_md5( miva_array_serialize( l.signature_data ) ) }">
 
@@ -2565,18 +2561,29 @@
 <MvFUNCTION NAME = "Runtime_ProductList_Cache_AI_Search_LowLevel" PARAMETERS = "searchsettings var, cachedproductlist var, search var, index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvCOMMENT>
 	|
-	| Get embedding search vector from the searched term then query redis index
-	|
-	|	FT.SEARCH product_embedding_N @N:[VECTOR_RANGE $srch_range $query_vector]=>{$YIELD_DISTANCE_AS: vector_score}
-	|		NOCONTENT
-	|		LIMIT 0 100
-	|		SORTBY vector_score
-	|		PARAMS 4
-	|			query_vector <binary vector data>
-	|			srch_range <float>
-	|		DIALECT 2
+	| Reload the sNN_CachedProductLists entry to make sure it was not populated by another process while we were waiting for the lock file
 	|
 	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT CachedProductList_Load_Signature( l.cachedproductlist:signature, l.cachedproductlist:version, l.cachedproductlist ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.cachedproductlist:populated }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ( ' ' IN l.search ) AND NOT ISNULL l.index:exactfield }">
+		<MvCOMMENT>
+		|
+		| Attempt exact match relational search and bypass AI search if any results were found
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ Runtime_ProductList_Cache_AI_Search_Exact_LowLevel( l.searchsettings, l.cachedproductlist, l.search, l.index ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
 
 	<MvASSIGN NAME = "l.inputs" INDEX = 1 VALUE = "{ l.search }">
 
@@ -2650,7 +2657,7 @@
 			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
 			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.broad_endpoint_distance }">
 		<MvELSE>
-			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.index:sparse_n }">
+			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ min( l.num_results, l.index:sparse_n ) }">
 			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = 1>
 		</MvIF>
 
@@ -2680,6 +2687,76 @@
 		</MvFOR>
 	</MvIF>
 
+	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Cache_AI_Search_Exact_LowLevel" PARAMETERS = "searchsettings var, cachedproductlist var, search var, index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.exact_query, 'prod.id' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.exact_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.exact_query, 'prod.disp_order', 'ASC' ) }">
+
+	<MvIF EXPR = "{ l.index:exactfield EQ 'code' }">						<MvEVAL EXPR = "{ SQL_Query_Search_Operator_Conversion_With_Type( l.exact_query, 'CHAR', 'code',	'EQ', l.search, 'OR', 'OR' ) }">
+	<MvELSEIF EXPR = "{ l.index:exactfield EQ 'sku' }">						<MvEVAL EXPR = "{ SQL_Query_Search_Operator_Conversion_With_Type( l.exact_query, 'CHAR', 'sku',		'EQ', l.search, 'OR', 'OR' ) }">
+	<MvELSEIF EXPR = "{ ( 'customfield:' IN l.index:exactfield ) NE 1 }">	<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00071' ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.module_code"	VALUE = "{ gettoken( l.index:exactfield, ':', 2 ) }">
+		<MvASSIGN NAME = "l.field_code"		VALUE = "{ gettoken( l.index:exactfield, ':', 3 ) }">
+	
+		<MvIF EXPR = "{ NOT ModuleAndFeatures_Load_Code_Cached( l.module_code, l.module ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.module:active			OR
+						l.module:api_ver LT 9.07	OR
+						NOT l.module:feature_hash:fields_prod }">
+			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00072' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT StoreModule_Count_Module_Cached( l.module:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00073' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Capabilities( l.module, l.field_code, l.capabilities ) }">
+
+		<MvIF EXPR = "{ NOT l.capabilities:search }">
+			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00074' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Query_Search( l.module, l.exact_query, l.field_code, 'EQ', l.search ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.exact_sql" VALUE = "{ SQL_Query_Build( l.exact_query, l.exact_fields ) }">
+
+	<MvOPENVIEW NAME = "Merchant"
+				VIEW	= "Products"
+				QUERY	= "{ l.exact_sql }"
+				FIELDS	= "{ l.exact_fields }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-RNT-00075', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ Products.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00076' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.disp_order"		VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
+		<MvASSIGN NAME = "l.disp_order"	VALUE = "{ l.disp_order + 1 }">
+
+		<MvQUERY NAME	= "Merchant"
+				QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
+				FIELDS	= "l.cachedproductlist:id, Products.d.id, l.disp_order">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00077', g.MvQUERY_Error ) }">
+		</MvIF>
+
+		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
 	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
 </MvFUNCTION>
 

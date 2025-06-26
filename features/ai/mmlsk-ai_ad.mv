@@ -165,22 +165,20 @@
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Tab_Visible( g.Tab, 'AIST' ) }">
 		<MvHIDE FIELDS = "g.AISettings, g.AISettings_Redis_UsePassword, g.AISettings_Redis_Password, g.AISettings_Redis_VerifyPassword">
 	<MvELSE>
-		<MvIF EXPR = "{ g.AISettings:vector_db EQ 'redis' }">
-			<MvASSIGN NAME = "l.redis_connected" 				VALUE = 0>
-			<MvASSIGN NAME = "l.redis_auth" 					VALUE = 0>
-			<MvASSIGN NAME = "l.redis_ping" 					VALUE = 0>
+		<MvIF EXPR = "{ g.AISettings:vector_db EQ 'redis' OR g.AISettings:vector_db EQ 'store_redis' }">
+			<MvASSIGN NAME = "l.redis_info" 					VALUE = "">
 
-			<MvIF EXPR = "{ substring_var( g.AISettings:redishost, 1, 1 ) EQ '/' }">	<MvASSIGN NAME = "l.redis_connected" VALUE = "{ redis_connect_unix( g.AISettings:redishost, l.conn_id ) }">
-			<MvELSE>																	<MvASSIGN NAME = "l.redis_connected" VALUE = "{ redis_connect_with_timeout( g.AISettings:redishost, g.AISettings:redisport, 5000, l.conn_id ) }">
+			<MvIF EXPR = "{ g.AISettings:vector_db EQ 'redis' }">
+				<MvASSIGN NAME = "l.redis_options:host"			VALUE = "{ g.AISettings:redishost }">
+				<MvASSIGN NAME = "l.redis_options:port"			VALUE = "{ g.AISettings:redisport }">
+				<MvASSIGN NAME = "l.redis_options:password"		VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.aisettings:redispwd ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.redis_options:host"			VALUE = "{ g.Store:redishost }">
+				<MvASSIGN NAME = "l.redis_options:port"			VALUE = "{ g.Store:redisport }">
+				<MvASSIGN NAME = "l.redis_options:password"		VALUE = "{ [ g.Module_Library_Crypto ].Decrypt_Payment_Password( g.Store:redispwd ) }">
 			</MvIF>
 
-			<MvIF EXPR = "{ l.redis_connected }">
-				<MvIF EXPR = "{ NOT ISNULL l.aisettings:redispwd }">	<MvASSIGN NAME = "l.redis_auth" VALUE = "{ redis_auth( l.conn_id, [ g.Module_Library_Crypto ].Decrypt_Payment_Password( l.aisettings:redispwd ) ) }">
-				<MvELSE>												<MvASSIGN NAME = "l.redis_auth" VALUE = 1>
-				</MvIF>
-
-				<MvASSIGN NAME = "l.redis_ping"					VALUE = "{ redis_ping( l.conn_id ) EQ 'PONG' }">
-			</MvIF>
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Server_Info( l.redis_options, l.redis_info ) }">
 		</MvIF>
 
 		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'AIST', 'GEN' ) }">
@@ -267,24 +265,51 @@
 				<input type="text" size="40" name="AISettings:redis_pfx" value="{ encodeentities( g.AISettings:redis_pfx ) }" />
 			</td></tr>
 
-			<tr>
-				<td valign="top" nowrap>Status:</td>
-				<td width="100%">
-				<MvIF EXPR = "{ g.AISettings:vector_db EQ 'redis' }">
-					<MvIF EXPR = "{ NOT l.redis_connected }">
-						<b><font color="red">Not Connected</font></b>
-					<MvELSE>
-						<MvIF EXPR = "{ NOT l.redis_auth AND l.redis_ping }">			<b><font color="red">Connected, Auth Failed: Password Not Required</font></b>
-						<MvELSEIF EXPR = "{ l.redis_auth AND NOT l.redis_ping }">		<b><font color="red">Connected, Auth Failed: Password Required</font></b>
-						<MvELSEIF EXPR = "{ NOT l.redis_auth AND NOT l.redis_ping }">	<b><font color="red">Connected, Auth Failed: Password Incorrect</font></b>
-						<MvELSE>														<b><font color="green">Connected</font></b>
+			<MvIF EXPR = "{ g.AISettings:vector_db EQ 'redis' OR g.AISettings:vector_db EQ 'store_redis' }">
+				<tr>
+					<td valign="top" nowrap>Status:</td>
+					<td width="100%">
+						<MvIF EXPR = "{ NOT l.redis_info:connected }">
+							<b><font color="red">Not Connected</font></b>
+						<MvELSE>
+							<MvIF EXPR = "{ NOT l.redis_info:authenticated AND l.redis_info:ping }">			<b><font color="red">Connected, Auth Failed: Password Not Required</font></b>
+							<MvELSEIF EXPR = "{ l.redis_info:authenticated AND NOT l.redis_info:ping }">		<b><font color="red">Connected, Auth Failed: Password Required</font></b>
+							<MvELSEIF EXPR = "{ NOT l.redis_info:authenticated AND NOT l.redis_info:ping }">	<b><font color="red">Connected, Auth Failed: Password Incorrect</font></b>
+							<MvELSE>																			<b><font color="green">Connected</font></b>
+							</MvIF>
 						</MvIF>
+					</td>
+				</tr>
+
+				<MvIF EXPR = "{ l.redis_info:connected AND l.redis_info:authenticated }">
+					<MvIF EXPR = "{ ISNULL l.redis_info:version OR l.redis_info:version LT 20400 }">
+						<tr>
+							<td valign="top" nowrap>&nbsp;</td>
+							<td width="100%">
+								<b><font color="red">The configured Redis server does not support VECTOR indexes. Redis v6.0.0 or newer with RediSearch v2.4 is required.</font></b>
+							</td>
+						</tr>
 					</MvIF>
-				<MvELSE>
-					<b>N/A</b>
+
+					<MvIF EXPR = "{ ISNULL l.redis_info:memory OR ( l.redis_info:memory:maxmemory NE 0 OR l.redis_info:memory:maxmemory_policy NE 'noeviction' ) }">
+						<tr>
+							<td valign="top" nowrap>&nbsp;</td>
+							<td width="100%">
+								<b><font color="red">The configured Redis server has memory usage configuration that may result in AI Search Index data being discarded.</font></b>
+							</td>
+						</tr>
+					</MvIF>
+
+					<MvIF EXPR = "{ NOT l.redis_info:persistence }">
+						<tr>
+							<td valign="top" nowrap>&nbsp;</td>
+							<td width="100%">
+								<b><font color="red">The configured Redis server does not persist data to disk. This will result in the loss of AI Search Index data.</font></b>
+							</td>
+						</tr>
+					</MvIF>
 				</MvIF>
-				</td>
-			</tr>
+			</MvIF>
 		</table>
 		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
 	</MvIF>

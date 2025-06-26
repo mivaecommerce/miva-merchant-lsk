@@ -33,6 +33,7 @@
 	"specific_e":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:specific_e ) }">,
 	"broad_e":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:broad_e ) }">,
 	"sparse_n":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.aisearchindex:sparse_n ) }">,
+	"exactfield":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:exactfield ) }">",
 	"idx_templ":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.aisearchindex:idx_templ ) }">"
 
 	<MvIF EXPR = "{ l.ondemandcolumns:count_indexed }">
@@ -217,26 +218,9 @@
 	<MvFUNCTIONRETURN VALUE = 0>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "JSON_AISearchIndex_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
-
-	<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Defaults( l.index ) }">
-
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',		'Code',					l.index:code )				OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:50',		'Source',				l.index:source )			OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',		'Template',				l.index:idx_templ )			OR
-					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Active',				l.index:active )			OR
-					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'MaximumResults',		l.index:max_res )			OR
-					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificThreshold',	l.index:specific_t,	7, 4 )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificEndpoint',		l.index:specific_e,	7, 4 )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'BroadEndpoint',		l.index:broad_e,	7, 4 )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'SparseResults',		l.index:sparse_n ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
-	</MvIF>
-
-	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) }">
+<MvFUNCTION NAME = "JSON_AISearchIndex_Validate" PARAMETERS = "index var, embedding_source var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) AND
+					l.index:id NE l.existing_index:id }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'An AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
 	</MvIF>
 
@@ -252,21 +236,94 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'BroadEndpoint', g.Validation_Message ) }">
 	</MvIF>
 
+	<MvIF EXPR = "{ ( 'customfield:' IN l.index:exactfield ) EQ 1 }">
+		<MvASSIGN NAME = "l.module_code"	VALUE = "{ gettoken( l.index:exactfield, ':', 2 ) }">
+		<MvASSIGN NAME = "l.field_code"		VALUE = "{ gettoken( l.index:exactfield, ':', 3 ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.module_code, l.module ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Module \'' $ l.module_code $ '\' could not be found' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.module:active }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Module \'' $ l.module_code $ '\' is deactivated' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.module:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Module \'' $ l.module_code $ '\' is not installed in store \'' $ g.Store:code $ '\'' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.module:api_ver LT 9.07 }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Module API version must be 9.07 or higher' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT l.module:feature_hash:fields_prod }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Module \'' $ l.module_code $ '\' does not provide feature \'fields_prod\'' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Capabilities( l.module, l.field_code, l.capabilities ) }">
+
+		<MvIF EXPR = "{ NOT l.capabilities:search }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Field \'' $ l.field_code $ '\' does not support searching' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT ISNULL l.index:exactfield AND NOT [ g.Module_Library_Utilities ].Value_In_List( l.index:exactfield, 'code,sku' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'ExactSearchField', 'Value must be empty, one of code, sku, or a reference to a custom field' ) }">
+	</MvIF>
+
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Template', g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embedding_sources ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT miva_array_search( l.embeddings, 1, l.embedding, 'strcasecmp( l.embedding:code, l.index:source ) EQ 0' ) }">
+	<MvIF EXPR = "{ NOT miva_array_search( l.embedding_sources, 1, l.found_embedding_source, 'strcasecmp( l.found_embedding_source:code, l.index:source ) EQ 0' ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Source', 'Invalid source' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.embedding_source" VALUE = "{ l.found_embedding_source }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_AISearchIndex_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'STOR', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE ="{ [ g.Module_JSON ].JSON_Response_Access_Denied() }"> </MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Defaults( l.index ) }">
+
+	<MvASSIGN NAME = "l.embedding_source"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'R',		'Code',					l.index:code )				OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:50',		'Source',				l.index:source )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',		'Template',				l.index:idx_templ )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Active',				l.index:active )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'MaximumResults',		l.index:max_res )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificThreshold',	l.index:specific_t,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificEndpoint',		l.index:specific_e,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'BroadEndpoint',		l.index:broad_e,	7, 4 )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'SparseResults',		l.index:sparse_n )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',		'ExactSearchField',		l.index:exactfield ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_AISearchIndex_Validate( l.index, l.embedding_source ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Compile( l.index ) }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Insert( l.index ) }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Create_Index( l.index, l.embedding ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Create_Index( l.index, l.embedding_source ) }">
+		<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+		<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Delete( l.index ) }">
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( l.error_code, l.error_message ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'aisearchindex' ) }">
@@ -289,7 +346,8 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.original_index" VALUE = "{ l.index }">
+	<MvASSIGN NAME = "l.original_index"		VALUE = "{ l.index }">
+	<MvASSIGN NAME = "l.embedding_source"	VALUE = "">
 
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(		'O',		'Code',					l.index:code )				OR
 					NOT [ g.Module_JSON ].JSON_Input_Text(		'O:50',		'Source',				l.index:source )			OR
@@ -299,36 +357,13 @@
 					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificThreshold',	l.index:specific_t,	7, 4 )	OR
 					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'SpecificEndpoint',		l.index:specific_e,	7, 4 )	OR
 					NOT [ g.Module_JSON ].JSON_Input_Number(	'O',		'BroadEndpoint',		l.index:broad_e,	7, 4 )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'SparseResults',		l.index:sparse_n ) }">
+					NOT [ g.Module_JSON ].JSON_Input_Integer(	'O:nonneg',	'SparseResults',		l.index:sparse_n )			OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'O',		'ExactSearchField',		l.index:exactfield ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
 	</MvIF>
 
-	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) AND l.existing_index:id NE l.index:id }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Code', 'An AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_t, 0, 100 ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'SpecificThreshold', g.Validation_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_e, 0, 100 ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'SpecificEndpoint', g.Validation_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:broad_e, 0, 100 ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'BroadEndpoint', g.Validation_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Template', g.Error_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT miva_array_search( l.embeddings, 1, l.embedding, 'strcasecmp( l.embedding:code, l.index:source ) EQ 0' ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_FieldError( 'Source', 'Invalid source' ) }">
+	<MvIF EXPR = "{ NOT JSON_AISearchIndex_Validate( l.index, l.embedding_source ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Compile( l.index ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
@@ -336,7 +371,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ strcasecmp( l.original_index:source, l.index:source ) NE 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Recreate( l.index, l.embedding ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Recreate( l.index, l.embedding_source ) }">
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvIF>

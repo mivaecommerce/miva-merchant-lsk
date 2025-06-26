@@ -491,13 +491,8 @@
 	<MvASSIGN NAME = "l.option_count" 		VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.wishlistitem:id, l.options ) }">
 	<MvASSIGN NAME = "l.attribute_count"	VALUE = "{ [ g.Module_Library_DB ].AttributeList_Load_Product( l.product:id, l.attributes ) }">
 
-	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant_LowLevel( l.product, l.attributes, l.attribute_count, l.options, l.option_count, l.variant_id ) }">
-		<MvASSIGN NAME = "l.variant_id" 	VALUE = 0>
-	</MvIF>
-
-	<MvIF EXPR = "{ l.variant_id EQ -1 }">
+	<MvIF EXPR = "{ NOT WishListItem_DetermineVariant( l.product, l.attributes, l.attribute_count, l.options, l.option_count, l.variant_id ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.product:code $ '\' is no longer available in the configuration you added to your wishlist.' ) }">
-
 		<MvFUNCTIONRETURN VALUE = -1>
 	</MvIF>
 
@@ -514,16 +509,16 @@
 		|
 		</MvCOMMENT>
 
-		<MvFOREACH ITERATOR = "l.basketitem" ARRAY = "l.basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.basketitems ) }">
-			<MvIF EXPR = "{ l.basketitem:parent_id						OR
-							l.basketitem:product_id NE l.product:id		OR
-							l.basketitem:upsold							OR
-							( l.basketitem:variant_id NE l.variant_id )	OR
-							( l.basketitem:subterm_id NE l.subterm_id ) }">
+		<MvFOREACH ITERATOR = "l.existing_basketitem" ARRAY = "l.existing_basketitems" COUNT = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( g.Basket:basket_id, l.existing_basketitems ) }">
+			<MvIF EXPR = "{ l.existing_basketitem:parent_id							OR
+							l.existing_basketitem:product_id NE l.product:id		OR
+							l.existing_basketitem:upsold							OR
+							( l.existing_basketitem:variant_id NE l.variant_id )	OR
+							( l.existing_basketitem:subterm_id NE l.subterm_id ) }">
 				<MvFOREACHCONTINUE>
 			</MvIF>
 
-			<MvASSIGN NAME = "l.item_option_count" VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.item_options ) }">
+			<MvASSIGN NAME = "l.item_option_count" VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.existing_basketitem:line_id, l.item_options ) }">
 
 			<MvIF EXPR = "{ l.item_option_count NE l.option_count }">
 				<MvFOREACHSTOP>
@@ -542,16 +537,16 @@
 				</MvIF>
 			</MvFOREACH>
 
-			<MvIF EXPR = "{ ( l.item_option_pos GT l.item_option_count ) AND ( NOT l.basketitem:upsold ) }">
-				<MvIF EXPR = "{ l.basketitem:wish_id EQ l.wishlistitem:id }">
-					<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.basketitem }">
-					<MvASSIGN NAME = "l.basketitem:quantity"	VALUE = "{ l.basketitem:quantity + l.quantity }">
+			<MvIF EXPR = "{ ( l.item_option_pos GT l.item_option_count ) AND ( NOT l.existing_basketitem:upsold ) }">
+				<MvIF EXPR = "{ l.existing_basketitem:wish_id EQ l.wishlistitem:id }">
+					<MvASSIGN NAME = "l.original_basketitem"	VALUE = "{ l.existing_basketitem }">
+					<MvASSIGN NAME = "l.existing_basketitem:quantity"	VALUE = "{ l.existing_basketitem:quantity + l.quantity }">
 
-					<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Module_Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.basketitem, l.items ) }">
+					<MvASSIGN NAME = "l.item_count"				VALUE = "{ [ g.Module_Library_DB ].Runtime_BasketItemList_Process_AppendItem_Update( l.product, l.original_basketitem, l.existing_basketitem, l.items ) }">
 
 					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
 				<MvELSEIF EXPR = "{ ISNULL l.resolved_group_id }">
-					<MvASSIGN NAME = "l.resolved_group_id"	VALUE = "{ l.basketitem:group_id }">
+					<MvASSIGN NAME = "l.resolved_group_id"	VALUE = "{ l.existing_basketitem:group_id }">
 				</MvIF>
 			</MvIF>
 		</MvFOREACH>
@@ -571,18 +566,14 @@
 	|
 	</MvCOMMENT>
 
-	<MvASSIGN NAME = "l.child_items"				VALUE = "">
-	<MvASSIGN NAME = "l.child_item_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.child_items"		VALUE = "">
+	<MvASSIGN NAME = "l.child_item_count"	VALUE = 0>
 
 	<MvFOREACH ITERATOR = "l.child_wishlistitem" ARRAY = "l.child_wishlistitems" COUNT = "{ l.child_wishlistitem_count }">
 		<MvASSIGN NAME = "l.child_option_count" 	VALUE = "{ [ g.Module_Feature_WSH_DB ].WishListOptionList_Load_WishListItem( l.child_wishlistitem:id, l.child_options ) }">
 		<MvASSIGN NAME = "l.child_attribute_count"	VALUE = "{ [ g.Module_Library_DB ].AttributeList_Load_Product( l.child_wishlistitem:product:id, l.child_attributes ) }">
 
-		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].OrderItem_DetermineVariant_LowLevel( l.child_wishlistitem:product, l.child_attributes, l.child_attribute_count, l.child_options, l.child_option_count, l.child_variant_id ) }">
-			<MvASSIGN NAME = "l.child_variant_id" 	VALUE = 0>
-		</MvIF>
-
-		<MvIF EXPR = "{ l.child_variant_id EQ -1 }">
+		<MvIF EXPR = "{ NOT WishListItem_DetermineVariant( l.child_wishlistitem:product, l.child_attributes, l.child_attribute_count, l.child_options, l.child_option_count, l.child_variant_id ) }">
 			<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( 'Product \'' $ l.child_wishlistitem:product:code $ '\' is no longer available in the configuration you added to your wishlist.' ) }">
 			<MvFUNCTIONRETURN VALUE = -1>
 		</MvIF>
@@ -621,8 +612,10 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
+	<MvASSIGN NAME = "l.basketitem"							VALUE = "">
 	<MvASSIGN NAME = "l.basketitem:basket_id"				VALUE = "{ g.Basket:basket_id }">
 	<MvASSIGN NAME = "l.basketitem:group_id"				VALUE = "{ l.group_id }">
+	<MvASSIGN NAME = "l.basketitem:parent_id"				VALUE = 0>
 	<MvASSIGN NAME = "l.basketitem:product_id" 				VALUE = "{ l.product:id }">
 	<MvASSIGN NAME = "l.basketitem:variant_id"				VALUE = "{ l.variant_id }">
 	<MvASSIGN NAME = "l.basketitem:wish_id"					VALUE = "{ l.wishlistitem:id }">
@@ -1358,4 +1351,155 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PGR_RT ].Runtime_Discount_Basket( g.Basket ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WishListItem_Build_Attribute_Lookup" PARAMETERS = "options var, option_count, lookup var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ l.option_count }">
+		<MvIF EXPR = "{ ( l.option:attr_id GT 0 ) AND ( l.option:attmpat_id GE 0 ) }">
+			<MvREFERENCEARRAY NAME = "l.entry" VARIABLE = "l.lookup">
+				<MvDIMENSION INDEX = "{ l.option:attr_id }">
+				<MvDIMENSION INDEX = "{ l.option:attmpat_id + 1 }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.entry"				VALUE = "">
+			<MvASSIGN NAME = "l.entry:exists"		VALUE = 1>
+			<MvASSIGN NAME = "l.entry:option_id"	VALUE = "{ l.option:option_id }">
+			<MvASSIGN NAME = "l.entry:opt_code"		VALUE = "{ l.option:opt_code }">
+			<MvASSIGN NAME = "l.entry:data"			VALUE = "{ l.option:data $ l.option:data_long }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "WishListItem_DetermineVariant" PARAMETERS = "product var, product_attributes var, product_attribute_count, options var, option_count, variant_id var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.variant_id"					VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_attribute_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.inventory_attributes"		VALUE = "">
+
+	<MvIF EXPR = "{ l.product:id EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ WishListItem_Build_Attribute_Lookup( l.options, l.option_count, l.lookup ) }">
+
+	<MvFOREACH ITERATOR = "l.product_attribute" ARRAY = "l.product_attributes" COUNT = "{ l.product_attribute_count }">
+		<MvIF EXPR = "{ l.product_attribute:type EQ 'template' }">
+			<MvFOREACH ITERATOR = "l.template_attribute" ARRAY = "l.template_attributes" COUNT = "{ [ g.Module_Feature_ATT_DB ].AttributeTemplateAttrList_Load_Template( l.product_attribute:attemp_id, l.template_attributes ) }">
+				<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.lookup">
+					<MvDIMENSION INDEX = "{ l.product_attribute:id }">
+					<MvDIMENSION INDEX = "{ l.template_attribute:id + 1 }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ l.template_attribute:required AND NOT l.value:exists }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvIF EXPR = "{ l.template_attribute:inventory }">
+					<MvIF EXPR = "{ ( l.template_attribute:type EQ 'radio' ) OR
+									( l.template_attribute:type EQ 'select' ) OR
+									( l.template_attribute:type EQ 'swatch-select' ) }">
+						<MvIF EXPR = "{ l.value:exists }">
+							<MvIF EXPR = "{ [ g.Module_Feature_ATT_DB ].AttributeTemplateOption_Load_Code( l.template_attribute:id, l.value:opt_code, l.option ) }">
+								<MvASSIGN NAME = "l.inventory_attribute"				VALUE = "">
+								<MvASSIGN NAME = "l.inventory_attribute:attr_id"		VALUE = "{ l.product_attribute:id }">
+								<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"		VALUE = "{ l.template_attribute:id }">
+								<MvASSIGN NAME = "l.inventory_attribute:option_id"		VALUE = "{ l.option:id }">
+								<MvASSIGN NAME = "l.inventory_attribute_count"			VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+							<MvELSE>
+								<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+									<MvFUNCTIONRETURN VALUE = 0>
+								</MvIF>
+
+								<MvIF EXPR = "{ l.value:option_id }">
+									<MvASSIGN NAME = "l.inventory_attribute"			VALUE = "">
+									<MvASSIGN NAME = "l.inventory_attribute:attr_id"	VALUE = "{ l.product_attribute:id }">
+									<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"	VALUE = "{ l.template_attribute:id }">
+									<MvASSIGN NAME = "l.inventory_attribute:option_id"	VALUE = "{ l.value:option_id }">
+									<MvASSIGN NAME = "l.inventory_attribute_count"		VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+								</MvIF>
+							</MvIF>
+						</MvIF>
+					<MvELSEIF EXPR = "{ ( l.template_attribute:type EQ 'text' ) OR
+										( l.template_attribute:type EQ 'memo' ) OR
+										( l.template_attribute:type EQ 'checkbox' ) }">
+						<MvIF EXPR = "{ l.value:exists }">
+							<MvASSIGN NAME = "l.inventory_attribute"					VALUE = "">
+							<MvASSIGN NAME = "l.inventory_attribute:attr_id"			VALUE = "{ l.product_attribute:id }">
+							<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"			VALUE = "{ l.template_attribute:id }">
+							<MvASSIGN NAME = "l.inventory_attribute:option_id"			VALUE = 1>
+							<MvASSIGN NAME = "l.inventory_attribute_count"				VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+						<MvELSE>
+							<MvASSIGN NAME = "l.inventory_attribute"					VALUE = "">
+							<MvASSIGN NAME = "l.inventory_attribute:attr_id"			VALUE = "{ l.product_attribute:id }">
+							<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"			VALUE = "{ l.template_attribute:id }">
+							<MvASSIGN NAME = "l.inventory_attribute:option_id"			VALUE = 0>
+							<MvASSIGN NAME = "l.inventory_attribute_count"				VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+						</MvIF>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+		<MvELSE>
+			<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.lookup">
+				<MvDIMENSION INDEX = "{ l.product_attribute:id }">
+				<MvDIMENSION INDEX = 1>
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ l.product_attribute:required AND NOT l.value:exists }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.product_attribute:inventory }">
+				<MvIF EXPR = "{ ( l.product_attribute:type EQ 'radio' ) OR
+								( l.product_attribute:type EQ 'select' ) OR
+								( l.product_attribute:type EQ 'swatch-select' ) }">
+					<MvIF EXPR = "{ l.value:exists }">
+						<MvIF EXPR = "{ [ g.Module_Library_DB ].Option_Load_Code( l.product_attribute:id, l.value:opt_code, l.option ) }">
+							<MvASSIGN NAME = "l.inventory_attribute"						VALUE = "">
+							<MvASSIGN NAME = "l.inventory_attribute:attr_id"				VALUE = "{ l.product_attribute:id }">
+							<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"				VALUE = 0>
+							<MvASSIGN NAME = "l.inventory_attribute:option_id"				VALUE = "{ l.option:id }">
+							<MvASSIGN NAME = "l.inventory_attribute_count"					VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+						<MvELSE>
+							<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+								<MvFUNCTIONRETURN VALUE = 0>
+							</MvIF>
+
+							<MvIF EXPR = "{ l.value:option_id }">
+								<MvASSIGN NAME = "l.inventory_attribute"					VALUE = "">
+								<MvASSIGN NAME = "l.inventory_attribute:attr_id"			VALUE = "{ l.product_attribute:id }">
+								<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"			VALUE = 0>
+								<MvASSIGN NAME = "l.inventory_attribute:option_id"			VALUE = "{ l.value:option_id }">
+								<MvASSIGN NAME = "l.inventory_attribute_count"				VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+							</MvIF>
+						</MvIF>
+					</MvIF>
+				<MvELSEIF EXPR = "{ ( l.product_attribute:type EQ 'text' ) OR
+									( l.product_attribute:type EQ 'memo' ) OR
+									( l.product_attribute:type EQ 'checkbox' ) }">
+					<MvIF EXPR = "{ l.value:exists }">
+						<MvASSIGN NAME = "l.inventory_attribute"							VALUE = "">
+						<MvASSIGN NAME = "l.inventory_attribute:attr_id"					VALUE = "{ l.product_attribute:id }">
+						<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"					VALUE = 0>
+						<MvASSIGN NAME = "l.inventory_attribute:option_id"					VALUE = 1>
+						<MvASSIGN NAME = "l.inventory_attribute_count"						VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+					<MvELSE>
+						<MvASSIGN NAME = "l.inventory_attribute"							VALUE = "">
+						<MvASSIGN NAME = "l.inventory_attribute:attr_id"					VALUE = "{ l.product_attribute:id }">
+						<MvASSIGN NAME = "l.inventory_attribute:attmpat_id"					VALUE = 0>
+						<MvASSIGN NAME = "l.inventory_attribute:option_id"					VALUE = 0>
+						<MvASSIGN NAME = "l.inventory_attribute_count"						VALUE = "{ miva_array_insert_var( l.inventory_attributes, l.inventory_attribute, -1 ) }">
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.inventory_attribute_count }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ProductVariant_Load_Attributes( l.product:id, l.inventory_attributes, l.inventory_attribute_count, l.productvariant ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.variant_id" VALUE = "{ l.productvariant:variant_id }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>

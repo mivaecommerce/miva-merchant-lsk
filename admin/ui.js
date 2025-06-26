@@ -825,6 +825,35 @@ function shippingmethod_encodeentities( input )
 	return result;
 }
 
+function ReplaceHTMLEntities( value )
+{
+	//
+	// This function is intended to be used with text nodes (textContent). It is
+	// unsafe to use with innerHTML.
+	//
+	// Note: DOMParser will strip any leading / trailing whitespace from the parsed
+	// string. If the value is only whitespace, return the value directly. Otherwise,
+	// find the whitespace, parse the content between, then return the parsed content
+	// wrapped in the original whitespace.
+	//
+
+	const match = value.match( /^(\s*)(.*?)(\s*)$/ );
+
+	if ( !match || !match[ 2 ]?.length )
+	{
+		return value;
+	}
+
+	const content = new DOMParser().parseFromString( match[ 2 ], 'text/html' )?.body?.textContent;
+
+	if ( typeof content === 'undefined' )
+	{
+		return value;
+	}
+
+	return `${match[ 1 ]}${content}${match[ 3 ]}`;
+}
+
 /*
  * This function creates an Option that interprets HTML.  Use with care.
  */

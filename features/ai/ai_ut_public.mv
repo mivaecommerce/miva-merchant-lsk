@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-AI-UT-PUB-
-| Next Error Code: 12
+| Next Error Code: 16
 |
 </MvCOMMENT>
 
@@ -370,4 +370,76 @@
 	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "AISearchIndex_Redis_Server_Info" PARAMETERS = "options var, info var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.conn_id"							VALUE = 0>
+	<MvASSIGN NAME = "l.info"								VALUE = "">
+	<MvASSIGN NAME = "l.info:connected" 					VALUE = 0>
+	<MvASSIGN NAME = "l.info:authenticated" 				VALUE = 0>
+	<MvASSIGN NAME = "l.info:ping"							VALUE = 0>
+	<MvASSIGN NAME = "l.info:version"						VALUE = "">
+	<MvASSIGN NAME = "l.info:memory"						VALUE = "">
+	<MvASSIGN NAME = "l.info:persistence"					VALUE = 0>
+
+	<MvIF EXPR = "{ substring_var( l.options:host, 1, 1 ) EQ '/' }">	<MvASSIGN NAME = "l.info:connected" VALUE = "{ redis_connect_unix( l.options:host, l.conn_id ) }">
+	<MvELSE>															<MvASSIGN NAME = "l.info:connected" VALUE = "{ redis_connect_with_timeout( l.options:host, l.options:port, 5000, l.conn_id ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.info:connected }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00014', redis_last_error() ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.options:password }">
+		<MvASSIGN NAME = "l.info:authenticated"				VALUE = 1>
+	<MvELSE>
+		<MvASSIGN NAME = "l.info:authenticated"				VALUE = "{ redis_auth( l.conn_id, l.options:password ) }">
+
+		<MvIF EXPR = "{ NOT l.info:authenticated }">
+			<MvASSIGN NAME = "l.redis_last_error" 			VALUE = "{ redis_last_error() }">
+			<MvASSIGN NAME = "l.conn_id"					VALUE = 0>
+			<MvASSIGN NAME = "l.null" 						VALUE = "{ redis_disconnect( l.conn_id ) }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-AI-UT-PUB-00015', l.redis_last_error ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.info:ping"							VALUE = "{ redis_ping( l.conn_id ) EQ 'PONG' }">
+
+	<MvCOMMENT>
+	|
+	| Load search module version
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"								VALUE = "{ AISearchIndex_Redis_Search_Version( l.conn_id, l.info:version ) }">
+
+	<MvCOMMENT>
+	|
+	| Load persistence configuration 
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"								VALUE = "{ redis_config_get( l.conn_id, 'save', l.persistence ) }">
+	<MvASSIGN NAME = "l.info:persistence"					VALUE = "{ l.persistence[ 1 ] EQ 'save' AND NOT ISNULL l.persistence[ 2 ] }">
+
+	<MvCOMMENT>
+	|
+	| Load memory configuration
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"								VALUE = "{ miva_splitstring( redis_info_section( l.conn_id, 'memory' ), asciichar( 10 ), l.lines, 'trim,noempty' ) }">
+
+	<MvIF EXPR = "{ miva_array_search( l.lines, 1, l.line, '( \'maxmemory:\' CIN l.line ) EQ 1' ) }">
+		<MvASSIGN NAME = "l.info:memory:maxmemory"			VALUE = "{ gettoken( l.line, ':', 2 ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ miva_array_search( l.lines, 1, l.line, '( \'maxmemory_policy:\' CIN l.line ) EQ 1' ) }">
+		<MvASSIGN NAME = "l.info:memory:maxmemory_policy"	VALUE = "{ gettoken( l.line, ':', 2 ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" 								VALUE = "{ redis_disconnect( l.conn_id ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
