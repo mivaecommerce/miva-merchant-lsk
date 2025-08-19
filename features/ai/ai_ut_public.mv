@@ -47,13 +47,15 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "AISearchIndex_Template_Render" PARAMETERS = "index var, product var, hash var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.settings"						VALUE = "">
-	<MvASSIGN NAME = "l.settings:CustomField_Values"	VALUE = "">
-	<MvASSIGN NAME = "l.template_filename"				VALUE = "{ AISearchIndex_Template_Filename( l.index ) }">
+	<MvASSIGN NAME = "l.data"									VALUE = "">
+	<MvASSIGN NAME = "l.data:product_id"						VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.settings"								VALUE = "">
+	<MvREFERENCE NAME = "l.settings:product"					VARIABLE = "l.product">
+	<MvASSIGN NAME = "l.settings:product:CustomField_Values"	VALUE = "">
 
-	<MvEVAL EXPR = "{ miva_struct_member_callback( l.settings:CustomField_Values, 'AISearchIndex_Render_CustomField_Module', l.product ) }">
-	
-	<MvREFERENCE NAME = "l.settings:product" VARIABLE = "l.product">
+	<MvASSIGN NAME = "l.template_filename"						VALUE = "{ AISearchIndex_Template_Filename( l.index ) }">
+
+	<MvEVAL EXPR = "{ miva_struct_member_callback( l.settings:product:CustomField_Values, 'AISearchIndex_Render_CustomField_Module', l.data ) }">
 	
 	<MvCAPTURE VARIABLE = "l.result">
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ l.template_filename ].Template_Render( l.null, l.settings ) }">		
@@ -65,11 +67,10 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.result }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "AISearchIndex_Render_CustomField_Module" PARAMETERS = "struct var, member, product var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "AISearchIndex_Render_CustomField_Module" PARAMETERS = "struct var, member, callback_data var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.data"				VALUE = "">
 	<MvASSIGN NAME = "l.data:module" 		VALUE = "">
-
-	<MvREFERENCE NAME = "l.data:product"	VARIABLE = "l.product">
+	<MvASSIGN NAME = "l.data:product_id"	VALUE = "{ l.callback_data:product_id }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.member, l.data:module )	OR
 					NOT l.data:module:active																	OR
@@ -86,8 +87,8 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.ref }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "AISearchIndex_Render_CustomField_Value" PARAMETERS = "struct var, member, data var" STANDARDOUTPUTLEVEL = "">
-	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.data:module:module ].Module_Product_Field_Value( l.data:module, l.data:product:id, l.member ) }">
+<MvFUNCTION NAME = "AISearchIndex_Render_CustomField_Value" PARAMETERS = "struct var, member, callback_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.callback_data:module:module ].Module_Product_Field_Value( l.callback_data:module, l.callback_data:product_id, l.member ) }">
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -311,6 +312,9 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "AISearchIndex_Redis_Delete_Hash_Key" PARAMETERS = "conn_id, index_id, product_id" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Load_Cached( l.aisettings ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
 	<MvCOMMENT>
 	|
 	| redis_hdel returns 0 if an error occurs while also returning 0 if no fields were deleted. 
@@ -318,7 +322,7 @@
 	|
 	</MvCOMMENT>
 
-	<MvASSIGN NAME = "l.null" VALUE = "{ redis_hdel( l.conn_id, AISearchIndex_Redis_Product_Hash_Name( l.product_id ), l.index_id )  }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ redis_hdel( l.conn_id, AISearchIndex_Redis_Product_Hash_Key_Name( l.aisettings, l.product_id ), l.index_id )  }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>

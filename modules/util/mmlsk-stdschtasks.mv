@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-stdschtasks">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Standard Scheduled Tasks">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1201">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1203">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.00">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "This module implements a set of standard scheduled tasks.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, util, scheduledtask">
@@ -232,7 +232,7 @@
 	</MvCOMMENT>
 
 	<MvASSIGN NAME = "l.task"							VALUE = "">
-	<MvASSIGN NAME = "l.task:descrip"					VALUE = "Delete Unreferenced MivaPay Tokens">
+	<MvASSIGN NAME = "l.task:descrip"					VALUE = "Delete Unreferenced MivaPay Vault Tokens">
 	<MvASSIGN NAME = "l.task:enabled"					VALUE = 1>
 	<MvASSIGN NAME = "l.task:loglevel"					VALUE = "WE">
 	<MvASSIGN NAME = "l.task:trig"						VALUE = "">
@@ -471,7 +471,7 @@
 	<MvASSIGN NAME = "l.operation_count"	VALUE = "{ miva_array_insert_var( l.operations, l.operation, -1 ) }">
 
 	<MvASSIGN NAME = "l.operation:code"		VALUE = "deletemivapaytokens">
-	<MvASSIGN NAME = "l.operation:descrip"	VALUE = "Delete Unreferenced MivaPay Tokens">
+	<MvASSIGN NAME = "l.operation:descrip"	VALUE = "Delete Unreferenced MivaPay Vault Tokens">
 	<MvASSIGN NAME = "l.operation_count"	VALUE = "{ miva_array_insert_var( l.operations, l.operation, -1 ) }">
 
 	<MvASSIGN NAME = "l.operation:code"		VALUE = "pricegroup_validity">
@@ -2170,15 +2170,8 @@
 				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Product_Read( l.product ) }">
 
 				<MvIF EXPR = "{ NOT l.product:active }">
-					<MvQUERY NAME 	= "Merchant"
-							 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'AISearchIndexXProduct WHERE index_id = ? AND product_id = ? AND status = \'P\'' }"
-							 FIELDS = "l.index:id, l.product:id">
-					<MvIF EXPR = "{ g.MvQUERY_Error }">
-						<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
-						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-SST-00032', g.MvQUERY_Error ) }">
-					</MvIF>
-
-					<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Delete_Hash_Key( l.conn_id, l.index:id, l.product:id ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Delete_Processing( l.index:id, l.product:id ) OR
+									NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Delete_Hash_Key( l.conn_id, l.index:id, l.product:id ) }">
 						<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
 						<MvFUNCTIONRETURN VALUE = 0>
 					</MvIF>
@@ -2191,7 +2184,13 @@
 
 					<MvASSIGN NAME = "l.input"								VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Render( l.pending_queue:aisearchindex, l.product, l.input_hash ) }">
 
-					<MvIF EXPR = "{ strcmp( l.aisearchindexxproduct:last_hash, l.input_hash ) NE 0 }">
+					<MvIF EXPR = "{ ISNULL l.input }">
+						<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexXProduct_Delete_Processing( l.index:id, l.product:id ) OR
+										NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Delete_Hash_Key( l.conn_id, l.index:id, l.product:id ) }">
+							<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
+							<MvFUNCTIONRETURN VALUE = 0>
+						</MvIF>
+					<MvELSEIF EXPR = "{ strcmp( l.aisearchindexxproduct:last_hash, l.input_hash ) NE 0 }">
 						<MvASSIGN NAME = "l.null"							VALUE = "{ miva_array_insert_var( l.pending_queue:aisearchindexxproducts,	l.aisearchindexxproduct,	-1 ) }">
 						<MvASSIGN NAME = "l.null"							VALUE = "{ miva_array_insert_var( l.pending_queue:input_hashes,				l.input_hash,				-1 ) }">
 						<MvASSIGN NAME = "l.pending_queue:count"			VALUE = "{ miva_array_insert_var( l.pending_queue:inputs,					l.input,					-1 ) }">

@@ -3325,7 +3325,8 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00015', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.output_count" VALUE = 0>
+	<MvASSIGN NAME = "l.category_output_count"	VALUE = 0>
+	<MvASSIGN NAME = "l.fragment_rendering"		VALUE = "{ l.data:filters:fragments }">
 
 	<MvEVAL EXPR = "{ JSON_Runtime_Category_CustomFields_Initialize( l.filter, l.customfield_state ) }">
 	<MvEVAL EXPR = "{ JSON_Response_Start() }">
@@ -3334,21 +3335,46 @@
 		"start_offset":	<MvEVAL EXPR = "{ int( l.offset ) }">,
 		"data":
 		[
-		<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.output_count LT l.count ) ) }">
+		<MvWHILE EXPR = "{ ( NOT Categories.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.category_output_count LT l.count ) ) }">
 			<MvIF EXPR = "{ Categories.d.id EQ l.category:id }">
 				<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
 				<MvWHILECONTINUE>
 			</MvIF>
 
 			<MvEVAL EXPR = "{ JSON_Runtime_Category_Read( l.category ) }">
-			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_count ) }">
-			<MvEVAL EXPR = "{ JSON_Runtime_Category( l.category ) }">
-			<MvEVAL EXPR = "{ JSON_Category_CustomFields_With_Query( l.search_query, l.customfield_state, Categories.d.id, 'Categories' ) }">
 
-			<MvIF EXPR = "{ l.data:children:depth LE 0 OR NOT JSON_Runtime_Category_Read_IsValidDepth( 1 ) }">
-				<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.category_output_count ) }">
+
+			<MvCOMMENT>
+			|
+			| If no fragments were requested, the record can be immediately output. Otherwise, the record is captured, output, decoded,
+			| and then used to render the requested fragments, allowing the fragments to operate on the exact category record that is output.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT l.fragment_rendering }">
+				<MvEVAL EXPR = "{ JSON_Runtime_Category( l.category ) }">
+				<MvEVAL EXPR = "{ JSON_Category_CustomFields_With_Query( l.search_query, l.customfield_state, Categories.d.id, 'Categories' ) }">
+
+				<MvIF EXPR = "{ l.data:children:depth LE 0 OR NOT JSON_Runtime_Category_Read_IsValidDepth( 1 ) }">
+					<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+				<MvELSE>
+					<MvEVAL EXPR = "{ JSON_Runtime_CategoryList_Load_Query_ReadChildren( l.category, 1, l.customfield_state ) }">
+				</MvIF>
 			<MvELSE>
-				<MvEVAL EXPR = "{ JSON_Runtime_CategoryList_Load_Query_ReadChildren( l.category, 1, l.customfield_state ) }">
+				<MvCAPTURE VARIABLE = "l.json_category">
+					<MvEVAL EXPR = "{ JSON_Runtime_Category( l.category ) }">
+					<MvEVAL EXPR = "{ JSON_Category_CustomFields_With_Query( l.search_query, l.customfield_state, Categories.d.id, 'Categories' ) }">
+
+					<MvIF EXPR = "{ l.data:children:depth LE 0 OR NOT JSON_Runtime_Category_Read_IsValidDepth( 1 ) }">
+						<MvSKIP NAME = "Merchant" VIEW = "Categories" ROWS = 1>
+					<MvELSE>
+						<MvEVAL EXPR = "{ JSON_Runtime_CategoryList_Load_Query_ReadChildren( l.category, 1, l.customfield_state ) }">
+					</MvIF>
+				</MvCAPTURE>
+
+				<MvEVAL EXPR = "{ l.json_category }">
+				<MvEVAL EXPR = "{ JSON_Runtime_Category_Fragments( l.json_category, l.data ) }">
 			</MvIF>
 
 			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
@@ -3393,6 +3419,78 @@
 		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 	</MvWHILE>
 	]
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_Category_Fragments" PARAMETERS = "json_category var, data var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvCOMMENT>
+	|
+	| Fragments operate on the category record being output so we take the raw data, turn it into an object, and decode it
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT miva_json_decode( '{' $ l.json_category $ '}', l.category ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.page_settings"				VALUE = "">
+	<MvASSIGN NAME = "l.page_settings:page"			VALUE = "">
+	<MvREFERENCE NAME = "l.page_settings:category"	VARIABLE = "l.category">
+
+	<MvCOMMENT>
+	|
+	| Build template safe custom fields
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL l.category:CustomField_Values }">
+		<MvASSIGN NAME = "l.copied_customfield_values" VALUE = "{ l.category:CustomField_Values }">
+		<MvEVAL EXPR = "{ miva_member_delete( l.category, 'CustomField_Values' ) }">
+
+		<MvFOREACH ITERATOR = "l.module_code" ARRAY = "l.module_codes" COUNT = "{ miva_struct_members( l.copied_customfield_values, l.module_codes ) }">
+			<MvASSIGN NAME = "l.template_safe_module_code" VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.module_code ) }">
+
+			<MvREFERENCEARRAY NAME = "l.module_fields" VARIABLE = "l.copied_customfield_values">
+				<MvMEMBER NAME = "{ l.module_code }">
+			</MvREFERENCEARRAY>
+
+			<MvFOREACH ITERATOR = "l.field_code" ARRAY = "l.field_codes" COUNT = "{ miva_struct_members( l.module_fields, l.field_codes ) }">
+				<MvASSIGN NAME = "l.template_safe_field_code" VALUE = "{ [ g.Module_Feature_TUI_UT ].StripSpecialCharacters_TemplateCode( l.field_code ) }">
+
+				<MvREFERENCEARRAY NAME = "l.value" VARIABLE = "l.module_fields">
+					<MvMEMBER NAME = "{ l.field_code }">
+				</MvREFERENCEARRAY>
+
+				<MvASSIGNARRAY NAME = "l.page_settings:category:customfield_values" VALUE = "{ l.value }">
+					<MvMEMBER NAME = "{ l.template_safe_module_code }">
+					<MvMEMBER NAME = "{ l.template_safe_field_code }">
+				</MvASSIGNARRAY>
+			</MvFOREACH>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Render the fragments
+	|
+	</MvCOMMENT>
+
+	,"fragments":
+	{
+		<MvFOREACH ITERATOR = "l.fragment_code" ARRAY = "l.data:fragment_codes" INDEX = "l.pos" COUNT = "{ l.data:fragment_code_count }">
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				,
+			</MvIF>
+
+			<MvASSIGN NAME = "l.output"	VALUE = "">
+			<MvASSIGN NAME = "l.share"	VALUE = "">
+
+			<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.fragment_code, l.fragment ) AND l.fragment:fragment AND l.fragment:public }">
+				<MvCAPTURE VARIABLE = "l.output"><MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Fragment_Render_LowLevel( l.page_settings, l.fragment, l.share ) }"></MvCAPTURE>	
+			</MvIF>			
+
+			"<MvEVAL EXPR = "{ encodejavascriptstring( l.fragment_code ) }">": "<MvEVAL EXPR = "{ encodejavascriptstring( l.output ) }">"
+		</MvFOREACH>
+	}
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Runtime_CategoryList_OrderByColumns" PARAMETERS = "depth, default var" STANDARDOUTPUTLEVEL = "">
@@ -3471,6 +3569,22 @@
 		<MvASSIGN NAME = "l.data:children:depth"		VALUE = "{ int( l.filter_value:depth ) }">
 
 		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.filter_name EQ 'fragments' }">
+		<MvASSIGN NAME = "l.data:filters:fragments"		VALUE = 0>
+		<MvASSIGN NAME = "l.data:fragment_codes"		VALUE = "">
+		<MvASSIGN NAME = "l.data:fragment_code_count"	VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.value" ARRAY = "l.filter_value">
+			<MvASSIGN NAME = "l.value" VALUE = "{ trim( l.value ) }">
+
+			<MvIF EXPR = "{ NOT ISNULL l.value }">
+				<MvIF EXPR = "{ NOT miva_array_search( l.data:fragment_codes, 1, l.element, 'strcasecmp( l.element, l.value ) EQ 0' ) }">
+					<MvASSIGN NAME = "l.data:fragment_code_count" VALUE = "{ miva_array_insert_var( l.data:fragment_codes, l.value, -1 ) }">
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.data:filters:fragments"		VALUE = "{ l.data:fragment_code_count GT 0 }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 0>

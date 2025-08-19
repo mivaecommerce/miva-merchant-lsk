@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-RNT-
-| Next Error Code: 78   
+| Next Error Code: 86   
 |
 </MvCOMMENT>
 
@@ -2571,18 +2571,31 @@
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT ( ' ' IN l.search ) AND NOT ISNULL l.index:exactfield }">
-		<MvCOMMENT>
-		|
-		| Attempt exact match relational search and bypass AI search if any results were found
-		|
-		</MvCOMMENT>
+	<MvCOMMENT>
+	|
+	| Do initial population of results with relational settings
+	|
+	</MvCOMMENT>
 
-		<MvIF EXPR = "{ Runtime_ProductList_Cache_AI_Search_Exact_LowLevel( l.searchsettings, l.cachedproductlist, l.search, l.index ) }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+	<MvASSIGN NAME = "l.relational_result_count"	VALUE = "{ Runtime_ProductList_Cache_AI_Search_Relational( l.cachedproductlist, l.search, l.index ) }">
+	<MvIF EXPR = "{ l.relational_result_count EQ 0 }">
+		<MvIF EXPR = "{ NOT Error_Is_EOF() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Backfill with AI search results
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.relational_result_count GE l.index:max_res }">
+		<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
+	<MvELSEIF EXPR = "{ l.relational_result_count EQ 0 }">
+		<MvASSIGN NAME = "l.disp_order"	VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.disp_order"	VALUE = "{ l.relational_result_count }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.inputs" INDEX = 1 VALUE = "{ l.search }">
@@ -2596,7 +2609,7 @@
 	<MvASSIGN NAME = "l.options:sortby_direction"						VALUE = "ASC">
 	<MvASSIGN NAME = "l.options:dialect"								VALUE = 2>
 	<MvASSIGN NAME = "l.options:limit_offset"							VALUE = 0>
-	<MvASSIGN NAME = "l.options:limit_num"								VALUE = "{ l.index:max_res }">
+	<MvASSIGN NAME = "l.options:limit_num"								VALUE = "{ l.index:max_res  }">
 
 	<MvASSIGN NAME = "l.options:params:query_vector"					VALUE = "{ redis_pack_f32( l.embeddings[ 1 ] ) }">
 
@@ -2644,7 +2657,8 @@
 	<MvIF EXPR = "{ l.num_results GT 0 }">
 		<MvCOMMENT>
 		|
-		| Determine which endpoints to use based on the relevance of the first result
+		| Determine which endpoints to use based on the relevance of the first result.  If there are relational results
+		| present, the lowest cutoff is "broad"
 		|
 		</MvCOMMENT>
 
@@ -2653,7 +2667,7 @@
 		<MvIF EXPR = "{ l.first_result_distance LE l.specific_threshold_distance }">
 			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
 			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.specific_endpoint_distance }">
-		<MvELSEIF EXPR = "{ l.first_result_distance LE l.broad_endpoint_distance }">
+		<MvELSEIF EXPR = "{ ( l.first_result_distance LE l.broad_endpoint_distance ) OR l.relational_result_count }">
 			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
 			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.broad_endpoint_distance }">
 		<MvELSE>
@@ -2667,7 +2681,7 @@
 		|
 		</MvCOMMENT>
 
-		<MvASSIGN NAME = "l.disp_order"				VALUE = 0>
+		<MvASSIGN NAME = "l.total_products"			VALUE = "{ l.relational_result_count }">
 
 		<MvFOR INDEX = "l.pos" FIRST = "{ 2 }" LAST = "{ 1 + ( l.cutoff_n * 2 ) }" NEXT = "{ l.pos + 2 }">
 			<MvASSIGN NAME = "l.disp_order"			VALUE = "{ l.disp_order + 1 }">
@@ -2682,7 +2696,11 @@
 					 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
 					 FIELDS	= "l.cachedproductlist:id, l.product_id, l.disp_order">
 			<MvIF EXPR = "{ g.MvQUERY_Error }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00067', g.MvQUERY_Error ) }">
+				<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00067', g.MvQUERY_Error ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ ++l.total_products EQ l.index:max_res }">
+				<MvFORSTOP>
 			</MvIF>
 		</MvFOR>
 	</MvIF>
@@ -2690,74 +2708,252 @@
 	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Runtime_ProductList_Cache_AI_Search_Exact_LowLevel" PARAMETERS = "searchsettings var, cachedproductlist var, search var, index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.exact_query, 'prod.id' ) }">
-	<MvEVAL EXPR = "{ SQL_Query_FROM( l.exact_query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
-	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.exact_query, 'prod.disp_order', 'ASC' ) }">
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_AISearchIndex_Relational" PARAMETERS = "query var, search var, index var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexRelationalFields_Load_Index_Cached( l.index:id, l.relationalfields ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
 
-	<MvIF EXPR = "{ l.index:exactfield EQ 'code' }">						<MvEVAL EXPR = "{ SQL_Query_Search_Operator_Conversion_With_Type( l.exact_query, 'CHAR', 'code',	'EQ', l.search, 'OR', 'OR' ) }">
-	<MvELSEIF EXPR = "{ l.index:exactfield EQ 'sku' }">						<MvEVAL EXPR = "{ SQL_Query_Search_Operator_Conversion_With_Type( l.exact_query, 'CHAR', 'sku',		'EQ', l.search, 'OR', 'OR' ) }">
-	<MvELSEIF EXPR = "{ ( 'customfield:' IN l.index:exactfield ) NE 1 }">	<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00071' ) }">
-	<MvELSE>
-		<MvASSIGN NAME = "l.module_code"	VALUE = "{ gettoken( l.index:exactfield, ':', 2 ) }">
-		<MvASSIGN NAME = "l.field_code"		VALUE = "{ gettoken( l.index:exactfield, ':', 3 ) }">
+	<MvASSIGN NAME = "l.customfield_count"	VALUE = "{ [ g.Module_Feature_SEA_UT ].SearchableCustomFieldList_Load_AISearchIndex_With_Capabilities_Cached( l.index, l.customfields ) }">
+
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'prod.active = 1', '' ) }">
+	<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_Search_WHERE( l.query, l.search, l.relationalfields, l.customfields, l.customfield_count ) }">
+
+	<MvCOMMENT>
+	|
+	| Apply relevance sort, if configured
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.relevance_sort"			VALUE = 0>
+
+	<MvIF EXPR = "{ l.relationalfields:code_rel }">	<MvASSIGN NAME = "l.relevance_sort" VALUE = 1>	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'prod.code',		'FULLTEXT_NATURAL',	l.relationalfields:code_wt ) }">	</MvIF>
+	<MvIF EXPR = "{ l.relationalfields:name_rel }">	<MvASSIGN NAME = "l.relevance_sort" VALUE = 1>	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'prod.name',		'FULLTEXT_NATURAL',	l.relationalfields:name_wt ) }">	</MvIF>
+	<MvIF EXPR = "{ l.relationalfields:sku_rel }">	<MvASSIGN NAME = "l.relevance_sort" VALUE = 1>	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'prod.sku',		'FULLTEXT_NATURAL',	l.relationalfields:sku_wt ) }">		</MvIF>
+	<MvIF EXPR = "{ l.relationalfields:desc_rel }">	<MvASSIGN NAME = "l.relevance_sort" VALUE = 1>	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'prod.descrip',	'FULLTEXT_NATURAL',	l.relationalfields:desc_wt ) }">	</MvIF>
+
+	<MvIF EXPR = "{ l.relationalfields:acode_rel OR l.relationalfields:aprom_rel }">
+		<MvASSIGN NAME = "l.relevance_sort"		VALUE = 1>
+
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_Attributes( l.query ) }">
+
+		<MvIF EXPR = "{ l.relationalfields:acode_rel }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'attr.code',		'FULLTEXT_NATURAL',	l.relationalfields:acode_wt ) }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'attmpat.code',	'FULLTEXT_NATURAL',	l.relationalfields:acode_wt ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.relationalfields:aprom_rel }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'attr.prompt',		'FULLTEXT_NATURAL',	l.relationalfields:aprom_wt ) }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'attmpat.prompt',	'FULLTEXT_NATURAL',	l.relationalfields:aprom_wt ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.relationalfields:ocode_rel OR l.relationalfields:oprom_rel }">
+		<MvASSIGN NAME = "l.relevance_sort"		VALUE = 1>
+
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_Options( l.query ) }">
+
+		<MvIF EXPR = "{ l.relationalfields:ocode_rel }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'opt.code',		'FULLTEXT_NATURAL',	l.relationalfields:ocode_wt ) }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'attmpop.code',	'FULLTEXT_NATURAL',	l.relationalfields:ocode_wt ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.relationalfields:oprom_rel }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'opt.prompt',		'FULLTEXT_NATURAL',	l.relationalfields:oprom_wt ) }">
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.search, 'attmpop.prompt',	'FULLTEXT_NATURAL',	l.relationalfields:oprom_wt ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ l.customfield_count }">
+		<MvIF EXPR = "{ l.customfield:relevance		AND
+						l.customfield:module:active	AND
+						l.customfield:capabilities:orderby_relevance }">
+			<MvASSIGN NAME = "l.relevance_sort"	VALUE = 1>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.customfield:module:module ].Module_Product_Field_Query_OrderBy_Relevance( l.module, l.query, l.query_params:data:search, l.customfield:field_code, l.customfield:weight ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, 'prod.disp_order', 'ASC' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Cache_AI_Search_Relational" PARAMETERS = "cachedproductlist var, search var, index var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Relational search may be disabled, in which case we do nothing
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.index:blend_rel }">
+		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00085' ) }">
+	</MvIF>
 	
-		<MvIF EXPR = "{ NOT ModuleAndFeatures_Load_Code_Cached( l.module_code, l.module ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT l.module:active			OR
-						l.module:api_ver LT 9.07	OR
-						NOT l.module:feature_hash:fields_prod }">
-			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00072' ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT StoreModule_Count_Module_Cached( l.module:id ) }">
-			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00073' ) }">
-		</MvIF>
-
-		<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Capabilities( l.module, l.field_code, l.capabilities ) }">
-
-		<MvIF EXPR = "{ NOT l.capabilities:search }">
-			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00074' ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Query_Search( l.module, l.exact_query, l.field_code, 'EQ', l.search ) }">
+	<MvCOMMENT>
+	|
+	| Likewise, if enabled at the index level but no fields are enabled, we cannot perform
+	| a relational search.
+	|
+	</MvCOMMENT>
+	
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexRelationalFields_Load_Index_Cached( l.index:id, l.relationalfields ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.exact_sql" VALUE = "{ SQL_Query_Build( l.exact_query, l.exact_fields ) }">
+	<MvASSIGN NAME = "l.customfield_count"	VALUE = "{ [ g.Module_Feature_SEA_UT ].SearchableCustomFieldList_Load_AISearchIndex_With_Capabilities_Cached( l.index, l.customfields ) }">
 
-	<MvOPENVIEW NAME = "Merchant"
-				VIEW	= "Products"
-				QUERY	= "{ l.exact_sql }"
-				FIELDS	= "{ l.exact_fields }">
-	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-RNT-00075', g.MvOPENVIEW_Error ) }">
+	<MvIF EXPR = "{ NOT l.relationalfields:code			AND
+					NOT l.relationalfields:name			AND
+					NOT l.relationalfields:sku			AND
+					NOT l.relationalfields:descrip		AND
+					NOT l.relationalfields:atr_code		AND
+					NOT l.relationalfields:atr_prompt	AND
+					NOT l.relationalfields:opt_code		AND
+					NOT l.relationalfields:opt_prompt }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.customfields, 1, l.customfield, 'l.customfield:enabled' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00078' ) }">
+		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ Products.d.EOF }">
-		<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
-		<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-RNT-00076' ) }">
-	</MvIF>
+	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, 'prod.id' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Products', 'prod' ) }">
 
-	<MvASSIGN NAME = "l.disp_order"		VALUE = 0>
+	<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_AISearchIndex_Relational( l.query, l.search, l.index ) }">
 
-	<MvWHILE EXPR = "{ NOT Products.d.EOF }">
-		<MvASSIGN NAME = "l.disp_order"	VALUE = "{ l.disp_order + 1 }">
+	<MvCOMMENT>
+	|
+	| Populate the cache
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ g.Native_DBAPI EQ 'mysql' }">
+		<MvCOMMENT>
+		|
+		| MySQL does not support ROW_NUMBER() or DENSE_RANK() prior to version 8, and older versions of it and MariaDB have a whole host of issues
+		| related to emulating the functionality.  Specifically, the queries end up being sensitive to the columns that are selected, and require
+		| us to attempt to force the query to generate the correct sort order in a SUB-SELECT in a way that will preserve this order in the outer
+		| query.
+		|
+		</MvCOMMENT>
+
+		<MvQUERY NAME = "Merchant" QUERY = "SET @row_id = 0">
+		<MvQUERY NAME = "Merchant" QUERY = "DROP TEMPORARY TABLE IF EXISTS Temp_CachedProductListXProduct">
+
+		<MvCOMMENT>
+		|
+		| If the query is DISTINCT with a relevance sort, we must convert the DISTINCT into a GROUP BY so that we
+		| can properly account for relevance matches coming from separate tables/records.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.distinct"		VALUE = 0>
+		<MvASSIGN NAME = "l.groupby"		VALUE = 0>
+
+		<MvIF EXPR = "{ SQL_Query_Is_DISTINCT( l.query ) }">
+			<MvIF EXPR = "{ l.relevance_sort }">	<MvASSIGN NAME = "l.groupby"	VALUE = 1>
+			<MvELSE>								<MvASSIGN NAME = "l.distinct"	VALUE = 1>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.distinct }">
+			<MvEVAL EXPR = "{ SQL_Query_DISTINCT( l.query ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.groupby }">
+			<MvEVAL EXPR = "{ SQL_Query_GROUP_BY( l.query, 'prod.id' ) }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| With the ONLY_FULL_GROUP_BY option enabled, MySQL will error if the query is DISTINCT and a column referenced in the ORDER BY is not
+		| in the select list.  Since we must deal with this possibility, instead of using an unaliased ORDER BY, we simply make sure that all
+		| ORDER BY columns are also included in the inner query SELECT list.
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" COUNT = "{ l.query:orderby_count }">
+			<MvIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, l.orderby:column $ ' AS ' $ l.orderby:column_alias ) }">
+			<MvELSEIF EXPR = "{ l.orderby:column EQ 'prod.id' }">	<MvFOREACHCONTINUE>
+			<MvELSE>												<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, l.orderby:column ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.groupby }">
+				<MvEVAL EXPR = "{ SQL_Query_GROUP_BY( l.query, l.orderby:column ) }">
+			</MvIF>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.population_sql"	VALUE = "{ 'SELECT ?, prod.id, ( @row_id := @row_id + 1 ) FROM ( ' $ SQL_Query_Build( l.query, l.population_fields ) $ ' LIMIT ' $ int( l.index:max_res ) $ ' ) prod' }">
+
+		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.fields, 'l.cachedproductlist:id', -1 ) }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert_var( l.fields, l.population_fields, -1 ) }">
 
 		<MvQUERY NAME	= "Merchant"
-				QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
-				FIELDS	= "l.cachedproductlist:id, Products.d.id, l.disp_order">
+				 QUERY	= "{ 'CREATE TEMPORARY TABLE Temp_CachedProductListXProduct AS ' $ l.population_sql }"
+				 FIELDS	= "{ l.fields }">
 		<MvIF EXPR = "{ g.MvQUERY_Error }">
-			<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00077', g.MvQUERY_Error ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00079', g.MvQUERY_Error ) }">
 		</MvIF>
 
-		<MvSKIP NAME = "Merchant" VIEW = "Products" ROWS = 1>
-	</MvWHILE>
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) SELECT * FROM Temp_CachedProductListXProduct' }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00080', g.MvQUERY_Error ) }">
+		</MvIF>
 
-	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Products">
-	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
+		<MvQUERY NAME = "Merchant" QUERY = "DROP TEMPORARY TABLE Temp_CachedProductListXProduct">
+	<MvELSEIF EXPR = "{ g.Native_DBAPI EQ 'postgresql' }">
+		<MvCOMMENT>
+		|
+		| PostgreSQL does not permit the use of column aliases in window function OVER clauses, and DENSE_RANK() does not work in a sub-select,
+		| so we use an unaliased ORDER BY clause and no sub-select.
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.distinct"		VALUE = "{ SQL_Query_Is_DISTINCT( l.query ) }">
+		<MvASSIGN NAME = "l.orderby_sql"	VALUE = "{ SQL_Query_Build_ORDER_By_Unaliased( l.query ) }">
+
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_SELECT_Clear( l.query ) }">
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_By_Clear( l.query ) }">
+
+		<MvIF EXPR = "{ l.distinct }">
+			<MvEVAL EXPR = "{ SQL_Query_DISTINCT( l.query ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, 'CAST( ? AS INTEGER ), prod.id, DENSE_RANK() OVER ( ' $ l.orderby_sql $ ' )' ) }">
+
+		<MvASSIGN NAME = "l.population_sql"	VALUE = "{ SQL_Query_Build( l.query, l.population_fields ) $ ternary( l.max_results GT 0, ' LIMIT ' $ int( l.index:max_res ), '' ) }">
+
+		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.fields, 'l.cachedproductlist:id', -1 ) }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert_var( l.fields, l.population_fields, -1 ) }">
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) ' $ l.population_sql }"
+				 FIELDS	= "{ l.fields }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00081', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00082', 'Unsupported DBAPI' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| This function returns the number of relational results added to the cache
+	|
+	</MvCOMMENT>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "CachedProductListXProduct"
+				QUERY	= "{ 'SELECT COUNT( * ) AS product_count FROM ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct WHERE cache_id = ?' }"
+				FIELDS	= "l.cachedproductlist:id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00083', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ CachedProductListXProduct.d.EOF }">	<MvASSIGN NAME = "l.product_count"	VALUE = 0>
+	<MvELSE>											<MvASSIGN NAME = "l.product_count"	VALUE = "{ CachedProductListXProduct.d.product_count }">
+	</MvIF>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CachedProductListXProduct">
+	<MvFUNCTIONRETURN VALUE = "{ ListLoad_EOF_Return( 'MER-DBE-RNT-00084', l.product_count ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Search_FROM" PARAMETERS = "query var, search var, searchsettings var, customfields var, customfield_count" STANDARDOUTPUTLEVEL = "">
