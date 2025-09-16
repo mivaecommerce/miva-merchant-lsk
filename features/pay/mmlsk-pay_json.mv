@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-PAY-JSN-
-| Next Error Code: 68
+| Next Error Code: 75
 |
 </MvCOMMENT>
 
@@ -1012,6 +1012,109 @@
 		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-JSN-00030', 'Deleted payment card type \'' $ l.paymentcardtype:type $ '\'' ) }">
 	</MvIF>
 	
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| ProductPaymentRules
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_ProductPaymentRules_Update" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Product_Load( l.product ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Load_ProductOrDefault( l.product:id, l.productpaymentrules ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Boolean( 'O', 'LimitPaymentMethods', l.productpaymentrules:limitmeths ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Equal_Default( l.productpaymentrules ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Delete_Product( l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Insert( l.productpaymentrules ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentRules_Update( l.productpaymentrules ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Exists( 'PaymentMethods' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentMethod_Delete_All_Product( l.product:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.productpaymentmethod_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.productpaymentmethods"		VALUE = "">
+
+		<MvFOREACH ITERATOR = "l.input_paymentmethod" ARRAY = "l.input_paymentmethods" COUNT = "{ [ g.Module_JSON ].JSON_Input_Array( 'PaymentMethods', l.input_paymentmethods ) }">
+			<MvASSIGN NAME = "l.productpaymentmethod"				VALUE = "">
+			<MvASSIGN NAME = "l.productpaymentmethod:product_id"	VALUE = "{ l.product:id }">
+			<MvASSIGN NAME = "l.productpaymentmethod:mod_code"		VALUE = "">
+			<MvASSIGN NAME = "l.productpaymentmethod:meth_code"		VALUE = "">
+			<MvASSIGN NAME = "l.productpaymentmethod:pctype_id"		VALUE = 0>
+
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Exists( l.input_paymentmethod, 'paymentcard_type' ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_paymentmethod, 'R:50',	'module_code', l.productpaymentmethod:mod_code ) OR
+								NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_paymentmethod, 'r:100',	'method_code', l.productpaymentmethod:meth_code ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.productpaymentmethod:mod_code, l.productpaymentmethod_module ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+					</MvIF>
+
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-JSN-00068', 'The specified payment module \'' $ l.productpaymentmethod:mod_code $ '\' does not exist' ) }">
+				<MvELSEIF EXPR = "{ NOT l.productpaymentmethod_module:active }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-JSN-00070', 'Module \'' $ l.productpaymentmethod_module:name $ '\' has been deactivated' ) }">
+				<MvELSEIF EXPR = "{ NOT l.productpaymentmethod_module:feature_hash:payment }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-JSN-00074', 'Module \'' $ l.productpaymentmethod_module:name $ '\' does not implement the payment feature' ) }">
+				<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.productpaymentmethod_module:id ) }">
+
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-JSN-00069', 'The specified payment module \'' $ l.productpaymentmethod_module:name $ '\' is not installed in the store' ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) OR NOT l.mivapay_settings:enabled }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-JSN-00071', 'Payment Card Types are not available when MivaPay is disabled.  Please enable MivaPay and try again.' ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Element_Text( l.input_paymentmethod, 'R', 'paymentcard_type', l.pctype ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_Type( l.pctype, l.paymentcardtype ) }">
+					<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+					</MvIF>
+
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-PAY-JSN-00072', 'Payment Card Type \'' $ l.pctype $ '\' not found' ) }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.productpaymentmethod:pctype_id" VALUE = "{ l.paymentcardtype:id }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.productpaymentmethod_count" VALUE = "{ miva_array_insert_var( l.productpaymentmethods, l.productpaymentmethod, -1 ) }">
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.productpaymentmethod" ARRAY = "l.productpaymentmethods" COUNT = "{ l.productpaymentmethod_count }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].ProductPaymentMethod_Insert( l.productpaymentmethod ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PAY-JSN-00073', 'Product payment rules updated for product code \'' $ l.product:code $ '\'' ) }">
+
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
 </MvFUNCTION>
 

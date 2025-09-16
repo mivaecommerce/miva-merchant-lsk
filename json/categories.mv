@@ -353,6 +353,83 @@
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "JSON_CategoryCustomFieldList_Load_Query" PARAMETERS = "" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'CTGY', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
+	<MvASSIGN NAME = "l.filter"				VALUE = "">
+	<MvASSIGN NAME = "l.sort"				VALUE = "">
+	<MvASSIGN NAME = "l.offset"				VALUE = 0>
+	<MvASSIGN NAME = "l.count"				VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_CHAR( l.available_filters, 'code',		'l.customfield:code' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_CHAR( l.available_filters, 'name',		'l.customfield:name' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_CHAR( l.available_filters, 'type',		'l.customfield:type' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_CHAR( l.available_filters, 'module_name',	'l.customfield:module:name' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_BOOL( l.available_filters, 'public',		'l.customfield:public' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_BOOL( l.available_filters, 'readonly',	'l.customfield:readonly' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_BOOL( l.available_filters, 'searchable',	'l.customfield:capabilities:search' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_MivaScript_BOOL( l.available_filters, 'sortable',	'l.customfield:capabilities:orderby' ) }">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o',		'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o',		'Sort',		l.sort )	OR
+					NOT JSON_Input_Integer(	'o:nonneg',	'Offset',	l.offset )	OR
+					NOT JSON_Input_Integer(	'o',		'Count',	l.count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.customfield_count"	VALUE = "{ [ g.Library_Utilities ].CategoryCustomFieldList_Load( l.customfields ) }">
+	<MvASSIGN NAME = "l.search_expression"	VALUE = "1 EQ 1">
+
+	<MvEVAL EXPR = "{ JSON_Filter_MivaScript( l.search_expression, l.filter, l.available_filters ) }">
+
+	<MvASSIGN NAME = "l.total_count"		VALUE = "{ miva_array_filter_ref( l.customfields, 1, l.customfield, l.search_expression, l.filtered_customfields ) }">
+	<MvASSIGN NAME = "l.null"				VALUE = "{ miva_array_sort( l.filtered_customfields, 'CategoryCustomFieldList_Sort_Callback', l.sort ) }">
+
+	<MvASSIGN NAME = "l.output_count"		VALUE = 0>
+
+	<MvEVAL EXPR = "{ JSON_Response_Start() }">
+	{
+		"data":
+		[
+			<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.filtered_customfields" FIRST = "{ l.offset + 1 }" LAST = "{ l.total_count }">
+				<MvIF EXPR = "{ ( l.output_count LT l.count ) OR ( l.count EQ 0 ) }">
+					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.output_count ) }">
+						"code":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.customfield:code ) }">",
+						"name":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.customfield:name ) }">",
+						"type":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.customfield:type ) }">",
+						"public":		<MvEVAL EXPR = "{ encodejavascriptboolean( l.customfield:public ) }">,
+						"readonly":		<MvEVAL EXPR = "{ encodejavascriptboolean( l.customfield:readonly ) }">,
+						"searchable":	<MvEVAL EXPR = "{ encodejavascriptboolean( l.customfield:capabilities:search ) }">,
+						"sortable":		<MvEVAL EXPR = "{ encodejavascriptboolean( l.customfield:capabilities:orderby ) }">,
+						"module":
+						{
+							<MvEVAL EXPR = "{ JSON_Module( l.customfield:module ) }">
+						}
+						<MvIF EXPR = "{ l.customfield:type EQ 'choice' }">
+							,
+							"choices":
+							[
+								<MvFOREACH ITERATOR = "l.choice" ARRAY = "l.customfield:choices" INDEX = "l.choice_pos">
+									<MvIF EXPR = "{ l.choice_pos GT 1 }">
+										,
+									</MvIF>
+
+									"<MvEVAL EXPR = "{ encodejavascriptstring( l.choice ) }">"
+								</MvFOREACH>
+							]
+						</MvIF>
+					<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+				</MvIF>
+			</MvFOREACH>
+		],
+		"total_count": 	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">
+	}
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "JSON_CategoryIndex_Load_ID" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
 	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'CTGY', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
@@ -1971,4 +2048,64 @@
 	}
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "AvailabilityGroups">
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Helper functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CategoryCustomFieldList_Sort_Callback" PARAMETERS = "left var, right var, sort var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.result" VALUE = 0>
+
+	<MvIF EXPR = "{ l.sort EQ 'code' }">				<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.left:code, l.right:code ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-code' }">			<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.right:code, l.left:code ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ 'name' }">			<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.left:name, l.right:name ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-name' }">			<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.right:name, l.left:name ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ 'type' }">			<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.left:type, l.right:type ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-type' }">			<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.right:type, l.left:type ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ 'module_name' }">		<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.left:module:name, l.right:module:name ) }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-module_name' }">	<MvASSIGN NAME = "l.result" VALUE = "{ strcasecmp( l.right:module:name, l.left:module:name ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.result NE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ l.result }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.sort EQ 'public' }">			<MvASSIGN NAME = "l.left_data" VALUE = "{ l.left:public }">					<MvASSIGN NAME = "l.right_data" VALUE = "{ l.right:public }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-public' }">		<MvASSIGN NAME = "l.left_data" VALUE = "{ l.right:public }">				<MvASSIGN NAME = "l.right_data" VALUE = "{ l.left:public }">
+	<MvELSEIF EXPR = "{ l.sort EQ 'readonly' }">	<MvASSIGN NAME = "l.left_data" VALUE = "{ l.left:readonly }">				<MvASSIGN NAME = "l.right_data" VALUE = "{ l.right:readonly }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-readonly' }">	<MvASSIGN NAME = "l.left_data" VALUE = "{ l.right:readonly }">				<MvASSIGN NAME = "l.right_data" VALUE = "{ l.left:readonly }">
+	<MvELSEIF EXPR = "{ l.sort EQ 'searchable' }">	<MvASSIGN NAME = "l.left_data" VALUE = "{ l.left:capabilities:search }">	<MvASSIGN NAME = "l.right_data" VALUE = "{ l.right:capabilities:search }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-searchable' }">	<MvASSIGN NAME = "l.left_data" VALUE = "{ l.right:capabilities:search }">	<MvASSIGN NAME = "l.right_data" VALUE = "{ l.left:capabilities:search }">
+	<MvELSEIF EXPR = "{ l.sort EQ 'sortable' }">	<MvASSIGN NAME = "l.left_data" VALUE = "{ l.left:capabilities:orderby }">	<MvASSIGN NAME = "l.right_data" VALUE = "{ l.right:capabilities:orderby }">
+	<MvELSEIF EXPR = "{ l.sort EQ '-sortable' }">	<MvASSIGN NAME = "l.left_data" VALUE = "{ l.right:capabilities:orderby }">	<MvASSIGN NAME = "l.right_data" VALUE = "{ l.left:capabilities:orderby }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.left_data LT l.right_data }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left_data GT l.right_data }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Break ties using the code, followed by the module code
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ substring_var( l.sort, 1, 1 ) NE '-' }">
+		<MvIF EXPR = "{ strcasecmp( l.left:code, l.right:code ) LT 0 }">					<MvFUNCTIONRETURN VALUE = -1>
+		<MvELSEIF EXPR = "{ strcasecmp( l.left:code, l.right:code ) GT 0 }">				<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ strcasecmp( l.left:module:code, l.right:module:code ) LT 0 }">	<MvFUNCTIONRETURN VALUE = -1>
+		<MvELSEIF EXPR = "{ strcasecmp( l.left:module:code, l.right:module:code ) GT 0 }">	<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ strcasecmp( l.right:code, l.left:code ) LT 0 }">					<MvFUNCTIONRETURN VALUE = -1>
+		<MvELSEIF EXPR = "{ strcasecmp( l.right:code, l.left:code ) GT 0 }">				<MvFUNCTIONRETURN VALUE = 1>
+		<MvELSEIF EXPR = "{ strcasecmp( l.right:module:code, l.left:module:code ) LT 0 }">	<MvFUNCTIONRETURN VALUE = -1>
+		<MvELSEIF EXPR = "{ strcasecmp( l.right:module:code, l.left:module:code ) GT 0 }">	<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
 </MvFUNCTION>

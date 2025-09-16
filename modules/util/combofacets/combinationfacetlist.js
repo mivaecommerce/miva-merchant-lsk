@@ -160,6 +160,7 @@ CombinationFacetList.prototype.onCreate = function()
 	record.fields		= new Array();
 	record.inclother	= false;
 	record.createfit	= true;
+	record.fitlistpub	= false;
 	record.variantsrc	= 'master';
 
 	return record;
@@ -172,7 +173,7 @@ CombinationFacetList.prototype.onInsert = function( item, callback, delegator )
 
 CombinationFacetList.prototype.onSave = function( item, callback, delegator )
 {
-	CombinationFacet_Update( item.record.id, item.record.mmbatchlist_fieldlist, callback, delegator );
+	CombinationFacet_Update_FieldList( item.record.id, item.record.mmbatchlist_fieldlist, callback, delegator );
 }
 
 CombinationFacetList.prototype.onDelete = function( item, callback, delegator )
@@ -182,64 +183,77 @@ CombinationFacetList.prototype.onDelete = function( item, callback, delegator )
 
 CombinationFacetList.prototype.Facet_Update_Enabled = function( item, checked, delegator )
 {
-	var self = this;
-
-	CombinationFacet_Update_Enabled( item.record.id, checked, function( response )
+	CombinationFacet_Update( item.record.id, { enabled: checked }, ( response ) =>
 	{
 		if ( !response.success )
 		{
-			self.Record_Update_Error( response, item );
-			self.ReBindVisibleRows();
+			this.Record_Update_Error( response, item );
+			this.ReBindVisibleRows();
 
 			return;
 		}
 
-		item.record.enabled = checked ? 1 : 0;
+		item.record.enabled = checked;
 
-		self.ItemRecord_UpdateOriginalRecord( item, null );
-		self.ReBindVisibleRows();
+		this.ItemRecord_UpdateOriginalRecord( item, null );
+		this.ReBindVisibleRows();
 	}, delegator );
 }
 
 CombinationFacetList.prototype.Facet_Update_IncludeOtherProducts = function( item, checked, delegator )
 {
-	var self = this;
-
-	CombinationFacet_Update_IncludeOtherProducts( item.record.id, checked, function( response )
+	CombinationFacet_Update( item.record.id, { inclother: checked }, ( response ) =>
 	{
 		if ( !response.success )
 		{
-			self.Record_Update_Error( response, item );
-			self.ReBindVisibleRows();
+			this.Record_Update_Error( response, item );
+			this.ReBindVisibleRows();
 
 			return;
 		}
 
-		item.record.inclother = checked ? 1 : 0;
+		item.record.inclother = checked;
 
-		self.ItemRecord_UpdateOriginalRecord( item, null );
-		self.ReBindVisibleRows();
+		this.ItemRecord_UpdateOriginalRecord( item, null );
+		this.ReBindVisibleRows();
 	}, delegator );
 }
 
 CombinationFacetList.prototype.Facet_Update_CreateFitmentIndicator = function( item, checked, delegator )
 {
-	var self = this;
-
-	CombinationFacet_Update_CreateFitmentIndicator( item.record.id, checked, function( response )
+	CombinationFacet_Update( item.record.id, { createfit: checked }, ( response ) =>
 	{
 		if ( !response.success )
 		{
-			self.Record_Update_Error( response, item );
-			self.ReBindVisibleRows();
+			this.Record_Update_Error( response, item );
+			this.ReBindVisibleRows();
 
 			return;
 		}
 
-		item.record.createfit = checked ? true : false;
+		item.record.createfit = checked;
 
-		self.ItemRecord_UpdateOriginalRecord( item, null );
-		self.ReBindVisibleRows();
+		this.ItemRecord_UpdateOriginalRecord( item, null );
+		this.ReBindVisibleRows();
+	}, delegator );
+}
+
+CombinationFacetList.prototype.Facet_Update_FitmentListPublic = function( item, checked, delegator )
+{
+	CombinationFacet_Update( item.record.id, { fitlistpub: checked }, ( response ) =>
+	{
+		if ( !response.success )
+		{
+			this.Record_Update_Error( response, item );
+			this.ReBindVisibleRows();
+
+			return;
+		}
+
+		item.record.fitlistpub = checked;
+
+		this.ItemRecord_UpdateOriginalRecord( item, null );
+		this.ReBindVisibleRows();
 	}, delegator );
 }
 
@@ -271,6 +285,7 @@ CombinationFacetList.prototype.Field_Create = function()
 	record.code			= '';
 	record.name			= '';
 	record.sort_desc	= false;
+	record.fitlist		= 'visible';
 
 	return record;
 }
@@ -341,6 +356,10 @@ CombinationFacetList.prototype.onCreateRootColumnList = function()
 									.SetSortByField( '' )
 									.SetFieldName( '' )
 									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
+	this.rootcolumn_fitlist		= new MMBatchList_Column_Text( 'Fitment List', 'fitlist', 'FitmentList' )
+									.SetSortByField( '' )
+									.SetFieldName( '' )
+									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
 	this.rootcolumn_variantsrc	= new MMBatchList_Column_MappedTextValues( 'Variant Source', 'variantsrc', [ 'master', 'parts' ], [ 'Master Product', 'Part Products' ], 'VariantSource' )
 									.SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } );
 
@@ -349,12 +368,14 @@ CombinationFacetList.prototype.onCreateRootColumnList = function()
 		this.rootcolumn_enabled		= new MMBatchList_Column_CheckboxSlider( 'Enabled', 'enabled', 'Enabled', function( item, checked, delegator ) { self.Facet_Update_Enabled( item, checked, delegator ); } );
 		this.rootcolumn_inclother	= new MMBatchList_Column_CheckboxSlider( 'Include Other Products', 'inclother', 'IncludeOtherProducts', function( item, checked, delegator ) { self.Facet_Update_IncludeOtherProducts( item, checked, delegator ); } );
 		this.rootcolumn_createfit	= new MMBatchList_Column_CheckboxSlider( 'Create Fitment Indicator', 'createfit', 'CreateFitmentIndicator', function( item, checked, delegator ) { self.Facet_Update_CreateFitmentIndicator( item, checked, delegator ); } );
+		this.rootcolumn_fitlistpub	= new MMBatchList_Column_CheckboxSlider( 'Fitment List Public', 'fitlistpub', 'FitmentListPublic', function( item, checked, delegator ) { self.Facet_Update_FitmentListPublic( item, checked, delegator ); } );
 	}
 	else
 	{
 		this.rootcolumn_enabled		= new MMBatchList_Column_Checkbox( 'Enabled', 'enabled', 'Enabled' );
 		this.rootcolumn_inclother	= new MMBatchList_Column_Checkbox( 'Include Other Products', 'inclother', 'IncludeOtherProducts' );
 		this.rootcolumn_createfit	= new MMBatchList_Column_Checkbox( 'Create Fitment Indicator', 'createfit', 'CreateFitmentIndicator' );
+		this.rootcolumn_fitlistpub	= new MMBatchList_Column_Checkbox( 'Fitment List Public', 'fitlistpub', 'FitmentListPublic' );
 	}
 
 	return [
@@ -363,8 +384,10 @@ CombinationFacetList.prototype.onCreateRootColumnList = function()
 		this.rootcolumn_code,
 		this.rootcolumn_name,
 		this.rootcolumn_sort_desc,
+		this.rootcolumn_fitlist,
 		this.rootcolumn_inclother,
 		this.rootcolumn_createfit,
+		this.rootcolumn_fitlistpub,
 		this.rootcolumn_variantsrc
 	];
 }
@@ -386,11 +409,15 @@ CombinationFacetList.prototype.CreateColumnList_Fields = function()
 	this.field_sort_desc_column	= sort_desc_column
 									  .SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
 									  .SetRootColumn( this.rootcolumn_sort_desc );
+	this.field_fitlist_column	= new MMBatchList_Column_MappedTextValues( 'Fitment List', 'fitlist', [ 'visible', 'hidden', 'range' ], [ 'Visible', 'Hidden', 'Range' ], 'FitmentList' )
+									  .SetContentAttributeList( { 'class': 'mm9_batchlist_level_col' } )
+									  .SetRootColumn( this.rootcolumn_fitlist );
 
 	const columnlist = [
 		this.field_code_column,
 		this.field_name_column,
-		this.field_sort_desc_column
+		this.field_sort_desc_column,
+		this.field_fitlist_column
 	];
 
 	return columnlist;

@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2017 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -34,6 +34,11 @@ function MOD10CardList()
 DeriveFrom( MMBatchList, MOD10CardList );
 
 MOD10CardList.prototype.onLoad = MOD10CardList_Load_Query;
+
+MOD10CardList.prototype.DisplayNoEncryptionWarning = function()
+{
+	this.Feature_Persistent_Filters_Enable( 'mod10cardlist' );
+}
 
 MOD10CardList.prototype.onCreate = function()
 {

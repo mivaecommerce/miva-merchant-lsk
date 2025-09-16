@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2021 Miva, Inc.  All rights reserved.
+// Copyright 1998-2025 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -198,6 +198,8 @@ Modal_Callbacks.prototype.onModalShow = function( z_index )
 		{
 			MivaDialogRegistry_OnShow( this.key );
 		}
+
+		FireEvent( this.element, 'onmodalshow' );
 	}
 }
 
@@ -796,7 +798,9 @@ function MMDialog_Skin( dialog )
 	this.dialog						= newElement( 'div', { 'class': 'mm9_skinned_dialog_container' },				null, this.orig_dialog.parentNode );
 	this.content_container			= newElement( 'div', { 'class': 'mm_dialog_content_container' },				null, this.orig_dialog );
 	this.content					= newElement( 'div', { 'class': 'mm_dialog_content' },							null, this.content_container );
-	this.close						= newElement( 'div', { 'class': 'mm9_dialog_close mm9_mivaicon icon-cancel' },	null, this.orig_dialog );
+	this.top_controls				= newElement( 'div', { 'class': 'mm9_dialog_top_controls' },					null, this.orig_dialog );
+	this.help						= newElement( 'div', { 'class': 'mm9_dialog_help' },							null, this.top_controls );
+	this.close						= newElement( 'div', { 'class': 'mm9_dialog_close mm9_mivaicon icon-cancel' },	null, this.top_controls );
 	this.actionbar					= newElement( 'div', { 'class': 'mm9_dialog_actionbar' },						null, this.orig_dialog );
 
 	scrollbar_element				= newElement( 'div', { 'class': 'mm_dialog_skinned_scrollbar_width' },			null, document.body );
@@ -938,7 +942,7 @@ MMDialog_Skin.prototype.Initialize = function()
 	for ( i = 0, i_len = elementlist_children.length; i < i_len; i++ )
 	{
 		if ( elementlist_children[ i ] !== this.title				&& 
-			 elementlist_children[ i ] !== this.close				&&
+			 elementlist_children[ i ] !== this.top_controls		&&
 			 elementlist_children[ i ] !== this.content_container	&&
 			 elementlist_children[ i ] !== this.content				&&
 			 elementlist_children[ i ] !== this.actionbar )
@@ -1065,6 +1069,8 @@ MMDialog_Skin.prototype.onModalShow = function( z_index )
 	this.Redraw();
 	MivaDialogRegistry_OnShow( this.MivaDialogRegistryPrefix() );
 	MMRender_onRender_AddHook( this.render_read, this.render_write );
+
+	FireEvent( this.orig_dialog, 'onmodalshow' );
 }
 
 MMDialog_Skin.prototype.onModalHide = function()

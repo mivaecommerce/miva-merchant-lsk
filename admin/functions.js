@@ -1089,6 +1089,17 @@ function StandardFields_Load( callback, delegator )
 
 function ProductCustomFieldList_Load( callback, delegator )							{ return AJAX_Call( callback, 'admin', 'ProductCustomFieldList_Load',			'', delegator ); }
 
+function ProductCustomFieldList_Load_Query( filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'ProductCustomFieldList_Load_Query',
+	{
+		Filter:	filter,
+		Sort:	sort,
+		Offset:	offset,
+		Count:	count
+	}, delegator );
+}
+
 function ProductIndex_Load_ID( product_id, filter, sort, callback, delegator )
 {
 	return AJAX_Call_JSON( callback, 'admin', 'ProductIndex_Load_ID',
@@ -1798,6 +1809,17 @@ function EncryptionKey_Delete( prompt, callback, delegator )						{ return AJAX_
 
 function CategoryCustomFieldList_Load( callback, delegator )						{ return AJAX_Call( callback, 'admin', 'CategoryCustomFieldList_Load',									'', delegator ); }
 
+function CategoryCustomFieldList_Load_Query( filter, sort, offset, count, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'CategoryCustomFieldList_Load_Query',
+	{
+		Filter:	filter,
+		Sort:	sort,
+		Offset:	offset,
+		Count:	count
+	}, delegator );
+}
+
 function CategoryList_Load_Parent( parent_id, callback, delegator )
 {
 	return AJAX_Call_JSON( callback, 'admin', 'CategoryList_Load_Parent',
@@ -2252,7 +2274,8 @@ function APIToken_Insert( data, callback, delegator )
 		APIToken_Require_Signature:	data.req_sig,
 		APIToken_SigningKey:		data.signkey,
 		APIToken_Require_Timestamp:	data.req_ts,
-		APIToken_Timestamp_Window:	data.ts_window
+		APIToken_Timestamp_Window:	data.ts_window,
+		APIToken_GroupIDs:			data.assigned_group_ids
 	}, delegator );
 }
 
@@ -2398,4 +2421,12 @@ function CacheSetting_Delete( type, name, callback, delegator )
 function Cache_Flush( callback )
 {
 	return AJAX_Call_JSON( callback, 'admin', 'Cache_Flush' );
+}
+
+function AdminInlineHelp_Load_Article( article, callback, delegator )
+{
+	return AJAX_Call_Domain_JSON( callback, 'admin', 'AdminInlineHelp_Load_Article',
+	{
+		Article: article
+	}, delegator );
 }

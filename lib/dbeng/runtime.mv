@@ -2604,106 +2604,27 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.options"										VALUE = "">
-	<MvASSIGN NAME = "l.options:sortby"									VALUE = "vector_score">
-	<MvASSIGN NAME = "l.options:sortby_direction"						VALUE = "ASC">
-	<MvASSIGN NAME = "l.options:dialect"								VALUE = 2>
-	<MvASSIGN NAME = "l.options:limit_offset"							VALUE = 0>
-	<MvASSIGN NAME = "l.options:limit_num"								VALUE = "{ l.index:max_res  }">
+	<MvASSIGN NAME = "l.search_options"			VALUE = "">
+	<MvASSIGN NAME = "l.search_options:blended"	VALUE = "{ l.relational_result_count GT 0 }">
 
-	<MvASSIGN NAME = "l.options:params:query_vector"					VALUE = "{ redis_pack_f32( l.embeddings[ 1 ] ) }">
-
-	<MvASSIGN NAME = "l.options:return"	INDEX = 1 MEMBER = "identifier"	VALUE = "vector_score">
-
-	<MvASSIGN NAME = "l.query"											VALUE = "{ '(*) => [KNN ' $ int( l.index:max_res ) $ ' @' $ int( l.index:id ) $ ' $query_vector AS vector_score]' }">
-
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Search_Index( l.index, l.query, l.options, l.results ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Search_Index( l.index, l.search_options, l.embeddings[ 1 ], l.results, l.result_count ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvCOMMENT>
-	|
-	| Convert index similarity percentages to Redis cosine distance
-	|
-	</MvCOMMENT>
+	<MvASSIGN NAME = "l.total_products"	VALUE = "{ l.relational_result_count }">
 
-	<MvASSIGN NAME = "l.specific_threshold_distance"					VALUE = "{ 1 - ( l.index:specific_t / 100.0 ) }">
-	<MvASSIGN NAME = "l.specific_endpoint_distance"						VALUE = "{ 1 - ( l.index:specific_e / 100.0 ) }">
-	<MvASSIGN NAME = "l.broad_endpoint_distance"						VALUE = "{ 1 - ( l.index:broad_e / 100.0 ) }">
-
-	<MvCOMMENT>
-	|
-	| Process results.  They are returned from Redis in this format:
-	|
-	|	[	
-	|		100,
-	|		"test_product_embeddings:1173",
-	|		[
-	|			"vector_score",
-	|			0.185165286064
-	|		],
-	|		"test_product_embeddings:1121",
-	|		[
-	|			"vector_score",
-	|			0.187774002552
-	|		],
-	|		...
-	|	]
-	|
-	</MvCOMMENT>
-	
-	<MvASSIGN NAME = "l.num_results"									VALUE = "{ int( l.results[ 1 ] ) }">
-
-	<MvIF EXPR = "{ l.num_results GT 0 }">
-		<MvCOMMENT>
-		|
-		| Determine which endpoints to use based on the relevance of the first result.  If there are relational results
-		| present, the lowest cutoff is "broad"
-		|
-		</MvCOMMENT>
-
-		<MvASSIGN NAME = "l.first_result_distance"						VALUE = "{ l.results[ 3 ][ 2 ] }">
-
-		<MvIF EXPR = "{ l.first_result_distance LE l.specific_threshold_distance }">
-			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
-			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.specific_endpoint_distance }">
-		<MvELSEIF EXPR = "{ ( l.first_result_distance LE l.broad_endpoint_distance ) OR l.relational_result_count }">
-			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ l.num_results }">
-			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = "{ l.broad_endpoint_distance }">
-		<MvELSE>
-			<MvASSIGN NAME = "l.cutoff_n"								VALUE = "{ min( l.num_results, l.index:sparse_n ) }">
-			<MvASSIGN NAME = "l.cutoff_distance"						VALUE = 1>
+	<MvFOREACH ITERATOR = "l.result" ARRAY = "l.results" INDEX = "l.disp_order" COUNT = "{ l.result_count }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
+				 FIELDS	= "l.cachedproductlist:id, l.result:product_id, l.disp_order">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00067', g.MvQUERY_Error ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ ++l.total_products EQ l.index:max_res }">
+			<MvFOREACHSTOP>
 		</MvIF>
-
-		<MvCOMMENT>
-		|
-		| Populate CachedProductListXProduct
-		|
-		</MvCOMMENT>
-
-		<MvASSIGN NAME = "l.total_products"			VALUE = "{ l.relational_result_count }">
-
-		<MvFOR INDEX = "l.pos" FIRST = "{ 2 }" LAST = "{ 1 + ( l.cutoff_n * 2 ) }" NEXT = "{ l.pos + 2 }">
-			<MvASSIGN NAME = "l.disp_order"			VALUE = "{ l.disp_order + 1 }">
-			<MvASSIGN NAME = "l.product_id"			VALUE = "{ gettoken( l.results[ l.pos ], ':', 2 ) }">
-			<MvASSIGN NAME = "l.distance"			VALUE = "{ l.results[ l.pos + 1 ][ 2 ] }">
-
-			<MvIF EXPR = "{ l.distance GT l.cutoff_distance }">
-				<MvFORSTOP>
-			</MvIF>
-
-			<MvQUERY NAME	= "Merchant"
-					 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) VALUES ( ?, ?, ? )' }"
-					 FIELDS	= "l.cachedproductlist:id, l.product_id, l.disp_order">
-			<MvIF EXPR = "{ g.MvQUERY_Error }">
-				<MvIF EXPR = "{ NOT [ g.Library_Filename_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
-					<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00067', g.MvQUERY_Error ) }">
-				</MvIF>
-			<MvELSEIF EXPR = "{ ++l.total_products EQ l.index:max_res }">
-				<MvFORSTOP>
-			</MvIF>
-		</MvFOR>
-	</MvIF>
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">
 </MvFUNCTION>
@@ -2919,7 +2840,7 @@
 
 		<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, 'CAST( ? AS INTEGER ), prod.id, DENSE_RANK() OVER ( ' $ l.orderby_sql $ ' )' ) }">
 
-		<MvASSIGN NAME = "l.population_sql"	VALUE = "{ SQL_Query_Build( l.query, l.population_fields ) $ ternary( l.max_results GT 0, ' LIMIT ' $ int( l.index:max_res ), '' ) }">
+		<MvASSIGN NAME = "l.population_sql"	VALUE = "{ SQL_Query_Build( l.query, l.population_fields ) $ ' LIMIT ' $ int( l.index:max_res ) }">
 
 		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.fields, 'l.cachedproductlist:id', -1 ) }">
 		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert_var( l.fields, l.population_fields, -1 ) }">

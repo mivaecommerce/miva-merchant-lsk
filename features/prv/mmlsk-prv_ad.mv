@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-PRV-ADM-
-| Next Error Code: 156
+| Next Error Code: 161
 |
 </MvCOMMENT>
 
@@ -23,6 +23,10 @@
 	<MvIF EXPR = "{ fexists( l.provide_filename ) }">
 		<MvCOMMENT>If g.PRV_log_file_name is ever to change, make sure to change it in setup.mv as well</MvCOMMENT>
 		<MvASSIGN NAME = "g.PRV_log_file_name"	VALUE = "{ glosub( l.provide_filename, '.xml', '.log' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action_Priority( 'crit', 'MER-PRV-ADM-00160', 'Provisioning file: ' $ l.provide_filename ) }">
+		
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FEL_DB ].DomainFeatureEngagement_Increment_Counter( 'provision:' $ l.provide_filename, 1 ) }">
 
 		<MvCOMMENT>
 		|
@@ -811,6 +815,10 @@ function PRV_Refresh()
 		<MvELSEIF EXPR = "{ l.name EQ 'aisearchindex_add' }">													<MvEVAL EXPR = "{ PRV_Action_Provision_Store_AISearchIndex_Add( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'aisearchindex_update' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_AISearchIndex_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'aisearchindex_delete' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_AISearchIndex_Delete( l.provide_xml:children[ l.child_pos ] ) }">
+
+		<MvELSEIF EXPR = "{ l.name EQ 'merchandisingsettings_update' }">										<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MerchandisingSettings_Update( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'merchandisingprompt_add' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MerchandisingPrompt_Add( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'merchandisingprompt_delete' }">											<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MerchandisingPrompt_Delete( l.provide_xml:children[ l.child_pos ] ) }">
 
 		<MvELSEIF EXPR = "{ l.name EQ 'facetrules_update' }">													<MvEVAL EXPR = "{ PRV_Action_Provision_Store_FacetRules_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'categoryfacetrules_update' }">											<MvEVAL EXPR = "{ PRV_Action_Provision_Store_CategoryFacetRules_Update( l.provide_xml:children[ l.child_pos ] ) }">
@@ -13751,6 +13759,10 @@ function PRV_Refresh()
 	<MvASSIGN NAME = "l.task:enabled"		VALUE = 1>
 	<MvASSIGN NAME = "l.task:queue_id"		VALUE = 1>
 	<MvASSIGN NAME = "l.task:trig_delay"	VALUE = 0>
+	<MvASSIGN NAME = "l.task:frequency"		VALUE = "days">
+	<MvASSIGN NAME = "l.task:n"				VALUE = 1>
+	<MvASSIGN NAME = "l.task:fixed_hour"	VALUE = 0>
+	<MvASSIGN NAME = "l.task:fixed_min"		VALUE = 0>
 	<MvASSIGN NAME = "l.task:runonce"	 	VALUE = 0>
 	<MvASSIGN NAME = "l.task:mnt_mode"		VALUE = 0>
 	<MvASSIGN NAME = "l.task:mnt_advnce"	VALUE = 1800>
@@ -13797,19 +13809,43 @@ function PRV_Refresh()
 
 	<MvIF EXPR = "{ NOT PRV_Tag_Exists( l.provide_xml, 'RunInterval' ) }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Missing required tag RunInterval' ) }">
-	<MvELSEIF EXPR = "{ NOT PRV_Attribute_List( l.provide_xml:tags:RunInterval[ 1 ], 'units', l.runint_multiple, 'once,minutes,hours,days', '0,60,3600,86400' ) }">
+	<MvELSEIF EXPR = "{ NOT PRV_Attribute_List( l.provide_xml:tags:RunInterval[ 1 ], 'units', l.units, 'once,manual,minutes,hours,days,fixeddaily', 'once,manual,minutes,hours,days,fixeddaily' ) }">
 		<MvFUNCTIONRETURN>
 	<MvELSE>
-		<MvIF EXPR = "{ l.runint_multiple EQ 0 }">
-			<MvASSIGN NAME = "l.task:runint"		VALUE = 0>
-			<MvASSIGN NAME = "l.task:runonce" 		VALUE = 1>
-		<MvELSE>
-			<MvIF EXPR = "{ NOT PRV_Tag_Integer( 'R', l.provide_xml, 'RunInterval',	l.runint ) OR
-							NOT PRV_Tag_Boolean( 'O', l.provide_xml, 'RunOnce',		l.task:runonce ) }">
+		<MvIF EXPR = "{ l.units EQ 'once' }">
+			<MvASSIGN NAME = "l.task:frequency"		VALUE = "manual">
+			<MvASSIGN NAME = "l.task:runonce"		VALUE = 1>
+
+			<MvIF EXPR = "{ NOT l.task:enabled }">
+				<MvEVAL EXPR = "{ PRV_LogMessage( l.provide_xml, 'Disabled scheduled tasks with RunInterval "once" will not run until they are enabled' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.units EQ 'manual' }">
+			<MvASSIGN NAME = "l.task:frequency"		VALUE = "manual">
+
+			<MvIF EXPR = "{ NOT PRV_Tag_Boolean( 'O', l.provide_xml, 'RunOnce', l.task:runonce ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.units EQ 'fixeddaily' }">
+			<MvASSIGN NAME = "l.task:frequency"		VALUE = "fixeddaily">
+
+			<MvIF EXPR = "{ NOT PRV_Tag_Integer( 'R', l.provide_xml:tags:RunInterval[ 1 ], 'Hour',		l.task:fixed_hour ) OR
+							NOT PRV_Tag_Integer( 'R', l.provide_xml:tags:RunInterval[ 1 ], 'Minute',	l.task:fixed_min ) }">
 				<MvFUNCTIONRETURN>
 			</MvIF>
 
-			<MvASSIGN NAME = "l.task:runint"		VALUE = "{ l.runint * l.runint_multiple }">
+			<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.task:fixed_hour, 0, 23 ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:RunInterval[ 1 ], 'Invalid value for Hour: ' $ g.Validation_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.task:fixed_min, 0, 59 ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:RunInterval[ 1 ], 'Invalid value for Minute: ' $ g.Validation_Message ) }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.task:frequency"		VALUE = "{ l.units }">
+
+			<MvIF EXPR = "{ NOT PRV_Tag_Integer( 'R:nonneg', l.provide_xml, 'RunInterval',	l.task:n ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
 		</MvIF>
 	</MvIF>
 
@@ -13954,20 +13990,44 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'RunInterval' ) }">
-		<MvIF EXPR = "{ NOT PRV_Attribute_List( l.provide_xml:tags:RunInterval[ 1 ], 'units', l.runint_multiple, 'once,minutes,hours,days', '0,60,3600,86400' ) }">
+		<MvIF EXPR = "{ NOT PRV_Attribute_List( l.provide_xml:tags:RunInterval[ 1 ], 'units', l.units, 'once,manual,minutes,hours,days,fixeddaily', 'once,manual,minutes,hours,days,fixeddaily' ) }">
 			<MvFUNCTIONRETURN>
-		</MvIF>
-
-		<MvIF EXPR = "{ l.runint_multiple EQ 0 }">
-			<MvASSIGN NAME = "l.task:runint"		VALUE = 0>
-			<MvASSIGN NAME = "l.task:runonce" 		VALUE = 1>
 		<MvELSE>
-			<MvIF EXPR = "{ NOT PRV_Tag_Integer( 'R', l.provide_xml, 'RunInterval',	l.runint ) OR
-							NOT PRV_Tag_Boolean( 'O', l.provide_xml, 'RunOnce',		l.task:runonce ) }">
-				<MvFUNCTIONRETURN>
-			</MvIF>
+			<MvIF EXPR = "{ l.units EQ 'once' }">
+				<MvASSIGN NAME = "l.task:frequency"		VALUE = "manual">
+				<MvASSIGN NAME = "l.task:runonce"		VALUE = 1>
 
-			<MvASSIGN NAME = "l.task:runint"		VALUE = "{ l.runint * l.runint_multiple }">
+				<MvIF EXPR = "{ NOT l.task:enabled }">
+					<MvEVAL EXPR = "{ PRV_LogMessage( l.provide_xml, 'Disabled scheduled tasks with RunInterval "once" will not run until they are enabled' ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.units EQ 'manual' }">
+				<MvASSIGN NAME = "l.task:frequency"		VALUE = "manual">
+
+				<MvIF EXPR = "{ NOT PRV_Tag_Boolean( 'O', l.provide_xml, 'RunOnce', l.task:runonce ) }">
+					<MvFUNCTIONRETURN>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.units EQ 'fixeddaily' }">
+				<MvASSIGN NAME = "l.task:frequency"		VALUE = "fixeddaily">
+
+				<MvIF EXPR = "{ NOT PRV_Tag_Integer( 'R', l.provide_xml:tags:RunInterval[ 1 ], 'Hour',		l.task:fixed_hour ) OR
+								NOT PRV_Tag_Integer( 'R', l.provide_xml:tags:RunInterval[ 1 ], 'Minute',	l.task:fixed_min ) }">
+					<MvFUNCTIONRETURN>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.task:fixed_hour, 0, 23 ) }">
+					<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:RunInterval[ 1 ], 'Invalid value for Hour: ' $ g.Validation_Message ) }">
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.task:fixed_min, 0, 59 ) }">
+					<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:RunInterval[ 1 ], 'Invalid value for Minute: ' $ g.Validation_Message ) }">
+				</MvIF>
+			<MvELSE>
+				<MvASSIGN NAME = "l.task:frequency"		VALUE = "{ l.units }">
+
+				<MvIF EXPR = "{ NOT PRV_Tag_Integer( 'R:nonneg', l.provide_xml, 'RunInterval',	l.task:n ) }">
+					<MvFUNCTIONRETURN>
+				</MvIF>
+			</MvIF>
 		</MvIF>
 	</MvIF>
 
@@ -14486,7 +14546,7 @@ function PRV_Refresh()
 			<MvASSIGN NAME = "l.searchsettings:index_id"	VALUE = 0>
 		<MvELSE>
 			<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index_code, l.index ) }">
-				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with the code \'' $ l.index_code $ '\' does not exist' ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index_code $ '\' does not exist' ) }">
 			</MvIF>
 
 			<MvASSIGN NAME = "l.searchsettings:index_id"	VALUE = "{ l.index:id }">
@@ -14730,16 +14790,18 @@ function PRV_Refresh()
 
 	<MvASSIGN NAME = "l.openai_token" VALUE = "">
 
-	<MvIF EXPR = "{ NOT PRV_Tag_Boolean(	'O',			l.provide_xml, 'GenerativeAIEnabled',	l.aisettings:enabled )		OR
-					NOT PRV_Tag_Text(		'O:50', 		l.provide_xml, 'OpenAIEngine',			l.aisettings:engine )		OR
-					NOT PRV_Tag_Text(		'O',			l.provide_xml, 'OpenAIToken',			l.openai_token )			OR
-					NOT PRV_Tag_Text(		'O:254',		l.provide_xml, 'MARSURL',				l.aisettings:mars_url )		OR
-					NOT PRV_Tag_Text(		'O:254',		l.provide_xml, 'RedisHost',				l.aisettings:redishost )	OR
-					NOT PRV_Tag_Integer(	'O:positive',	l.provide_xml, 'RedisPort',				l.aisettings:redisport )	OR
-					NOT PRV_Tag_Integer(	'O:positive',	l.provide_xml, 'RedisTimeout',			l.aisettings:redisto )		OR
-					NOT PRV_Tag_Code(		'o',			l.provide_xml, 'RedisKeyPrefix',		l.aisettings:redis_pfx )	OR
-					NOT PRV_Tag_List( 		'O',			l.provide_xml, 	'VectorDatabase',		l.aisettings:vector_db,
-																			'StoreRedis,SeparateRedis', 'store_redis,redis' ) }">
+	<MvIF EXPR = "{ NOT PRV_Tag_Boolean(	'O',			l.provide_xml, 'GenerativeAIEnabled',		l.aisettings:enabled )			OR
+					NOT PRV_Tag_Text(		'O:50', 		l.provide_xml, 'OpenAIEngine',				l.aisettings:engine )			OR
+					NOT PRV_Tag_Text(		'O',			l.provide_xml, 'OpenAIToken',				l.openai_token )				OR
+					NOT PRV_Tag_Text(		'O:254',		l.provide_xml, 'MARSURL',					l.aisettings:mars_url )			OR
+					NOT PRV_Tag_Integer(	'O:positive',	l.provide_xml, 'LLMCompletionCacheTimeout',	l.aisettings:llmchexp )			OR
+					NOT PRV_Tag_Text(		'O:254',		l.provide_xml, 'RedisHost',					l.aisettings:redishost )		OR
+					NOT PRV_Tag_Integer(	'O:positive',	l.provide_xml, 'RedisPort',					l.aisettings:redisport )		OR
+					NOT PRV_Tag_Integer(	'O:positive',	l.provide_xml, 'RedisTimeout',				l.aisettings:redisto )			OR
+					NOT PRV_Tag_Code(		'o',			l.provide_xml, 'RedisKeyPrefix',			l.aisettings:redis_pfx )		OR
+					NOT PRV_Tag_Text(		'o:254',		l.provide_xml, 'PostgresDatabase',			l.aisettings:pgsqldb )			OR
+					NOT PRV_Tag_Text(		'o:254',		l.provide_xml, 'PostgresUsername',			l.aisettings:pgsqluser )		OR
+					NOT PRV_Tag_List( 		'O',			l.provide_xml, 'VectorDatabase',			l.aisettings:vector_db, 'None,StoreRedis,SeparateRedis,StorePostgres,Postgres', 'none,store_redis,redis,store_postgres,postgres' ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -14767,6 +14829,22 @@ function PRV_Refresh()
 		</MvIF>
 	</MvIF>
 
+	<MvIF EXPR = "{ l.aisettings:vector_db EQ 'store_postgres' AND g.Native_DBAPI NE 'postgresql' }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Store database type is not PostgreSQL' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'PostgresPassword' ) }">
+		<MvIF EXPR = "{ NOT PRV_Tag_Text( 'o', l.provide_xml, 'PostgresPassword', l.pgsqlpass ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.pgsqlpass }">
+			<MvASSIGN NAME = "l.aisettings:pgsqlpass" VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "l.aisettings:pgsqlpass" VALUE = "{ [ g.Module_Library_Crypto ].Encrypt_Payment_Password( l.pgsqlpass ) }">
+		</MvIF>
+	</MvIF>
+
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISettings_Update( l.aisettings ) }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 	</MvIF>
@@ -14777,6 +14855,10 @@ function PRV_Refresh()
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_AISearchIndex_Add" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Defaults( l.index ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndexRelationalFields_Default( l.relationalfields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Load( l.merchandisingsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchSettings_Load_Notify( l.notify_original_searchsettings ) }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
@@ -14801,7 +14883,7 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.existing_index:code $ '\' already exists' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_t, 0, 100 ) }">
@@ -14884,7 +14966,7 @@ function PRV_Refresh()
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Create_Index( l.index, l.embedding ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Create_Index( l.index, l.embedding ) }">
 		<MvEVAL EXPR = "{ PRV_LogError( l.provide_xml ) }">
 
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Delete( l.index ) }">
@@ -14892,7 +14974,17 @@ function PRV_Refresh()
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'aisearchindex' ) }">
+
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00152', 'AI Search Index \'' $ l.index:code $ '\' created' ) }">
+
+	<MvIF EXPR = "{ NOT l.merchandisingsettings:index_id }">
+		<MvASSIGN NAME = "l.merchandisingsettings:index_id" VALUE = "{ l.index:id }">
+
+		<MvIF EXPR = "{ [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Update( l.merchandisingsettings ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00158', 'Index \'' $ l.index:code $ '\' set as the default merchandising index' ) }">
+		</MvIF>
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_AISearchIndex_Update" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
@@ -14910,7 +15002,7 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index_code, l.index ) }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with the code \'' $ l.index_code $ '\' does not exist' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index_code $ '\' does not exist' ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.original_index" VALUE = "{ l.index }">
@@ -14929,7 +15021,7 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index:code, l.existing_index ) AND l.existing_index:id NE l.index:id }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with the code \'' $ l.existing_index:code $ '\' already exists' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.existing_index:code $ '\' already exists' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Range( l.index:specific_t, 0, 100 ) }">
@@ -14946,6 +15038,18 @@ function PRV_Refresh()
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Validate_Compilation( l.index:idx_templ ) }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_index:active AND NOT l.index:active }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Load( l.searchsettings ) }">						<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Load( l.merchandisingsettings ) }">	<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.index:id EQ l.searchsettings:index_id }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index:code $ '\' is configured as the Vexture Search Index and cannot be disabled' ) }">
+		<MvELSEIF EXPR = "{ l.index:id EQ l.merchandisingsettings:index_id }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index:code $ '\' is configured as the Merchandising Search Index and cannot be disabled' ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].MARS_Call_Embeddings( l.embeddings ) }">
@@ -14977,7 +15081,7 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ strcasecmp( l.original_index:source, l.index:source ) NE 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Index_Recreate( l.index, l.embedding ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Recreate_Index( l.index, l.embedding ) }">
 			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 		</MvIF>
 	</MvIF>
@@ -15001,7 +15105,7 @@ function PRV_Refresh()
 
 		<MvFOREACH ITERATOR = "l.relationalcustomfield" ARRAY = "l.relationalcustomfields" COUNT = "{ l.relationalcustomfield_count }">
 			<MvIF EXPR = "{ [ g.Module_Feature_AI_DB ].AISearchIndexRelationalCustomFields_Equal_Default( l.relationalcustomfield ) }">
-				<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexRelationalCustomField_Delete_Field( l.relationalcustomfield:index_id, l.relationalcustomfield:module_id, l.relationalcustomfield:field_code ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndexRelationalCustomField_Delete_Field( l.index:id, l.relationalcustomfield:module_id, l.relationalcustomfield:field_code ) }">
 					<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 				</MvIF>
 			<MvELSE>
@@ -15030,8 +15134,8 @@ function PRV_Refresh()
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_AISearchIndex_Delete" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Load( l.searchsettings ) }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Load( l.searchsettings ) }">						<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Load( l.merchandisingsettings ) }">	<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchSettings_Load_Notify( l.notify_original_searchsettings ) }">
@@ -15045,22 +15149,20 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index_code, l.index ) }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with the code \'' $ l.index_code $ '\' does not exist' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index_code $ '\' does not exist' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.index:id EQ l.searchsettings:index_id }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index:code $ '\' is configured as the Vexture Search Index and cannot be deleted' ) }">
+	<MvELSEIF EXPR = "{ l.index:id EQ l.merchandisingsettings:index_id }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index:code $ '\' is configured as the Merchandising Search Index and cannot be deleted' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_UT ].AISearchIndex_Template_Delete( l.index ) }">	<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Delete( l.index ) }">		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Redis_Delete_Index( l.index ) }">
-
-	<MvIF EXPR = "{ l.index:id EQ l.searchsettings:index_id }">
-		<MvASSIGN NAME = "l.searchsettings:index_id" VALUE = 0>
-
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Update( l.searchsettings ) }">
-			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
-		</MvIF>
-	</MvIF>
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_AI_UT ].AISearchIndex_Delete_Index( l.index ) }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchSettings_Load_Notify( l.notify_searchsettings ) }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
@@ -15263,6 +15365,82 @@ function PRV_Refresh()
 	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = "{ l.relationalcustomfield_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_MerchandisingSettings_Update" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Load( l.merchandisingsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_Text(	'O:50',	l.provide_xml, 'LLM',				l.merchandisingsettings:llm ) OR
+					NOT PRV_Tag_Number(	'O',	l.provide_xml, 'LLMTemperature',	l.merchandisingsettings:llm_temp, 3, 2 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'AIProductSearchIndex' ) }">
+		<MvIF EXPR = "{ NOT PRV_Tag_Code( 'o', l.provide_xml, 'AIProductSearchIndex', l.index_code ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.index_code }">
+			<MvASSIGN NAME = "l.merchandisingsettings:index_id"	VALUE = 0>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.index_code, l.index ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index_code $ '\' does not exist' ) }">
+			<MvELSEIF EXPR = "{ NOT l.index:active }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'AI Search Index with code \'' $ l.index_code $ '\' is not active' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.merchandisingsettings:index_id"	VALUE = "{ l.index:id }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Update( l.merchandisingsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00159', 'Merchandising Settings updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_MerchandisingPrompt_Add" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.merchandisingprompt" VALUE = "">
+
+	<MvIF EXPR = "{ NOT PRV_Tag_Code( 'R',		l.provide_xml, 'Code',			l.merchandisingprompt:code )	OR 
+					NOT PRV_Tag_Text( 'R:100',	l.provide_xml, 'Name',			l.merchandisingprompt:name )	OR
+					NOT PRV_Tag_Text( 'o:254',	l.provide_xml, 'Description',	l.merchandisingprompt:descrip )	OR
+					NOT PRV_Tag_Text( 'o',		l.provide_xml, 'Prompt',		l.merchandisingprompt:prompt ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_MCH_DB ].MerchandisingPrompt_Load_Code( l.merchandisingprompt:code, l.existing_merchandisingprompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Prompt with code \'' $ l.existing_merchandisingprompt:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingPrompt_Insert( l.merchandisingprompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00156', 'Merchandising prompt \'' $ l.merchandisingprompt:code $ '\' created' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_MerchandisingPrompt_Delete" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT PRV_Attribute_Text( l.provide_xml, 'code', l.merchandisingprompt_code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingPrompt_Load_Code( l.merchandisingprompt_code, l.merchandisingprompt ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Prompt \'' $ l.merchandisingprompt_code $ '\' not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingPrompt_Delete( l.merchandisingprompt ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00157', 'Merchandising prompt \'' $ l.merchandisingprompt:code $ '\' deleted' ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_FacetRules_Update" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
@@ -16754,6 +16932,7 @@ function PRV_Refresh()
 					NOT PRV_Tag_Text( 		'o',		l.provide_xml, 	'AdminSecureBaseURL',						l.working_domain:admin_burl )	OR 
 					NOT PRV_Tag_Text( 		'O',		l.provide_xml, 	'BaseURL',									l.working_domain:base_url )		OR 
 					NOT PRV_Tag_Text( 		'o',		l.provide_xml, 	'BaseSecureURL',							l.working_domain:base_surl )	OR 
+					NOT PRV_Tag_Text( 		'o',		l.provide_xml, 	'HelpManifestURL',							l.working_domain:help_murl )	OR 
 					NOT PRV_Tag_Text( 		'O',		l.provide_xml, 	'ImageRoot',								l.working_domain:image_root )	OR 
 					NOT PRV_Tag_Text( 		'O',		l.provide_xml, 	'ModuleRoot',								l.working_domain:mod_root )		OR 
 					NOT PRV_Tag_Text( 		'o',		l.provide_xml, 	'ModuleRootSecure',							l.working_domain:mod_sroot )	OR 
@@ -16804,6 +16983,10 @@ function PRV_Refresh()
 		<MvELSEIF EXPR = "{ gettoken( l.working_domain:admin_surl, '/', 3 ) NE gettoken( l.working_domain:admin_burl, '/', 3 ) }">
 			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'URL hostname must match Secure URL to Administration' ) }">
 		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( NOT ISNULL l.working_domain:help_murl ) AND ( 'https://' IN l.working_domain:help_murl NE 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'HelpManifestURL must start with \'https://\'' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( l.working_domain:img_qual ) OR l.working_domain:img_qual GT 100 }">
@@ -16937,11 +17120,12 @@ function PRV_Refresh()
 	<MvASSIGN NAME = "l.store:schtsk_que"		VALUE = 2>
 	<MvASSIGN NAME = "l.store:cache_exp"		VALUE = 240>
 	<MvASSIGN NAME = "l.store:cache_ver"		VALUE = 0>
+	<MvASSIGN NAME = "l.store:cache_type"		VALUE = "none">
+	<MvASSIGN NAME = "l.store:cache_comp"		VALUE = 1>
 	<MvASSIGN NAME = "l.store:req_ship" 		VALUE = 1>
 	<MvASSIGN NAME = "l.store:req_tax" 			VALUE = 1>
 	<MvASSIGN NAME = "l.store:req_frship" 		VALUE = 0>
 	<MvASSIGN NAME = "l.store:branch_id" 		VALUE = 1>
-	<MvASSIGN NAME = "l.store:cache_type"		VALUE = "none">
 	<MvASSIGN NAME = "l.store:redishost"		VALUE = "127.0.0.1">
 	<MvASSIGN NAME = "l.store:redisport"		VALUE = 6379>
 	<MvASSIGN NAME = "l.store:redisto"			VALUE = 1000>

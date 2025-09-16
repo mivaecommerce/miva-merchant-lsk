@@ -30,43 +30,27 @@ function CombinationFacet_Insert( fieldlist, callback, delegator )
 											delegator );
 }
 
-function CombinationFacet_Update( facet_id, fieldlist, callback, delegator )
+function CombinationFacet_Update( facet_id, data, callback, delegator )
+{
+	return AJAX_Call_Module_JSON( callback, 'admin', 'combofacets', 'CombinationFacet_Update',
+	{
+		CombinationFacet_ID:	facet_id,
+		Code:					data.code,
+		Name:					data.name,
+		VariantSource:			data.variantsrc,
+		Enabled:				data.enabled,
+		IncludeOtherProducts:	data.inclother,
+		CreateFitmentIndicator:	data.createfit,
+		FitmentListPublic:		data.fitlistpub
+	}, delegator );
+}
+
+function CombinationFacet_Update_FieldList( facet_id, fieldlist, callback, delegator )
 {
 	return AJAX_Call_Module_JSON_FieldList( callback, 'admin', 'combofacets', 'CombinationFacet_Update',
 	{
 		CombinationFacet_ID: facet_id
 	}, fieldlist, delegator );
-}
-
-function CombinationFacet_Update_Enabled( facet_id, enabled, callback, delegator )
-{
-	return AJAX_Call_Module( callback,
-							 'admin',
-							 'combofacets',
-							 'CombinationFacet_Update_Enabled',
-							 'CombinationFacet_ID='	+ encodeURIComponent( facet_id ) +
-							 '&Enabled='			+ ( enabled ? 1 : 0 ),
-							 delegator );
-}
-
-function CombinationFacet_Update_IncludeOtherProducts( facet_id, inclother, callback, delegator )
-{
-	return AJAX_Call_Module( callback,
-							 'admin',
-							 'combofacets',
-							 'CombinationFacet_Update_IncludeOtherProducts',
-							 'CombinationFacet_ID='		+ encodeURIComponent( facet_id ) +
-							 '&IncludeOtherProducts='	+ ( inclother ? 1 : 0 ),
-							 delegator );
-}
-
-function CombinationFacet_Update_CreateFitmentIndicator( facet_id, createfit, callback, delegator )
-{
-	return AJAX_Call_Module_JSON( callback, 'admin', 'combofacets', 'CombinationFacet_Update_CreateFitmentIndicator',
-	{
-		CombinationFacet_ID:	facet_id,
-		CreateFitmentIndicator:	createfit
-	}, delegator );
 }
 
 function CombinationFacet_Delete( facet_id, callback, delegator )

@@ -4301,23 +4301,52 @@ MMSelect.prototype.Empty = function()
 	this.SetSelectedIndex( -1 );
 }
 
-MMSelect.prototype.AddOption = function( text, value, /* optional */ option_display_element )
+MMSelect.prototype.AddOption = function( text, value, options )
 {
-	return this.InsertOption( text, value, option_display_element, -1 );
+	//
+	// The original parameters of this function were "text, value, option_display_element".
+	// In order to simplify this and to support the addition of new optional configuration parameters,
+	// the parameters have been altered to "text, value, options". We must still support the original
+	// parameters to avoid breaking existing code. Since JavaScript does not support function
+	// overloading, we must conditionally check the argument type to determine whether someone is
+	// using legacy parameters or our new object-based version.
+	//
+	// Do not remove the legacy code path mapping.
+	//
+
+	if ( arguments[ 2 ] instanceof Node )	return this.InsertOptionLowLevel( text, value, -1, { element: arguments[ 2 ] } ); // Legacy
+	else									return this.InsertOptionLowLevel( text, value, -1, options );
 }
 
-MMSelect.prototype.InsertOption = function( text, value, /* optional */ option_display_element, index )
+MMSelect.prototype.InsertOption = function( text, value, index, options )
 {
-	var self = this;
+	//
+	// The original parameters of this function were "text, value, option_display_element, index".
+	// In order to simplify this and to support the addition of new optional configuration parameters,
+	// the parameters have been altered to "text, value, index, options". We must still support the
+	// original parameters to avoid breaking existing code. Since JavaScript does not support function
+	// overloading, we must conditionally check the argument type to determine whether someone is
+	// using legacy parameters or our new object-based version.
+	//
+	// Do not remove the legacy code path mapping.
+	//
+
+	if ( ( arguments[ 2 ] instanceof Node ) || ( typeof arguments[ 3 ] === 'number' ) )	return this.InsertOptionLowLevel( text, value, arguments[ 3 ], { element: arguments[ 2 ] } ); // Legacy
+	else																				return this.InsertOptionLowLevel( text, value, index, options );
+}
+
+MMSelect.prototype.InsertOptionLowLevel = function( text, value, index, { element = null, selected = false, prevent_selection = false, callback = ( event, option ) => { this.SetValue( value ); } } = {} )
+{
 	var option;
 
-	index				= stoi_max( stoi_def_nonneg( index, this.options.length ), this.options.length );
+	index						= stoi_max( stoi_def_nonneg( index, this.options.length ), this.options.length );
 
-	option				= new Object();
-	option.text			= text;
-	option.value		= value;
-	option.element		= option_display_element;
-	option.menu_option	= new MMMenuButton_Item( null, option_display_element ? option_display_element : option.text, function( event, option ) { self.SetValue( value ); }, option.value );
+	option						= new Object();
+	option.text					= text;
+	option.value				= value;
+	option.element				= element;
+	option.prevent_selection	= prevent_selection; // Allows the option to be clicked, but the option cannot be set as the selected option (ie, it will never be set as the selectedIndex)
+	option.menu_option			= new MMMenuButton_Item( null, element ? element : option.text, callback, option.value );
 
 	this.menubutton.MenuItem_Insert( option.menu_option, index );
 	this.options.splice( index, 0, option );
@@ -4326,11 +4355,16 @@ MMSelect.prototype.InsertOption = function( text, value, /* optional */ option_d
 	{
 		this.selectedIndex++;
 	}
-	else if ( this.selectedIndex === index && index === this.options.length - 1 )
+	else if ( this.selectedIndex === index && index === this.options.length - 1 && !prevent_selection )
 	{
 		this.SetSelectedIndex( index );
 	}
-	else if ( this.selectedIndex === -1 )
+	else if ( this.selectedIndex === -1 && !prevent_selection )
+	{
+		this.SetSelectedIndex( index );
+	}
+
+	if ( !prevent_selection && selected )
 	{
 		this.SetSelectedIndex( index );
 	}
@@ -4386,6 +4420,11 @@ MMSelect.prototype.DisableOptionAtIndex = function( index, value_if_selected )
 {
 	if ( this.options.length > index && this.options[ index ] )
 	{
+		if ( this.selectedIndex === index )
+		{
+			this.SetValue( value_if_selected );
+		}
+
 		this.options[ index ].menu_option.Disable();
 	}
 }
@@ -4529,7 +4568,11 @@ MMSelect.prototype.SetValue = function( value )
 
 	for ( i = 0, i_len = this.options.length; i < i_len; i++ )
 	{
-		if ( this.options[ i ].value === value )
+		if ( this.options[ i ].prevent_selection )
+		{
+			continue;
+		}
+		else if ( this.options[ i ].value === value )
 		{
 			this.SetSelectedIndex( i );
 			break;
@@ -4555,7 +4598,7 @@ MMSelect.prototype.GetValue = function( default_value )
 {
 	var option;
 
-	if ( this.loading || this.selectedIndex === -1 || ( option = this.GetOptionAtIndex( this.selectedIndex ) ) === null )
+	if ( this.loading || this.selectedIndex === -1 || ( option = this.GetOptionAtIndex( this.selectedIndex ) ) === null || option.prevent_selection )
 	{
 		return default_value;
 	}
@@ -4567,7 +4610,7 @@ MMSelect.prototype.GetOption = function()
 {
 	var option;
 
-	if ( this.loading || this.selectedIndex === -1 || ( option = this.GetOptionAtIndex( this.selectedIndex ) ) === null )
+	if ( this.loading || this.selectedIndex === -1 || ( option = this.GetOptionAtIndex( this.selectedIndex ) ) === null || option.prevent_selection )
 	{
 		return null;
 	}
@@ -4579,7 +4622,7 @@ MMSelect.prototype.GetText = function( default_text )
 {
 	var option;
 
-	if ( this.loading || this.selectedIndex === -1 || ( option = this.GetOptionAtIndex( this.selectedIndex ) ) === null )
+	if ( this.loading || this.selectedIndex === -1 || ( option = this.GetOptionAtIndex( this.selectedIndex ) ) === null || option.prevent_selection )
 	{
 		return default_value;
 	}
@@ -4601,7 +4644,7 @@ MMSelect.prototype.SetSelectedIndex = function( index )
 		option.menu_option.RemoveClassName( 'selected_option' );
 	}
 
-	if ( ( option = this.GetOptionAtIndex( index ) ) !== null )
+	if ( ( ( option = this.GetOptionAtIndex( index ) ) !== null ) && !option.prevent_selection )
 	{
 		this.selectedIndex = index;
 
@@ -4737,7 +4780,8 @@ MMSelect.prototype.Event_OnKeyDown_Select = function( e )
 	for ( i = 0, i_len = this.options.length; i < i_len; i++ )
 	{
 		if ( !this.options[ i ].menu_option.Selectable() ||
-			 !this.options[ i ].menu_option.Visible() )
+			 !this.options[ i ].menu_option.Visible() ||
+			 this.options[ i ].prevent_selection )
 		{
 			continue;
 		}
@@ -8842,6 +8886,8 @@ function MMTextArea( parent, name, value )
 	this.element_parent						= typeof parent === 'string' ? document.getElementById( parent ) : parent;
 	this.element_container					= newElement( 'span',		{ 'class': 'mm_textarea' }, 								null, this.element_parent );
 	this.element_title						= newElement( 'span',		{ 'class': 'mm_textarea_title' },		 					null, this.element_container );
+	this.element_title_text					= newElement( 'span',		{ 'class': 'mm_textarea_title_text' },		 				null, this.element_title );
+	this.element_title_tooltip				= newElement( 'span',		{ 'class': 'mm_textarea_title_tooltip' },		 			null, this.element_title );
 	this.element_textarea_container			= newElement( 'span',		{ 'class': 'mm_textarea_container' }, 						null, this.element_container );
 	this.element_textarea_scroller			= newElement( 'span',		{ 'class': 'mm_textarea_scroller' },						null, this.element_textarea_container );
 	this.element_textarea_calculator 		= newElement( 'textarea',	{ 'class': 'mm_textarea_editor mm_textarea_calculator' },	null, this.element_textarea_scroller );
@@ -8863,17 +8909,34 @@ function MMTextArea( parent, name, value )
 	AddEvent( this.element_textarea_container,	'mousedown',	function( event ) { return self.Event_OnMouseDown_TextArea_Container( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'focus',		function( event ) { return self.Event_OnFocus_Input( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'blur',			function( event ) { return self.Event_OnBlur_Input( event ? event : window.event ); } );
+	AddEvent( this.element_textarea,			'input',		function( event ) { return self.Event_OnInput_Input( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'change',		function( event ) { return self.Event_OnChange_Input( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'keydown',		function( event ) { return self.Event_OnKeyDown_Input( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'keyup',		function( event ) { return self.Event_OnKeyUp_Input( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'cut',			function( event ) { return self.Event_OnCut_Input( event ? event : window.event ); } );
 	AddEvent( this.element_textarea,			'paste',		function( event ) { return self.Event_OnPaste_Input( event ? event : window.event ); } );
-	AddEvent( this.element_title,				'click',		function( event ) { return self.Event_OnClick_Title( event ? event : window.event ); } );
+	AddEvent( this.element_title_text,			'click',		function( event ) { return self.Event_OnClick_Title( event ? event : window.event ); } );
 
 	MMRender_onRender_AddHook( this.event_render_read, this.event_render_write );
 
 	this.SetValue( this.value );
 	this.SetResizeEnabled();
+}
+
+MMTextArea.prototype.CreateToolTipMenuButton = function()
+{
+	if ( this.menubutton_tooltip )
+	{
+		return;
+	}
+
+	this.menubutton_tooltip = new MMMenuButton( '', this.element_title_tooltip );
+	this.menubutton_tooltip.SetTabIndex( 1 );
+	this.menubutton_tooltip.SetCustomContent( MivaSVGIconMapWithSpan( 'tooltip' ) );
+	this.menubutton_tooltip.SetMenuAsRootMenu( true );
+	this.menubutton_tooltip.SetClassName( 'mm_tooltip' );
+	this.menubutton_tooltip.SetMenuClassName( 'mm_tooltip_menu' );
+	this.menubutton_tooltip.SetButtonClassName( 'mm_tooltip_button' );
 }
 
 MMTextArea.prototype.AddToParent = function( element_parent )
@@ -8889,7 +8952,7 @@ MMTextArea.prototype.SetAutoComplete = function( enabled )
 
 MMTextArea.prototype.SetTitle = function( text )
 {
-	this.element_title.textContent = text;
+	this.element_title_text.textContent = text;
 
 	return this;
 }
@@ -8897,6 +8960,33 @@ MMTextArea.prototype.SetTitle = function( text )
 MMTextArea.prototype.SetName = function( name )
 {
 	this.element_textarea.name = name;
+}
+
+MMTextArea.prototype.SetToolTip = function( node_or_text )
+{
+	var item, span;
+
+	this.CreateToolTipMenuButton();
+	this.menubutton_tooltip.Menu_Empty();
+
+	if ( !ValueIsEmpty( node_or_text ) )
+	{
+		if ( typeof node_or_text !== 'string' )
+		{
+			item				= new MMMenuButton_Item( null, node_or_text );
+		}
+		else
+		{
+			span				= newElement( 'span', { 'class': 'mm_tooltip_menu_item_default' }, null, null );
+			span.textContent	= node_or_text;
+			item				= new MMMenuButton_Item( null, span );
+		}
+
+		item.SetNeverSelectable();
+		this.menubutton_tooltip.MenuItem_Insert( item, -1 );
+	}
+
+	return this;
 }
 
 MMTextArea.prototype.SetTabIndex = function( index )
@@ -9489,6 +9579,40 @@ MMTextArea.prototype.InsertTab = function()
 	this.ClonedEditor_End( data );
 }
 
+MMTextArea.prototype.InsertString = function( string )
+{
+	var data, source, caret_pos, scroll_top, clientrects, scroll_left;
+
+	source		= this.GetValue_Raw();
+	caret_pos	= this.element_textarea.selectionStart + string.length;
+	scroll_top	= this.element_textarea_scroller.scrollTop;
+	scroll_left	= this.element_textarea_scroller.scrollLeft;
+
+	this.SetValue( source.substring( 0, this.element_textarea.selectionStart ) + string + source.substring( this.element_textarea.selectionEnd, source.length ) );
+	this.element_textarea.setSelectionRange( caret_pos, caret_pos );
+
+	data												= new Object();
+	this.element_textarea_scroller.scrollTop			= scroll_top;
+	this.element_textarea_scroller.scrollLeft			= scroll_left;
+
+	this.ClonedEditor_Start( data );
+
+	if ( ( clientrects = this.CalculateSelectionClientRects( data.range_element, caret_pos, caret_pos ) ) && clientrects.length )
+	{
+		if ( ( clientrects[ 0 ].top - ( data.textarea_rect.top - data.padding_top - data.scroll_top ) ) < scroll_top || ( clientrects[ 0 ].top - ( data.textarea_rect.top - data.padding_top - data.scroll_top ) ) > ( scroll_top + this.element_textarea_scroller.clientHeight ) )
+		{
+			this.element_textarea_scroller.scrollTop	= ( clientrects[ 0 ].top - ( data.textarea_rect.top - data.padding_top - data.scroll_top ) ) - ( this.element_textarea_scroller.clientHeight / 2 );
+		}
+
+		if ( ( clientrects[ 0 ].left - ( data.textarea_rect.left - data.padding_left - data.scroll_left ) ) < scroll_left || ( clientrects[ 0 ].left - ( data.textarea_rect.left - data.padding_left - data.scroll_left ) ) > ( scroll_left + this.element_textarea_scroller.clientWidth ) )
+		{
+			this.element_textarea_scroller.scrollLeft	= ( clientrects[ 0 ].left - ( data.textarea_rect.left - data.padding_left - data.scroll_left ) ) - ( this.element_textarea_scroller.clientWidth / 2 );
+		}
+	}
+
+	this.ClonedEditor_End( data );
+}
+
 MMTextArea.prototype.RemoveKeyStackEntry = function()
 {
 	var keystackentry;
@@ -9874,7 +9998,7 @@ MMTextArea.prototype.Event_OnMouseDown_TextArea_Container = function( e )
 
 	target = e.target || e.srcElement;
 
-	if ( target === this.element_textarea )
+	if ( target === this.element_textarea || target === this.element_title_tooltip || containsChild( this.element_title_tooltip, target ) )
 	{
 		return true;
 	}
@@ -9986,6 +10110,17 @@ MMTextArea.prototype.Event_OnBlur_Input = function( e )
 }
 
 MMTextArea.prototype.Event_OnChange_Input = function( e )
+{
+	if ( this.disabled || this.readonly )
+	{
+		return true;
+	}
+
+	this.NotifyChange();
+	return true;
+}
+
+MMTextArea.prototype.Event_OnInput_Input = function( e )
 {
 	if ( this.disabled || this.readonly )
 	{
@@ -10498,6 +10633,12 @@ function MivaSVGIconMap( icon )
 				<path class="mm10_svg_icon_color" d="M6.5,6.5H1.5V1.5h5v5ZM6.8,0H1.2C.5,0,0,.6,0,1.2v5.6c0,.7.5,1.2,1.2,1.2h5.6c.7,0,1.2-.5,1.2-1.2V1.2C8,.6,7.5,0,6.8,0M15.2,10.5H.8c-.4,0-.8.3-.8.8s.3.8.8.8h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M15.2,14.5H.8c-.4,0-.8.3-.8.8s.3.8.8.8h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M10.8,1.5h4.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-4.5c-.4,0-.8.3-.8.8s.3.8.8.8M10.8,5h4.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-4.5c-.4,0-.8.3-.8.8s.3.8.8.8M10.8,8.6h1.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-1.5c-.4,0-.8.3-.8.8s.3.8.8.8" />
 			</svg>`;
 		}
+		case 'component-product-fitment-list':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="15.5" viewBox="0 0 16 15.5">
+				<path class="mm10_svg_icon_color" d="M.8,1.5h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8H.8c-.4,0-.8.3-.8.8s.3.8.8.8M.8,5h2.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8H.8c-.4,0-.8.3-.8.8s.3.8.8.8M6.8,3.5c-.4,0-.8.3-.8.8s.3.8.8.8h2.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-2.5ZM15.2,3.5h-2.5c-.4,0-.8.3-.8.8s.3.8.8.8h2.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M15.2,7H.8c-.4,0-.8.3-.8.8s.3.8.8.8h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M15.2,14H.8c-.4,0-.8.3-.8.8s.3.8.8.8h14.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8M.8,12h2.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8H.8c-.4,0-.8.3-.8.8s.3.8.8.8M9.2,12c.4,0,.8-.3.8-.8s-.3-.8-.8-.8h-2.5c-.4,0-.8.3-.8.8s.3.8.8.8h2.5ZM15.2,10.5h-2.5c-.4,0-.8.3-.8.8s.3.8.8.8h2.5c.4,0,.8-.3.8-.8s-.3-.8-.8-.8" />
+			</svg>`;
+		}
 		case 'component-contact-form':
 		{
 			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
@@ -10744,6 +10885,12 @@ function MivaSVGIconMap( icon )
 				<path class="mm10_svg_icon_color" d="M28296,2506a6,6,0,1,1,6,6A6.017,6.017,0,0,1,28296,2506Zm2.551-3.524-.078.078a4.932,4.932,0,1,0,7.049,6.9,5.043,5.043,0,0,0,0-7.048,4.955,4.955,0,0,0-6.971.071Zm2.771,6.153v-2.778a.675.675,0,1,1,1.35,0v2.778a.675.675,0,1,1-1.35,0Zm-.15-5.1a.824.824,0,1,1,.824.824A.834.834,0,0,1,28301.174,2503.524Z" transform="translate(-28296.002 -2500.001)" />
 			</svg>`;
 		}
+		case 'inline-help':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 16 16">
+				<path class="mm10_svg_icon_color" d="M18916.984,20773a8,8,0,0,1,.016-16h.016a7.973,7.973,0,0,1,5.646,2.346A8,8,0,0,1,18917,20773Zm-4.656-12.705a6.631,6.631,0,0,0,4.688,11.318h.006a6.663,6.663,0,0,0,4.676-1.939,6.628,6.628,0,1,0-9.369-9.379Zm4,8.07v-.182a.684.684,0,0,1,1.367,0v.182a.684.684,0,0,1-1.367,0Zm0-2.252v-.234a1.761,1.761,0,0,1,1.064-1.646,1.012,1.012,0,0,0,.563-.6,1,1,0,0,0-1.887-.666c-.006.016-.01.031-.016.051a.66.66,0,0,1-.371.371.681.681,0,0,1-.525.01.688.688,0,0,1-.375-.9,2.366,2.366,0,0,1,2.512-1.559l.006.006c.031,0,.072,0,.1.01l.031.01a2.348,2.348,0,0,1,1.914,1.908,2.374,2.374,0,0,1-1.434,2.617.4.4,0,0,0-.215.375v.24a.686.686,0,1,1-1.371,0Z" transform="translate(-18908.998 -20757)" />
+			</svg>`;
+		}
 		case 'pagebuilder-theme-reset':
 		{
 			return `<svg xmlns="http://www.w3.org/2000/svg" width="14.498" height="11.416" viewBox="0 0 14.498 11.416">
@@ -10880,6 +11027,18 @@ function MivaSVGIconMap( icon )
 		{
 			return `<svg xmlns="http://www.w3.org/2000/svg" width="7.43" height="3.998" viewBox="0 0 7.43 3.998">
 				<path class="mm10_svg_icon_color" d="M3.648,4a.711.711,0,0,1-.4-.169L.266,1.266A.711.711,0,1,1,1.191.186L3.715,2.351,6.239.186a.711.711,0,1,1,.924,1.08L4.177,3.826A.711.711,0,0,1,3.648,4Z" />
+			</svg>`;
+		}
+		case 'merchandising':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 18 18">
+				<path class="mm10_svg_icon_color" d="M16.489,5.766H13.914v-.84a4.915,4.915,0,1,0-9.829,0v.84H1.51A1.5,1.5,0,0,0,0,7.279v6.478A4.243,4.243,0,0,0,4.234,18h9.531A4.244,4.244,0,0,0,18,13.757V7.279a1.514,1.514,0,0,0-1.511-1.513M5.744,4.96a3.256,3.256,0,1,1,6.511,0V5.8H5.744Zm10.6,8.8a2.55,2.55,0,0,1-2.575,2.58H4.234a2.55,2.55,0,0,1-2.575-2.58V7.429H4.085v2.638a.83.83,0,1,0,1.659,0V7.429h6.511v2.638a.83.83,0,1,0,1.659,0V7.429H16.34Z" />
+			</svg>`;
+		}
+		case 'merchandising-prompt-submit':
+		{
+			return `<svg xmlns="http://www.w3.org/2000/svg" width="12.25" height="14" viewBox="0 0 12.25 14">
+				<path class="mm10_svg_icon_color" d="M6.125,14a.875.875,0,0,1-.875-.875V2.987L1.494,6.744A.875.875,0,0,1,.256,5.506L5.506.256A.87.87,0,0,1,6.122,0h.005a.87.87,0,0,1,.616.256l5.25,5.25a.875.875,0,0,1-1.237,1.237L7,2.987V13.125A.875.875,0,0,1,6.125,14" />
 			</svg>`;
 		}
 		default:
@@ -12045,6 +12204,31 @@ function MMCopyTextToClipboard( text, callback /* optional */ )
 	}
 
 	document.body.removeChild( element_textarea );
+}
+
+function MMPostMessageListen( onmessage, { destination = window, source = null } = {} )
+{
+	destination.addEventListener( 'message', ( e ) =>
+	{
+		if ( source !== null && e.source !== source )
+		{
+			return;
+		}
+
+		try
+		{
+			const data = JSON.parse( e.data );
+
+			onmessage( data.command, data.data );
+		}
+		catch ( err )
+		{
+			if ( typeof e.data === 'string' && e.data.length )
+			{
+				onmessage( e.data, null );
+			}
+		}
+	} );
 }
 
 // Font Embed Generator Functions
