@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-cmp-mv-flex">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Flex Component">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1301">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.10">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, util, component, component_frag, component_prov, provision_store, json, json_upload, clientside, clientside_sri, pagebuilder_cmp, json_changeset, skins">
 </MvFUNCTION>
@@ -392,8 +392,7 @@
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.flex_item:settings ) }">
-	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.flex_item:settings ) }">
+	<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.flex_item:settings ) }">
 
 	<MvASSIGN NAME = "l.flex_item:settings:resourcegroup_code" VALUE = "{ l.managedproperty:version:settings:resourcegroup_code }">
 
@@ -414,7 +413,13 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "FlexItemSettings_Upgrade" PARAMETERS = "module var, managedproperty var, settings var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "FlexItemSettings_Sanitize" PARAMETERS = "module var, component var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.component, l.settings, l.upgraded ) }">
+	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.component, l.settings ) }">
+	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.component, l.settings, l.upgraded ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_Upgrade" PARAMETERS = "module var, component var, settings var, upgraded var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ strcasecmp( l.settings:_flex:flex_version, l.module:version ) NE 0 }">
 		<MvCOMMENT>
 		|
@@ -427,31 +432,35 @@
 		<MvASSIGN NAME = "l.settings:_flex:flex_version"		VALUE = "{ l.module:version }">
 	</MvIF>
 
-	<MvIF EXPR = "{ strcasecmp( l.settings:_flex:settings_version, l.managedproperty:version:settings:version ) NE 0 }">
-		<MvIF EXPR = "{ NOT l.managedproperty:version:settings:upgrade_template_disabled AND
-						NOT ISNULL l.managedproperty:version:settings:upgrade_template_filename }">
+	<MvIF EXPR = "{ strcasecmp( l.settings:_flex:settings_version, l.component:version ) EQ 0 }">
+		<MvASSIGN NAME = "l.upgraded" VALUE = 0>
+	<MvELSE>
+		<MvASSIGN NAME = "l.upgraded" VALUE = 1>
+
+		<MvIF EXPR = "{ NOT l.component:upgrade_template_disabled AND
+						NOT ISNULL l.component:upgrade_template_filename }">
 			<MvASSIGN NAME = "l.render_settings"				VALUE = "">
-			<MvASSIGN NAME = "l.render_settings:component"		VALUE = "{ l.managedproperty:version:settings }">
+			<MvASSIGN NAME = "l.render_settings:component"		VALUE = "{ l.component }">
 			<MvREFERENCE NAME = "l.render_settings:instance"	VARIABLE = "l.settings">
 
 			<MvCAPTURE VARIABLE = "l.discard">
-				<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Render_Template( l.managedproperty:version:settings:upgrade_template_filename, l.render_settings ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Render_Template( l.component:upgrade_template_filename, l.render_settings ) }">
 			</MvCAPTURE>
 		</MvIF>
 
-		<MvASSIGN NAME = "l.settings:_flex:settings_version"	VALUE = "{ l.managedproperty:version:settings:version }">
+		<MvASSIGN NAME = "l.settings:_flex:settings_version"	VALUE = "{ l.component:version }">
 	</MvIF>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "FlexItemSettings_Extend_Defaults" PARAMETERS = "managedproperty var, settings var" STANDARDOUTPUTLEVEL = "">
-	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_LowLevel( l.managedproperty:version:settings:properties, l.managedproperty:version:settings:defaults, l.settings ) }">
+<MvFUNCTION NAME = "FlexItemSettings_Extend_Defaults" PARAMETERS = "component var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Properties( l.component:properties, l.component:defaults, l.settings ) }">
 
-	<MvIF EXPR = "{ NOT ISNULL l.managedproperty:version:settings:advanced_properties }">
-		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_LowLevel( l.managedproperty:version:settings:advanced_properties, l.managedproperty:version:settings:defaults:advanced, l.settings:advanced ) }">
+	<MvIF EXPR = "{ NOT ISNULL l.component:advanced_properties }">
+		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Properties( l.component:advanced_properties, l.component:defaults:advanced, l.settings:advanced ) }">
 	</MvIF>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "FlexItemSettings_Extend_Defaults_LowLevel" PARAMETERS = "properties var, defaults var, settings var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "FlexItemSettings_Extend_Defaults_Properties" PARAMETERS = "properties var, defaults var, settings var" STANDARDOUTPUTLEVEL = "">
 	<MvFOREACH ITERATOR = "l.property" ARRAY = "l.properties">
 		<MvIF EXPR = "{ ISNULL l.property:code }">
 			<MvFOREACHCONTINUE>
@@ -464,10 +473,6 @@
 		<MvREFERENCEARRAY NAME = "l.property_settings" VARIABLE = "l.settings">
 			<MvMEMBER NAME = "{ l.property:code }">
 		</MvREFERENCEARRAY>
-
-		<MvIF EXPR = "{ NOT ISNULL l.property:visibility_conditions AND NOT l.property_settings:visible }">
-			<MvFOREACHCONTINUE>
-		</MvIF>
 
 		<MvIF EXPR = "{ l.property:type EQ 'merchandisingprompt' }">			<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Property_MerchandisingPrompt( l.property, l.property_defaults, l.property_settings ) }">
 		<MvELSEIF EXPR = "{ l.property:type EQ 'borderthickness' }">			<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Property_BorderThickness( l.property, l.property_defaults, l.property_settings ) }">
@@ -802,7 +807,7 @@
 	
 	<MvIF EXPR = "{ l.property:include_default }">
 		<MvIF EXPR = "{ miva_member_exists( l.property_defaults, 'default' ) }">
-			<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_LowLevel( l.property:properties, l.property_defaults:default, l.property_settings:default ) }">
+			<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Properties( l.property:properties, l.property_defaults:default, l.property_settings:default ) }">
 		<MvELSEIF EXPR = "{ miva_member_exists( l.property_defaults, '{any}' ) }">
 			<MvREFERENCEARRAY NAME = "l.default_property_defaults" VARIABLE = "l.property_defaults">
 				<MvMEMBER NAME = "{ '{any}' }">
@@ -812,7 +817,7 @@
 				<MvASSIGN NAME = "l.property_settings:default" VALUE = "{ l.default_property_defaults }">
 			</MvIF>
 
-			<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_LowLevel( l.property:properties, l.default_property_defaults, l.property_settings:default ) }">
+			<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Properties( l.property:properties, l.default_property_defaults, l.property_settings:default ) }">
 		</MvIF>
 	</MvIF>
 
@@ -847,7 +852,7 @@
 			<MvASSIGN NAME = "l.breakpoint_property_settings" VALUE = "{ l.breakpoint_property_defaults }">
 		</MvIF>
 
-		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_LowLevel( l.property:properties, l.breakpoint_property_defaults, l.breakpoint_property_settings ) }">
+		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Properties( l.property:properties, l.breakpoint_property_defaults, l.breakpoint_property_settings ) }">
 	</MvFOREACH>
 </MvFUNCTION>
 
@@ -862,7 +867,7 @@
 		</MvIF>
 	</MvIF>
 
-	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_LowLevel( l.property:properties, l.property_defaults, l.property_settings ) }">
+	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults_Properties( l.property:properties, l.property_defaults, l.property_settings ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "FlexItemSettings_Extend_Defaults_Property_List" PARAMETERS = "property var, property_defaults var, property_settings var" STANDARDOUTPUTLEVEL = "">
@@ -871,6 +876,230 @@
 	| Intentionally ignored due to the complexity of list defaults vs settings
 	|
 	</MvCOMMENT>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible" PARAMETERS = "component var, settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Properties( l.component:properties, l.settings, l.force_visibility_recalculation ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.component:advanced_properties }">
+		<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Properties( l.component:advanced_properties, l.settings:advanced, l.force_visibility_recalculation ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Properties" PARAMETERS = "properties var, settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.processed_properties" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.property" ARRAY = "l.properties">
+		<MvIF EXPR = "{ ISNULL l.property:code }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property( l.properties, l.property, l.processed_properties, l.settings, l.force_visibility_recalculation ) }">
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Property" PARAMETERS = "properties var, property var, processed_properties var, settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.property_processed" VARIABLE = "l.processed_properties">
+		<MvMEMBER NAME = "{ l.property:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.property_processed }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.property_processed" VALUE = 1>
+
+	<MvREFERENCEARRAY NAME = "l.property_settings" VARIABLE = "l.settings">
+		<MvMEMBER NAME = "{ l.property:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT ISNULL l.property:visibility_conditions AND ( l.force_visibility_recalculation OR ISNULL l.property_settings:visible ) }">
+		<MvFOREACH ITERATOR = "l.property_code" ARRAY = "l.property_codes" COUNT = "{ miva_struct_members( l.property:visibility_conditions, l.property_codes ) }">
+			<MvIF EXPR = "{ strcasecmp( l.property_code, l.property:code ) EQ 0 }">
+				<MvASSIGN NAME = "l.property_settings"			VALUE = "">
+				<MvASSIGN NAME = "l.property_settings:visible"	VALUE = 0>
+
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.visibility_condition_property" VARIABLE = "l.property:visibility_conditions">
+				<MvMEMBER NAME = "{ l.property_code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT miva_array_search( l.properties, 1, l.search_property, 'strcasecmp( l.search_property:code, l.property_code ) EQ 0' ) }">
+				<MvASSIGN NAME = "l.property_settings"			VALUE = "">
+				<MvASSIGN NAME = "l.property_settings:visible"	VALUE = 0>
+
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property( l.properties, l.search_property, l.processed_properties, l.settings, l.force_visibility_recalculation ) }">
+
+			<MvREFERENCEARRAY NAME = "l.search_property_settings" VARIABLE = "l.settings">
+				<MvMEMBER NAME = "{ l.search_property:code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT ISNULL l.search_property:visibility_conditions AND NOT l.search_property_settings:visible }">
+				<MvASSIGN NAME = "l.property_settings"			VALUE = "">
+				<MvASSIGN NAME = "l.property_settings:visible"	VALUE = 0>
+
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.value_member_name" ARRAY = "l.value_member_names" COUNT = "{ miva_struct_members( l.visibility_condition_property, l.value_member_names ) }">
+				<MvREFERENCEARRAY NAME = "l.values" VARIABLE = "l.visibility_condition_property">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.property_value" VARIABLE = "l.search_property_settings">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT miva_array_search( l.values, 1, l.search_value, 'l.search_value EQ l.property_value' ) }">
+					<MvASSIGN NAME = "l.property_settings"			VALUE = "">
+					<MvASSIGN NAME = "l.property_settings:visible"	VALUE = 0>
+
+					<MvFUNCTIONRETURN>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.property_settings:visible" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.property:type EQ 'text' OR l.property:type EQ 'textarea' }">	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property_TextSettings( l.property, l.property_settings, l.force_visibility_recalculation ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'breakpointgroup' }">					<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property_BreakpointGroup( l.property, l.property_settings, l.force_visibility_recalculation ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'group' }">								<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property_Group( l.property, l.property_settings, l.force_visibility_recalculation ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'list' }">								<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property_List( l.property, l.property_settings, l.force_visibility_recalculation ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Property_BreakpointGroup" PARAMETERS = "property var, property_settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.property:include_default }">
+		<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Properties( l.property:properties, l.property_settings:default, l.force_visibility_recalculation ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Load_Theme( l.theme ) }">
+		<MvFOREACH ITERATOR = "l.breakpoint" ARRAY = "l.theme:layout:breakpoints" COUNT = "{ l.theme:layout:breakpoint_count }">
+			<MvREFERENCEARRAY NAME = "l.breakpoint_settings" VARIABLE = "l.property_settings">
+				<MvMEMBER NAME = "{ l.breakpoint:code }">
+			</MvREFERENCEARRAY>
+	
+			<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Properties( l.property:properties, l.breakpoint_settings, l.force_visibility_recalculation ) }">
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Property_Group" PARAMETERS = "property var, property_settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.property:can_disable OR l.property_settings:settings:enabled }">
+		<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Properties( l.property:properties, l.property_settings, l.force_visibility_recalculation ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Property_List" PARAMETERS = "property var, property_settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.item_settings" ARRAY = "l.property_settings:children">
+		<MvIF EXPR = "{ l.property:list_type EQ 'group' }">
+			<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Properties( l.property:properties, l.item_settings, l.force_visibility_recalculation ) }">
+		</MvIF>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Property_TextSettings" PARAMETERS = "property var, property_settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.processed_fields" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.property:textsettings:fields">
+		<MvIF EXPR = "{ ISNULL l.field:code }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.pseudoclass" ARRAY = "l.field:pseudoclasses">
+			<MvIF EXPR = "{ ISNULL l.pseudoclass }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.pseudoclass_settings" VARIABLE = "l.property_settings:textsettings:fields">
+				<MvMEMBER NAME = "{ l.pseudoclass }">
+			</MvREFERENCEARRAY>
+
+			<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property_TextSettings_Field( l.property, l.field, l.pseudoclass, l.processed_fields, l.pseudoclass_settings, l.force_visibility_recalculation ) }">
+		</MvFOREACH>
+	</MvFOREACH>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "FlexItemSettings_SanitizeVisible_Property_TextSettings_Field" PARAMETERS = "property var, field var, pseudoclass var, processed_fields var, pseudoclass_settings var, force_visibility_recalculation" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.field_processed" VARIABLE = "l.processed_fields">
+		<MvMEMBER NAME = "{ l.pseudoclass }">
+		<MvMEMBER NAME = "{ l.field:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.field_processed }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.field_processed" VALUE = 1>
+
+	<MvREFERENCEARRAY NAME = "l.field_settings" VARIABLE = "l.pseudoclass_settings">
+		<MvMEMBER NAME = "{ l.field:code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT ISNULL l.field:visibility_conditions AND ( l.force_visibility_recalculation OR ISNULL l.field_settings:visible ) }">
+		<MvREFERENCEARRAY NAME = "l.pseudoclass_visibility_conditions" VARIABLE = "l.field:visibility_conditions">
+			<MvMEMBER NAME = "{ l.pseudoclass }">
+		</MvREFERENCEARRAY>
+
+		<MvFOREACH ITERATOR = "l.field_code" ARRAY = "l.field_codes" COUNT = "{ miva_struct_members( l.pseudoclass_visibility_conditions, l.field_codes ) }">
+			<MvIF EXPR = "{ strcasecmp( l.field_code, l.field:code ) EQ 0 }">
+				<MvASSIGN NAME = "l.field_settings"			VALUE = "">
+				<MvASSIGN NAME = "l.field_settings:visible"	VALUE = 0>
+
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT miva_array_search( l.property:textsettings:fields, 1, l.search_field, 'strcasecmp( l.search_field:code, l.field_code ) EQ 0' ) OR
+							NOT miva_array_search( l.search_field:pseudoclasses, 1, l.search_pseudoclass, 'strcasecmp( l.search_pseudoclass, l.pseudoclass ) EQ 0' ) }">
+				<MvASSIGN NAME = "l.field_settings"			VALUE = "">
+				<MvASSIGN NAME = "l.field_settings:visible"	VALUE = 0>
+
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible_Property_TextSettings_Field( l.property, l.search_field, l.pseudoclass, l.processed_fields, l.pseudoclass_settings, l.force_visibility_recalculation ) }">
+
+			<MvREFERENCEARRAY NAME = "l.search_field_settings" VARIABLE = "l.pseudoclass_settings">
+				<MvMEMBER NAME = "{ l.search_field:code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT ISNULL l.search_field:visibility_conditions AND NOT l.search_field_settings:visible }">
+				<MvASSIGN NAME = "l.field_settings"			VALUE = "">
+				<MvASSIGN NAME = "l.field_settings:visible"	VALUE = 0>
+
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.visibility_condition_field" VARIABLE = "l.pseudoclass_visibility_conditions">
+				<MvMEMBER NAME = "{ l.field_code }">
+			</MvREFERENCEARRAY>
+
+			<MvFOREACH ITERATOR = "l.value_member_name" ARRAY = "l.value_member_names" COUNT = "{ miva_struct_members( l.visibility_condition_field, l.value_member_names ) }">
+				<MvREFERENCEARRAY NAME = "l.values" VARIABLE = "l.visibility_condition_field">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.field_value" VARIABLE = "l.search_field_settings">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT miva_array_search( l.values, 1, l.search_value, 'l.search_value EQ l.field_value' ) }">
+					<MvASSIGN NAME = "l.field_settings"			VALUE = "">
+					<MvASSIGN NAME = "l.field_settings:visible"	VALUE = 0>
+
+					<MvFUNCTIONRETURN>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.field_settings:visible" VALUE = 1>
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ComponentModule_Initialize_JSON_Callback" PARAMETERS = "settings var, member, managedproperty var" STANDARDOUTPUTLEVEL = "">
@@ -2101,7 +2330,7 @@
 			<MvMEMBER NAME = "{ l.property:code }">
 		</MvREFERENCEARRAY>
 
-		<MvIF EXPR = "{ ( NOT ISNULL l.property:visibility_conditions ) AND ( NOT ISNULL l.property_settings:visible ) AND ( NOT l.property_settings:visible ) }">
+		<MvIF EXPR = "{ NOT ISNULL l.property:visibility_conditions AND NOT l.property_settings:visible }">
 			<MvFOREACHCONTINUE>
 		</MvIF>
 
@@ -3501,6 +3730,8 @@
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:flex_version"		VALUE = "{ l.module:version }">
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:settings_version"	VALUE = "{ ComponentManager_Sanitize_Version( l.managedproperty:version:settings:version ) }">
 
+	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.managedproperty:version:settings, l.flex_item:settings, 1 ) }">
+
 	<MvASSIGNARRAY NAME = "l.working_settings" VALUE = "{ l.flex_item }">
 		<MvMEMBER NAME = "{ l.flex_item:item_code }">
 	</MvASSIGNARRAY>
@@ -3553,8 +3784,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Exists( l.provide_xml, 'Settings' ) }">
-		<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.flex_item:settings ) }">
-		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.flex_item:settings ) }">
+		<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.flex_item:settings ) }">
 	<MvELSE>
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 'O', l.provide_xml, 'Settings', l.json_settings ) }">
 			<MvFUNCTIONRETURN>
@@ -3566,6 +3796,8 @@
 
 		<MvASSIGN NAME = "l.flex_item:settings:_flex:flex_version"		VALUE = "{ l.module:version }">
 		<MvASSIGN NAME = "l.flex_item:settings:_flex:settings_version"	VALUE = "{ ComponentManager_Sanitize_Version( l.managedproperty:version:settings:version ) }">
+
+		<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.managedproperty:version:settings, l.flex_item:settings, 1 ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ strcasecmp( l.original_flex_item:item_code, l.flex_item:item_code ) NE 0 }">
@@ -3716,8 +3948,7 @@
 						</MvREFERENCEARRAY>
 
 						<MvIF EXPR = "{ miva_array_search( l.managedproperties, 1, l.managedproperty, 'strcasecmp( l.managedproperty:code, l.flex_item:component_code ) EQ 0' ) }">
-							<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.flex_item:settings ) }">
-							<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.flex_item:settings ) }">
+							<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.flex_item:settings ) }">
 
 							<FlexItem_Add>
 								<Item_Code><MvEVAL EXPR = "{ miva_cdata_encode( l.flex_item:item_code ) }"></Item_Code>
@@ -4191,8 +4422,7 @@
 			<MvFOREACHCONTINUE>
 		</MvIF>
 
-		<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.flex_item:settings ) }">
-		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.flex_item:settings ) }">
+		<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.flex_item:settings ) }">
 
 		<MvASSIGN NAME = "l.element"				VALUE = "">
 		<MvASSIGN NAME = "l.element:component_code"	VALUE = "{ l.flex_item:component_code }">
@@ -4224,8 +4454,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-CMP-MV-FLEX-00244', 'Element not found' ) }">
 	</MvIF>
 
-	<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.flex_item:settings ) }">
-	<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.flex_item:settings ) }">
+	<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.flex_item:settings ) }">
 
 	<MvASSIGN NAME = "l.element"				VALUE = "">
 	<MvASSIGN NAME = "l.element:component_code"	VALUE = "{ l.flex_item:component_code }">
@@ -4250,6 +4479,8 @@
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:flex_version"		VALUE = "{ l.module:version }">
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:settings_version"	VALUE = "{ ComponentManager_Sanitize_Version( l.component:version ) }">
 
+	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.component, l.flex_item:settings, 1 ) }">
+
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-CMP-MV-FLEX-00073', 'Inserted flex item \'' $ l.flex_item:item_code $ '\' using component \'' $ l.flex_item:component_code $ '\'' ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -4271,6 +4502,8 @@
 	<MvASSIGN NAME = "l.flex_item:settings"							VALUE = "{ l.element:settings }">
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:flex_version"		VALUE = "{ l.module:version }">
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:settings_version"	VALUE = "{ ComponentManager_Sanitize_Version( l.component:version ) }">
+
+	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.component, l.flex_item:settings, 1 ) }">
 
 	<MvIF EXPR = "{ strcasecmp( l.original_flex_item:item_code, l.flex_item:item_code ) NE 0 }">
 		<MvASSIGNARRAY NAME = "l.settings"			VALUE = "{ l.flex_item }">
@@ -9113,8 +9346,7 @@
 			<MvIF EXPR = "{ NOT ComponentManager_Validate_Type_Component( l.managedproperty:version:settings:type ) }">
 				<MvASSIGN NAME = "l.item:component_name"	VALUE = "<Not Available>">
 			<MvELSE>
-				<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.flex_item:settings ) }">
-				<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.flex_item:settings ) }">
+				<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.flex_item:settings ) }">
 
 				<MvASSIGN NAME = "l.item:component_name"	VALUE = "{ l.managedproperty:version:settings:name }">
 			</MvIF>
@@ -9233,6 +9465,8 @@
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:flex_version"		VALUE = "{ l.module:version }">
 	<MvASSIGN NAME = "l.flex_item:settings:_flex:settings_version"	VALUE = "{ ComponentManager_Sanitize_Version( l.managedproperty:version:settings:version ) }">
 
+	<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.managedproperty:version:settings, l.flex_item:settings, 1 ) }">
+
 	<MvASSIGNARRAY NAME = "l.page:settings:flex" VALUE = "{ l.flex_item }">
 		<MvMEMBER NAME = "{ l.flex_item:item_code }">
 	</MvASSIGNARRAY>
@@ -9328,10 +9562,11 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Exists( 'Settings' ) }">
-		<MvEVAL EXPR = "{ FlexItemSettings_Upgrade( l.module, l.managedproperty, l.ref:flex_item:settings ) }">
-		<MvEVAL EXPR = "{ FlexItemSettings_Extend_Defaults( l.managedproperty, l.ref:flex_item:settings ) }">
+		<MvEVAL EXPR = "{ FlexItemSettings_Sanitize( l.module, l.managedproperty:version:settings, l.ref:flex_item:settings ) }">
 	<MvELSE>
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Raw( 'Settings', l.ref:flex_item:settings ) }">
+
+		<MvEVAL EXPR = "{ FlexItemSettings_SanitizeVisible( l.managedproperty:version:settings, l.ref:flex_item:settings, 1 ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.ref:flex_item:settings:_flex:flex_version"		VALUE = "{ l.module:version }">

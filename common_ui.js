@@ -1558,12 +1558,7 @@ function Price_Pad( price )
 
 function Decimal_Pad( value, digits )
 {
-	const parts		= stod_def( value, 0.00 ).toString().split( '.' );
-	const integer	= parts[ 0 ];
-	const decimal	= padr( parts[ 1 ] ?? '', digits, '0' );
-
-	if ( decimal.length == 0 )	return integer;
-	else						return `${integer}.${decimal}`;
+	return stod_def( value, 0.0 ).toLocaleString( 'en-US', { minimumFractionDigits: digits, maximumFractionDigits: 8, useGrouping: false } );
 }
 
 ( function( global )

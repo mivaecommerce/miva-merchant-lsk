@@ -15,9 +15,57 @@
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-ORD-
-| Next Error Code: 45
+| Next Error Code: 50
 |
 </MvCOMMENT>
+
+<MvFUNCTION NAME = "Order_Transaction_Begin" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Session:cache:order_transaction"		VALUE = "">
+	<MvASSIGN NAME = "g.Session:cache:order_transaction:active"	VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Transaction_Commit" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Session:cache:order_transaction:active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Session:cache:order_transaction:type EQ 'insert' }"> <MvASSIGN NAME = "l.null" VALUE = "{ Order_Transaction_Finalize_Insert( g.Session:cache:order_transaction:order ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:order_transaction" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Transaction_Commit_PreserveError" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.error_is_eof"	VALUE = "{ g.Error_DB_EOF }">
+	<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+	<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ Order_Transaction_Commit() }">
+
+	<MvASSIGN NAME = "g.Error_DB_EOF"	VALUE = "{ l.error_is_eof }">
+	<MvASSIGN NAME = "g.Error_Code"		VALUE = "{ l.error_code }">
+	<MvASSIGN NAME = "g.Error_Message"	VALUE = "{ l.error_message }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Order_Transaction_Finalize_Insert" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_FEL_DYN ].FeatureEngagement_Log_OrderEvent( 'MER-DBE-ORD-00047', 'Order_Insert', l.order ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action_Priority( 'crit', 'MER-DBE-ORD-00048', 'Failed to log order event: ' $ g.Error_Code $ ': ' $ g.Error_Message ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_order', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Order_Insert( l.module, l.order ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
 
 <MvFUNCTION NAME = "Order_Create_Empty" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT StandardFields_Load_Cached( l.std_fields ) }">
@@ -91,11 +139,12 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_order', l.modules ) }">
-		<MvIF EXPR = "{ l.module:api_ver GE 9.04 }">
-			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Order_Insert( l.module, l.order ) }">
-		</MvIF>
-	</MvFOREACH>
+	<MvIF EXPR = "{ NOT g.Session:cache:order_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Order_Transaction_Finalize_Insert( l.order ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Session:cache:order_transaction:type"		VALUE = "insert">
+		<MvREFERENCE NAME = "g.Session:cache:order_transaction:order"	VARIABLE = "l.order">
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -781,6 +830,18 @@
 
 <MvFUNCTION NAME = "Order_Update_Status" PARAMETERS = "order var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "Orders"
+				QUERY 	= "{ 'SELECT status FROM ' $ g.Store_Table_Prefix $ 'Orders WHERE id = ?' }"
+				FIELDS	= "l.order:id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-ORD-00049', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+	
+	<MvASSIGN NAME = "l.order:status" VALUE = "{ Orders.d.status }">
+	
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Orders">
+
+	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "OrderItemStatus"
 				QUERY	= "{ 'SELECT COUNT( * ) AS oi_count, status FROM ' $ g.Store_Table_Prefix $ 'OrderItems WHERE order_id = ? GROUP BY status ORDER BY status' }"
 				FIELDS	= "l.order:id">
@@ -857,6 +918,14 @@
 	<MvIF EXPR = "{ l.order_status NE l.order:status }">
 		<MvASSIGN NAME = "l.original_status"	VALUE = "{ l.order:status }">
 		<MvASSIGN NAME = "l.order:status"		VALUE = "{ l.order_status }">
+
+		<MvIF EXPR = "{ ( l.original_status NE 200 AND l.original_status NE 201 )	AND
+						( l.order:status EQ 200 OR l.order:status EQ 201 )			AND
+						NOT g.Session:cache:order_transaction:active }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_FEL_DYN ].FeatureEngagement_Log_OrderEvent( 'MER-DBE-ORD-00045', 'Order_Shipped', l.order ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action_Priority( 'crit', 'MER-DBE-ORD-00046', 'Failed to log order event: ' $ g.Error_Code $ ': ' $ g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
 
 		<MvASSIGN NAME = "l.module_pos"			VALUE = 1>
 		<MvASSIGN NAME = "l.module_count"		VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_order', l.modules ) }">

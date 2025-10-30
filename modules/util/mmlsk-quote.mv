@@ -39,7 +39,7 @@
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Manage Quotes">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Use this module to enable price quotes on products within your store.  If a product has a fixed initial price that fluctuates based on order details (for example, swimming pools), this module can be used to allow your customers to get a more detailed price quote before purchasing a product.">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1301">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.10">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, clientside, component, data_store, json, json_api, log, system, vis_util, scheduledtask, vis_cust, not_cust, provision_store, shipping, discount, rt_basketitem, cleanup_store, vis_email">
 </MvFUNCTION>
@@ -3925,12 +3925,6 @@
 		<MvASSIGN NAME = "l.order:bill_cntry"	VALUE = "{ l.customer:bill_cntry }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Insert( l.order ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_STA_DB ].Stats_Inc_Orders() }">
-
 	<MvIF EXPR = "{ NOT JSON_Quote_Convert_LowLevel( l.module, l.quote, l.order ) }">
 		<MvFOREACH ITERATOR = "l.vis_module" ARRAY = "l.vis_modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'vis_order', l.vis_modules ) }">
 			<MvIF EXPR = "{ l.vis_module:api_ver GE 5.51 }">
@@ -3970,6 +3964,16 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Quote_Convert_LowLevel" PARAMETERS = "module var, quote var, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Insert( l.order ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"							VALUE = "{ [ g.Module_Feature_STA_DB ].Stats_Inc_Orders() }">
+
 	<MvASSIGN NAME = "l.orderinfo"						VALUE = "">
 	<MvASSIGN NAME = "l.orderinfo:order_id"				VALUE = "{ l.order:id }">
 	<MvASSIGN NAME = "l.orderinfo:module_id"			VALUE = "{ l.module:id }">
@@ -3986,11 +3990,13 @@
 		</MvIF>
 
 		<MvIF EXPR = "{ NOT Quote_Convert_QuoteItem( l.quote, l.order, l.orderinfo, l.quoteitem, 0, l.discount_pricegroup_id_lookup, l.discount_pricegroup_ids, l.discount_pricegroup_id_count, l.orderitem ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 
 		<MvFOREACH ITERATOR = "l.child_quoteitem" ARRAY = "l.quoteitem:children" COUNT = "{ l.quoteitem:child_count }">
 			<MvIF EXPR = "{ NOT Quote_Convert_QuoteItem( l.quote, l.order, l.orderinfo, l.child_quoteitem, l.orderitem:line_id, l.discount_pricegroup_id_lookup, l.discount_pricegroup_ids, l.discount_pricegroup_id_count, l.child_orderitem ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvFOREACH>
@@ -4003,8 +4009,12 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Insert( l.orderinfo ) }">
-		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Update( l.orderinfo ) }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderInfo_Update( l.orderinfo ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvIF>
 
@@ -4025,6 +4035,7 @@
 
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].OrderDiscountTotal_Insert( l.orderdiscounttotal ) }">
 			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvIF>
@@ -4045,6 +4056,7 @@
 
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].OrderDiscountTotal_Insert( l.orderdiscounttotal ) }">
 			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.Error_Message ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvIF>
@@ -4057,6 +4069,7 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].Discount_Order( l.order, 0 ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
@@ -4067,14 +4080,21 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_UT ].GiftCertificateSales_Process_Order( l.order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_DDL_UT ].DigitalDownload_Process_Order( l.order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Update_Status( l.order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Commit() }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 

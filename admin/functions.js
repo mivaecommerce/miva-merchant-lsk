@@ -291,7 +291,11 @@ function OrderReturnList_Load_Order( order_id, callback )							{ return AJAX_Ca
 function OrderReturnList_Received( return_ids, inventory_adjustments, callback )	{ return AJAX_Call( callback, 'admin', 'OrderReturnList_Received',				'Return_IDs=' + EncodeArray( return_ids ) + '&Inventory_Adjustments=' + EncodeArray( inventory_adjustments ) ); }
 
 function OrderReturn_Cancel( return_id, callback )									{ return AJAX_Call( callback, 'admin', 'OrderReturn_Cancel',					'Return_ID=' + encodeURIComponent( return_id ) ); }
-function Order_Create_Empty( callback, delegator )									{ return AJAX_Call( callback, 'admin', 'Order_Create_Empty',					'', delegator ); }
+
+function Order_Create_Empty( callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'Order_Create_Empty', null, delegator );
+}
 
 function Order_Create_FromOrder( order_id, callback, delegator )
 {
@@ -301,7 +305,14 @@ function Order_Create_FromOrder( order_id, callback, delegator )
 	}, delegator );
 }
 
-function Order_Create_Empty_Customer( cust_id, callback, delegator )				{ return AJAX_Call( callback, 'admin', 'Order_Create_Empty',					'Customer_ID=' + encodeURIComponent( cust_id ), delegator ); }
+function Order_Create_Empty_Customer( cust_id, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'Order_Create_Empty',
+	{
+		Customer_ID: cust_id
+	}, delegator );
+}
+
 function Order_Delete( order_id, callback, delegator )								{ return AJAX_Call( callback, 'admin', 'Order_Delete',							'Order_ID=' + encodeURIComponent( order_id ), delegator ); }
 function OrderList_Delete( order_ids, callback, delegator )							{ return AJAX_Call( callback, 'admin', 'OrderList_Delete',						'Order_IDs=' + EncodeArray( order_ids ), delegator ); }
 

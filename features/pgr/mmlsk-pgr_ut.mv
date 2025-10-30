@@ -1531,7 +1531,7 @@
 			</MvIF>
 
 			<MvASSIGN NAME = "l.orderitem:total_price"			VALUE = "{ l.orderitem:total_price + l.orderoption:price }">
-			<MvASSIGN NAME = "l.orderitem:total_weight"			VALUE = "{ l.orderitem:total_weight + l.orderoption:price }">
+			<MvASSIGN NAME = "l.orderitem:total_weight"			VALUE = "{ l.orderitem:total_weight + l.orderoption:weight }">
 		</MvFOREACH>
 
 		<MvASSIGN NAME = "l.orderitem:total"					VALUE = "{ [ g.Module_Library_Utilities ].Round_Item_Total( l.orderitem:total_price * l.orderitem:quantity ) }">
@@ -2017,13 +2017,23 @@
 			<MvASSIGN NAME = "l.item:qualifying"					VALUE = "{ l.item:qualifying AND l.discount_state:options:usl_qual }">
 		</MvIF>
 
-		<MvASSIGN NAME = "l.item:eligible_price"					VALUE = "{ l.item:total_price }">
-
 		<MvIF EXPR = "{ l.pricegroup:capabilities:eligibility EQ 'module' }">
+			<MvASSIGN NAME = "l.item:eligible_price"				VALUE = "{ max( 0.00, l.item:total_price ) }">
+
 			<MvIF EXPR = "{ NOT [ g.Module_Root $ l.pricegroup:module:module ].DiscountModule_Item_Eligible( l.pricegroup:module, l.pricegroup, l.discount_state, l.item, l.item:eligible ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		<MvELSE>
+			<MvCOMMENT>
+			|
+			| Sum-of-parts eligibility calculation works by subtracting the price of non-eligible parts.  If negative prices
+			| are involved, this can result in -total_price - -part_price, so enforcement of non-negative eligible_price is
+			| handled after calculation.
+			|
+			</MvCOMMENT>
+
+			<MvASSIGN NAME = "l.item:eligible_price"				VALUE = "{ l.item:total_price }">
+
 			<MvCOMMENT>
 			|
 			| Check subscription items only if they are not already covered by a product-level assignment, except in the
@@ -2079,10 +2089,6 @@
 					<MvIF EXPR = "{ l.have_eligible_part }">
 						<MvASSIGN NAME = "l.item:eligible"				VALUE = 1>
 					</MvIF>
-
-					<MvIF EXPR = "{ l.item:eligible_price LT 0 }">
-						<MvASSIGN NAME = "l.item:eligible_price"		VALUE = 0.00>
-					</MvIF>
 				<MvELSEIF EXPR = "{ ( NOT l.item:eligible ) AND l.item:part_product_count }">
 					<MvASSIGN NAME = "l.item:eligible"					VALUE = 1>
 
@@ -2098,6 +2104,8 @@
 					</MvFOREACH>
 				</MvIF>
 			</MvIF>
+
+			<MvASSIGN NAME = "l.item:eligible_price"				VALUE = "{ max( 0.00, l.item:eligible_price ) }">
 		</MvIF>
 
 		<MvASSIGN NAME = "l.variant:eligible"						VALUE = "{ l.item:eligible }">
@@ -4061,7 +4069,7 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "DiscountState_Discount_Item_Fixed" PARAMETERS = "discount_state var, item var, quantity, amount" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.amount GT l.discount_state:total_price }">
+	<MvIF EXPR = "{ ( l.discount_state:total_price GE 0 ) AND ( l.amount GT l.discount_state:total_price ) }">
 		<MvASSIGN NAME = "l.amount" VALUE = "{ l.discount_state:total_price }">
 	</MvIF>
 
@@ -4419,6 +4427,10 @@
 	|
 	</MvCOMMENT>
 
+	<MvIF EXPR = "{ l.discount_state:item_price LT 0 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
 	<MvIF EXPR = "{ l.amount GT l.discount_state:item_price }">
 		<MvASSIGN NAME = "l.amount"								VALUE = "{ l.discount_state:item_price }">
 	</MvIF>
@@ -4459,6 +4471,10 @@
 	|	- discount_state:total_price (the order total, reflecting items and charges of all types)
 	|
 	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.discount_state:item_price LT 0 }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
 
 	<MvASSIGN NAME = "l.amount"									VALUE = "{ l.discount_state:item_price }">
 	
@@ -4607,7 +4623,7 @@
 
 		<MvASSIGN NAME = "l.option:discount_count"		VALUE = 0>
 		<MvASSIGN NAME = "l.item:total_price"			VALUE = "{ l.item:total_price + l.option:price }">
-		<MvASSIGN NAME = "l.item:total_weight"			VALUE = "{ l.item:total_weight + l.option:price }">
+		<MvASSIGN NAME = "l.item:total_weight"			VALUE = "{ l.item:total_weight + l.option:weight }">
 	</MvFOREACH>
 
 	<MvASSIGN NAME = "l.item:discount_count"			VALUE = 0>

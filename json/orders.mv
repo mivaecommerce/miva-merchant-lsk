@@ -508,8 +508,20 @@
 		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.search_query, 'ord', 'Modules', 'opm', 'opm.id = ord.pay_id', '' ) }">
 	</MvIF>
 
-	<MvEVAL EXPR = "{ JSON_Query_Callback_With_CustomFields( l.search_query, l.filter, g.Module_JSON, 'JSON_Order_CustomFields_Query' ) }">
 	<MvEVAL EXPR = "{ JSON_OrderBy_Callback_With_CustomFields( l.search_query, l.sort, l.orderby_columns, l.default_sort, g.Module_JSON, 'JSON_Order_CustomFields_Query_OrderBy' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_BaseOrderList_Load_Query_QueryCustomFields" PARAMETERS = "search_query var, filter var, count, total_count" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| For performance reasons, custom field values are only retrieved via query when total_count is less than 100,000 and
+	| the number of records requested for output is greater than 500.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ( l.count EQ 0 ) OR ( l.count GT 500 ) ) AND ( l.total_count LT 100000 ) }">
+		<MvEVAL EXPR = "{ JSON_Query_Callback_With_CustomFields( l.search_query, l.filter, g.Module_JSON, 'JSON_Order_CustomFields_Query' ) }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_BaseOrderIndex_Load_ID" PARAMETERS = "filter var, sort, default_sort, query var, record var" STANDARDOUTPUTLEVEL = "">
@@ -624,6 +636,8 @@
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.count_query, l.total_count ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
+
+	<MvEVAL EXPR = "{ JSON_BaseOrderList_Load_Query_QueryCustomFields( l.search_query, l.filter, l.count, l.total_count ) }">
 
 	<MvASSIGN NAME = "l.search_sql"	VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.search_query, l.search_fields ) }">
 
@@ -1844,20 +1858,30 @@
 	<MvASSIGN NAME = "l.order:bord_count"	VALUE = 0>
 	<MvASSIGN NAME = "l.order:note_count"	VALUE = 0>
 	<MvASSIGN NAME = "l.order:dt_updated"	VALUE = "{ l.order:orderdate }">
-	
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Insert( l.order ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_Customer_Information( l.order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvFOREACH ITERATOR = "l.paymentcard" ARRAY = "l.paymentcards" COUNT = "{ [ g.Module_Feature_PAY_DB ].OrderPaymentCardList_Load_Order( l.existing_order:id, l.paymentcards ) }">
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].OrderPaymentCardXOrder_Insert( l.paymentcard, l.order ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Transaction_Commit() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
 
 	<MvEVAL EXPR = "{ JSON_Response_Start() }">
 	{
@@ -1867,27 +1891,29 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Order_Create_Empty" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">								<MvFUNCTIONRETURN>												</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Filename_Admin ].CanI( 'ORDR', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Access_Denied() }">	</MvIF>
 
-	<MvASSIGN NAME = "g.Customer_ID"		VALUE = "{ int( g.Customer_ID ) }">
-
+	<MvASSIGN NAME = "l.customer"			VALUE = "">
+	<MvASSIGN NAME = "l.order"				VALUE = "">
 	<MvASSIGN NAME = "l.order:source"		VALUE = "user">
 	<MvASSIGN NAME = "l.order:source_id"	VALUE = "{ g.User:id }">
+
+	<MvIF EXPR = "{ [ g.Module_Feature_CUS_JSON ].JSON_Customer_Loaders_Present() }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_JSON ].JSON_Customer_Load( l.customer ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Create_Empty( l.order ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ g.Customer_ID }">
-		<MvIF EXPR = "{ NOT [ g.Feature_CUS_DB ].Customer_Load_ID( g.Customer_ID, l.customer ) }">
-			<MvIF EXPR = "{ NOT [ g.Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-ORD-00037', 'Failed to load customer' ) }">
-		</MvIF>
-
+	<MvIF EXPR = "{ NOT ISNULL l.customer }">
 		<MvASSIGN NAME = "l.order:cust_id" 		VALUE = "{ l.customer:id }">
 		<MvASSIGN NAME = "l.order:ship_fname"	VALUE = "{ l.customer:ship_fname }">
 		<MvASSIGN NAME = "l.order:ship_lname"	VALUE = "{ l.customer:ship_lname }">
@@ -1918,6 +1944,7 @@
 		<MvASSIGN NAME = "l.order:bill_cntry"	VALUE = "{ l.customer:bill_cntry }">
 
 		<MvIF EXPR = "{ NOT [ g.Library_DB ].Order_Update_Customer_Information( l.order ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 
@@ -1926,8 +1953,13 @@
 		</MvLOCKFILE>
 
 		<MvIF EXPR = "{ NOT l.result }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Commit() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvEVAL EXPR = "{ JSON_Response_Start() }">
@@ -2074,12 +2106,6 @@
 	<MvEVAL EXPR = "{ JSON_Order_Create_CustomerInformation_SetField( l.order,	l.customer, 'BillZip',			'bill_zip',		'' ) }">
 	<MvEVAL EXPR = "{ JSON_Order_Create_CustomerInformation_SetField( l.order,	l.customer, 'BillCountry',		'bill_cntry',	'' ) }">
 
-	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Insert( l.order ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvASSIGN NAME = "l.null"				VALUE = "{ [ g.Module_Feature_STA_DB ].Stats_Inc_Orders() }">
-
 	<MvIF EXPR = "{ NOT JSON_Order_Create_LowLevel( l.order, l.customer, l.calculate_shipping, l.shipping_module, l.shipping_module_data, l.calculate_tax, l.triggerfulfillmentmodules ) }">
 		<MvFOREACH ITERATOR = "l.vis_module" ARRAY = "l.vis_modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'vis_order', l.vis_modules ) }">
 			<MvIF EXPR = "{ l.vis_module:api_ver GE 5.51 }">
@@ -2126,26 +2152,40 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Order_Create_LowLevel" PARAMETERS = "order var, customer var, calculate_shipping, shipping_module var, shipping_module_data, calculate_tax, triggerfulfillmentmodules" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Insert( l.order ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_STA_DB ].Stats_Inc_Orders() }">
+
 	<MvIF EXPR = "{ JSON_Input_Exists( 'Items' ) }">
 		<MvIF EXPR = "{ NOT JSON_Order_Create_Items( l.order ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ JSON_Input_Exists( 'Products' ) }">
 		<MvIF EXPR = "{ NOT JSON_Order_Create_Products( l.order, l.customer ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ JSON_Input_Exists( 'Charges' ) }">
 		<MvIF EXPR = "{ NOT JSON_Order_Create_Charges( l.order ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ JSON_Input_Exists( 'CustomField_Values' ) }">
 		<MvIF EXPR = "{ NOT JSON_Order_CustomFields( l.order ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvIF>
@@ -2162,11 +2202,13 @@
 		</MvIF>
 
 		<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Order_Calculate_Charges( l.order, l.calculate_params ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 
 		<MvIF EXPR = "{ l.calculate_shipping }">
 			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Change_Shipping( l.order, l.shipping_module:id, l.shipping_module_data ) }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvIF>
@@ -2176,6 +2218,11 @@
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v56_Order_Update_Total( l.order, l.order_total ) OR
 					NOT [ g.Module_Library_DB ].Order_Update_Status( l.order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Commit() }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 

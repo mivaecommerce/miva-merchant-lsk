@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-SUB-UTL-
-| Next Error Code: 45
+| Next Error Code: 46
 |
 </MvCOMMENT>
 
@@ -803,6 +803,10 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SubscriptionList_ProcessOrder" PARAMETERS = "subscriptions var, subscription_count, order var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.subscription_count LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SUB-UTL-00045', 'At least one subscription must be provided' ) }">
+	</MvIF>
+
 	<MvASSIGN NAME = "l.order_id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Orders' ) }">
 
 	<MvIF EXPR = "{ l.subscription_count GT 1 }">
@@ -1022,9 +1026,13 @@
 
 	<MvCOMMENT>
 	|
-	| Create the order
+	| Create the order (the transaction is committed in SubscriptionList_ProcessOrder_LowLevel_FinalizeOrder)
 	|
 	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Begin() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
 
 	<MvASSIGN NAME = "l.order:source" VALUE = "subscription">
 
@@ -1044,11 +1052,13 @@
 
 	<MvFOREACH ITERATOR = "l.subscription" ARRAY = "l.subscriptions" COUNT = "{ l.subscription_count }">
 		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_RT ].Inventory_Adjust_Variant( l.subscription:product, l.subscription:variant_id, 0 - l.subscription:quantity ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = "{ Subscription_Basket_Reset( g.Basket ) }">
 		</MvIF>
 	</MvFOREACH>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Reset( g.Basket ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -1059,14 +1069,26 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_GFT_UT ].GiftCertificateSales_Process_Order( g.Order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_DDL_UT ].DigitalDownload_Process_Order( g.Order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Update_Status( g.Order ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Root $ g.Store:tax_mod:module ].TaxModule_ProcessOrder( g.Store:tax_mod ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Order_Transaction_Commit_PreserveError() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Order_Transaction_Commit() }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -1075,10 +1097,6 @@
 	| Perform final module notifications
 	|
 	</MvCOMMENT>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Root $ g.Store:tax_mod:module ].TaxModule_ProcessOrder( g.Store:tax_mod ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
 
 	<MvFOREACH ITERATOR = "l.fulfillment_module" ARRAY = "l.fulfillment_modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features( 'fulfill', l.fulfillment_modules ) }">
 		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.fulfillment_module:module ].FulfillmentModule_ProcessOrder( l.fulfillment_module, g.Order ) }">

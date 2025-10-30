@@ -4939,6 +4939,7 @@ function MMInput( parent, name, value )
 	this.element_title							= newElement( 'span', 	{ 'class': 'mm_input_title' },		 		null, this.element_container );
 	this.element_title_text						= newElement( 'span', 	{ 'class': 'mm_input_title_text' },			null, this.element_title );
 	this.element_title_tooltip					= newElement( 'span', 	{ 'class': 'mm_input_title_tooltip' }, 		null, this.element_title );
+	this.element_prefix							= newElement( 'span', 	{ 'class': 'mm_input_prefix' },		 		null, this.element_container );
 	this.element_input							= this.Create_Input( name, this.element_container );
 	this.element_label							= newElement( 'span', 	{ 'class': 'mm_input_label' },		 		null, this.element_container );
 	this.element_error_container				= newElement( 'span',	{ 'class': 'mm_input_error_container' },	null, null );
@@ -5061,6 +5062,13 @@ MMInput.prototype.SetToolTip = function( node_or_text )
 		item.SetNeverSelectable();
 		this.menubutton_tooltip.MenuItem_Insert( item, -1 );
 	}
+
+	return this;
+}
+
+MMInput.prototype.SetPrefix = function( prefix )
+{
+	this.element_prefix.textContent = prefix;
 
 	return this;
 }
@@ -5494,6 +5502,16 @@ MMInput.prototype.ContainedInput = function()
 MMInput.prototype.ContainedElementTitle = function()
 {
 	return this.element_title;
+}
+
+MMInput.prototype.ContainedElementPrefix = function()
+{
+	return this.element_prefix;
+}
+
+MMInput.prototype.ContainedElementLabel = function()
+{
+	return this.element_label;
 }
 
 MMInput.prototype.NotifyChange = function()
