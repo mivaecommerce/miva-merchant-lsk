@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1301">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1302">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -4299,26 +4299,30 @@
 	<MvELSE>									<MvASSIGN NAME = "l.can_upload" VALUE = "{ [ g.Module_Admin ].CanI( 'PAGE', 0, 1, 0, 0 ) }">
 	</MvIF>
 	
+	<MvFOREACH ITERATOR = "l.group" ARRAY = "l.groups" COUNT = "{ l.group_count }">
+		<MvIF EXPR = "{ NOT ISNULL g.Edit_Page }">	<MvASSIGN NAME = "l.group:field_count" VALUE = "{ PageFieldAndValueList_Load_Group( g.Edit_Page, l.group:id, l.group:fields ) }">
+		<MvELSE>									<MvASSIGN NAME = "l.group:field_count" VALUE = "{ PageFieldList_Load_Group( l.group:id, l.group:fields ) }">
+		</MvIF>
+	</MvFOREACH>
+
 	<MvIF EXPR = "{ l.load_fields }">
 		<MvASSIGN NAME = "g.CFM_Fields" VALUE = "">
 
-		<MvFOREACH ITERATOR = "l.group" ARRAY = "l.groups" INDEX = "l.pos" COUNT = "{ l.group_count }">
-			<MvASSIGN NAME = "l.loaded_fields" VALUE = "">
-
-			<MvIF EXPR = "{ NOT ISNULL g.Edit_Page }">	<MvASSIGN NAME = "l.null" VALUE = "{ PageFieldAndValueList_Load_Group( g.Edit_Page, l.group:id, l.loaded_fields ) }">
-			<MvELSE>									<MvASSIGN NAME = "l.null" VALUE = "{ PageFieldList_Load_Group( l.group:id, l.loaded_fields ) }">
-			</MvIF>
-
-			<MvASSIGN NAME = "g.CFM_Fields" INDEX = "{ l.pos }" MEMBER = "fields" VALUE = "{ l.loaded_fields }">
+		<MvFOREACH ITERATOR = "l.group" ARRAY = "l.groups" COUNT = "{ l.group_count }">
+			<MvFOREACH ITERATOR = "l.field" ARRAY = "l.group:fields" COUNT = "{ l.group:field_count }">
+				<MvASSIGN NAME = "g.CFM_Fields" MEMBER = "{ l.field:code }" VALUE = "{ l.field:value }">
+			</MvFOREACH>
 		</MvFOREACH>
 	</MvIF>
 
 	<MvFOREACH ITERATOR = "l.group" ARRAY = "l.groups" INDEX = "l.pos" COUNT = "{ l.group_count }">
 		<MvIF EXPR = "{ g.Tab EQ 'CPFG_' $ l.group:code }">
 			<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_MMImagePicker_HTML() }">
-			<MvEVAL EXPR = "{ Custom_Field_Content( l.pos, l.can_upload, 1 ) }">
+			<MvEVAL EXPR = "{ Custom_Field_Content( l.group, l.can_upload, 1 ) }">
 		<MvELSE>
-			<MvHIDE FIELDS = "{ 'g.CFM_Fields[' $ l.pos $ ']' }">
+			<MvFOREACH ITERATOR = "l.field" ARRAY = "l.group:fields">
+				<MvHIDE FIELDS = "{ 'g.CFM_Fields:' $ l.field:code }">
+			</MvFOREACH>
 		</MvIF>
 	</MvFOREACH>
 	
@@ -4467,22 +4471,26 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ComponentModule_Update_Requires_Version" PARAMETERS = "module var, page var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
-	<MvFOREACH ITERATOR = "l.field_array" ARRAY = "g.CFM_Fields">
-		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.field_array:fields">
-			<MvEVAL EXPR = "{ Normalize_Value( l.field, l.field:value ) }">
+	<MvFOREACH ITERATOR = "l.group" ARRAY = "l.groups" COUNT = "{ GroupList_Load_Include_Default( l.groups ) }">
+		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.group:fields" COUNT = "{ PageFieldList_Load_Group( l.group:id, l.group:fields ) }">
+			<MvREFERENCEARRAY NAME = "l.field_value" VARIABLE = "g.CFM_Fields">
+				<MvMEMBER NAME = "{ l.field:code }">
+			</MvREFERENCEARRAY>
+
+			<MvEVAL EXPR = "{ Normalize_Value( l.field, l.field_value ) }">
 
 			<MvIF EXPR = "{ NOT PageFieldValue_Load( l.field:id, l.page:id, l.page:version_id, l.value ) }">
 				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 					<MvFUNCTIONRETURN VALUE = 0>
 				</MvIF>
 
-				<MvIF EXPR = "{ NOT ISNULL l.field:value }">
+				<MvIF EXPR = "{ NOT ISNULL l.field_value }">
 					<MvFUNCTIONRETURN VALUE = 1>
 				</MvIF>
 			<MvELSE>
 				<MvEVAL EXPR = "{ Normalize_Value( l.field, l.value ) }">
 
-				<MvIF EXPR = "{ strcmp( l.field:value, l.value ) NE 0 }">
+				<MvIF EXPR = "{ strcmp( l.field_value, l.value ) NE 0 }">
 					<MvFUNCTIONRETURN VALUE = 1>
 				</MvIF>
 			</MvIF>
@@ -4493,12 +4501,16 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ComponentModule_PostUpdate" PARAMETERS = "module var, page var, item, field_prefix, fields var" STANDARDOUTPUTLEVEL = "">
-	<MvFOREACH ITERATOR = "l.array" ARRAY = "g.CFM_Fields">
-		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.array:fields">
-			<MvEVAL EXPR = "{ Normalize_Value( l.field, l.field:value ) }">
+	<MvFOREACH ITERATOR = "l.group" ARRAY = "l.groups" COUNT = "{ GroupList_Load_Include_Default( l.groups ) }">
+		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.group:fields" COUNT = "{ PageFieldList_Load_Group( l.group:id, l.group:fields ) }">
+			<MvREFERENCEARRAY NAME = "l.field_value" VARIABLE = "g.CFM_Fields">
+				<MvMEMBER NAME = "{ l.field:code }">
+			</MvREFERENCEARRAY>
 
-			<MvIF EXPR = "{ NOT ISNULL l.field:value }">
-				<MvIF EXPR = "{ NOT PageFieldValue_Set( l.field:id, l.page:id, l.page:version_id, l.field:value ) }">
+			<MvEVAL EXPR = "{ Normalize_Value( l.field, l.field_value ) }">
+
+			<MvIF EXPR = "{ NOT ISNULL l.field_value }">
+				<MvIF EXPR = "{ NOT PageFieldValue_Set( l.field:id, l.page:id, l.page:version_id, l.field_value ) }">
 					<MvFUNCTIONRETURN VALUE = 0>
 				</MvIF>
 				
@@ -4517,10 +4529,12 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ComponentModule_Validate" PARAMETERS = "module var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
-	<MvFOREACH ITERATOR = "l.array" ARRAY = "g.CFM_Fields">		
-		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.array:fields">
-			<MvASSIGN NAME = "l.field:value" VALUE = "{ trim( l.field:value ) }">
-		</MvFOREACH>
+	<MvFOREACH ITERATOR = "l.field_code" ARRAY = "l.field_codes" COUNT = "{ miva_struct_members( g.CFM_Fields, l.field_codes ) }">
+		<MvREFERENCEARRAY NAME = "l.field_value" VARIABLE = "g.CFM_Fields">
+			<MvMEMBER NAME = "{ l.field_code }">
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.field_value" VALUE = "{ trim( l.field_value ) }">
 	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
