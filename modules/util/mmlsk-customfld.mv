@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1302">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1303">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -8281,15 +8281,15 @@
 <MvFUNCTION NAME = "Write_Customer_ID" PARAMETERS = "module var, param, customer_id, custom_field, value" STANDARDOUTPUTLEVEL = "">
 	<MIVA MvDO_Error = "fatal, display">
 
-	<MvIF EXPR = "{ NOT CustomerField_Load_Code( l.custom_field, l.null ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Load_ID( l.customer_id, l.customer ) }">
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 			<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, g.Error_Code $ ': ' $ g.Error_Message ) }">
 		</MvIF>
 
-		<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, 'Customer custom field \'' $ l.custom_field $ '\' could not be found' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, 'Customer id \'' $ l.customer_id $ '\' could not be found' ) }">
 	</MvIF>
-	
-	<MvASSIGN NAME = "l.null" VALUE = "{ Module_Customer_Set_Field( l.module, l.customer_id, l.custom_field, l.value ) }">
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ Write_Customer_LowLevel( l.module, l.param, l.customer, l.custom_field, l.value ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Write_Customer_Login" PARAMETERS = "module var, param, customer_login, custom_field, value" STANDARDOUTPUTLEVEL = "">	
@@ -8303,7 +8303,29 @@
 		<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, 'Customer login \'' $ l.customer_login $ '\' could not be found' ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.null" VALUE = "{ Write_Customer_ID( l.module, l.param, l.customer:id, l.custom_field, l.value ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ Write_Customer_LowLevel( l.module, l.param, l.customer, l.custom_field, l.value ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Write_Customer_LowLevel" PARAMETERS = "module var, param, customer var, custom_field, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CustomerField_Load_Code( l.custom_field, l.null ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, g.Error_Code $ ': ' $ g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, 'Customer custom field \'' $ l.custom_field $ '\' could not be found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ Module_Customer_Set_Field( l.module, l.customer:id, l.custom_field, l.value ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Update_LastUpdated( l.customer:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ Parameter_Error( l.param, g.Error_Code $ ': ' $ g.Error_Message ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_cust', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Customer_Update( l.module, l.customer ) }">
+		</MvIF>
+	</MvFOREACH>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Read_Order" PARAMETERS = "module var, param, order_id, custom_fields, destination var" STANDARDOUTPUTLEVEL = "">	

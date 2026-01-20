@@ -29,7 +29,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customerimport">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Customer Import">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1201">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1303">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.12">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "import">
 </MvFUNCTION>
@@ -370,16 +370,25 @@
         </MvIF>
     </MvIF>
 
-    <MvIF EXPR = "{ [ g.Module_Feature_CUS_DB ].Customer_Insert( l.record ) }">
-        <MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00003', 'CustomerImport Customer \'' $ l.record:login $ '\' created' ) }">
-        <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
-    <MvELSE>
-        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' failed to create: ' $ g.Error_Message ) }">
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Transaction_Begin() }">
+    	<MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Insert( l.record ) }">
+    	<MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' failed to create: ' $ g.Error_Message ) }">
+    	<MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+    <MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00003', 'CustomerImport Customer \'' $ l.record:login $ '\' created' ) }">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_created', 1 ) }">
+
+    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+    	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit_PreserveError() }">
         <MvFUNCTIONRETURN VALUE = 0>
     </MvIF>
 
-    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
-        <MvFUNCTIONRETURN VALUE = 0>
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit() }">
+    	<MvFUNCTIONRETURN VALUE = 0>
     </MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -448,6 +457,10 @@
     <MvIF EXPR = "{ l.run_data:columns_present:bill_fax }">     <MvASSIGN NAME = "l.existing_customer:bill_fax"     VALUE = "{ l.record:bill_fax }">    </MvIF>
     <MvIF EXPR = "{ l.run_data:columns_present:bill_comp }">    <MvASSIGN NAME = "l.existing_customer:bill_comp"    VALUE = "{ l.record:bill_comp }">   </MvIF>
 
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Transaction_Begin() }">
+    	<MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
 	<MvIF EXPR = "{ [ g.Module_Feature_CUS_DB ].Customer_Update( l.existing_customer ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00004', 'CustomerImport Customer \'' $ l.existing_customer:login $ '\' updated' ) }">
         <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_updated', 1 ) }">
@@ -458,13 +471,19 @@
 
 	<MvIF EXPR = "{ l.password_changed }">
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Basket_Expire_All_Customer( l.existing_customer:id ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit_PreserveError() }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 	</MvIF>
 
     <MvASSIGN NAME = "l.record:id"	                    VALUE = "{ l.existing_customer:id }">
     <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+    	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit_PreserveError() }">
         <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit() }">
+    	<MvFUNCTIONRETURN VALUE = 0>
     </MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -491,20 +510,29 @@
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Delete( l.existing_customer ) }">
         <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' failed to replace: ' $ g.Error_Message ) }">
         <MvFUNCTIONRETURN VALUE = 0>
-	<MvELSE>
-		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00005', 'CustomerImport Customer \'' $ l.existing_customer:login $ '\' deleted' ) }">
-        <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Insert( l.record ) }">
-            <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
-            <MvFUNCTIONRETURN VALUE = 0>
-
-        <MvELSE>
-            <MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00006', 'CustomerImport Customer \'' $ l.customer:login $ '\' created' ) }">
-            <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
-        </MvIF>
 	</MvIF>
 
-    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00005', 'CustomerImport Customer \'' $ l.existing_customer:login $ '\' deleted' ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Transaction_Begin() }">
+    	<MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+    
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Insert( l.record ) }">
+        <MvEVAL EXPR = "{ Record_Skip( l.session, 'customer \'' $ l.record:login $ '\' deleted but failed to recreate: ' $ g.Error_Message ) }">
         <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+    <MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-IMP-CUS-00006', 'CustomerImport Customer \'' $ l.customer:login $ '\' created' ) }">
+    <MvEVAL EXPR = "{ [ g.Module_Feature_IMP_UT ].Import_Session_StatusField_Increment( l.session, 'records_replaced', 1 ) }">
+
+    <MvIF EXPR = "{ NOT Import_Update_Custom_Fields( l.import, l.session, l.record, l.run_data ) }">
+    	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit_PreserveError() }">
+        <MvFUNCTIONRETURN VALUE = 0>
+    </MvIF>
+
+    <MvIF EXPR = "{ NOT [ g.Module_Feature_CUS_DB ].Customer_Transaction_Commit() }">
+    	<MvFUNCTIONRETURN VALUE = 0>
     </MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>

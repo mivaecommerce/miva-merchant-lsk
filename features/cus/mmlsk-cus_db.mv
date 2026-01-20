@@ -443,9 +443,12 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_cust', l.modules ) }">
-		<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.null"	VALUE = "{ Module_Notify_Customer_Insert( l.module, l.customer ) }">
-	</MvFOREACH>
+	<MvIF EXPR = "{ NOT g.Session:cache:customer_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Customer_Transaction_Finalize_Insert( l.customer ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Session:cache:customer_transaction:type"		VALUE = "insert">
+		<MvREFERENCE NAME = "g.Session:cache:customer_transaction:customer"	VARIABLE = "l.customer">
+	</MvIF>
 	
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -662,11 +665,15 @@
 		</MvIF>
 	</MvIF>
 
-	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_cust', l.modules ) }">
-		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
-			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Customer_Update( l.module, l.customer ) }">
+	<MvIF EXPR = "{ NOT g.Session:cache:customer_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Customer_Transaction_Finalize_Update( l.customer ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ ( l.customer:id NE g.Session:cache:customer_transaction:customer:id ) OR ( g.Session:cache:customer_transaction:type NE 'insert' ) }">
+			<MvASSIGN NAME = "g.Session:cache:customer_transaction:type" VALUE = "update">
 		</MvIF>
-	</MvFOREACH>
+
+		<MvREFERENCE NAME = "g.Session:cache:customer_transaction:customer" VARIABLE = "l.customer">
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -1901,6 +1908,59 @@
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Customers">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-CUS-DTB-00044', l.customer_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Transaction_Begin" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Session:cache:customer_transaction"			VALUE = "">
+	<MvASSIGN NAME = "g.Session:cache:customer_transaction:active"	VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Transaction_Commit" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Session:cache:customer_transaction:active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Session:cache:customer_transaction:type EQ 'insert' }">		<MvASSIGN NAME = "l.null" VALUE = "{ Customer_Transaction_Finalize_Insert( g.Session:cache:customer_transaction:customer ) }">
+	<MvELSEIF EXPR = "{ g.Session:cache:customer_transaction:type EQ 'update' }">	<MvASSIGN NAME = "l.null" VALUE = "{ Customer_Transaction_Finalize_Update( g.Session:cache:customer_transaction:customer ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:customer_transaction" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Transaction_Commit_PreserveError" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.error_is_eof"	VALUE = "{ g.Error_DB_EOF }">
+	<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+	<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ Customer_Transaction_Commit() }">
+
+	<MvASSIGN NAME = "g.Error_DB_EOF"	VALUE = "{ l.error_is_eof }">
+	<MvASSIGN NAME = "g.Error_Code"		VALUE = "{ l.error_code }">
+	<MvASSIGN NAME = "g.Error_Message"	VALUE = "{ l.error_message }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Transaction_Finalize_Insert" PARAMETERS = "customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_cust', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Customer_Insert( l.module, l.customer ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Customer_Transaction_Finalize_Update" PARAMETERS = "customer var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'not_cust', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Customer_Update( l.module, l.customer ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvCOMMENT>
