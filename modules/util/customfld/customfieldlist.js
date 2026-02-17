@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -79,6 +79,10 @@ CustomFieldList.prototype.onCreateRootColumnList = function()
 		new MMList_Column_Text( 'Facet', 'facet' )
 			.SetSearchable( false )
 			.SetOnDisplayData( function( record ) { return record.type == 'product' ? DrawMMListCheckbox_Data( this.onRetrieveValue( record ) ) : DrawMMListString_Data( 'N/A' ); } ),
+		new MMList_Column_Text( 'Separate', 'separate' )
+			.SetSearchable( false )
+			.SetOnDisplayData( function( record ) { return record.type == 'product' ? DrawMMListCheckbox_Data( this.onRetrieveValue( record ) ) : DrawMMListString_Data( 'N/A' ); } )
+			.SetDefaultActive( false ),
 		new MMList_Column_Checkbox( 'Public', 'is_public' )
 			.SetDefaultActive( false )
 	];

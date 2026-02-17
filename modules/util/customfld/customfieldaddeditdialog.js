@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2025 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -27,6 +27,7 @@ function CustomField_AddEditDialog( customfield )
 
 	// Elements
 	this.tbody_facet				= document.getElementById( 'customfield_addeditdialog_tbody_facet' );
+	this.tbody_separate				= document.getElementById( 'customfield_addeditdialog_tbody_separate' );
 	this.tbody_options_info			= document.getElementById( 'customfield_addeditdialog_tbody_options_info' );
 	this.tbody_options				= document.getElementById( 'customfield_addeditdialog_tbody_options' );
 	this.span_fieldtype_warning		= document.getElementById( 'customfield_addeditdialog_fieldtype_warning' );
@@ -40,6 +41,7 @@ function CustomField_AddEditDialog( customfield )
 	this.edit_code					= new MMDialog_Edit_Controller( 'customfield_addeditdialog_edit_code' );
 	this.edit_name					= new MMDialog_Edit_Controller( 'customfield_addeditdialog_name' );
 	this.edit_facet					= new MMDialog_Checkbox_Controller( 'customfield_addeditdialog_facet' );
+	this.edit_separate				= new MMDialog_Checkbox_Controller( 'customfield_addeditdialog_separate' );
 	this.edit_is_public				= new MMDialog_Checkbox_Controller( 'customfield_addeditdialog_is_public' );
 
 	this.edit_fieldtype				= new MMDialog_Select_Controller( 'customfield_addeditdialog_fieldtype' );
@@ -106,6 +108,7 @@ CustomField_AddEditDialog.prototype.onSetContent = function()
 		this.edit_code.SetValue( '' );
 		this.edit_name.SetValue( '' );
 		this.edit_facet.SetChecked( false );
+		this.edit_separate.SetChecked( false );
 		this.edit_is_public.SetChecked( false );
 		this.edit_fieldtype.SetValue( 'textfield' );
 		this.edit_group.SetValue( 0 );
@@ -120,6 +123,7 @@ CustomField_AddEditDialog.prototype.onSetContent = function()
 		this.edit_code.SetValue( this.customfield.code );
 		this.edit_name.SetValue( this.customfield.name );
 		this.edit_facet.SetChecked( this.customfield.facet );
+		this.edit_separate.SetChecked( this.customfield.separate );
 		this.edit_is_public.SetChecked( this.customfield.is_public );
 		this.edit_fieldtype.SetValue( this.customfield.fieldtype );
 		this.edit_group.SetValue( this.customfield.group_id );
@@ -139,12 +143,14 @@ CustomField_AddEditDialog.prototype.ModifyType = function( value )
 {
 	if ( value == 'product' )
 	{
-		this.tbody_facet.style.display = '';
+		this.tbody_facet.style.display		= '';
+		this.tbody_separate.style.display	= '';
 		this.edit_fieldtype.EnableOption( 'multitext' );
 	}
 	else
 	{
-		this.tbody_facet.style.display = 'none';
+		this.tbody_facet.style.display		= 'none';
+		this.tbody_separate.style.display	= 'none';
 		this.edit_fieldtype.DisableOption( 'multitext', 'textfield' );
 	}
 }
@@ -217,8 +223,25 @@ CustomField_AddEditDialog.prototype.Save = function( plus )
 		return;
 	}
 
-	if ( this.customfield )	CustomField_Update( this.customfield.id, data, function( response ) { self.Save_Callback( plus, response ); } );
-	else					CustomField_Insert( data, function( response ) { self.Save_Callback( plus, response ); } );
+	const callback = () =>
+	{
+		if ( this.customfield )	CustomField_Update( this.customfield.id, data, function( response ) { self.Save_Callback( plus, response ); } );
+		else					CustomField_Insert( data, function( response ) { self.Save_Callback( plus, response ); } );
+	};
+
+	if ( !this.customfield || this.customfield.separate == data.separate )
+	{
+		callback();
+	}
+	else
+	{
+		const dialog	= new ConfirmationDialog();
+		dialog.onYes	= callback;
+
+		dialog.SetTitle( 'Warning' );
+		dialog.SetMessage( 'Migrating custom field values between storage locations may take some time. Please do not modify the custom field during the migration process.<br /><br />Are you sure you wish to continue?' );
+		dialog.Show();
+	}
 }
 
 CustomField_AddEditDialog.prototype.Validate = function( data )
@@ -232,6 +255,7 @@ CustomField_AddEditDialog.prototype.Validate = function( data )
 	data.code			= this.edit_code.GetValue();
 	data.name			= this.edit_name.GetValue();
 	data.facet			= this.edit_facet.GetChecked();
+	data.separate		= this.edit_separate.GetChecked();
 	data.is_public		= this.edit_is_public.GetChecked();
 	data.fieldtype		= this.edit_fieldtype.GetValue( '' );
 	data.group_id		= this.edit_group.GetValue( 0 );

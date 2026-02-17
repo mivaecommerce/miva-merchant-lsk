@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2022 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -28,48 +28,46 @@ function CustomFieldList_Load_Query( filter, sort, offset, count, callback, dele
 
 function CustomField_Insert( data, callback ) 
 { 
-	return AJAX_Call_Module( 	callback,
-								'admin',
-								'customfields',
-								'CustomField_Insert',
-								'Code=' 			+ encodeURIComponent( data.code ) 		+ 
-								'&Name=' 			+ encodeURIComponent( data.name ) 		+
-								'&Facet='			+ ( data.facet ? '1' : '0' )			+
-								'&Field_Type='		+ encodeURIComponent( data.fieldtype )	+
-								'&Type='			+ encodeURIComponent( data.type )		+
-								'&Info='			+ encodeURIComponent( data.info )		+
-								'&Group_ID='		+ encodeURIComponent( data.group_id )	+
-								'&Is_Public='		+ ( data.is_public ? '1' : '0' )		+
-								'&Option_Values='	+ EncodeArray( data.option_values ) );
+	return AJAX_Call_Module_JSON( callback, 'admin', 'customfields', 'CustomField_Insert',
+	{
+		Type:			data.type,
+		Code:			data.code,
+		Name:			data.name,
+		Facet:			data.facet,
+		Separate:		data.separate,
+		Field_Type:		data.fieldtype,
+		Info:			data.info,
+		Group_ID:		data.group_id,
+		Is_Public:		data.is_public,
+		Option_Values:	data.option_values
+	} );
 }
 
 function CustomField_Update( id, data, callback ) 
 { 
-	return AJAX_Call_Module(	callback,
-								'admin',
-								'customfields',
-								'CustomField_Update',
-								'Field_ID='			+ encodeURIComponent( id )				+
-								'&Code=' 			+ encodeURIComponent( data.code ) 		+ 
-								'&Name=' 			+ encodeURIComponent( data.name ) 		+
-								'&Facet='			+ ( data.facet ? '1' : '0' )			+
-								'&Field_Type='		+ encodeURIComponent( data.fieldtype )	+
-								'&Type='			+ encodeURIComponent( data.type )		+
-								'&Info='			+ encodeURIComponent( data.info )		+
-								'&Group_ID='		+ encodeURIComponent( data.group_id )	+
-								'&Is_Public='		+ ( data.is_public ? '1' : '0' )		+
-								'&Option_Values='	+ EncodeArray( data.option_values ) );
+	return AJAX_Call_Module_JSON( callback, 'admin', 'customfields', 'CustomField_Update',
+	{
+		Field_ID:		id,
+		Type:			data.type,
+		Code:			data.code,
+		Name:			data.name,
+		Facet:			data.facet,
+		Separate:		data.separate,
+		Field_Type:		data.fieldtype,
+		Info:			data.info,
+		Group_ID:		data.group_id,
+		Is_Public:		data.is_public,
+		Option_Values:	data.option_values
+	} );
 }
 
 function CustomField_Delete( id, type, callback, delegator )
 {
-	return AJAX_Call_Module( 	callback,
-								'admin',
-								'customfields',
-								'CustomField_Delete',
-								'Field_ID=' + encodeURIComponent( id ) + 
-								'&Type='	+ encodeURIComponent( type ),
-								delegator);
+	return AJAX_Call_Module_JSON( callback, 'admin', 'customfields', 'CustomField_Delete',
+	{
+		Field_ID:	id,
+		Type:		type,
+	}, delegator );
 }
 
 // Custom Field Group Functions

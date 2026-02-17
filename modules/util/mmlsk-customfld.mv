@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-UTL-CST-
-| Next Error Code: 382  
+| Next Error Code: 424  
 |
 </MvCOMMENT>
 
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1303">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1304">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -140,7 +140,8 @@
 							fieldtype 	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 20 ) 	$ ',
 							facet 		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
 							info		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ ',
-							is_public	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
+							is_public	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+							separate	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
 						  ) ' }">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00001', g.MvQUERY_Error ) }">
@@ -488,6 +489,12 @@
 	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'CFM_Groups' ) }">
 	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'CFM_FieldOptions' ) }">
 	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Delete( 'CFM_ProdMultiValues' ) }">
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ ProductFieldList_Load_All( l.fields ) }">
+		<MvIF EXPR = "{ l.field:separate }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ CustomFields_ProductSeparateField_Delete( l.field ) }">
+		</MvIF>
+	</MvFOREACH>
 
 	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CFM_CatFields' }">
 	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CFM_CatValues' }">
@@ -987,7 +994,7 @@
 				<MvEVAL EXPR = "{ Normalize_Value( l.field, l.field_value ) }">
 
 				<MvIF EXPR = "{ NOT ISNULL l.field_value }">
-					<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field:id, l.product:id, l.field_value ) }">
+					<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field, l.product:id, l.field_value ) }">
 						<MvFUNCTIONRETURN VALUE = 0>
 					</MvIF>
 
@@ -998,7 +1005,7 @@
 
 				<MvFOREACH ITERATOR = "l.value" ARRAY = "l.values" COUNT = "{ l.value_count }">
 					<MvIF EXPR = "{ NOT ISNULL l.value }">
-						<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field:id, l.product:id, l.value ) }">
+						<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field, l.product:id, l.value ) }">
 							<MvFUNCTIONRETURN VALUE = 0>
 						</MvIF>
 					</MvIF>
@@ -1030,20 +1037,20 @@
 				<MvEVAL EXPR = "{ Normalize_Value( l.field, l.field_value ) }">
 
 				<MvIF EXPR = "{ NOT ISNULL l.field_value }">
-					<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field:id, l.product:id, l.field_value ) }">
+					<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field, l.product:id, l.field_value ) }">
 						<MvFUNCTIONRETURN VALUE = 0>
 					</MvIF>
 					
 					<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-CST-00097', 'CustomFields Product ID \'' $ l.product:id $ '\', Custom Field ID \'' $ l.field:id $ '\' created' ) }">
 				<MvELSE>
-					<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field:id, l.product:id ) }">
+					<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field, l.product:id ) }">
 						<MvFUNCTIONRETURN VALUE = 0>
 					</MvIF>
 
 					<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-CST-00098', 'CustomFields Product ID \'' $ l.product:id $ '\', Custom Field ID \'' $ l.field:id $ '\' deleted' ) }">	
 				</MvIF>
 			<MvELSE>
-				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Delete( l.field:id, l.product:id ) }">
+				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Delete( l.field, l.product:id ) }">
 					<MvFUNCTIONRETURN VALUE = 0>
 				</MvIF>
 
@@ -1065,7 +1072,7 @@
 
 				<MvFOREACH ITERATOR = "l.value" ARRAY = "l.values" COUNT = "{ l.value_count }">
 					<MvIF EXPR = "{ NOT ISNULL l.value }">
-						<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field:id, l.product:id, l.value ) }">
+						<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field, l.product:id, l.value ) }">
 							<MvFUNCTIONRETURN VALUE = 0>
 						</MvIF>
 					</MvIF>
@@ -1252,7 +1259,7 @@
 		<MvEVAL EXPR = "{ Normalize_Value( l.field, l.value ) }">
 
 		<MvIF EXPR = "{ NOT ISNULL l.value }">
-			<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field:id, l.product_id, l.value ) }">
+			<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field, l.product_id, l.value ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 
@@ -1260,7 +1267,7 @@
 				<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-CST-00101', 'CustomFields Product ID \'' $ l.product_id $ '\', Custom Field ID \'' $ l.field:id $ '\' created' ) }">
 			</MvIF>
 		<MvELSE>
-			<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field:id, l.product_id ) }">
+			<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field, l.product_id ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 
@@ -1269,7 +1276,7 @@
 			</MvIF>
 		</MvIF>
 	<MvELSE>
-		<MvIF EXPR = "{ NOT ProductFieldMultiValue_Delete( l.field:id, l.product_id ) }">
+		<MvIF EXPR = "{ NOT ProductFieldMultiValue_Delete( l.field, l.product_id ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
 
@@ -1281,7 +1288,7 @@
 
 		<MvFOREACH ITERATOR = "l.element" ARRAY = "l.values" COUNT = "{ l.value_count }">
 			<MvIF EXPR = "{ NOT ISNULL l.element }">
-				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field:id, l.product_id, l.element ) }">
+				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field, l.product_id, l.element ) }">
 					<MvFUNCTIONRETURN VALUE = 0>
 				</MvIF>
 			</MvIF>
@@ -1316,7 +1323,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00305', 'Field must be a type of \'multitext\'' ) }">
 	</MvIF>
 	
-	<MvIF EXPR = "{ NOT ProductFieldMultiValue_Delete( l.field:id, l.product_id ) }">
+	<MvIF EXPR = "{ NOT ProductFieldMultiValue_Delete( l.field, l.product_id ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -1326,7 +1333,7 @@
 
 	<MvFOREACH ITERATOR = "l.value" ARRAY = "l.values" COUNT = "{ l.value_count }">
 		<MvIF EXPR = "{ NOT ISNULL l.value }">
-			<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field:id, l.product_id, l.value ) }">
+			<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field, l.product_id, l.value ) }">
 				<MvFUNCTIONRETURN VALUE = 0>
 			</MvIF>
 		</MvIF>
@@ -2155,15 +2162,17 @@
 	<MvASSIGN NAME = "l.field:fieldtype" 	VALUE = "textfield">
 	<MvASSIGN NAME = "l.field:group_id" 	VALUE = 0>
 	<MvASSIGN NAME = "l.field:facet" 		VALUE = 0>
+	<MvASSIGN NAME = "l.field:separate"		VALUE = 0>
 	<MvASSIGN NAME = "l.field:is_public"	VALUE = 0>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code( 	 'R', l.provide_xml, 'Code',		l.field:code ) 		OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'R', l.provide_xml, 'Name',		l.field:name ) 		OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml, 'Facet', 		l.field:facet )		OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'o', l.provide_xml, 'Info',		l.field:info ) 		OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'O', l.provide_xml, 'Group', 		l.group_code )		OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', l.provide_xml, 'Public',		l.field:is_public )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 	 'O', l.provide_xml, 'FieldType', 	l.field:fieldtype, 'textfield,textarea,dropdown,radio,checkbox,imageupload,pdfupload,multitext', 'textfield,textarea,dropdown,radio,checkbox,imageupload,pdfupload,multitext' ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code( 	 'R',		l.provide_xml, 'Code',		l.field:code ) 		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'R:100',	l.provide_xml, 'Name',		l.field:name ) 		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O',		l.provide_xml, 'Facet', 	l.field:facet )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O',		l.provide_xml, 'Separate',	l.field:separate )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'o',		l.provide_xml, 'Info',		l.field:info ) 		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'O',		l.provide_xml, 'Group', 	l.group_code )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O',		l.provide_xml, 'Public',	l.field:is_public )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 	 'O',		l.provide_xml, 'FieldType', l.field:fieldtype, 'textfield,textarea,dropdown,radio,checkbox,imageupload,pdfupload,multitext', 'textfield,textarea,dropdown,radio,checkbox,imageupload,pdfupload,multitext' ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -2204,6 +2213,7 @@
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code( 	 'O',		l.provide_xml, 'Code',		l.field:code ) 		OR
 					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'O:100',	l.provide_xml, 'Name',		l.field:name ) 		OR
 					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', 		l.provide_xml, 'Facet', 	l.field:facet )		OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O',		l.provide_xml, 'Separate',	l.field:separate )	OR
 					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text( 	 'o', 		l.provide_xml, 'Info',		l.field:info ) 		OR
 					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean( 'O', 		l.provide_xml, 'Public',	l.field:is_public )	OR
 					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List( 	 'O', 		l.provide_xml, 'FieldType', l.field:fieldtype, 'textfield,textarea,dropdown,radio,checkbox,imageupload,pdfupload,multitext', 'textfield,textarea,dropdown,radio,checkbox,imageupload,pdfupload,multitext' ) }">
@@ -2238,7 +2248,7 @@
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT ProductField_Update( l.field ) }">
+	<MvIF EXPR = "{ NOT ProductField_Update( l.module, l.field ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
@@ -2264,8 +2274,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Product field \'' $ l.code $ '\' not found' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT ProductField_Delete( l.field:id ) OR
-					NOT ProductFieldValue_Delete_All_Field( l.field:id ) }">
+	<MvIF EXPR = "{ NOT ProductField_Delete( l.field ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
@@ -2294,13 +2303,13 @@
 		<MvEVAL EXPR = "{ Normalize_Value( l.field, l.provide_xml:value ) }">
 
 		<MvIF EXPR = "{ len( l.provide_xml:value ) }">
-			<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field:id, l.product:id, l.provide_xml:value ) }">
+			<MvIF EXPR = "{ NOT ProductFieldValue_Set( l.field, l.product:id, l.provide_xml:value ) }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 			</MvIF>
 
 			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-CST-00125', 'CustomFields Product ID \'' $ l.product:id $ '\', Field ID \'' $ l.field:id $ '\' created' ) }">
 		<MvELSE>
-			<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field:id, l.product:id ) }">
+			<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field, l.product:id ) }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 			</MvIF>
 
@@ -2311,7 +2320,7 @@
 
 		<MvFOREACH ITERATOR = "l.value" ARRAY = "l.values" COUNT = "{ l.value_count }">
 			<MvIF EXPR = "{ NOT ISNULL l.value }">
-				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field:id, l.product:id, l.value ) }">
+				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field, l.product:id, l.value ) }">
 					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 				</MvIF>
 			</MvIF>
@@ -2368,8 +2377,8 @@
 	<MvASSIGN NAME = "l.value" VALUE = "{ trim( l.provide_xml:value ) }">
 
 	<MvIF EXPR = "{ ISNULL l.value }">
-		<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field:id, l.product:id ) OR
-						NOT ProductFieldMultiValue_Delete( l.field:id, l.product:id ) }">
+		<MvIF EXPR = "{ NOT ProductFieldValue_Delete( l.field, l.product:id ) OR
+						NOT ProductFieldMultiValue_Delete( l.field, l.product:id ) }">
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 		</MvIF>
 
@@ -2498,8 +2507,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Customer field \'' $ l.code $ '\' not found' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT CustomerField_Delete( l.field:id ) OR
-					NOT CustomerFieldValue_Delete_All_Field( l.field:id ) }">
+	<MvIF EXPR = "{ NOT CustomerField_Delete( l.field:id ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
@@ -2667,8 +2675,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Category field \'' $ l.code $ '\' not found' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT CategoryField_Delete( l.field:id ) OR
-					NOT CategoryFieldValue_Delete_All_Field( l.field:id ) }">
+	<MvIF EXPR = "{ NOT CategoryField_Delete( l.field:id ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
@@ -2836,8 +2843,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Order field \'' $ l.code $ '\' not found' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT OrderField_Delete( l.field:id ) OR
-					NOT OrderFieldValue_Delete_All_Field( l.field:id ) }">
+	<MvIF EXPR = "{ NOT OrderField_Delete( l.field:id ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
@@ -3005,8 +3011,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogMessage( l.provide_xml, 'Page field \'' $ l.code $ '\' not found' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT PageField_Delete( l.field:id ) OR
-					NOT PageFieldValue_Delete_All_Field( l.field:id ) }">
+	<MvIF EXPR = "{ NOT PageField_Delete( l.field:id ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
@@ -3709,6 +3714,47 @@
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "JSON_CustomField_Load" PARAMETERS = "customfield var, type var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List( 'R', 'Type', l.type, 'category,customer,order,page,product', 'category,customer,order,page,product' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00382', 'Unable to load custom field: Invalid custom field type' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve_Integer( 'Field_ID', l.field_id ) }">
+		<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Load_ID( l.field_id, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Load_ID( l.field_id, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Load_ID( l.field_id, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Load_ID( l.field_id, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Load_ID( l.field_id, l.customfield ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Edit_Field', l.edit_field ) }">
+		<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Load_Code( l.edit_field, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Load_Code( l.edit_field, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Load_Code( l.edit_field, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Load_Code( l.edit_field, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Load_Code( l.edit_field, l.customfield ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Retrieve( 'Code', l.code ) }">
+		<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Load_Code( l.code, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Load_Code( l.code, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Load_Code( l.code, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Load_Code( l.code, l.customfield ) }">
+		<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Load_Code( l.code, l.customfield ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00383', 'Unable to load custom field: One of Field_ID, Edit_Field, or Code must be specified' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00384', 'Custom field not found' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "JSON_CustomFieldList_Load_Query" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
@@ -3726,11 +3772,11 @@
 	<MvASSIGN NAME = "l.single_search_query" 		VALUE = "">
 	<MvASSIGN NAME = "l.query"						VALUE = "">
 
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.category_search_query,	'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, g.name AS group_name, c.is_public, \'category\'	AS type' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.customer_search_query,	'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, g.name AS group_name, c.is_public, \'customer\'	AS type' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.order_search_query,		'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, g.name AS group_name, c.is_public, \'order\'		AS type' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.page_search_query,		'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, g.name AS group_name, c.is_public, \'page\'		AS type' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.product_search_query,		'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, c.facet AS facet, g.name AS group_name, c.is_public, \'product\'	AS type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.category_search_query,	'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, 0				AS separate, g.name AS group_name, c.is_public, \'category\'	AS type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.customer_search_query,	'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, 0				AS separate, g.name AS group_name, c.is_public, \'customer\'	AS type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.order_search_query,		'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, 0				AS separate, g.name AS group_name, c.is_public, \'order\'		AS type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.page_search_query,		'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, 0		AS facet, 0				AS separate, g.name AS group_name, c.is_public, \'page\'		AS type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.product_search_query,		'c.id, c.group_id, c.code, c.name, c.fieldtype, c.info, c.facet AS facet, c.separate	AS separate, g.name AS group_name, c.is_public, \'product\'	AS type' ) }">
 
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.category_search_query, g.Store_Table_Prefix $ 'CFM_CatFields', 'c' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.category_search_query, 'c', g.Store_Table_Prefix $ 'CFM_Groups', 'g', 'g.id = c.group_id', '' ) }">
@@ -3788,7 +3834,7 @@
 
 	<MvASSIGN NAME = "l.count_sql" VALUE = "{ miva_joinstring( l.count_sql_array, ' UNION ALL ', '' ) }">
 
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.query, g.Sort, 'code,name,group:group_name,fieldtype,type,info,facet,is_public', 'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_OrderBy_Fields( l.query, g.Sort, 'code,name,group:group_name,fieldtype,type,info,facet,separate,is_public', 'code' ) }">
 
 	<MvASSIGN NAME = "l.search_sql"							VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.search_fields ) }">
 
@@ -3802,33 +3848,34 @@
 	
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
 	{
-		"total_count": 	<MvEVAL EXPR = "{ int( l.total_count ) }">,
-		"start_offset": <MvEVAL EXPR = "{ int( g.Offset ) }">,
+		"total_count": 	<MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
+		"start_offset": <MvEVAL EXPR = "{ encodejavascriptnumber( g.Offset ) }">,
 		"data":
 		[
 		<MvWHILE EXPR = "{ ( ( g.Count EQ 0 ) OR ( l.custom_field_count LT g.Count ) ) AND ( NOT CustomFields.d.EOF ) }">
 			<MvASSIGN NAME = "l.formatted_group" VALUE = "{ Formatted_Group( CustomFields.d.group_id ) }">
 			
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.custom_field_count ) }">
-			"id":					<MvEVAL EXPR = "{ int( CustomFields.d.id ) }">,
-			"code":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( CustomFields.d.code ) }">",
-			"name":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( CustomFields.d.name ) }">",
-			"type":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( CustomFields.d.type ) }">",
-			"fieldtype": 			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( CustomFields.d.fieldtype ) }">",
-			"facet":				<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( CustomFields.d.facet ) }">,
-			"info":					"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( CustomFields.d.info ) }">",
-			"group_id":				<MvEVAL EXPR = "{ int( CustomFields.d.group_id ) }">,
-			"formatted_group":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.formatted_group ) }">",
-			"is_public":			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( CustomFields.d.is_public ) }">,
+			"id":					<MvEVAL EXPR = "{ encodejavascriptnumber( CustomFields.d.id ) }">,
+			"code":					"<MvEVAL EXPR = "{ encodejavascriptstring( CustomFields.d.code ) }">",
+			"name":					"<MvEVAL EXPR = "{ encodejavascriptstring( CustomFields.d.name ) }">",
+			"type":					"<MvEVAL EXPR = "{ encodejavascriptstring( CustomFields.d.type ) }">",
+			"fieldtype": 			"<MvEVAL EXPR = "{ encodejavascriptstring( CustomFields.d.fieldtype ) }">",
+			"facet":				<MvEVAL EXPR = "{ encodejavascriptboolean( CustomFields.d.facet ) }">,
+			"separate":				<MvEVAL EXPR = "{ encodejavascriptboolean( CustomFields.d.separate ) }">,
+			"info":					"<MvEVAL EXPR = "{ encodejavascriptstring( CustomFields.d.info ) }">",
+			"group_id":				<MvEVAL EXPR = "{ encodejavascriptnumber( CustomFields.d.group_id ) }">,
+			"formatted_group":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.formatted_group ) }">",
+			"is_public":			<MvEVAL EXPR = "{ encodejavascriptboolean( CustomFields.d.is_public ) }">,
 			"additional_options":
 			[
 				<MvASSIGN NAME = "l.add_count" VALUE = 0>
 				
 				<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ FieldOptionList_Load( CustomFields.d.id, l.options ) }">
 					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.add_count ) }">
-					"id":		<MvEVAL EXPR = "{ int( l.option:id ) }">,
-					"field_id":	<MvEVAL EXPR = "{ int( l.option:field_id ) }">,
-					"value":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.option:value ) }">"
+					"id":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:id ) }">,
+					"field_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.option:field_id ) }">,
+					"value":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.option:value ) }">"
 					<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
 				</MvFOREACH>
 			]
@@ -3857,113 +3904,66 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_CustomField_Insert" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
-	
-	<MvASSIGN NAME = "g.Code" 		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Code ) }">
-	<MvASSIGN NAME = "g.Name" 		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Name ) }">
-	<MvASSIGN NAME = "g.Facet" 		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Facet ) }">
-	<MvASSIGN NAME = "g.Field_Type" VALUE = "{ tolower( [ g.Module_JSON ].JSON_Decode( g.Field_Type ) ) }">
-	<MvASSIGN NAME = "g.Type" 		VALUE = "{ tolower( [ g.Module_JSON ].JSON_Decode( g.Type ) ) }">
-	<MvASSIGN NAME = "g.Info"		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Info ) }">
-	<MvASSIGN NAME = "g.Group_ID" 	VALUE = "{ int( g.Group_ID ) }">
-	<MvASSIGN NAME = "g.Is_Public"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Is_Public ) }">
-	
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code( g.Code ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_code', g.Validation_Message ) }">
-	</MvIF>
-	
-	<MvIF EXPR = "{ NOT Validate_Type( g.Type ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00166', '\'' $ g.Type $ '\' is not a valid Type' ) }">
-	</MvIF>
-	
-	<MvIF EXPR = "{ NOT Validate_Field_Type( g.Field_Type ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00167', '\'' $ g.Field_Type $ '\' is not a valid Field Type' ) }">	
-	</MvIF>
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
-	<MvIF EXPR = "{ ISNULL g.Name }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_name', 'Name cannot be blank' ) }">
-	<MvELSEIF EXPR = "{ len_var( g.Name ) GT 100 }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_name', 'Name must be 100 characters or less' ) }">
-	</MvIF>
-	
-	<MvIF EXPR = "{ g.Group_ID NE 0 }">
-		<MvIF EXPR = "{ NOT Group_Load_ID( g.Group_ID, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00170', 'Group ID \'' $ g.Group_ID $ '\' could not be found' ) }">
-		</MvIF>
-	</MvIF>
-	
 	<MvASSIGN NAME = "l.customfield"			VALUE = "">
-	<MvASSIGN NAME = "l.customfield:code" 		VALUE = "{ g.Code }">
-	<MvASSIGN NAME = "l.customfield:name" 		VALUE = "{ g.Name }">
-	<MvASSIGN NAME = "l.customfield:fieldtype" 	VALUE = "{ g.Field_Type }">
-	<MvASSIGN NAME = "l.customfield:info" 		VALUE = "{ g.Info }">
-	<MvASSIGN NAME = "l.customfield:group_id" 	VALUE = "{ g.Group_ID }">
-	<MvASSIGN NAME = "l.customfield:is_public"	VALUE = "{ g.Is_Public }">
+	<MvASSIGN NAME = "l.customfield:info"		VALUE = "">
+	<MvASSIGN NAME = "l.customfield:group_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.customfield:facet"		VALUE = 0>
+	<MvASSIGN NAME = "l.customfield:separate"	VALUE = 0>
+	<MvASSIGN NAME = "l.customfield:is_public"	VALUE = 0>
 
-	<MvIF EXPR = "{ g.Type EQ 'product' }">	<MvASSIGN NAME = "l.customfield:facet" VALUE = "{ g.Facet }">
-	<MvELSE>								<MvASSIGN NAME = "l.customfield:facet" VALUE = 0>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(			'R',		'Type',				l.type,	'category,customer,order,page,product',
+																											'category,customer,order,page,product' ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Code(			'R',		'Code',				l.customfield:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'R:100',	'Name',				l.customfield:name )		OR
+					NOT [ g.Module_JSON ].JSON_Input_List(			'R',		'Field_Type',		l.customfield:fieldtype,  'textfield,textarea,radio,dropdown,checkbox,imageupload,pdfupload,multitext',
+																															  'textfield,textarea,radio,dropdown,checkbox,imageupload,pdfupload,multitext' ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'O',		'Facet',			l.customfield:facet )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'O',		'Separate',			l.customfield:separate	)	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'O',		'Is_Public',		l.customfield:is_public	)	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'o',		'Info',				l.customfield:info )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(		'O',		'Group_ID',			l.customfield:group_id )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text_Array(	'O',		'Option_Values',	l.option_values, l.option_value_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.option_values_count"	VALUE = "{ [ g.Module_JSON ].JSON_Array_String( g.Option_Values, l.option_values ) }">
-	<MvASSIGN NAME = "l.pos" 					VALUE = 1>
-
-	<MvFOREACH ITERATOR = "l.option_value" ARRAY = "l.option_values" COUNT = "{ l.option_values_count }">
-		<MvASSIGN NAME = "l.option_value" VALUE = "{ trim( l.option_value ) }">
-
-		<MvIF EXPR = "{ ISNULL l.option_value }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00171', 'Option value cannot be blank' ) }">
-		</MvIF>
-	</MvFOREACH>
-
-	<MvIF EXPR = "{ g.Type EQ 'category' }">
-		<MvIF EXPR = "{ CategoryField_Load_Code( g.Code, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00172', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Category type' ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT CategoryField_Insert( l.customfield ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'customer' }">
-		<MvIF EXPR = "{ CustomerField_Load_Code( g.Code, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00173', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Customer type' ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT CustomerField_Insert( l.customfield ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'order' }">
-		<MvIF EXPR = "{ OrderField_Load_Code( g.Code, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00174', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Order type' ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT OrderField_Insert( l.customfield ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'page' }">
-		<MvIF EXPR = "{ PageField_Load_Code( g.Code, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00324', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Page type' ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT PageField_Insert( l.customfield ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'product' }">
-		<MvIF EXPR = "{ ProductField_Load_Code( g.Code, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00175', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Product type' ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT ProductField_Insert( l.customfield ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvIF EXPR = "{ l.customfield:group_id }">
+		<MvIF EXPR = "{ NOT Group_Load_ID( l.customfield:group_id, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00170', 'Group ID \'' $ l.customfield:group_id $ '\' could not be found' ) }">
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ g.Field_Type EQ 'dropdown' OR g.Field_Type EQ 'radio' }">
-		<MvASSIGN NAME = "l.option:field_id" VALUE = "{ l.customfield:id }">
+	<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Load_Code( l.customfield:code, l.null ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Load_Code( l.customfield:code, l.null ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Load_Code( l.customfield:code, l.null ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Load_Code( l.customfield:code, l.null ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Load_Code( l.customfield:code, l.null ) }">
+	</MvIF>
 
-		<MvFOREACH ITERATOR = "l.option_value" ARRAY = "l.option_values" COUNT = "{ l.option_values_count }">
-			<MvASSIGN NAME = "l.option:value" VALUE = "{ l.option_value }">
+	<MvIF EXPR = "{ l.result }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00385', 'A ' $ l.type $ ' custom field with the code \'' $ l.customfield:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Insert( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Insert( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Insert( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Insert( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Insert( l.customfield ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customfield:fieldtype EQ 'dropdown' OR l.customfield:fieldtype EQ 'radio' }">
+		<MvASSIGN NAME = "l.option"				VALUE = "">
+		<MvASSIGN NAME = "l.option:field_id"	VALUE = "{ l.customfield:id }">
+
+		<MvFOREACH ITERATOR = "l.option_value" ARRAY = "l.option_values" COUNT = "{ l.option_value_count }">
+			<MvASSIGN NAME = "l.option:value"	VALUE = "{ l.option_value }">
 
 			<MvIF EXPR = "{ NOT FieldOption_Insert( l.option ) }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
@@ -3975,263 +3975,103 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_CustomField_Update" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
-	
-	<MvASSIGN NAME = "g.Field_ID" 	VALUE = "{ int( g.Field_ID ) }">
-	<MvASSIGN NAME = "g.Code" 		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Code ) }">
-	<MvASSIGN NAME = "g.Name" 		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Name ) }">
-	<MvASSIGN NAME = "g.Facet" 		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Facet ) }">
-	<MvASSIGN NAME = "g.Field_Type" VALUE = "{ tolower( [ g.Module_JSON ].JSON_Decode( g.Field_Type ) ) }">
-	<MvASSIGN NAME = "g.Type" 		VALUE = "{ tolower( [ g.Module_JSON ].JSON_Decode( g.Type ) ) }">
-	<MvASSIGN NAME = "g.Info" 		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.Info ) }">
-	<MvASSIGN NAME = "g.Group_ID" 	VALUE = "{ int( g.Group_ID ) }">
-	<MvASSIGN NAME = "g.Is_Public"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Is_Public ) }">
-	
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code( g.Code ) }">
-        <MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_code', g.Validation_Message ) }">
-    </MvIF>
-	
-	<MvIF EXPR = "{ NOT Validate_Type( g.Type ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00176', '\'' $ g.Type $ '\' is not a valid Type' ) }">
-	</MvIF>
-	
-	<MvIF EXPR = "{ NOT Validate_Field_Type( g.Field_Type ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00177', '\'' $ g.Field_Type $ '\' is not a valid Field Type' ) }">	
-	</MvIF>
-	
-	<MvIF EXPR = "{ ISNULL g.Name }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_name', 'Name cannot be blank' ) }">
-	<MvELSEIF EXPR = "{ len_var( g.Name ) GT 100 }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'invalid_name', 'Name must be 100 characters or less' ) }">
-	</MvIF>
-	
-	<MvIF EXPR = "{ g.Group_ID NE 0 }">
-		<MvIF EXPR = "{ NOT Group_Load_ID( g.Group_ID, l.null ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00180', 'Group ID \'' $ g.Group_ID $ '\' could not be found' ) }">
-		</MvIF>
-	</MvIF>
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
-	<MvASSIGN NAME = "l.option_count" VALUE = "{ [ g.Module_JSON ].JSON_Array_String( g.Option_Values, l.option_values ) }">
-
-	<MvFOREACH ITERATOR = "l.option_value" ARRAY = "l.option_values" COUNT = "{ l.option_count }">
-		<MvASSIGN NAME = "l.option_value" VALUE = "{ trim( l.option_value ) }">
-
-		<MvIF EXPR = "{ ISNULL l.option_value }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00181', 'Option value cannot be blank' ) }">
-		</MvIF>
-	</MvFOREACH>
-	
-	<MvIF EXPR = "{ g.Type EQ 'category' }">
-		<MvIF EXPR = "{ NOT CategoryField_Load_ID( g.Field_ID, l.loaded_category ) }">
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-			
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00182', 'Custom field ID \'' $ g.Field_ID $ '\' could not be found' ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ ( CategoryField_Load_Code( g.Code, l.loaded_category_code ) ) AND
-						( l.loaded_category_code:id NE g.Field_ID ) }">			
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00183', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Category type' ) }">
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.loaded_category:code" 		VALUE = "{ g.Code }">
-		<MvASSIGN NAME = "l.loaded_category:name" 		VALUE = "{ g.Name }">
-		<MvASSIGN NAME = "l.loaded_category:fieldtype" 	VALUE = "{ g.Field_Type }">
-		<MvASSIGN NAME = "l.loaded_category:info" 		VALUE = "{ g.Info }">
-		<MvASSIGN NAME = "l.loaded_category:group_id" 	VALUE = "{ g.Group_ID }">
-		<MvASSIGN NAME = "l.loaded_category:is_public"	VALUE = "{ g.Is_Public }">
-		
-		<MvIF EXPR = "{ NOT CategoryField_Update( l.loaded_category ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.option:field_id" VALUE = "{ l.loaded_category:id }">
-	<MvELSEIF EXPR = "{ g.Type EQ 'customer' }">
-		<MvIF EXPR = "{ NOT CustomerField_Load_ID( g.Field_ID, l.loaded_customer ) }">
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-			
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00184', 'Custom field ID \'' $ g.Field_ID $ '\' could not be found' ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ ( CustomerField_Load_Code( g.Code, l.loaded_customer_code ) ) AND
-						( l.loaded_customer_code:id NE g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00185', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Customer type' ) }">
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.loaded_customer:code" 		VALUE = "{ g.Code }">
-		<MvASSIGN NAME = "l.loaded_customer:name" 		VALUE = "{ g.Name }">
-		<MvASSIGN NAME = "l.loaded_customer:fieldtype" 	VALUE = "{ g.Field_Type }">
-		<MvASSIGN NAME = "l.loaded_customer:info" 		VALUE = "{ g.Info }">
-		<MvASSIGN NAME = "l.loaded_customer:group_id" 	VALUE = "{ g.Group_ID }">
-		<MvASSIGN NAME = "l.loaded_customer:is_public"	VALUE = "{ g.Is_Public }">
-		
-		<MvIF EXPR = "{ NOT CustomerField_Update( l.loaded_customer ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.option:field_id" VALUE = "{ l.loaded_customer:id }">
-	<MvELSEIF EXPR = "{ g.Type EQ 'order' }">
-		<MvIF EXPR = "{ NOT OrderField_Load_ID( g.Field_ID, l.loaded_order ) }">
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-			
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00186', 'Custom field ID \'' $ g.Field_ID $ '\' could not be found' ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ ( OrderField_Load_Code( g.Code, l.loaded_order_code ) ) AND
-						( l.loaded_order_code:id NE g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00187', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Order type' ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.loaded_order:code" 		VALUE = "{ g.Code }">
-		<MvASSIGN NAME = "l.loaded_order:name" 		VALUE = "{ g.Name }">
-		<MvASSIGN NAME = "l.loaded_order:fieldtype" VALUE = "{ g.Field_Type }">
-		<MvASSIGN NAME = "l.loaded_order:info" 		VALUE = "{ g.Info }">
-		<MvASSIGN NAME = "l.loaded_order:group_id" 	VALUE = "{ g.Group_ID }">
-		<MvASSIGN NAME = "l.loaded_order:is_public"	VALUE = "{ g.Is_Public }">
-		
-		<MvIF EXPR = "{ NOT OrderField_Update( l.loaded_order ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.option:field_id" VALUE = "{ l.loaded_order:id }">
-	<MvELSEIF EXPR = "{ g.Type EQ 'page' }">
-		<MvIF EXPR = "{ NOT PageField_Load_ID( g.Field_ID, l.loaded_page ) }">
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-			
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00325', 'Custom field ID \'' $ g.Field_ID $ '\' could not be found' ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ ( PageField_Load_Code( g.Code, l.loaded_page_code ) ) AND
-						( l.loaded_page_code:id NE g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00326', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Page type' ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.loaded_page:code" 		VALUE = "{ g.Code }">
-		<MvASSIGN NAME = "l.loaded_page:name" 		VALUE = "{ g.Name }">
-		<MvASSIGN NAME = "l.loaded_page:fieldtype"	VALUE = "{ g.Field_Type }">
-		<MvASSIGN NAME = "l.loaded_page:info" 		VALUE = "{ g.Info }">
-		<MvASSIGN NAME = "l.loaded_page:group_id" 	VALUE = "{ g.Group_ID }">
-		<MvASSIGN NAME = "l.loaded_page:is_public"	VALUE = "{ g.Is_Public }">
-
-		<MvIF EXPR = "{ NOT PageField_Update( l.loaded_page ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.option:field_id" VALUE = "{ l.loaded_page:id }">
-	<MvELSEIF EXPR = "{ g.Type EQ 'product' }">
-		<MvIF EXPR = "{ NOT ProductField_Load_ID( g.Field_ID, l.loaded_product ) }">
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-			
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00188', 'Custom field ID \'' $ g.Field_ID $ '\' could not be found' ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.original_field" VALUE = "{ l.loaded_product }">
-		
-		<MvIF EXPR = "{ ( ProductField_Load_Code( g.Code, l.loaded_product_code ) ) AND
-						( l.loaded_product_code:id NE g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00189', 'A custom field with the code \'' $ g.Code $ '\' already exists for the Product type' ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.loaded_product:code" 		VALUE = "{ g.Code }">
-		<MvASSIGN NAME = "l.loaded_product:name" 		VALUE = "{ g.Name }">
-		<MvASSIGN NAME = "l.loaded_product:facet" 		VALUE = "{ g.Facet }">
-		<MvASSIGN NAME = "l.loaded_product:fieldtype" 	VALUE = "{ g.Field_Type }">
-		<MvASSIGN NAME = "l.loaded_product:info" 		VALUE = "{ g.Info }">
-		<MvASSIGN NAME = "l.loaded_product:group_id" 	VALUE = "{ g.Group_ID }">
-		<MvASSIGN NAME = "l.loaded_product:is_public"	VALUE = "{ g.Is_Public }">
-
-		<MvIF EXPR = "{ NOT ProductField_FieldType_OnChange_Values_Delete( l.original_field, l.loaded_product ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT ProductField_Update( l.loaded_product ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.option:field_id" VALUE = "{ l.loaded_product:id }">
-	</MvIF>
-	
-	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.option:field_id ) }">
+	<MvIF EXPR = "{ NOT JSON_CustomField_Load( l.customfield, l.type ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
+
+	<MvASSIGN NAME = "l.original_customfield" VALUE = "{ l.customfield }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Code(			'O',		'Code',				l.customfield:code )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'O:100',	'Name',				l.customfield:name )		OR
+					NOT [ g.Module_JSON ].JSON_Input_List(			'O',		'Field_Type',		l.customfield:fieldtype,  'textfield,textarea,radio,dropdown,checkbox,imageupload,pdfupload,multitext',
+																															  'textfield,textarea,radio,dropdown,checkbox,imageupload,pdfupload,multitext' ) OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'O',		'Facet',			l.customfield:facet )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'O',		'Separate',			l.customfield:separate	)	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(		'O',		'Is_Public',		l.customfield:is_public	)	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(			'o',		'Info',				l.customfield:info )		OR
+					NOT [ g.Module_JSON ].JSON_Input_Integer(		'O',		'Group_ID',			l.customfield:group_id )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Text_Array(	'O',		'Option_Values',	l.option_values, l.option_value_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
 	
-	<MvIF EXPR = "{ g.Field_Type EQ 'dropdown' OR g.Field_Type EQ 'radio' }">
-		<MvFOREACH ITERATOR = "l.option_value" ARRAY = "l.option_values" COUNT = "{ l.option_count }">
-			<MvASSIGN NAME = "l.option:value" VALUE = "{ l.option_value }">
+	<MvIF EXPR = "{ l.customfield:group_id }">
+		<MvIF EXPR = "{ NOT Group_Load_ID( l.customfield:group_id, l.null ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00180', 'Group ID \'' $ l.customfield:group_id $ '\' could not be found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Load_Code( l.customfield:code, l.existing_customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Load_Code( l.customfield:code, l.existing_customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Load_Code( l.customfield:code, l.existing_customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Load_Code( l.customfield:code, l.existing_customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Load_Code( l.customfield:code, l.existing_customfield ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.result AND l.existing_customfield:id NE l.customfield:id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00386', 'A ' $ l.type $ ' custom field with the code \'' $ l.customfield:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Update( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Update( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Update( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Update( l.customfield ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Update( l.module, l.customfield ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.type EQ 'product' }">
+		<MvIF EXPR = "{ NOT ProductField_FieldType_OnChange_Values_Delete( l.original_customfield, l.customfield ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.customfield:id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.customfield:fieldtype EQ 'dropdown' OR l.customfield:fieldtype EQ 'radio' }">
+		<MvASSIGN NAME = "l.option"				VALUE = "">
+		<MvASSIGN NAME = "l.option:field_id"	VALUE = "{ l.customfield:id }">
+
+		<MvFOREACH ITERATOR = "l.option_value" ARRAY = "l.option_values" COUNT = "{ l.option_value_count }">
+			<MvASSIGN NAME = "l.option:value"	VALUE = "{ l.option_value }">
 
 			<MvIF EXPR = "{ NOT FieldOption_Insert( l.option ) }">
 				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 			</MvIF>
 		</MvFOREACH>
 	</MvIF>
-	
+
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_CustomField_Delete" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ g.Session_Type NE 'admin' }">							<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'SUTL', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 	
-	<MvASSIGN NAME = "g.Field_ID" 	VALUE = "{ int( g.Field_ID ) }">
-	<MvASSIGN NAME = "g.Type" 		VALUE = "{ tolower( [ g.Module_JSON ].JSON_Decode( g.Type ) ) }">
-	
-	<MvIF EXPR = "{ g.Type EQ 'category' }">		
-		<MvIF EXPR = "{ NOT CategoryFieldValue_Delete_All_Field( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT CategoryField_Delete( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'customer' }">		
-		<MvIF EXPR = "{ NOT CustomerFieldValue_Delete_All_Field( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT CustomerField_Delete( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'order' }">
-		<MvIF EXPR = "{ NOT OrderFieldValue_Delete_All_Field( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT OrderField_Delete( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'page' }">
-		<MvIF EXPR = "{ NOT PageFieldValue_Delete_All_Field( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT PageField_Delete( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSEIF EXPR = "{ g.Type EQ 'product' }">
-		<MvIF EXPR = "{ NOT ProductFieldValue_Delete_All_Field( g.Field_ID ) OR
-						NOT ProductFieldMultiValue_Delete_All_Field( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ NOT ProductField_Delete( g.Field_ID ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	<MvELSE>
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-UTL-CST-00190', '\'' $ g.Type $ '\' is not a valid Type' ) }">
+	<MvIF EXPR = "{ NOT JSON_CustomField_Load( l.customfield, l.type ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 	
+	<MvIF EXPR = "{ l.type EQ 'category' }">		<MvASSIGN NAME = "l.result" VALUE = "{ CategoryField_Delete( l.customfield:id ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'customer' }">	<MvASSIGN NAME = "l.result" VALUE = "{ CustomerField_Delete( l.customfield:id ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'order' }">		<MvASSIGN NAME = "l.result" VALUE = "{ OrderField_Delete( l.customfield:id ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'page' }">		<MvASSIGN NAME = "l.result" VALUE = "{ PageField_Delete( l.customfield:id ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'product' }">		<MvASSIGN NAME = "l.result" VALUE = "{ ProductField_Delete( l.customfield ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
 </MvFUNCTION>
 
@@ -4591,16 +4431,56 @@
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.table"		VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues' }">
-	<MvASSIGN NAME = "l.index"		VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_FULLTEXT' }">
-	<MvASSIGN NAME = "l.need_index"	VALUE = "{ miva_array_search( l.searchablecustomfields, 1, l.searchablecustomfield, 'CustomFields_Field_Requires_FULLTEXT_Index( l.module, l.searchablecustomfield )' ) GT 0 }">
-
 	<MvLOCKFILE FILE = "{ g.MerchantPath $ 'customfields_fulltext_' $ int( g.Store:id ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ ProductFieldList_Load_All( l.fields ) }">
+
+		<MvCOMMENT>
+		|
+		| Determine if the sNN_CFM_ProdValues table needs a fulltext index
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.table"		VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues' }">
+		<MvASSIGN NAME = "l.index"		VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_FULLTEXT' }">
+		<MvASSIGN NAME = "l.need_index" VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.shared_fields" COUNT = "{ miva_array_filter_ref( l.fields, 1, l.field, 'NOT l.field:separate', l.shared_fields ) }">
+			<MvASSIGN NAME = "l.need_index" VALUE = "{ miva_array_search( l.searchablecustomfields, 1, l.searchablecustomfield, 'CustomFields_Field_Requires_FULLTEXT_Index( l.module, l.searchablecustomfield, l.field )' ) GT 0 }">
+
+			<MvCOMMENT>
+			|
+			| If at least one field requires the fulltext index, stop processing
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.need_index }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+
 		<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Index_Exists( l.table, l.index, l.exists ) }">
 			<MvIF EXPR = "{ ( NOT l.need_index ) AND l.exists }">		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Drop_Index( l.table, l.index ) }">
 			<MvELSEIF EXPR = "{ l.need_index AND ( NOT l.exists ) }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Create_FULLTEXT_Index( l.table, l.index, 'value, value_long' ) }">
 			</MvIF>
 		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Determine if any of the sNN_CFM_ProdValues_NN tables need a fulltext index
+		|
+		</MvCOMMENT>
+
+		<MvFOREACH ITERATOR = "l.field" ARRAY = "l.separate_fields" COUNT = "{ miva_array_filter_ref( l.fields, 1, l.field, 'l.field:separate', l.separate_fields ) }">
+			<MvASSIGN NAME = "l.table"		VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) }">
+			<MvASSIGN NAME = "l.index"		VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '_FULLTEXT' }">
+			<MvASSIGN NAME = "l.need_index" VALUE = "{ miva_array_search( l.searchablecustomfields, 1, l.searchablecustomfield, 'CustomFields_Field_Requires_FULLTEXT_Index( l.module, l.searchablecustomfield, l.field )' ) GT 0 }">
+
+			<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Index_Exists( l.table, l.index, l.exists ) }">
+				<MvIF EXPR = "{ ( NOT l.need_index ) AND l.exists }">		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Drop_Index( l.table, l.index ) }">
+				<MvELSEIF EXPR = "{ l.need_index AND ( NOT l.exists ) }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Create_FULLTEXT_Index( l.table, l.index, 'value, value_long' ) }">
+				</MvIF>	
+			</MvIF>
+		</MvFOREACH>
 	</MvLOCKFILE>
 </MvFUNCTION>
 
@@ -4627,7 +4507,7 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Module_Product_Facets_Query" PARAMETERS = "module var, query var, facets var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.union_query"				VALUE = "{ l.query }">
+	<MvASSIGN NAME = "l.original_query" VALUE = "{ l.query }">
 
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.query, 'pf.code, pf.name' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'CFM_ProdFields',	'pf' ) }">
@@ -4635,6 +4515,8 @@
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'pf.id			= pv.field_id	AND
 																		 pf.facet		= 1				AND
 																		 pv.product_id	= prod.id', '' ) }">
+
+	<MvASSIGN NAME = "l.union_query" VALUE = "{ l.original_query }">
 
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.union_query, 'pf.code, pf.name' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.union_query, g.Store_Table_Prefix $ 'CFM_ProdFields',		'pf' ) }">
@@ -4644,6 +4526,28 @@
 																			   pmv.product_id	= prod.id', '' ) }">
 
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_UNION( l.query, l.union_query ) }">
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ ProductFieldList_Load_All_FacetSeparate( l.fields ) }">
+		<MvASSIGN NAME = "l.union_query" VALUE = "{ l.original_query }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.union_query, 'pf.code, pf.name' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.union_query, g.Store_Table_Prefix $ 'CFM_ProdFields',						'pf' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.union_query, g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ),	'pv' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.union_query, 'pf.id			= ?	AND
+																				   pv.product_id	= prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_UNION( l.query, l.union_query ) }">
+
+		<MvASSIGN NAME = "l.union_query" VALUE = "{ l.original_query }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.union_query, 'pf.code, pf.name' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.union_query, g.Store_Table_Prefix $ 'CFM_ProdFields',							'pf' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.union_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ),	'pmv' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.union_query, 'pf.id			= ?	AND
+																				   pmv.product_id	= prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_UNION( l.query, l.union_query ) }">
+	</MvFOREACH>
 
 	<MvASSIGN NAME = "l.sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.fields ) }">
 
@@ -4700,8 +4604,15 @@
 		<MvASSIGN NAME = "l.facet_query"		VALUE = "{ l.query }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.facet_query, 'COUNT( DISTINCT pmv.product_id ) AS cpv_count, pmv.value AS cpv_value' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues', 'pmv' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query, 'pmv.product_id = prod.id AND pmv.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues', 'pmv' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query, 'pmv.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ), 'pmv' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query, 'pmv.product_id = prod.id', '' ) }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_GROUP_BY( l.facet_query, 'pmv.value' ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.facet_query, 'cpv_value', 'ASC' ) }">
@@ -4710,12 +4621,24 @@
 		<MvASSIGN NAME = "l.facet_query_no" 	VALUE = "{ l.query }">	
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.facet_query_yes, 'COUNT( * ) AS cpv_count, \'Yes\' AS cpv_value' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query_yes, g.Store_Table_Prefix $ 'CFM_ProdValues', 'cpv' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query_yes, 'cpv.field_id = ? AND cpv.product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query_yes, '( ( cpv.value <> \'0\' AND cpv.value_long IS NULL ) OR ( cpv.value IS NULL AND cpv.value_long <> \'0\' ) )', '' ) }">
+
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query_yes, g.Store_Table_Prefix $ 'CFM_ProdValues', 'cpv' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query_yes, 'cpv.field_id = ? ', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+		<MvELSE>			
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query_yes, g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ), 'cpv' ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query_yes, 'cpv.product_id = prod.id AND ( ( cpv.value <> \'0\' AND cpv.value_long IS NULL ) OR ( cpv.value IS NULL AND cpv.value_long <> \'0\' ) )', '' ) }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.facet_query_no, 'COUNT( * ) AS cpv_count, \'No\' AS cpv_value' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.facet_query_no, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues', 'cpv', 'prod.id = cpv.product_id AND cpv.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.facet_query_no, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues', 'cpv', 'cpv.field_id = ? AND prod.id = cpv.product_id', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.facet_query_no, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ), 'cpv', 'prod.id = cpv.product_id', '' ) }">
+		</MvIF>
+
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query_no, '( ( ( cpv.value = \'0\' OR cpv.value IS NULL ) AND cpv.value_long IS NULL ) OR ( ( cpv.value_long = \'0\' OR cpv.value_long IS NULL ) AND cpv.value IS NULL ) )', '' ) }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_UNION_ALL( l.facet_query, l.facet_query_yes ) }">
@@ -4726,8 +4649,14 @@
 		<MvASSIGN NAME = "l.facet_query" 		VALUE = "{ l.query }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.facet_query, 'COUNT( * ) AS cpv_count, cpv.value AS cpv_value' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query, g.Store_Table_Prefix $ 'CFM_ProdValues', 'cpv' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query, 'cpv.field_id	= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query, g.Store_Table_Prefix $ 'CFM_ProdValues', 'cpv' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query, 'cpv.field_id	= ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.facet_query, g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ), 'cpv' ) }">
+		</MvIF>
+
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.facet_query,
 																   'cpv.product_id = prod.id AND
 																    cpv.value IS NOT NULL', '' ) }">
@@ -4784,10 +4713,17 @@
 		<MvASSIGN NAME = "l.table_alias" VALUE = "{ l.table_alias $ '_facet_filter' }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_DISTINCT( l.query ) }">
-		<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_FROM( l.query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues', l.table_alias ) }">
+
+		<MvIF EXPR = "{ NOT l.field:separate }">	<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_FROM( l.query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues', l.table_alias ) }">
+		<MvELSE>									<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_FROM( l.query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ), l.table_alias ) }">
+		</MvIF>
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
-			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.table_alias $ '.field_id = ? AND prod.id = ' $ l.table_alias $ '.product_id', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+			<MvIF EXPR = "{ NOT l.field:separate }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.table_alias $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+			</MvIF>
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ' $ l.table_alias $ '.product_id', '' ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'AND' ) }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
@@ -4796,7 +4732,9 @@
 			</MvFOREACH>
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
 	<MvELSEIF EXPR = "{ l.field:fieldtype EQ 'checkbox' }">
-		<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues', l.table_alias, 'product_id', l.field:id ) }">
+		<MvIF EXPR = "{ NOT l.field:separate }">	<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues', l.table_alias, 'product_id', l.field:id, l.field:separate ) }">
+		<MvELSE>									<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ), l.table_alias, 'product_id', l.field:id, l.field:separate ) }">
+		</MvIF>
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
 			<MvFOREACH ITERATOR = "l.facet_value" ARRAY = "l.facet_values">
@@ -4814,7 +4752,9 @@
 			</MvFOREACH>
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.query, 'OR' ) }">
 	<MvELSE>
-		<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues', l.table_alias, 'product_id', l.field:id ) }">
+		<MvIF EXPR = "{ NOT l.field:separate }">	<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues', l.table_alias, 'product_id', l.field:id, l.field:separate ) }">
+		<MvELSE>									<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, 'prod', g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ), l.table_alias, 'product_id', l.field:id, l.field:separate ) }">
+		</MvIF>
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
 			<MvFOREACH ITERATOR = "l.facet_value" ARRAY = "l.facet_values">
@@ -4889,50 +4829,103 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvCOMMENT>
-	|
-	| Copy values for sNN_CFM_ProdValues
-	|
-	</MvCOMMENT>
+	<MvASSIGN NAME = "l.non_separate_processed" VALUE = 0>
 
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues ( field_id, product_id, value, value_long )
-			 			  SELECT
-			 			  	field_id, ?, value, value_long
-			 			  FROM ' $ 
-			 				g.Store_Table_Prefix $ 'CFM_ProdValues
-			 			  WHERE
-			 				product_id = ?' }"
-			 FIELDS = "l.dest_product:id,
-					   l.source_product:id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00310', g.MvQUERY_Error ) }">
-	</MvIF>
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ ProductFieldList_Load_All( l.fields ) }">
+		<MvIF EXPR = "{ l.field:separate }">
+			<MvCOMMENT>
+			|
+			| Copy values for sNN_CFM_ProdValues_NN
+			|
+			</MvCOMMENT>
 
-	<MvCOMMENT>
-	|
-	| Copy values for sNN_CFM_ProdMultiValues
-	|
-	</MvCOMMENT>
+			<MvQUERY NAME 	= "Merchant"
+					 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ ' ( product_id, value, value_long )
+					 			  SELECT
+					 			  	?, value, value_long
+					 			  FROM ' $ 
+					 				g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '
+					 			  WHERE
+					 				product_id = ?' }"
+					 FIELDS = "l.dest_product:id,
+							   l.source_product:id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00387', g.MvQUERY_Error ) }">
+			</MvIF>
 
-	<MvOPENVIEW NAME	= "Merchant"
-				VIEW 	= "CFM_ProdMultiValues"
-				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE product_id = ? ORDER BY id' }"
-				FIELDS	= "l.source_product:id">
-	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00311', g.MvOPENVIEW_Error ) }">
-	</MvIF>
-	
-	<MvWHILE EXPR = "{ NOT CFM_ProdMultiValues.d.EOF }">
-		<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( CFM_ProdMultiValues.d.field_id, l.dest_product:id, CFM_ProdMultiValues.d.value ) }">
+			<MvCOMMENT>
+			|
+			| Copy values for sNN_CFM_ProdMultiValues_NN
+			|
+			</MvCOMMENT>
+
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW 	= "CFM_ProdMultiValues"
+						QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ ' WHERE product_id = ? ORDER BY id' }"
+						FIELDS	= "l.source_product:id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00388', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+			
+			<MvWHILE EXPR = "{ NOT CFM_ProdMultiValues.d.EOF }">
+				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( l.field, l.dest_product:id, CFM_ProdMultiValues.d.value ) }">
+					<MvCLOSEVIEW NAME = "Merchant" VIEW = "CFM_ProdMultiValues">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			
+				<MvSKIP NAME = "Merchant" VIEW = "CFM_ProdMultiValues" ROWS = 1>
+			</MvWHILE>
+			
 			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CFM_ProdMultiValues">
-			<MvFUNCTIONRETURN VALUE = 0>
+		<MvELSEIF EXPR = "{ NOT l.non_separate_processed }">
+			<MvASSIGN NAME = "l.non_separate_processed" VALUE = 1>
+
+			<MvCOMMENT>
+			|
+			| Copy values for sNN_CFM_ProdValues
+			|
+			</MvCOMMENT>
+
+			<MvQUERY NAME 	= "Merchant"
+					 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues ( field_id, product_id, value, value_long )
+					 			  SELECT
+					 			  	field_id, ?, value, value_long
+					 			  FROM ' $ 
+					 				g.Store_Table_Prefix $ 'CFM_ProdValues
+					 			  WHERE
+					 				product_id = ?' }"
+					 FIELDS = "l.dest_product:id,
+							   l.source_product:id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00310', g.MvQUERY_Error ) }">
+			</MvIF>
+			<MvCOMMENT>
+			|
+			| Copy values for sNN_CFM_ProdMultiValues
+			|
+			</MvCOMMENT>
+
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW 	= "CFM_ProdMultiValues"
+						QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE product_id = ? ORDER BY id' }"
+						FIELDS	= "l.source_product:id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00311', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvWHILE EXPR = "{ NOT CFM_ProdMultiValues.d.EOF }">
+				<MvIF EXPR = "{ NOT ProductFieldMultiValue_Set( CFM_ProdMultiValues.d.field_id, l.dest_product:id, CFM_ProdMultiValues.d.value ) }">
+					<MvCLOSEVIEW NAME = "Merchant" VIEW = "CFM_ProdMultiValues">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvSKIP NAME = "Merchant" VIEW = "CFM_ProdMultiValues" ROWS = 1>
+			</MvWHILE>
+			
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "CFM_ProdMultiValues">
 		</MvIF>
-	
-		<MvSKIP NAME = "Merchant" VIEW = "CFM_ProdMultiValues" ROWS = 1>
-	</MvWHILE>
-	
-	<MvCLOSEVIEW NAME = "Merchant" VIEW = "CFM_ProdMultiValues">
+	</MvFOREACH>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -5833,7 +5826,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CategoryField_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) }">
+	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) OR
+					NOT CategoryFieldValue_Delete_All_Field( l.id ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -6031,14 +6025,16 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductField_Read" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.field:id"			VALUE = "{ ProductFields.d.id }">
-	<MvASSIGN NAME = "l.field:group_id"		VALUE = "{ ProductFields.d.group_id }">
-	<MvASSIGN NAME = "l.field:code"			VALUE = "{ ProductFields.d.code }">
-	<MvASSIGN NAME = "l.field:name"			VALUE = "{ ProductFields.d.name }">
-	<MvASSIGN NAME = "l.field:fieldtype" 	VALUE = "{ ProductFields.d.fieldtype }">
-	<MvASSIGN NAME = "l.field:facet" 		VALUE = "{ ProductFields.d.facet }">
-	<MvASSIGN NAME = "l.field:info" 		VALUE = "{ ProductFields.d.info }">
-	<MvASSIGN NAME = "l.field:is_public"	VALUE = "{ ProductFields.d.is_public }">
+	<MvASSIGN NAME = "l.field:id"					VALUE = "{ ProductFields.d.id }">
+	<MvASSIGN NAME = "l.field:group_id"				VALUE = "{ ProductFields.d.group_id }">
+	<MvASSIGN NAME = "l.field:code"					VALUE = "{ ProductFields.d.code }">
+	<MvASSIGN NAME = "l.field:name"					VALUE = "{ ProductFields.d.name }">
+	<MvASSIGN NAME = "l.field:fieldtype" 			VALUE = "{ ProductFields.d.fieldtype }">
+	<MvASSIGN NAME = "l.field:facet" 				VALUE = "{ ProductFields.d.facet }">
+	<MvASSIGN NAME = "l.field:separate"				VALUE = "{ ProductFields.d.separate }">
+	<MvASSIGN NAME = "l.field:original_separate"	VALUE = "{ ProductFields.d.separate }">
+	<MvASSIGN NAME = "l.field:info" 				VALUE = "{ ProductFields.d.info }">
+	<MvASSIGN NAME = "l.field:is_public"			VALUE = "{ ProductFields.d.is_public }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductFields_Count" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -6101,14 +6097,33 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "ProductFieldList_Load_All_FacetSeparate" PARAMETERS = "fields var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "ProductFields"
+				QUERY	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdFields WHERE facet = 1 AND separate = 1 ORDER BY id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00422', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.field_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT ProductFields.d.EOF }">
+		<MvEVAL EXPR = "{ ProductField_Read( l.fields[ ++l.field_count ] ) }">
+		<MvSKIP NAME = "Merchant" VIEW = "ProductFields" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFields">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTL-CST-00423', l.field_count ) }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "ProductFieldList_Load_Values" PARAMETERS = "product_id, fields var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "ProductFields"
 				QUERY	= "{ 'SELECT
-								pf.id, pf.code, pf.name, pv.value, pv.value_long
+								pf.*, pv.value, pv.value_long
 							  FROM ' $
 								g.Store_Table_Prefix $ 'CFM_ProdFields pf
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CFM_ProdValues pv ON ( pv.field_id = pf.id AND pv.product_id = ? )
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CFM_ProdValues pv ON pv.field_id = pf.id AND pv.product_id = ?
 							  ORDER BY
 								pf.id' }"
 				FIELDS	= "l.product_id">
@@ -6127,6 +6142,25 @@
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFields">
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ l.field_count }">
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW 	= "ProductFieldValues"
+					QUERY 	= "{ 'SELECT value, value_long FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ ' WHERE product_id = ?' }"
+					FIELDS	= "l.product_id">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00389', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+		
+		<MvASSIGN NAME = "l.field:value" VALUE = "{ ProductFieldValues.d.value $ ProductFieldValues.d.value_long }">
+		
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+	</MvFOREACH>
+
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTL-CST-00084', l.field_count ) }">
 </MvFUNCTION>
 
@@ -6215,7 +6249,54 @@
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFields">
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ l.field_count }">
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.field:fieldtype NE 'multitext' }">
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW 	= "ProductFieldValues"
+						QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ ' WHERE product_id = ?' }"
+						FIELDS	= "l.product_id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00390', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+			
+			<MvASSIGN NAME = "l.field:value" VALUE = "{ ProductFieldValues.d.value $ ProductFieldValues.d.value_long }">
+			
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+		<MvELSE>
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW 	= "ProductFieldValues"
+						QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ ' WHERE product_id = ?' }"
+						FIELDS	= "l.product_id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00391', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvWHILE EXPR = "{ NOT ProductFieldValues.d.EOF }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.field:value, ProductFieldValues.d.value, -1 ) }">
+
+				<MvSKIP NAME = "Merchant" VIEW = "ProductFieldValues" ROWS = 1>
+			</MvWHILE>
+			
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+		</MvIF>
+	</MvFOREACH>
+
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTL-CST-00250', l.field_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductField_Load_ID_Dynamic" PARAMETERS = "id_or_field, field var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ miva_variable_type( l.id_or_field ) EQ 'STRUCTURE' }">
+		<MvASSIGN NAME = "l.field" VALUE = "{ l.id_or_field }">
+	<MvELSEIF EXPR = "{ NOT ProductField_Load_ID( l.id_or_field, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductField_Load_ID" PARAMETERS = "id, field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -6291,23 +6372,37 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductField_Insert" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.field:id"			VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'CFM_Fields' ) }">
-
-	<MvIF EXPR = "{ ISNULL l.field:group_id }">
-		<MvASSIGN NAME = "l.field:group_id"	VALUE = 0>
+<MvFUNCTION NAME = "ProductField_Insert" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductDataField_Insert_LowLevel( l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvIF EXPR = "{ ISNULL l.field:is_public }">
-		<MvASSIGN NAME = "l.field:is_public" VALUE = 0>
+	<MvIF EXPR = "{ l.field:separate }">
+		<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_Create( l.field ) }">
+			<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+			<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+			<MvASSIGN NAME = "l.null"			VALUE = "{ ProductField_Delete( l.field ) }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( l.error_code, l.error_message ) }">
+		</MvIF>
 	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductDataField_Insert_LowLevel" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.field:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'CFM_Fields' ) }">
+
+	<MvIF EXPR = "{ ISNULL l.field:group_id }">		<MvASSIGN NAME = "l.field:group_id"		VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.field:separate }">		<MvASSIGN NAME = "l.field:separate"		VALUE = 0> </MvIF>
+	<MvIF EXPR = "{ ISNULL l.field:is_public }">	<MvASSIGN NAME = "l.field:is_public"	VALUE = 0> </MvIF>
 
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdFields
-						  ( id, group_id, code, name, fieldtype, facet, info, is_public )
+						  ( id, group_id, code, name, fieldtype, facet, separate, info, is_public )
 						  VALUES
-						  ( ?, ?, ?, ?, ?, ?, ?, ? )' }"
-			 FIELDS	= "l.field:id, l.field:group_id, l.field:code, l.field:name, l.field:fieldtype, l.field:facet, l.field:info, l.field:is_public">
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+			 FIELDS	= "l.field:id, l.field:group_id, l.field:code, l.field:name, l.field:fieldtype, l.field:facet, l.field:separate, l.field:info, l.field:is_public">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00072', g.MvQUERY_Error ) }">
 	</MvIF>
@@ -6315,7 +6410,34 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductField_Update" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+<MvFUNCTION NAME = "ProductField_Update" PARAMETERS = "module var, field var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Update_LowLevel( l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.field:separate NE l.field:original_separate }">
+		<MvIF EXPR = "{ l.field:separate }">
+			<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_MigrateTo_SeparateTable( l.module, l.field ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_MigrateTo_SharedTable( l.module, l.field ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductField_Update_LowLevel" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Note that the separate field is not set here.  If the value has changed, it will be handled during the migration process
+	| of shared / separate tables.
+	|
+	</MvCOMMENT>
+
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CFM_ProdFields
 						  SET
@@ -6337,12 +6459,24 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductField_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) }">
+<MvFUNCTION NAME = "ProductField_Delete" PARAMETERS = "id_or_field" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.id_or_field, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.field:id )		OR
+					NOT ProductFieldValue_Delete_All_Field( l.field )	OR
+					NOT ProductFieldMultiValue_Delete_All_Field( l.field ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvFUNCTIONRETURN VALUE = "{ ProductField_Delete_LowLevel( l.id ) }">
+	<MvIF EXPR = "{ l.field:separate }">
+		<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_Delete( l.field ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ ProductField_Delete_LowLevel( l.field:id ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductField_Delete_LowLevel" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -6371,13 +6505,11 @@
 								pf.*,
 								pv.*
 							  FROM ' $
-							  	g.Store_Table_Prefix $ 'CFM_ProdFields pf, ' $
-							  	g.Store_Table_Prefix $ 'CFM_ProdValues pv
+							  	g.Store_Table_Prefix $ 'CFM_ProdFields pf
+							  	LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'CFM_ProdValues pv ON pv.field_id = pf.id AND pv.product_id = ?
 							  WHERE ' $
-							  	[ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pf.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' AND
-							  	pv.field_id															= pf.id																AND
-							  	pv.product_id														= ?' }"
-				FIELDS	= "l.code, l.product_id">
+							  	[ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pf.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) }"
+				FIELDS	= "l.product_id, l.code">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00280', g.MvOPENVIEW_Error ) }">
 	</MvIF>
@@ -6400,6 +6532,7 @@
 	<MvASSIGN NAME = "l.field:name"			VALUE = "{ ProductFieldValues.d.name }">
 	<MvASSIGN NAME = "l.field:fieldtype"	VALUE = "{ ProductFieldValues.d.fieldtype }">
 	<MvASSIGN NAME = "l.field:facet"		VALUE = "{ ProductFieldValues.d.facet }">
+	<MvASSIGN NAME = "l.field:separate"		VALUE = "{ ProductFieldValues.d.separate }">
 	<MvASSIGN NAME = "l.field:info"			VALUE = "{ ProductFieldValues.d.info }">
 
 	<MvCOMMENT>
@@ -6415,6 +6548,42 @@
 	<MvASSIGN NAME = "l.value:value_long"	VALUE = "{ ProductFieldValues.d.value_long }">
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvIF EXPR = "{ ISNULL l.value:field_id }">
+			<MvASSIGN NAME = "l.field" VALUE = "">
+			<MvASSIGN NAME = "l.value" VALUE = "">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-CST-00392' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvOPENVIEW NAME	= "Merchant"
+					VIEW 	= "ProductFieldValues"
+					QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ ' WHERE product_id = ?' }"
+					FIELDS	= "l.product_id">
+		<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00393', g.MvOPENVIEW_Error ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ProductFieldValues.d.EOF }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTL-CST-00394' ) }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| sNN_CFM_ProdValues_NN
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.value"				VALUE = "">
+		<MvASSIGN NAME = "l.value:product_id"	VALUE = "{ ProductFieldValues.d.product_id }">
+		<MvASSIGN NAME = "l.value:value"		VALUE = "{ ProductFieldValues.d.value }">
+		<MvASSIGN NAME = "l.value:value_long"	VALUE = "{ ProductFieldValues.d.value_long }">
+
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -6422,8 +6591,10 @@
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "ProductFieldValues"
 				QUERY	= "{ 'SELECT
+								pf.id,
 								pf.code,
 								pf.fieldtype,
+								pf.separate,
 								pv.value		AS pv_value,
 								pv.value_long	AS pv_value_long,
 								pmv.value		AS pmv_value
@@ -6438,86 +6609,208 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00076', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
+	<MvASSIGN NAME = "l.separate_fields"		VALUE = "">
+	<MvASSIGN NAME = "l.separate_field_count"	VALUE = 0>
+
 	<MvWHILE EXPR = "{ NOT ProductFieldValues.d.EOF }">
 		<MvREFERENCEARRAY NAME = "l.data" VARIABLE = "l.cache">
 			<MvMEMBER NAME = "{ ProductFieldValues.d.code }">
 		</MvREFERENCEARRAY>
 
-		<MvIF EXPR = "{ ProductFieldValues.d.fieldtype EQ 'multitext' }">	<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.data, ProductFieldValues.d.pmv_value, -1 ) }">
-		<MvELSE>															<MvASSIGN NAME = "l.data" VALUE = "{ ProductFieldValues.d.pv_value $ ProductFieldValues.d.pv_value_long }">
+		<MvIF EXPR = "{ NOT ProductFieldValues.d.separate }">
+			<MvIF EXPR = "{ ProductFieldValues.d.fieldtype EQ 'multitext' }">	<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.data, ProductFieldValues.d.pmv_value, -1 ) }">
+			<MvELSE>															<MvASSIGN NAME = "l.data" VALUE = "{ ProductFieldValues.d.pv_value $ ProductFieldValues.d.pv_value_long }">
+			</MvIF>
+		<MvELSE>
+			<MvASSIGN NAME = "l.separate_field"				VALUE = "">
+			<MvASSIGN NAME = "l.separate_field:id"			VALUE = "{ ProductFieldValues.d.id }">
+			<MvASSIGN NAME = "l.separate_field:code"		VALUE = "{ ProductFieldValues.d.code }">
+			<MvASSIGN NAME = "l.separate_field:fieldtype"	VALUE = "{ ProductFieldValues.d.fieldtype }">
+			<MvASSIGN NAME = "l.separate_field_count"		VALUE = "{ miva_array_insert_var( l.separate_fields, l.separate_field, -1 ) }">
 		</MvIF>
 
 		<MvSKIP NAME = "Merchant" VIEW = "ProductFieldValues" ROWS = 1>
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+
+	<MvFOREACH ITERATOR = "l.separate_field" ARRAY = "l.separate_fields" COUNT = "{ l.separate_field_count }">
+		<MvREFERENCEARRAY NAME = "l.data" VARIABLE = "l.cache">
+			<MvMEMBER NAME = "{ l.separate_field:code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ l.separate_field:fieldtype NE 'multitext' }">
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW 	= "ProductFieldValues"
+						QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.separate_field:id ) $ ' WHERE product_id = ?' }"
+						FIELDS	= "l.product_id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00395', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.data" VALUE = "{ ProductFieldValues.d.value $ ProductFieldValues.d.value_long }">
+
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+		<MvELSE>
+			<MvOPENVIEW NAME	= "Merchant"
+						VIEW 	= "ProductFieldValues"
+						QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.separate_field:id ) $ ' WHERE product_id = ? ORDER BY id' }"
+						FIELDS	= "l.product_id">
+			<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00396', g.MvOPENVIEW_Error ) }">
+			</MvIF>
+
+			<MvWHILE EXPR = "{ NOT ProductFieldValues.d.EOF }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.data, ProductFieldValues.d.value, -1 ) }">
+
+				<MvSKIP NAME = "Merchant" VIEW = "ProductFieldValues" ROWS = 1>
+			</MvWHILE>
+
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductFieldValues">
+		</MvIF>
+	</MvFOREACH>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductFieldValue_Set" PARAMETERS = "field_id, product_id, value" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvIF EXPR = "{ len( l.value ) GT 254 }">	<MvASSIGN NAME = "l.values"	VALUE = "( ?, ?, NULL, ? )">
-	<MvELSE>									<MvASSIGN NAME = "l.values" VALUE = "( ?, ?, ?, NULL )">
+<MvFUNCTION NAME = "ProductFieldValue_Set" PARAMETERS = "field_or_field_id, product_id, value" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.field_or_field_id, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvQUERY NAME	= "Merchant"
-			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues ( field_id, product_id, value, value_long ) VALUES ' $ l.values }"
-			 FIELDS	= "l.field_id, l.product_id, l.value">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00063', g.MvQUERY_Error ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ len( l.value ) GT 254 }">	<MvASSIGN NAME = "l.values"	VALUE = "value = NULL, value_long = ?">
-		<MvELSE>									<MvASSIGN NAME = "l.values" VALUE = "value = ?, value_long = NULL">
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvIF EXPR = "{ len_var( l.value ) GT 254 }">	<MvASSIGN NAME = "l.values"	VALUE = "( ?, ?, NULL, ? )">
+		<MvELSE>										<MvASSIGN NAME = "l.values" VALUE = "( ?, ?, ?, NULL )">
 		</MvIF>
 
 		<MvQUERY NAME	= "Merchant"
-				 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CFM_ProdValues SET ' $ l.values $ ' WHERE field_id = ? AND product_id = ? AND ( ( value_long IS NULL ) OR ( ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( 'value_long' ) $ ' <> ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( '?' ) $ ' ) )' }"
-				 FIELDS	= "l.value, l.field_id, l.product_id, l.value">
+				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues ( field_id, product_id, value, value_long ) VALUES ' $ l.values }"
+				 FIELDS	= "l.field:id, l.product_id, l.value">
 		<MvIF EXPR = "{ g.MvQUERY_Error }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00064', g.MvQUERY_Error ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00063', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ len_var( l.value ) GT 254 }">	<MvASSIGN NAME = "l.values"	VALUE = "value = NULL, value_long = ?">
+			<MvELSE>										<MvASSIGN NAME = "l.values" VALUE = "value = ?, value_long = NULL">
+			</MvIF>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CFM_ProdValues SET ' $ l.values $ ' WHERE field_id = ? AND product_id = ? AND ( ( value_long IS NULL ) OR ( ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( 'value_long' ) $ ' <> ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( '?' ) $ ' ) )' }"
+					 FIELDS	= "l.value, l.field:id, l.product_id, l.value">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00064', g.MvQUERY_Error ) }">
+			</MvIF>
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ len_var( l.value ) GT 254 }">	<MvASSIGN NAME = "l.values"	VALUE = "( ?, NULL, ? )">
+		<MvELSE>										<MvASSIGN NAME = "l.values" VALUE = "( ?, ?, NULL )">
+		</MvIF>
+
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ ' ( product_id, value, value_long ) VALUES ' $ l.values }"
+				 FIELDS	= "l.product_id, l.value">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_Error_IsIndexDuplicate( g.MvQUERY_Error ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00397', g.MvQUERY_Error ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ len_var( l.value ) GT 254 }">	<MvASSIGN NAME = "l.values"	VALUE = "value = NULL, value_long = ?">
+			<MvELSE>										<MvASSIGN NAME = "l.values" VALUE = "value = ?, value_long = NULL">
+			</MvIF>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ ' SET ' $ l.values $ ' WHERE product_id = ? AND ( ( value_long IS NULL ) OR ( ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( 'value_long' ) $ ' <> ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_CaseSensitive( '?' ) $ ' ) )' }"
+					 FIELDS	= "l.value, l.product_id, l.value">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00398', g.MvQUERY_Error ) }">
+			</MvIF>
 		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductFieldValue_Delete" PARAMETERS = "field_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME	= "Merchant"
-			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
-						  WHERE
-							field_id	= ? AND
-							product_id	= ?' }"
-			 FIELDS	= "l.field_id, l.product_id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00077', g.MvQUERY_Error ) }">
+<MvFUNCTION NAME = "ProductFieldValue_Delete" PARAMETERS = "field_or_field_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.field_or_field_id, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
+							  WHERE
+								field_id	= ? AND
+								product_id	= ?' }"
+				 FIELDS	= "l.field:id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00077', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '
+							  WHERE
+								product_id = ?' }"
+				 FIELDS	= "l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00399', g.MvQUERY_Error ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductFieldValue_Delete_All_Field" PARAMETERS = "field_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME	= "Merchant"
-			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
-						  WHERE
-							field_id = ?' }"
-			 FIELDS	= "l.field_id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00078', g.MvQUERY_Error ) }">
+<MvFUNCTION NAME = "ProductFieldValue_Delete_All_Field" PARAMETERS = "field_or_field_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.field_or_field_id, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvQUERY NAME	= "Merchant"
+				 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
+							  WHERE
+								field_id = ?' }"
+				 FIELDS	= "l.field:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00078', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00400', g.MvQUERY_Error ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductFieldValue_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME	= "Merchant"
-			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
-						  WHERE
-							product_id	= ?' }"
-			 FIELDS	= "l.product_id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00079', g.MvQUERY_Error ) }">
-	</MvIF>
+	<MvASSIGN NAME = "l.non_separate_processed" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ ProductFieldList_Load_All( l.fields ) }">
+		<MvIF EXPR = "{ l.field:separate }">
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '
+								  WHERE
+									product_id	= ?' }"
+					 FIELDS	= "l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00401', g.MvQUERY_Error ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT l.non_separate_processed }">
+			<MvASSIGN NAME = "l.non_separate_processed" VALUE = 1>
+
+			<MvQUERY NAME	= "Merchant"
+					 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
+								  WHERE
+									product_id	= ?' }"
+					 FIELDS	= "l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00079', g.MvQUERY_Error ) }">
+			</MvIF>
+		</MvIF>	
+	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -6815,7 +7108,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CustomerField_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) }">
+	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) OR
+					NOT CustomerFieldValue_Delete_All_Field( l.id ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -7205,7 +7499,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "OrderField_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) }">
+	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) OR
+					NOT OrderFieldValue_Delete_All_Field( l.id ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -7465,51 +7760,113 @@
 |
 </MvCOMMENT>
 
-<MvFUNCTION NAME = "ProductFieldMultiValue_Set" PARAMETERS = "field_id, product_id, value" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+<MvFUNCTION NAME = "ProductFieldMultiValue_Set" PARAMETERS = "field_or_field_id, product_id, value" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.field_or_field_id, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
 	<MvASSIGN NAME = "l.id"		VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'CFM_ProdMultiValues' ) }">
 	<MvASSIGN NAME = "l.value"	VALUE = "{ substring_var( l.value, 1, 254 ) }">
 
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues
-			 			  ( id, field_id, product_id, value )
-			 			  VALUES
-			 			  ( ?, ?, ?, ? )' }"
-			 FIELDS = "l.id, l.field_id, l.product_id, l.value">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00297', g.MvQUERY_Error ) }">
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues
+				 			  ( id, field_id, product_id, value )
+				 			  VALUES
+				 			  ( ?, ?, ?, ? )' }"
+				 FIELDS = "l.id, l.field:id, l.product_id, l.value">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00297', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ '
+				 			  ( id, product_id, value )
+				 			  VALUES
+				 			  ( ?, ?, ? )' }"
+				 FIELDS = "l.id, l.product_id, l.value">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00402', g.MvQUERY_Error ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductFieldMultiValue_Delete" PARAMETERS = "field_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE field_id = ? AND product_id = ?' }"
-			 FIELDS = "l.field_id, l.product_id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00298', g.MvQUERY_Error ) }">
+<MvFUNCTION NAME = "ProductFieldMultiValue_Delete" PARAMETERS = "field_or_field_id, product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.field_or_field_id, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE field_id = ? AND product_id = ?' }"
+				 FIELDS = "l.field:id, l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00298', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ ' WHERE product_id = ?' }"
+				 FIELDS = "l.product_id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00403', g.MvQUERY_Error ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ProductFieldMultiValue_Delete_All_Field" PARAMETERS = "field_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE field_id = ?' }"
-			 FIELDS = "l.field_id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00299', g.MvQUERY_Error ) }">
+<MvFUNCTION NAME = "ProductFieldMultiValue_Delete_All_Field" PARAMETERS = "field_or_field_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ProductField_Load_ID_Dynamic( l.field_or_field_id, l.field ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.field:separate }">
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE field_id = ?' }"
+				 FIELDS = "l.field:id">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00299', g.MvQUERY_Error ) }">
+		</MvIF>
+	<MvELSE>
+		<MvQUERY NAME 	= "Merchant"
+				 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) }">
+		<MvIF EXPR = "{ g.MvQUERY_Error }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00404', g.MvQUERY_Error ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductFieldMultiValue_Delete_All_Product" PARAMETERS = "product_id" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
-	<MvQUERY NAME 	= "Merchant"
-			 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE product_id = ?' }"
-			 FIELDS = "l.product_id">
-	<MvIF EXPR = "{ g.MvQUERY_Error }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00300', g.MvQUERY_Error ) }">
+	<MvASSIGN NAME = "l.non_separate_processed" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ ProductFieldList_Load_All( l.fields ) }">
+		<MvIF EXPR = "{ l.field:separate }">
+			<MvQUERY NAME 	= "Merchant"
+					 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ '
+					 			  WHERE
+					 				product_id = ?' }"
+					 FIELDS = "l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00405', g.MvQUERY_Error ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ NOT l.non_separate_processed }">
+			<MvASSIGN NAME = "l.non_separate_processed" VALUE = 1>
+
+			<MvQUERY NAME 	= "Merchant"
+					 QUERY 	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues WHERE product_id = ?' }"
+					 FIELDS = "l.product_id">
+			<MvIF EXPR = "{ g.MvQUERY_Error }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00300', g.MvQUERY_Error ) }">
+			</MvIF>
+		</MvIF>	
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.delete_non_separate }">
+		
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -7763,7 +8120,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PageField_Delete" PARAMETERS = "id" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) }">
+	<MvIF EXPR = "{ NOT FieldOption_Delete_Field_ID( l.id ) OR
+					NOT PageFieldValue_Delete_All_Field( l.id ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -8948,7 +9306,7 @@
 		<MvIF EXPR = "{ l.data:field:fieldtype NE 'multitext' }">
 			<MvASSIGN NAME = "l.record:alias"		VALUE = "{ l.alias }">
 
-			<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, l.data:correlation, l.data:cf_table, l.alias, l.data:cf_correlation, l.data:field:id ) }">
+			<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, l.data:correlation, l.data:cf_table, l.alias, l.data:cf_correlation, l.data:field:id, l.data:field:separate ) }">
 		</MvIF>
 	</MvIF>
 
@@ -9014,7 +9372,7 @@
 			<MvASSIGN NAME = "l.record:alias"		VALUE = "{ l.alias }">
 
 			<MvIF EXPR = "{ l.is_conjunctive }">	<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_FROM( l.query, l.data:cf_table, l.alias ) }">
-			<MvELSE>								<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, l.data:correlation, l.data:cf_table, l.alias, l.data:cf_correlation, l.data:field:id ) }">
+			<MvELSE>								<MvEVAL EXPR = "{ CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN( l.query, l.data:correlation, l.data:cf_table, l.alias, l.data:cf_correlation, l.data:field:id, l.data:field:separate ) }">
 			</MvIF>
 		</MvIF>
 	</MvIF>
@@ -9036,14 +9394,17 @@
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
 
 	<MvIF EXPR = "{ l.is_conjunctive }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.element:alias $ '.field_id = ? AND ' $ l.element:alias $ '.' $ l.data:cf_correlation $ ' = ' $ l.data:correlation $ '.id', [ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) ) }">
+		<MvIF EXPR = "{ NOT l.data:field:separate }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.element:alias $ '.field_id = ? AND ' $ l.element:alias $ '.' $ l.data:cf_correlation $ ' = ' $ l.data:correlation $ '.id', [ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, l.element:alias $ '.' $ l.data:cf_correlation $ ' = ' $ l.data:correlation $ '.id', '' ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ l.data:field:fieldtype EQ 'multitext' }">
-		<MvASSIGN NAME = "l.alias"			VALUE = "{ CustomFields_Generic_Query_MultiText_Field_Alias( l.element:field, ++l.element:join_count ) }">
-		<MvASSIGN NAME = "l.where_fields"	VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) }">
+		<MvASSIGN NAME = "l.alias" VALUE = "{ CustomFields_Generic_Query_MultiText_Field_Alias( l.element:field, ++l.element:join_count ) }">
 
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues ' $ l.alias $ ' WHERE ' $ l.alias $ '.field_id = ? AND ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	l.where_fields ) }">
+		<MvIF EXPR = "{ NOT l.data:field:separate }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues ' $ l.alias $ ' WHERE ' $ l.alias $ '.field_id = ? AND ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	[ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.data:field:id ) $ ' ' $ l.alias $ ' WHERE ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',		[ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
+		</MvIF>
 	<MvELSE>
 		<MvIF EXPR = "{ ( l.operator EQ 'NC' )		OR
 						( l.operator EQ 'NE' )		OR
@@ -9181,9 +9542,11 @@
 	</MvIF>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN" PARAMETERS = "query var, correlation, cf_table, cf_alias, cf_correlation, field_id" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "CustomFields_Generic_Query_CFM_xxxValues_LEFT_OUTER_JOIN" PARAMETERS = "query var, correlation, cf_table, cf_alias, cf_correlation, field_id, separate" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT CustomFields_Generic_Alias_In_Use( l.query, l.cf_alias ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, l.correlation, l.cf_table, l.cf_alias, l.cf_alias $ '.field_id = ? AND ' $ l.cf_alias $ '.' $ l.cf_correlation $ ' = ' $ l.correlation $ '.id', [ g.Module_Library_DB ].SQL_Query_Field( l.field_id ) ) }">
+		<MvIF EXPR = "{ NOT l.separate }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, l.correlation, l.cf_table, l.cf_alias, l.cf_alias $ '.field_id = ? AND ' $ l.cf_alias $ '.' $ l.cf_correlation $ ' = ' $ l.correlation $ '.id', [ g.Module_Library_DB ].SQL_Query_Field( l.field_id ) ) }">
+		<MvELSE>							<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.query, l.correlation, l.cf_table, l.cf_alias, l.cf_alias $ '.' $ l.cf_correlation $ ' = ' $ l.correlation $ '.id', '' ) }">
+		</MvIF>
 	</MvIF>
 </MvFUNCTION>
 
@@ -9203,17 +9566,33 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ l.field:fieldtype EQ 'multitext' }">
-		<MvASSIGN NAME = "l.data"					VALUE = "">
-		<MvASSIGN NAME = "l.data:correlation"		VALUE = "prod">
-		<MvASSIGN NAME = "l.data:cf_table"			VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdMultiValues' }">
-		<MvASSIGN NAME = "l.data:cf_correlation"	VALUE = "product_id">
-		<MvASSIGN NAME = "l.data:field"				VALUE = "">
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvASSIGN NAME = "l.data"					VALUE = "">
+			<MvASSIGN NAME = "l.data:correlation"		VALUE = "prod">
+			<MvASSIGN NAME = "l.data:cf_table"			VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdMultiValues' }">
+			<MvASSIGN NAME = "l.data:cf_correlation"	VALUE = "product_id">
+			<MvASSIGN NAME = "l.data:field"				VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "l.data"					VALUE = "">
+			<MvASSIGN NAME = "l.data:correlation"		VALUE = "prod">
+			<MvASSIGN NAME = "l.data:cf_table"			VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) }">
+			<MvASSIGN NAME = "l.data:cf_correlation"	VALUE = "product_id">
+			<MvASSIGN NAME = "l.data:field"				VALUE = "">
+		</MvIF>
 	<MvELSE>
-		<MvASSIGN NAME = "l.data"					VALUE = "">
-		<MvASSIGN NAME = "l.data:correlation"		VALUE = "prod">
-		<MvASSIGN NAME = "l.data:cf_table"			VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues' }">
-		<MvASSIGN NAME = "l.data:cf_correlation"	VALUE = "product_id">
-		<MvASSIGN NAME = "l.data:field"				VALUE = "">
+		<MvIF EXPR = "{ NOT l.field:separate }">
+			<MvASSIGN NAME = "l.data"					VALUE = "">
+			<MvASSIGN NAME = "l.data:correlation"		VALUE = "prod">
+			<MvASSIGN NAME = "l.data:cf_table"			VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues' }">
+			<MvASSIGN NAME = "l.data:cf_correlation"	VALUE = "product_id">
+			<MvASSIGN NAME = "l.data:field"				VALUE = "">
+		<MvELSE>
+			<MvASSIGN NAME = "l.data"					VALUE = "">
+			<MvASSIGN NAME = "l.data:correlation"		VALUE = "prod">
+			<MvASSIGN NAME = "l.data:cf_table"			VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) }">
+			<MvASSIGN NAME = "l.data:cf_correlation"	VALUE = "product_id">
+			<MvASSIGN NAME = "l.data:field"				VALUE = "">
+		</MvIF>
 	</MvIF>
 
 	<MvREFERENCE NAME = "l.data:field" VARIABLE = "l.field">
@@ -9286,12 +9665,8 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.choice_count }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "CustomFields_Field_Requires_FULLTEXT_Index" PARAMETERS = "module var, searchablecustomfield var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.searchablecustomfield:relevance }">
-		<MvFUNCTIONRETURN VALUE = 1>
-	</MvIF>
-
-	<MvIF EXPR = "{ ( l.searchablecustomfield:module_id EQ l.module:id ) AND ( l.searchablecustomfield:searchtype EQ 'fulltext' ) }">
+<MvFUNCTION NAME = "CustomFields_Field_Requires_FULLTEXT_Index" PARAMETERS = "module var, searchablecustomfield var, field var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.searchablecustomfield:module_id EQ l.module:id ) AND ( l.searchablecustomfield:searchtype EQ 'fulltext' OR l.searchablecustomfield:relevance ) AND ( strcasecmp( l.searchablecustomfield:field_code, l.field:code ) EQ 0 ) }">
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
@@ -9339,14 +9714,328 @@
 
 <MvFUNCTION NAME = "ProductField_FieldType_OnChange_Values_Delete" PARAMETERS = "original_field var, field var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ l.original_field:fieldtype EQ l.field:fieldtype }">	<MvFUNCTIONRETURN VALUE = 1>
-	<MvELSEIF EXPR = "{ l.original_field:fieldtype EQ 'multitext' }">	<MvFUNCTIONRETURN VALUE = "{ ProductFieldMultiValue_Delete_All_Field( l.original_field:id ) }">
-	<MvELSEIF EXPR = "{ l.field:fieldtype EQ 'multitext' }">			<MvFUNCTIONRETURN VALUE = "{ ProductFieldValue_Delete_All_Field( l.original_field:id ) }">
+	<MvELSEIF EXPR = "{ l.original_field:fieldtype EQ 'multitext' }">	<MvFUNCTIONRETURN VALUE = "{ ProductFieldMultiValue_Delete_All_Field( l.original_field ) }">
+	<MvELSEIF EXPR = "{ l.field:fieldtype EQ 'multitext' }">			<MvFUNCTIONRETURN VALUE = "{ ProductFieldValue_Delete_All_Field( l.original_field ) }">
 	<MvELSE>															<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CustomFields_FieldType_Supports_Options" PARAMETERS = "fieldtype" STANDARDOUTPUTLEVEL = "">
 	<MvFUNCTIONRETURN VALUE = "{ l.fieldtype EQ 'dropdown' OR l.fieldtype EQ 'radio' }">
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Separate Storage Functions
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_Create" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ACCESS = "private">
+	<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Create( l.field ) }">				<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Create_Indexes( l.field ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_Delete" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ACCESS = "private">
+	<MvFUNCTIONRETURN VALUE = "{ CustomFields_ProductSeparateField_SeparateTables_Drop( l.field ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_MigrateTo_SeparateTable" PARAMETERS = "module var, field var" STANDARDOUTPUTLEVEL = "" ACCESS = "private">
+	<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Drop( l.field ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Create( l.field ) }">				<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Copy_SharedData( l.field ) }">		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Create_Indexes( l.field ) }">		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateFlag_Set( l.field ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SharedTable_Drop_Indexes( l.module, l.field ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SharedTable_Delete_Data( l.field ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-CST-00406', 'Product field values for field \'' $ l.field:code $ '\' migrated to a separate table' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_MigrateTo_SharedTable" PARAMETERS = "module var, field var" STANDARDOUTPUTLEVEL = "" ACCESS = "private">
+	<MvIF EXPR = "{ NOT CustomFields_ProductSeparateField_SharedTable_Delete_Data( l.field ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SharedTable_Copy_SeparateData( l.field ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SharedTable_Create_Indexes( l.field ) }">		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateFlag_Clear( l.field ) }">				<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT CustomFields_ProductSeparateField_SeparateTables_Drop( l.field ) }">			<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTL-CST-00407', 'Product field values for field \'' $ l.field:code $ '\' migrated to the shared table' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SeparateTables_Create" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvCOMMENT>
+	|
+	| sNN_CFM_ProdValues_NN
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '
+						  (
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							value		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							value_long	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_MEMO()		$ '
+						  ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00408', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_CFM_ProdMultiValues_NN
+	|
+	</MvCOMMENT>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ '
+						  (
+							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
+							value		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ '
+						  ) ' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00409', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SeparateTables_Drop" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) }">	
+	<MvQUERY NAME = "Merchant" QUERY = "{ 'DROP TABLE ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SeparateTables_Create_Indexes" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvCOMMENT>
+	|
+	| sNN_CFM_ProdValues_NN
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.table_name" VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ l.table_name $ '_1 ON ' $ l.table_name $ ' ( product_id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00410', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ l.table_name $ '_2 ON ' $ l.table_name $ ' ( value )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00411', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_FULLTEXT_Supported() }">
+		<MvLOCKFILE FILE = "{ g.MerchantPath $ 'customfields_fulltext_' $ int( g.Store:id ) }">
+			<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Index_Exists( g.Store_Table_Prefix $ 'CFM_ProdValues', g.Store_Table_Prefix $ 'CFM_ProdValues_FULLTEXT', l.exists ) AND l.exists }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Create_FULLTEXT_Index( l.table_name, l.table_name $ '_FULLTEXT', 'value, value_long' ) }">
+			</MvIF>
+		</MvLOCKFILE>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| sNN_CFM_ProdMultiValues_NN
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.table_name" VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) }">
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE UNIQUE INDEX ' $ l.table_name $ '_1 ON ' $ l.table_name $ ' ( id )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00412', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'CREATE INDEX ' $ l.table_name $ '_2 ON ' $ l.table_name $ ' ( product_id, value )' }">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00413', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SeparateFlag_Set" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CFM_ProdFields SET separate = 1 WHERE id = ?' }"
+			 FIELDS	= "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00414', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SeparateFlag_Clear" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'CFM_ProdFields SET separate = 0 WHERE id = ?' }"
+			 FIELDS	= "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00415', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SeparateTables_Copy_SharedData" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '
+			 			  ( product_id, value, value_long )
+			 			  SELECT
+			 			  	product_id, value, value_long
+			 			  FROM ' $
+			 			  	g.Store_Table_Prefix $ 'CFM_ProdValues
+			 			  WHERE
+			 				field_id = ?' }"
+			 FIELDS = "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00416', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) $ '
+			 			  ( id, product_id, value )
+			 			  SELECT
+			 			  	id, product_id, value
+			 			  FROM ' $
+			 			  	g.Store_Table_Prefix $ 'CFM_ProdMultiValues
+			 			  WHERE
+			 				field_id = ?' }"
+			 FIELDS = "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00417', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SharedTable_Delete_Data" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
+						  WHERE
+							field_id = ?' }"
+			 FIELDS	= "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00418', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME	= "Merchant"
+			 QUERY	= "{ 'DELETE FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues
+						  WHERE
+							field_id = ?' }"
+			 FIELDS	= "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00419', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SharedTable_Copy_SeparateData" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "" ACCESS = "private">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdValues
+			 			  ( field_id, product_id, value, value_long )
+			 			  SELECT
+			 			  	?, product_id, value, value_long
+			 			  FROM ' $
+			 			  	g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) }"
+			 FIELDS = "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00420', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues
+			 			  ( id, field_id, product_id, value )
+			 			  SELECT
+			 			  	id, ?, product_id, value
+			 			  FROM ' $
+			 			  	g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.field:id ) }"
+			 FIELDS = "l.field:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-CST-00421', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SharedTable_Drop_Indexes" PARAMETERS = "module var, field var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Migrating a field from the shared table to a separate table requires verification that the shared table
+	| still needs its FULLTEXT index (if it exists).  This covers the case that the migrated field was the only
+	| field that required the FULLTEXT index on the shared table.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_FULLTEXT_Supported() }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.table" VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues' }">
+	<MvASSIGN NAME = "l.index" VALUE = "{ g.Store_Table_Prefix $ 'CFM_ProdValues_FULLTEXT' }">
+
+	<MvCOMMENT>
+	|
+	| Check to see if the sNN_CFM_ProdValues table has the FULLTEXT index
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Index_Exists( l.table, l.index, l.exists ) AND NOT l.exists }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Iterate over all non-separate fields, seeing if any of them require the FULLTEXT index
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.null"		VALUE = "{ [ g.Module_Feature_SEA_DB ].SearchableCustomFieldList_Load( l.searchablecustomfields ) }">
+	<MvASSIGN NAME = "l.need_index" VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ ProductFieldList_Load_All( l.fields ) }">
+		<MvIF EXPR = "{ l.field:separate }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ miva_array_search( l.searchablecustomfields, 1, l.searchablecustomfield, 'CustomFields_Field_Requires_FULLTEXT_Index( l.module, l.searchablecustomfield, l.field )' ) }">
+			<MvASSIGN NAME = "l.need_index" VALUE = 1>
+			<MvFOREACHSTOP>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ NOT l.need_index }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Drop_Index( l.table, l.index ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "CustomFields_ProductSeparateField_SharedTable_Create_Indexes" PARAMETERS = "field var" STANDARDOUTPUTLEVEL = "" ACCESS = "private">
+	<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_FULLTEXT_Supported() }">
+		<MvLOCKFILE FILE = "{ g.MerchantPath $ 'customfields_fulltext_' $ int( g.Store:id ) }">
+			<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Index_Exists( g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ), g.Store_Table_Prefix $ 'CFM_ProdValues_' $ int( l.field:id ) $ '_FULLTEXT', l.exists ) AND l.exists }">
+				<MvIF EXPR = "{ [ g.Module_Library_Native_DBAPI ].DB_Index_Exists( g.Store_Table_Prefix $ 'CFM_ProdValues', g.Store_Table_Prefix $ 'CFM_ProdValues_FULLTEXT', l.exists ) AND NOT l.exists }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_Create_FULLTEXT_Index( g.Store_Table_Prefix $ 'CFM_ProdValues', g.Store_Table_Prefix $ 'CFM_ProdValues_FULLTEXT', 'value, value_long' ) }">
+				</MvIF>
+			</MvIF>
+		</MvLOCKFILE>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvINCLUDE FILE = "modules/util/customfld/functions.mv">
