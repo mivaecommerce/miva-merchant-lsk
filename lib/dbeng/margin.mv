@@ -1,0 +1,110 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-DBE-MGN-
+| Next Error Code: 6   
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Product_Calculate_Margin" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT MarginSettings_Load_Cached( l.marginsettings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.profit" VALUE = "{ l.product:profit }">
+	<MvASSIGN NAME = "l.margin" VALUE = "{ l.product:margin }">
+
+	<MvIF EXPR = "{ l.marginsettings:method EQ 'none' }">
+		<MvASSIGN NAME = "l.profit" VALUE = 0>
+		<MvASSIGN NAME = "l.margin" VALUE = 0>
+	<MvELSEIF EXPR = "{ l.marginsettings:method EQ 'price_minus_cost' }">
+		<MvASSIGN NAME = "l.profit" VALUE = "{ l.product:price - l.product:cost }">
+	<MvELSEIF EXPR = "{ l.marginsettings:method EQ 'price_minus_customfield' OR l.marginsettings:method EQ 'customfield' }">
+		<MvIF EXPR = "{ NOT ModuleAndFeatures_Load_Code_Cached( l.marginsettings:mod_code, l.module ) }">
+			<MvIF EXPR = "{ NOT Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-MGN-00001', 'Module \'' $ l.marginsettings:mod_code $ '\' not found' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:active }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-MGN-00002', 'Module \'' $ l.module:code $ '\' is deactivated' ) }">
+		<MvELSEIF EXPR = "{ NOT l.module:feature_hash:fields_prod }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-MGN-00003', 'Module \'' $ l.module:code $ '\' does not provide feature \'fields_prod\'' ) }">
+		<MvELSEIF EXPR = "{ NOT StoreModule_Count_Module_Cached( l.module:id ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-DBE-MGN-00004', 'Module \'' $ l.module:code $ '\' is not installed in store \'' $ g.Store:code $ '\'' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.customfield_value"	VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Value( l.module, l.product:id, l.marginsettings:field_code ) }">
+
+		<MvIF EXPR = "{ l.marginsettings:method EQ 'customfield' }">	<MvASSIGN NAME = "l.profit" VALUE = "{ l.customfield_value }">
+		<MvELSE>														<MvASSIGN NAME = "l.profit" VALUE = "{ l.product:price - l.customfield_value }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.marginsettings:method EQ 'template' }">
+		<MvASSIGN NAME = "l.data"									VALUE = "">
+		<MvASSIGN NAME = "l.data:product_id"						VALUE = "{ l.product:id }">
+		<MvASSIGN NAME = "l.settings"								VALUE = "">
+		<MvASSIGN NAME = "l.settings:product"						VALUE = "{ l.product }">
+
+		<MvASSIGN NAME = "l.settings:product:CustomField_Values"	VALUE = "">
+
+		<MvASSIGN NAME = "l.template_filename"						VALUE = "{ g.Module_Root $ 'templates/' $ int( g.Store:id ) $ '_margin_calculation.mvc' }">
+
+		<MvEVAL EXPR = "{ miva_struct_member_callback( l.settings:product:CustomField_Values, 'MarginSettings_Render_CustomField_Module', l.data ) }">
+		
+		<MvCAPTURE VARIABLE = "l.null">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ l.template_filename ].Template_Render( l.null, l.settings ) }">
+		</MvCAPTURE>
+
+		<MvASSIGN NAME = "l.profit" VALUE = "{ l.settings:product:profit }">
+		<MvASSIGN NAME = "l.margin" VALUE = "{ l.settings:product:margin }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.product:price NE 0 AND l.marginsettings:method NE 'template' }">
+		<MvASSIGN NAME = "l.margin" VALUE = "{ ( l.profit / l.product:price ) * 100 }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.product:profit NE l.profit ) OR ( l.product:margin NE l.margin ) }">
+		<MvASSIGN NAME = "l.product:profit" VALUE = "{ l.profit ROUND 8 }">
+		<MvASSIGN NAME = "l.product:margin" VALUE = "{ l.margin ROUND 2 }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ Error_Load_EOF( 'MER-DBE-MGN-00005' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MarginSettings_Render_CustomField_Module" PARAMETERS = "struct var, member, callback_data var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"				VALUE = "">
+	<MvASSIGN NAME = "l.data:module" 		VALUE = "">
+	<MvASSIGN NAME = "l.data:product"		VALUE = "{ l.callback_data:product }">
+	<MvASSIGN NAME = "l.data:product_id"	VALUE = "{ l.callback_data:product_id }">
+
+	<MvIF EXPR = "{ NOT ModuleAndFeatures_Load_Code_Cached( l.member, l.data:module )	OR
+					NOT l.data:module:active											OR
+					NOT l.data:module:feature_hash:fields_prod }">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.ref" VARIABLE = "l.struct">
+		<MvMEMBER NAME = "{ l.data:module:code }">
+	</MvREFERENCEARRAY>
+
+	<MvEVAL EXPR = "{ miva_struct_member_callback( l.ref, 'MarginSettings_Render_CustomField_Value', l.data ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "MarginSettings_Render_CustomField_Value" PARAMETERS = "struct var, member, callback_data var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.callback_data:module:module ].Module_Product_Field_Value( l.callback_data:module, l.callback_data:product_id, l.member ) }">
+</MvFUNCTION>

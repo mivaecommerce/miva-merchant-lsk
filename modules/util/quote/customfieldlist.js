@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2023 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -360,7 +360,7 @@ Quote_CustomFieldList.prototype.ColumnDefault_Edit = function( record, item )
 	button	= new MMButton( div );
 
 	button.SetText( record.default_opt ? 'Unset' : 'Set' );
-	button.SetClassName( 'mm10_button_style_alternative_1 mm_list_column_textarea_button' );
+	button.SetClassName( 'mm_button_style_alternate mm_list_column_textarea_button' );
 	button.SetOnClickHandler( function( e )
 	{
 		var is_default = !item.record.default_opt;

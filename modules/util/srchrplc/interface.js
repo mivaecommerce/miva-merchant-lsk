@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2021 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -33,47 +33,45 @@ function TemplateSearchAndReplace_Interface()
 
 	this.element_container									= document.getElementById( 'templatesearchandreplace_interface_container' );
 
-	this.element_search_container							= newElement( 'span', { 'class': 'templatesearchandreplace_interface_container visible' },						null, this.element_container );
-	this.element_search_title								= newElement( 'span', { 'class': 'templatesearchandreplace_interface_title mm10_style_header_font' },			null, this.element_search_container );
-	this.element_search_content								= newElement( 'span', { 'class': 'templatesearchandreplace_interface_content' },								null, this.element_search_container );
-	this.element_search_row_find							= newElement( 'span', { 'class': 'templatesearchandreplace_interface_search_row visible' },						null, this.element_search_content );
-	this.element_search_row_field_find						= newElement( 'span', { 'class': 'templatesearchandreplace_interface_search_row_field' },						null, this.element_search_row_find );
-	this.element_search_row_actions_find					= newElement( 'span', { 'class': 'templatesearchandreplace_interface_search_row_actions' },						null, this.element_search_row_find );
+	this.element_search_container							= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_container visible', 'mm-container-style': 'section' },						null, this.element_container );
+	this.element_search_title								= newElement( 'mm-text',	{ 'class': 'templatesearchandreplace_interface_title', 'type': 'display-7' },												null, this.element_search_container );
+	this.element_search_content								= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_content' },																	null, this.element_search_container );
+	this.element_search_row_find							= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_search_row visible' },														null, this.element_search_content );
 
 	if ( this.can_modify )
 	{
-		this.element_search_row_replace						= newElement( 'span', { 'class': 'templatesearchandreplace_interface_search_row replace' },						null, this.element_search_content );
-		this.element_search_row_field_replace				= newElement( 'span', { 'class': 'templatesearchandreplace_interface_search_row_field' },						null, this.element_search_row_replace );
-		this.element_search_row_actions_replace				= newElement( 'span', { 'class': 'templatesearchandreplace_interface_search_row_actions' },						null, this.element_search_row_replace );
+		this.element_search_row_replace						= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_search_row replace' },														null, this.element_search_content );
 	}
 
-	this.element_results_container							= newElement( 'span', { 'class': 'templatesearchandreplace_interface_container' },								null, this.element_container );
-	this.element_results_title								= newElement( 'span', { 'class': 'templatesearchandreplace_interface_title mm10_style_header_font' },			null, this.element_results_container );
-	this.element_results_subtitle							= newElement( 'span', { 'class': 'templatesearchandreplace_interface_subtitle' },								null, this.element_results_container );
-	this.element_results_content							= newElement( 'span', { 'class': 'templatesearchandreplace_interface_content' },								null, this.element_results_container );
-	this.element_results_header								= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header' },							null, this.element_results_content );
+	this.element_search_row_actions							= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_search_row templatesearchandreplace_interface_search_row_actions visible' },	null, this.element_search_content );
+
+	this.element_results_container							= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_container', 'mm-container-style': 'section' },								null, this.element_container );
+	this.element_results_title								= newElement( 'mm-text',	{ 'class': 'templatesearchandreplace_interface_title', 'type': 'display-7' },												null, this.element_results_container );
+	this.element_results_subtitle							= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_subtitle' },																	null, this.element_results_container );
+	this.element_results_content							= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_content' },																	null, this.element_results_container );
+	this.element_results_header								= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header' },															null, this.element_results_content );
 
 	if ( this.can_modify )
 	{
-		this.element_results_header_selection_container		= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header_selection_container' },		null, this.element_results_header );
-		this.element_results_header_selection_checkbox		= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header_selection_checkbox' },		null, this.element_results_header_selection_container );
-		this.element_results_header_selection_checkbox_bg1	= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header_selection_checkbox_bg1' },	null, this.element_results_header_selection_checkbox );
-		this.element_results_header_selection_checkbox_bg2	= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header_selection_checkbox_bg2' },	null, this.element_results_header_selection_checkbox );
+		this.element_results_header_selection_container		= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header_selection_container' },										null, this.element_results_header );
+		this.element_results_header_selection_checkbox		= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header_selection_checkbox' },										null, this.element_results_header_selection_container );
+		this.element_results_header_selection_checkbox_bg1	= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header_selection_checkbox_bg1' },									null, this.element_results_header_selection_checkbox );
+		this.element_results_header_selection_checkbox_bg2	= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header_selection_checkbox_bg2' },									null, this.element_results_header_selection_checkbox );
 
-		this.element_results_header_label					= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header_label' },					null, this.element_results_header );
+		this.element_results_header_label					= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header_label' },														null, this.element_results_header );
 		this.element_results_header_label.textContent		= '0 Selected';
 
 		AddEvent( this.element_results_header_selection_container, 'click', this.event_onclick_selection );
 	}
 
-	this.element_results_header_actions						= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results_header_actions' },					null, this.element_results_header );
-	this.element_results									= newElement( 'span', { 'class': 'templatesearchandreplace_interface_results' },								null, this.element_results_content );
+	this.element_results_header_actions						= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results_header_actions' },													null, this.element_results_header );
+	this.element_results									= newElement( 'span',		{ 'class': 'templatesearchandreplace_interface_results' },																	null, this.element_results_content );
 
 	this.element_search_title.textContent					= 'Template Search And Replace';
 	this.element_results_title.textContent					= 'Results';
 	this.element_results_subtitle.textContent				= '0 search results found';
 
-	this.textarea_find										= new MMTextArea( this.element_search_row_field_find, 'Find', '' );
+	this.textarea_find										= new MMTextArea( this.element_search_row_find, 'Find', '' );
 	this.textarea_find.SetTitle( 'Find' );
 	this.textarea_find.AddClassName( [ 'whole_width', 'title_visible' ] );
 	this.textarea_find.SetAutoHeightEnabled( 44, 150 );
@@ -84,18 +82,18 @@ function TemplateSearchAndReplace_Interface()
 		else				self.button_find.Disable();
 	} );
 
-	this.button_find										= new MMButton( this.element_search_row_actions_find );
+	this.button_find										= new MMButton( this.element_search_row_actions );
 	this.button_find.SetText( 'Find' );
 	this.button_find.SetClassName( 'mm10_button_style_primary templatesearchandreplace_interface_search_button' );
 	this.button_find.SetOnClickHandler( function( e ) { self.Find(); } );
 	this.button_find.Disable();
 
-	element													= newElement( 'span', { 'class': 'mm10_button_style_xxx_tertiary_icon' },		null, null );
-	element.element_bg1										= newElement( 'span', { 'class': 'mm10_button_style_xxx_tertiary_icon_bg1' },	null, element );
-	element.element_bg2										= newElement( 'span', { 'class': 'mm10_button_style_xxx_tertiary_icon_bg2' },	null, element );
-	element.element_bg3										= newElement( 'span', { 'class': 'mm10_button_style_xxx_tertiary_icon_bg3' },	null, element );
+	element													= newElement( 'span', { 'class': 'mm_button_style_xxx_tertiary_icon' },		null, null );
+	element.element_bg1										= newElement( 'span', { 'class': 'mm_button_style_xxx_tertiary_icon_bg1' },	null, element );
+	element.element_bg2										= newElement( 'span', { 'class': 'mm_button_style_xxx_tertiary_icon_bg2' },	null, element );
+	element.element_bg3										= newElement( 'span', { 'class': 'mm_button_style_xxx_tertiary_icon_bg3' },	null, element );
 
-	this.menubutton_options									= new MMMenuButton( '', this.element_search_row_actions_find );
+	this.menubutton_options									= new MMMenuButton( '', this.element_search_row_actions );
 	this.menubutton_options_matchcase						= this.menubutton_options.Menu_Append_Item_Checkbox( 'Match Case', function() { UserPreferenceList_Save( Store_Code, [ self.key_prefix + '.match_case' ], [ self.menubutton_options_matchcase.Checked() ? '1' : '0' ], function( response ) { ; } ); }, null );
 	this.menubutton_options.onAddKeyStackEntry				= function( keystackentry ) { KeyDownHandlerStackEntry_BubbleUnsetKeyCodes( keystackentry ); };
 	this.menubutton_options.onButtonAddKeyStackEntry		= function( keystackentry ) { KeyDownHandlerStackEntry_BubbleUnsetKeyCodes( keystackentry ); };
@@ -107,7 +105,7 @@ function TemplateSearchAndReplace_Interface()
 	this.menubutton_options.SetMenuClassName( 'mm10_menubutton_container_style_common_menu' );
 	this.menubutton_options.SetButtonClassName( 'mm10_button_style_secondary tertiary' );
 
-	this.button_newsearch									= new MMButton( this.element_search_row_actions_find );
+	this.button_newsearch									= new MMButton( this.element_search_row_actions );
 	this.button_newsearch.SetText( 'New Search' );
 	this.button_newsearch.SetClassName( 'mm10_button_style_secondary templatesearchandreplace_interface_search_button' );
 	this.button_newsearch.SetOnClickHandler( function( e ) { self.NewSearch(); } );
@@ -115,16 +113,17 @@ function TemplateSearchAndReplace_Interface()
 
 	if ( this.can_modify )
 	{
-		this.textarea_replace								= new MMTextArea( this.element_search_row_field_replace, 'Replace', '' );
+		this.textarea_replace								= new MMTextArea( this.element_search_row_replace, 'Replace', '' );
 		this.textarea_replace.SetTitle( 'Replace' );
 		this.textarea_replace.AddClassName( [ 'whole_width', 'title_visible' ] );
 		this.textarea_replace.SetAutoHeightEnabled( 44, 150 );
 		this.textarea_replace.SetOnEnterHandler( function( e ) { self.button_replace.SimulateClick(); } );
 
-		this.button_replace									= new MMButton( this.element_search_row_actions_replace );
+		this.button_replace									= new MMButton( this.element_search_row_actions );
 		this.button_replace.SetText( 'Replace Selected' );
 		this.button_replace.SetClassName( 'mm10_button_style_primary templatesearchandreplace_interface_search_button' );
 		this.button_replace.SetOnClickHandler( function( e ) { self.Replace(); } );
+		this.button_replace.Hide();
 	}
 
 	this.button_collapse_all								= new MMButton( this.element_results_header_actions );
@@ -315,6 +314,7 @@ TemplateSearchAndReplace_Interface.prototype.NewSearch = function()
 	this.button_find.Show();
 	this.menubutton_options.Show();
 	this.button_newsearch.Hide();
+	this.button_replace?.Hide();
 	this.textarea_find.SetReadOnly( false );
 
 	classNameRemoveIfPresent( this.element_results_container, 'visible' );
@@ -379,15 +379,23 @@ TemplateSearchAndReplace_Interface.prototype.Find_Callback = function( response,
 	this.button_newsearch.Show();
 	this.textarea_find.SetReadOnly( true );
 
-	classNameAddIfMissing( this.element_results_container, 'visible' );
+	this.element_results_container.classList.add( 'visible' );
 
-	if ( this.ResultItem_Count() )		classNameRemoveIfPresent( this.element_results_container, 'empty' );
-	else								classNameAddIfMissing( this.element_results_container, 'empty' );
+	if ( this.ResultItem_Count() )		this.element_results_container.classList.remove( 'empty' );
+	else								this.element_results_container.classList.add( 'empty' );
 
 	if ( this.element_search_row_replace )
 	{
-		if ( this.ResultItem_Count() )	classNameAddIfMissing( this.element_search_row_replace, 'visible' );
-		else							classNameRemoveIfPresent( this.element_search_row_replace, 'visible' );
+		if ( this.ResultItem_Count() )
+		{
+			this.element_search_row_replace.classList.add( 'visible' );
+			this.button_replace?.Show();
+		}
+		else
+		{
+			this.element_search_row_replace.classList.remove( 'visible' );
+			this.button_replace?.Hide();
+		}
 	}
 
 	if ( this.textarea_replace )

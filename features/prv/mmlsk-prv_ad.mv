@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-PRV-ADM-
-| Next Error Code: 161
+| Next Error Code: 167
 |
 </MvCOMMENT>
 
@@ -28,19 +28,50 @@
 		
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FEL_DB ].DomainFeatureEngagement_Increment_Counter( 'provision:' $ l.provide_filename, 1 ) }">
 
-		<MvCOMMENT>
-		|
-		| Handle extremely small provisioning files in one fell swoop, and launch the interating/progress
-		| bar provisioner for large ones
-		|
-		</MvCOMMENT>
+		<MvASSIGN NAME = "l.null" VALUE = "{ PRV_Action_ProvisionEntireFile( l.provide_filename ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
 
-		<MvIF EXPR = "{ ( NOT g.Admin_User_ID ) OR ( fsize( l.provide_filename ) LE 10240 ) }">
-			<MvASSIGN NAME = "l.null" VALUE = "{ PRV_Action_ProvisionEntireFile( l.provide_filename ) }">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_SignedProvisionAsNeeded" PARAMETERS = "provide_filename" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ fexists( l.provide_filename ) }">
+		<MvCOMMENT>If g.PRV_log_file_name is ever to change, make sure to change it in setup.mv as well</MvCOMMENT>
+		<MvASSIGN NAME = "g.PRV_log_file_name" VALUE = "{ glosub( l.provide_filename, '.xml', '.log' ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action_Priority( 'crit', 'MER-PRV-ADM-00161', 'Signed provisioning file: ' $ l.provide_filename ) }">
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FEL_DB ].DomainFeatureEngagement_Increment_Counter( 'signed_provision:' $ l.provide_filename, 1 ) }">
+
+		<MvIF EXPR = "{ fsize( l.provide_filename ) GT ( 128 * 1024 ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ frename( l.provide_filename, l.provide_filename $ '-' $ PRV_ErroredStamp() ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PRV-ADM-00162', 'File exceeds the 128KiB limit' ) }">
 			<MvFUNCTIONRETURN VALUE = 1>
-		<MvELSE>
-			<MvASSIGN NAME = "l.null" VALUE = "{ PRV_Frameset( l.provide_filename ) }">
-			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ file_read( l.provide_filename, 'data', l.data ) LT 0 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ frename( l.provide_filename, l.provide_filename $ '-' $ PRV_ErroredStamp() ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PRV-ADM-00163', 'File read error: ' $ file_last_error() ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT xml_parse_var( l.data, l.provide_xml ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ frename( l.provide_filename, l.provide_filename $ '-' $ PRV_ErroredStamp() ) }">
+			<MvEVAL EXPR = "{ PRV_LogParseError() }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Crypto ].SignedProvisioning_Verify( l.data, l.provide_xml ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action_Priority( 'crit', 'MER-PRV-ADM-00164', 'Signed provisioning file validation failed: ' $ g.Error_Message ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ frename( l.provide_filename, l.provide_filename $ '-' $ PRV_ErroredStamp() ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>	
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ PRV_Action_Provision_Fragment( l.provide_xml:Provision ) }">
+
+		<MvIF EXPR = "{ strcasecmp( l.provide_xml:Provision:attribute:oncomplete, 'delete' ) EQ 0 }">	<MvASSIGN NAME = "l.null" VALUE = "{ fdelete( l.provide_filename ) }">
+		<MvELSE>																						<MvASSIGN NAME = "l.null" VALUE = "{ frename( l.provide_filename, l.provide_filename $ '-' $ PRV_ExecutedStamp() ) }">
 		</MvIF>
 	</MvIF>
 
@@ -48,11 +79,6 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_ProvisionEntireFile" PARAMETERS = "provide_filename" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ g.PRV_Return_Import }">
-		<MvASSIGN NAME = "g.Provision_Email" 		VALUE = "{ g.ProvisioningImport_Email }">
-		<MvASSIGN NAME = "g.Provision_Completed"	VALUE = 1>
-	</MvIF>
-
 	<MvIF EXPR = "{ NOT xml_parse( l.provide_filename, 'data', l.provide_xml ) }">
 		<MvASSIGN NAME = "l.moved"	VALUE = "{ frename( l.provide_filename, l.provide_filename $ '-' $ PRV_ErroredStamp() ) }">
 
@@ -106,278 +132,6 @@
 								 time_t_year( s.time_t, g.Merchant_Local_Timezone ) $ padl( time_t_month( s.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ padl( time_t_dayofmonth( s.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $
 								 '-' $
 								 padl( time_t_hour( s.time_t, g.Merchant_Local_Timezone ), 2, '0' ) $ padl( time_t_min( s.time_t, g.Merchant_Local_Timezone ), 2, '0' ) }">
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "PRV_Frameset" PARAMETERS = "provide_filename" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<head><title>Miva Merchant: Provisioning in Progress</title></head>
-
-	<frameset rows = "*, 25%, 22%" border = 0>
-		<frame name = "Info"		src = "{ g.adminurl $ 'Screen=PRVI' }" noresize>
-
-		<MvIF EXPR = "{ g.PRV_Return_Import }">
-			<frame name = "Work"		src = "{ g.adminurl $ 'Screen=PRVW&Provide_Filename=' $ encodeattribute( l.provide_filename ) $ '&Return_Store=' $ encodeattribute( g.Store_Code ) $ '&Provision_Email=' $ encodeattribute( g.ProvisioningImport_Email ) }" noresize>
-		<MvELSE>
-			<frame name = "Work"		src = "{ g.adminurl $ 'Screen=PRVW&Provide_Filename=' $ encodeattribute( l.provide_filename ) }" noresize>
-		</MvIF>
-		
-		<frame name = "Progress"	src = "{ g.adminurl $ 'Screen=BLNK' }" noresize>
-
-		<noframes>Miva Merchant requires a browser that supports frames</noframes>
-	</frameset>
-
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "PRV_Screen_Info" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<head>
-	<title>Miva Merchant: Provisioning: Information</title>
-	<MvEVAL EXPR = "{ [ g.Module_Admin ].StyleSheet() }">
-	</head>
-	<body onload="loaded = 1;">
-<script language="JavaScript">
-<!--
-var loaded = 0;
-
-function PRV_Draw_Status( output_document, status, percent_complete )
-{
-	var percent_remaining;
-	var output_document;
-
-	percent_remaining = 100 - percent_complete;
-
-	output_document.open( 'text/html', 1 );
-	output_document.writeln( '<html>' );
-
-	output_document.writeln( '<style type="text/css">' );
-	output_document.writeln( 'body {' );
-	output_document.writeln( 'background-color: #ffffff; ' );
-	output_document.writeln( 'font-family: Verdana, Arial, Helvetica, sans-serif;' );
-	output_document.writeln( 'font-size: 11px;' );
-	output_document.writeln( 'color: #333333; ' );
-	output_document.writeln( '}' );
-	output_document.writeln( 'A:link, A:visited, A:active, A:hover {' );
-	output_document.writeln( 'color: #b20000;' );
-	output_document.writeln( '}' );
-	output_document.writeln( 'A:hover {' );
-	output_document.writeln( 'color: #999999;' );
-	output_document.writeln( 'text-decoration: none;' );
-	output_document.writeln( '}' );
-	output_document.writeln( 'td {' );
-	output_document.writeln( 'font-family: Verdana, Arial, Helvetica, sans-serif;' );
-	output_document.writeln( 'font-size: 11px;' );
-	output_document.writeln( 'color: #333333;' );
-	output_document.writeln( '</style>' );
-
-	output_document.writeln( '<body>' );
-	output_document.writeln( '<table border=0 width="100%">' );
-	output_document.writeln( '<tr><td nowrap>' );
-	output_document.writeln( '	<b>Status:</b>' );
-	output_document.writeln( '</td><td width="100%">' );
-	output_document.writeln( '	' + status );
-	output_document.writeln( '</td></tr>' );
-
-	output_document.writeln( '' );
-	output_document.writeln( '<tr><td nowrap>' );
-	output_document.writeln( '	<b>Progress:</b>' );
-	output_document.writeln( '</td><td width="100%">' );
-	output_document.writeln( '	<table border=0 cellpadding=1 width="100%">' );
-	output_document.writeln( '	<tr><td bgcolor="#000000">' );
-	output_document.writeln( '		<table border=0 cellspacing=0 cellpadding=0 width="100%">' );
-	output_document.writeln( '		<tr>' );
-	output_document.writeln( '			<td width="100%" bgcolor="#000000">' );
-	output_document.writeln( '				<table border=0 cellspacing=0 cellpadding=0 width="100%">' );
-	output_document.writeln( '				<tr>' );
-
-	if ( percent_complete == 100 )
-	{
-		output_document.writeln( '					<td width="100%" bgcolor="blue">&nbsp;</td>' );
-	}
-	else
-	{
-		output_document.writeln( '					<td width="' + Math.round( percent_complete ) + '%" bgcolor="blue">&nbsp;</td>' );
-		output_document.writeln( '					<td width="' + Math.round( percent_remaining ) + '%" bgcolor="white">&nbsp;</td>' );
-	}
-
-	output_document.writeln( '				</tr>' );
-	output_document.writeln( '				</table>' );
-	output_document.writeln( '			</td>' );
-	output_document.writeln( '		</tr>' );
-	output_document.writeln( '		</table>' );
-	output_document.writeln( '	</td></tr>' );
-	output_document.writeln( '	</table>' );
-	output_document.writeln( '</td></tr>' );
-
-	output_document.writeln( '</table>' );
-	output_document.writeln( '</body></html>' );
-	output_document.close();
-}
-//-->
-</script>
-
-	<table border=0 cellpadding=2 cellspacing=0 width="100%">
-	<tr><td valign="top" align="left" colspan=2>
-		<p>
-		Miva Merchant is performing automated configuration operations.  This process may take some time.
-		</p>
-
-		<p>
-		<b><font color="red">Please do not close your browser until the configuration process has completed</font></b>
-		</p>
-	</td></tr>
-	</table>
-
-<script language="JavaScript">
-<!--
-PRV_Draw_Status( parent.Progress.document, 'Initializing', 0 );
-//-->
-</script>
-	</body>
-
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "PRV_Screen_Work" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<head>
-	<title>Miva Merchant: Provisioning: Work</title>
-	<MvEVAL EXPR = "{ [ g.Module_Admin ].StyleSheet() }">
-	</head>
-
-	<body onload="PRV_Refresh();">
-<script language="JavaScript">
-<!--
-var PRV_Status_Message = 'Initializing';
-var PRV_Status_Percent = 0;
-
-function PRV_Status_Poll()
-{
-	if ( parent.Info.loaded )
-	{
-		parent.Info.PRV_Draw_Status( parent.Progress.document, PRV_Status_Message, PRV_Status_Percent );
-	}
-}
-
-function PRV_Draw_Status( status, percent_complete )
-{
-	PRV_Status_Message	= status;
-	PRV_Status_Percent	= percent_complete;
-
-	PRV_Status_Poll();
-}
-
-setInterval( PRV_Status_Poll, 1000 );
-//-->
-</script>
-	
-	<MvIF EXPR = "{ NOT g.PRV_Initialized }">
-		<MvASSIGN NAME = "g.PRV_Initialized"	VALUE = 1>
-		<MvASSIGN NAME = "g.PRV_log_file_name"	VALUE = "{ glosub( g.Provide_Filename, '.xml', '.log' ) }">
-		<MvASSIGN NAME = "g.Provide_Filesize"	VALUE = "{ fsize( g.Provide_Filename ) }">
-		<MvASSIGN NAME = "g.Provide_OnComplete"	VALUE = "archive">
-
-		<MvIF EXPR = "{ NOT xml_parse_section_init( g.Provide_Filename, 'data', 2 ) }">
-			<MvEVAL EXPR = "{ PRV_LogMessage( l.null, 'xml_parse_section_init failure' ) }">
-			<MvEXIT>
-		</MvIF>			
-	<MvELSE>
-		<MvIF EXPR = "{ NOT xml_parse_section_setstate( g.Provide_State ) }">
-			<MvEVAL EXPR = "{ PRV_LogMessage( l.null, 'xml_parse_section_setstate failure' ) }">
-			<MvEXIT>
-		</MvIF>
-	</MvIF>
-
-	<MvWHILE EXPR = "{ 1 }">
-		<MvIF EXPR = "{ NOT xml_parse_section( l.provide_xml, l.done ) }">
-			<MvEVAL EXPR = "{ PRV_LogParseError() }">
-			<MvASSIGN NAME = "l.done" VALUE = 1>
-			<MvWHILESTOP>
-		</MvIF>
-
-		<MvIF EXPR = "{ l.done }">
-			<MvWHILESTOP>
-		</MvIF>
-
-		<MvEVAL EXPR = "{ PRV_Status( l.provide_xml ) }">
-
-		<MvIF EXPR = "{ miva_member_exists( l.provide_xml:Provision:attribute, 'oncomplete' ) }">
-			<MvASSIGN NAME = "g.Provide_OnComplete"	VALUE = "{ tolower( l.provide_xml:Provision:attribute:oncomplete ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.null"					VALUE = "{ PRV_Action_Provision_Fragment( l.provide_xml:Provision ) }">
-
-		<MvIF EXPR = "{ ( s.dyn_time_remaining NE -1 ) AND ( s.dyn_time_remaining LE ( s.globaltimeout / 3 ) ) }">
-			<MvWHILESTOP>
-		</MvIF>
-	</MvWHILE>
-
-	<MvIF EXPR = "{ l.done }">
-		<MvIF EXPR = "{ g.Provide_OnComplete EQ 'delete' }">
-			<MvASSIGN NAME = "l.null"				VALUE = "{ fdelete( g.Provide_Filename ) }">
-		<MvELSE>
-			<MvASSIGN NAME = "l.moved"				VALUE = "{ frename( g.Provide_Filename, g.Provide_Filename $ '-' $ PRV_ExecutedStamp() ) }">
-		</MvIF>
-		
-		<MvIF EXPR = "{ len( g.Return_Store ) EQ 0 }">
-			<MvEVAL EXPR = "{ [ g.Module_Admin ].JavaScript_SetVariables( 'g', 'adminurl' ) }">
-
-<script language="JavaScript">
-<!--
-function PRV_Refresh()
-{
-	parent.window.location.replace( adminurl );
-}
-//-->
-</script>
-		<MvELSE>
-			<MvEVAL EXPR = "{ [ g.Module_Admin ].JavaScript_SetVariables( 'g', 'adminurl, Return_Store, Provision_Email' ) }">
-
-<script language="JavaScript">
-<!--
-function PRV_Refresh()
-{
-	parent.parent.Main.location.replace( adminurl + 'Screen=IMPT&Module_Code=provimpt&Store_Code=' + encodeURIComponent( Return_Store ) + '&Provision_Completed=1&Provision_Email=' + encodeURIComponent( Provision_Email ) );		
-}
-//-->
-</script>
-
-		</MvIF>
-	<MvELSE>
-		<MvIF EXPR = "{ NOT xml_parse_section_getstate( g.Provide_State ) }">
-			<MvEVAL EXPR = "{ PRV_LogMessage( l.null, 'xml_parse_section_getstate failure' ) }">
-			<MvEXIT>
-		</MvIF>
-
-		<form name="{ g.Screen }" method="POST" action="{ g.adminurl }">
-		<MvHIDE FIELDS = "g.Screen, g.PRV_Initialized, g.PRV_log_file_name, g.Provide_Filename, g.Provide_Filesize, g.Provide_OnComplete, g.Provide_State, g.Return_Store, g.Provision_Email">
-		</form>
-
-		<MvEVAL EXPR = "{ [ g.Module_Admin ].JavaScript_SetVariables( 'g', 'Screen' ) }">
-<script language="JavaScript">
-<!--
-function PRV_Refresh()
-{
-	document.forms[ Screen ].submit();
-}
-//-->
-</script>
-	</MvIF>
-	</body>
-	
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "PRV_Status" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ ( s.dyn_time_t GT g.PRV5_Last_Status ) OR
-					( tolower( l.provide_xml:Provision:children[ 1 ]:children[ 1 ]:name ) EQ 'store_create' ) }">
-		<MvASSIGN NAME = "l.status"		VALUE = "{ l.provide_xml:Provision:children[ 1 ]:children[ 1 ]:name }">
-		<MvASSIGN NAME = "l.percent"	VALUE = "{ ( ( l.provide_xml:Provision:children[ 1 ]:children[ 1 ]:offset / g.Provide_Filesize ) * 100 ) ROUND 0 }">
-
-		<MvEVAL EXPR = "{ '<script language="JavaScript">' $ 
-						  'PRV_Draw_Status( \'' $ [ g.Module_Admin ].JavaScriptEncode( l.status ) $ '\', ' $ l.percent $ ' );' $
-						  '</script>' }">
-		<MvEVAL EXPR = "{ miva_output_flush() }">
-
-		<MvASSIGN NAME = "g.PRV5_Last_Status"	VALUE = "{ s.dyn_time_t }">
-	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Fragment" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
@@ -435,6 +189,7 @@ function PRV_Refresh()
 		<MvELSEIF EXPR = "{ l.name EQ 'printqueue_update' }">				<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_PrintQueue_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'printqueue_delete' }">				<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_PrintQueue_Delete( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'module' }">							<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_Module( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'insightsettings_update' }">			<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_InsightSettings_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSE>															<MvEVAL EXPR = "{ PRV_LogMessage( l.provide_xml:children[ l.child_pos ], 'Unknown tag' ) }">
 		</MvIF>
 
@@ -819,6 +574,8 @@ function PRV_Refresh()
 		<MvELSEIF EXPR = "{ l.name EQ 'merchandisingsettings_update' }">										<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MerchandisingSettings_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'merchandisingprompt_add' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MerchandisingPrompt_Add( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'merchandisingprompt_delete' }">											<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MerchandisingPrompt_Delete( l.provide_xml:children[ l.child_pos ] ) }">
+
+		<MvELSEIF EXPR = "{ l.name EQ 'marginsettings_update' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_MarginSettings_Update( l.provide_xml:children[ l.child_pos ] ) }">
 
 		<MvELSEIF EXPR = "{ l.name EQ 'facetrules_update' }">													<MvEVAL EXPR = "{ PRV_Action_Provision_Store_FacetRules_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'categoryfacetrules_update' }">											<MvEVAL EXPR = "{ PRV_Action_Provision_Store_CategoryFacetRules_Update( l.provide_xml:children[ l.child_pos ] ) }">
@@ -2726,6 +2483,12 @@ function PRV_Refresh()
 			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Product_Update( l.module, l.product ) }">
 		</MvIF>
 	</MvFOREACH>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Product_Calculate_Margin( l.product ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Update_Margin( l.product ) }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
 
 	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_COL_UT ].Product_Evaluate_Collections( l.product ) }">
 </MvFUNCTION>
@@ -12718,11 +12481,15 @@ function PRV_Refresh()
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT PRV_Tag_Boolean(	'o', l.provide_xml,	'ShipsInOwnPackaging',	l.productshippingrules:ownpackage )		OR
-					NOT PRV_Tag_Number(		'o', l.provide_xml, 'Width',				l.productshippingrules:width,	10, 2 )	OR
-					NOT PRV_Tag_Number(		'o', l.provide_xml, 'Length',				l.productshippingrules:length,	10, 2 )	OR
-					NOT PRV_Tag_Number(		'o', l.provide_xml, 'Height',				l.productshippingrules:height,	10, 2 )	OR
-					NOT PRV_Tag_Boolean(	'o', l.provide_xml, 'LimitShippingMethods',	l.productshippingrules:limitmeths ) }">
+	<MvIF EXPR = "{ NOT PRV_Tag_Boolean(	'O',	l.provide_xml, 'ShipsInOwnPackaging',	l.productshippingrules:ownpackage )		OR
+					NOT PRV_Tag_Number(		'O',	l.provide_xml, 'Width',					l.productshippingrules:width,	10, 2 )	OR
+					NOT PRV_Tag_Number(		'O',	l.provide_xml, 'Length',				l.productshippingrules:length,	10, 2 )	OR
+					NOT PRV_Tag_Number(		'O',	l.provide_xml, 'Height',				l.productshippingrules:height,	10, 2 )	OR
+					NOT PRV_Tag_Text(		'o:2',	l.provide_xml, 'CountryOfOrigin',		l.productshippingrules:origcntry )		OR
+					NOT PRV_Tag_Text(		'o:15',	l.provide_xml, 'HSCode',				l.productshippingrules:hscode )			OR
+					NOT PRV_Tag_Text(		'o:10',	l.provide_xml, 'NMFCClass',				l.productshippingrules:nmfcclass )		OR
+					NOT PRV_Tag_Text(		'o:10',	l.provide_xml, 'NMFCCode',				l.productshippingrules:nmfccode )		OR
+					NOT PRV_Tag_Boolean(	'O',	l.provide_xml, 'LimitShippingMethods',	l.productshippingrules:limitmeths ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -14835,7 +14602,7 @@ function PRV_Refresh()
 					NOT PRV_Tag_Code(		'o',			l.provide_xml, 'RedisKeyPrefix',			l.aisettings:redis_pfx )		OR
 					NOT PRV_Tag_Text(		'o:254',		l.provide_xml, 'PostgresDatabase',			l.aisettings:pgsqldb )			OR
 					NOT PRV_Tag_Text(		'o:254',		l.provide_xml, 'PostgresUsername',			l.aisettings:pgsqluser )		OR
-					NOT PRV_Tag_List( 		'O',			l.provide_xml, 'VectorDatabase',			l.aisettings:vector_db, 'None,StoreRedis,SeparateRedis,StorePostgres,Postgres', 'none,store_redis,redis,store_postgres,postgres' ) }">
+					NOT PRV_Tag_List( 		'O',			l.provide_xml, 'VectorDatabase',			l.aisettings:vector_db, 'None,Redis,Postgres', 'none,redis,postgres' ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -14861,10 +14628,6 @@ function PRV_Refresh()
 		<MvELSE>
 			<MvASSIGN NAME = "l.aisettings:redispwd" VALUE = "{ [ g.Module_Library_Crypto ].Encrypt_Payment_Password( l.redispwd ) }">
 		</MvIF>
-	</MvIF>
-
-	<MvIF EXPR = "{ l.aisettings:vector_db EQ 'store_postgres' AND g.Native_DBAPI NE 'postgresql' }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Store database type is not PostgreSQL' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'PostgresPassword' ) }">
@@ -17069,14 +16832,6 @@ function PRV_Refresh()
 		<MvASSIGN NAME = "l.working_domain:mailpass"		VALUE = "{ [ g.Module_Library_Crypto ].Encrypt_Payment_Password( l.mailpass ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ miva_member_exists( l.provide_xml, 'StoreSelectionLayout' ) }">
-		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code( l.provide_xml:tags:StoreSelectionLayout[1]:UserInterface[1], l.uimodule ) }">
-			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Invalid Code value, ignored' ) }">
-		<MvELSE>
-			<MvASSIGN NAME = "l.working_domain:stsl_id"		VALUE = "{ l.uimodule:id }">
-		</MvIF>
-	</MvIF>
-
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( l.working_domain:maxadmsess ) }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Concurrent administrative sessions must be a non-negative whole number' ) }">
 	</MvIF>
@@ -17275,7 +17030,7 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvIF EXPR = "{ ISNULL l.store:icon }">
-		<MvASSIGN NAME = "l.store:icon" VALUE = "graphics/en-US/admin/store_icon_1.png">
+		<MvASSIGN NAME = "l.store:icon" VALUE = "graphics/en-US/admin/miva_26_store_icon_1.svg">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Zip( l.store:zip, l.store:country ) }">
@@ -18660,6 +18415,22 @@ function PRV_Refresh()
 	</MvIF>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "PRV_Action_Provision_Domain_InsightSettings_Update" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].InsightSettings_Load( l.insightsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_Text( 'O:50', l.provide_xml, 'LLM', l.insightsettings:llm ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_AI_DB ].InsightSettings_Update( l.insightsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00165', 'Insight Settings updated' ) }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "PRV_URISettings_Regenerate_Handler" PARAMETERS = "provide_xml var, tag_name, output var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT PRV_Tag_Exists( l.provide_xml, l.tag_name ) }">
 		<MvFUNCTIONRETURN VALUE = 1>
@@ -19399,6 +19170,72 @@ function PRV_Refresh()
 	</MvIF>
 
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00121', 'Collection \'' $ l.collection:code $ '\' unassigned from Availability Group \'' $ l.group:name $ '\'' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_MarginSettings_Update" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].MarginSettings_Load( l.marginsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_List(		'O',		l.provide_xml, 'RelevanceSortField',	l.marginsettings:relevance, 'none,profit,margin', 'none,profit,margin' ) OR
+					NOT PRV_Tag_Integer(	'O:nonneg',	l.provide_xml, 'RelevanceSortCount',	l.marginsettings:relcount ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'Calculation' ) }">
+		<MvIF EXPR = "{ NOT PRV_Attribute_List(	l.provide_xml:tags:Calculation[ 1 ], 'method', l.marginsettings:method, 'none,price_minus_cost,price_minus_customfield,customfield,template', 'none,price_minus_cost,price_minus_customfield,customfield,template' ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.marginsettings:mgn_templ"	VALUE = "">
+		<MvASSIGN NAME = "l.marginsettings:mod_code"	VALUE = "">
+		<MvASSIGN NAME = "l.marginsettings:field_code"	VALUE = "">
+
+		<MvIF EXPR = "{ l.marginsettings:method EQ 'price_minus_customfield' OR l.marginsettings:method EQ 'customfield' }">
+			<MvIF EXPR = "{ NOT PRV_Tag_Code( 'R', l.provide_xml:tags:Calculation[ 1 ], 'Module_Code',	l.marginsettings:mod_code ) OR
+							NOT PRV_Tag_Code( 'R', l.provide_xml:tags:Calculation[ 1 ], 'Field_Code',	l.marginsettings:field_code ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_Code_Cached( l.marginsettings:mod_code, l.loaded_module ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:Calculation[ 1 ], g.Error_Message ) }">
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:Calculation[ 1 ], 'Module \'' $ l.marginsettings:mod_code $ '\' not found' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.loaded_module:active }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:Calculation[ 1 ], 'Module \'' $ l.loaded_module:code $ '\' is deactivated' ) }">
+			<MvELSEIF EXPR = "{ NOT l.loaded_module:feature_hash:fields_prod }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:Calculation[ 1 ], 'Module \'' $ l.loaded_module:code $ '\' does not provide feature \'fields_prod\'' ) }">
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Count_Module_Cached( l.loaded_module:id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:Calculation[ 1 ], 'Module \'' $ l.loaded_module:code $ '\' is not installed in store \'' $ g.Store:code $ '\'' ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.loaded_module:module ].Module_Product_Fields( l.loaded_module, l.fields ) }">
+
+			<MvIF EXPR = "{ NOT miva_array_search( l.fields, 1, l.field, 'l.field:code EQ l.marginsettings:field_code' ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Field \'' $ l.marginsettings:field_code $ '\' not found' ) }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.marginsettings:method EQ 'template' }">
+			<MvIF EXPR = "{ NOT PRV_Tag_Text( 'R', l.provide_xml:tags:Calculation[ 1 ], 'Template', l.marginsettings:mgn_templ ) }">
+				<MvFUNCTIONRETURN>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.filename" VALUE = "{ g.Module_Root $ 'templates/' $ int( g.Store:id ) $ '_margin_calculation.mvc' }">
+
+			<MvIF EXPR = "{ NOT miva_template_compile_itemlist( l.null, l.marginsettings:mgn_templ, l.null, l.filename, l.compile_error ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:Calculation[ 1 ], 'Error compiling template: ' $ l.compile_error ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].MarginSettings_Update( l.marginsettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00166', 'Margin Settings updated' ) }">
 </MvFUNCTION>
 
 <MvCOMMENT>

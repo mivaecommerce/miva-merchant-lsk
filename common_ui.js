@@ -1471,6 +1471,14 @@ function ValueIsEmpty( value )
 	return false;
 }
 
+function ValueIsNonEmptyString( value )
+{
+	if ( typeof value !== 'string' )		return false;
+	else if ( value.trim().length === 0 )	return false;
+
+	return true;
+}
+
 function getMonthName_Abbreviated( date )
 {
 	switch ( date.getMonth() )

@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-RPT-JSN-
-| Next Error Code: 77   
+| Next Error Code: 90   
 |
 </MvCOMMENT>
 
@@ -44,6 +44,10 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Loaders_Present" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Input_Exists( 'Report_ID' ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Report" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
@@ -86,8 +90,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_ReportList_Load_Query" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
 	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
 	<MvASSIGN NAME = "l.filter"				VALUE = "">
@@ -121,7 +125,7 @@
 																				 m.priority	AS module_priority' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, g.Store_Table_Prefix $ 'Reports', 'r' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.search_query, 'Modules', 'm' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'm.id = r.module_id AND m.active = 1', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.search_query, 'r.conv_id = 0 AND m.id = r.module_id AND m.active = 1', '' ) }">
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter( l.search_query, l.filter, l.available_filters ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.search_query, l.sort, 'id,descrip,display,module_name', 'id' ) }">
@@ -191,6 +195,10 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00059', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
 	</MvIF>
 
+	<MvIF EXPR = "{ l.module:api_ver GE 26.01 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00077', 'This function requires a module with an API version prior to 26.01' ) }">
+	</MvIF>
+
 	<MvIF EXPR = "{ g.Report_ID EQ 0 }">
 		<MvASSIGN NAME = "l.report"		VALUE = "">
 		<MvASSIGN NAME = "l.report:id"	VALUE = 0>
@@ -235,6 +243,62 @@
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "JSON_ReportModuleSettings_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Module_Load( l.module ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Report_Loaders_Present() }">
+		<MvASSIGN NAME = "l.report" VALUE = "">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT JSON_Report_Load( l.report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT l.module:active }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00078', 'Module not active' ) }">
+	<MvELSEIF EXPR = "{ NOT l.module:feature_hash:report }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00079', 'Module does not implement the \'report\' feature' ) }">
+	<MvELSEIF EXPR = "{ l.module:api_ver LT 26.01 }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00080', 'This function requires a module with an API version 26.01 or higher' ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.template">
+		<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Property_Template( l.module ) }">
+	</MvCAPTURE>
+
+	<MvASSIGN NAME = "l.settings" VALUE = "">
+
+	<MvIF EXPR = "{ ISNULL l.report }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Settings_Default( l.module, l.settings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Settings_Load( l.module, l.report, l.settings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		"capabilities":
+		{
+			<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Capabilities( l.module, l.capabilities ) }">
+			<MvEVAL EXPR = "{ JSON_ReportModule_Capabilities( l.capabilities ) }">
+		},
+
+		"template":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.template ) }">",
+		"properties":	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Properties( l.module ) }">,
+
+		<MvIF EXPR = "{ miva_variable_type( l.settings ) NE 'STRUCTURE' }">	"settings": {}
+		<MvELSE>															"settings": <MvEVAL EXPR = "{ miva_json_encode( l.settings, 'pretty' ) }">
+		</MvIF>
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "JSON_Report_Validate_Module" PARAMETERS = "report var, module var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].FieldError_Clear() }">
 
@@ -261,15 +325,23 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Report_Insert" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 1, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
 	<MvASSIGN NAME = "l.report"				VALUE = "">
 	<MvASSIGN NAME = "l.report:rinterval"	VALUE = 60>
 	<MvASSIGN NAME = "l.report:display"		VALUE = 0>
 
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer(	'R',		'Module_ID',	l.module_id )														OR
-					NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Date_Group',	l.report:date_group,	'H,D,W,M,Y', 'H,D,W,M,Y' )					OR
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Module_Load( l.module ) }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvELSEIF EXPR = "{ NOT l.module:feature_hash:report }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00075', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00076', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Date_Group',	l.report:date_group,	'H,D,W,M,Y', 'H,D,W,M,Y' )					OR
 					NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Date_Range',	l.date_range,			'all,last,specific', 'all,last,specific' )	OR
 					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:254',	'Description',	l.report:descrip )													OR
 					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Display',		l.report:display )													OR
@@ -293,26 +365,6 @@
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.module_id, l.module ) }">
-		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00032', 'Report module not found' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Features( l.module ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00075', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT l.module:active }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00076', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
-	</MvIF>
-
 	<MvASSIGN NAME = "l.report:module_id"	VALUE = "{ l.module:id }">
 	<MvASSIGN NAME = "l.report:last"		VALUE = 0>
 	<MvASSIGN NAME = "l.report:data"		VALUE = "">
@@ -327,28 +379,67 @@
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Report_Validate_Module( l.report, l.module ) }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
+	<MvIF EXPR = "{ l.module:api_ver GE 26.01 }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_ModuleFieldUI_Settings( 'Settings', l.module, 'ReportModule_Properties', l.null_data, l.settings ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Settings_Validate( l.module, l.settings ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_ModuleFieldUI_Response_Errors( 'Settings' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.report:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Reports' ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Settings_Update( l.module, l.report, l.settings ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT JSON_Report_Validate_Module( l.report, l.module ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.report:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Reports' ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Update( l.module, l.report ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.report:id"			VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Reports' ) }">
+	<MvCOMMENT>
+	|
+	| Reload the module to ensure refcount is accurate in returned data
+	|
+	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Update( l.module, l.report ) }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_ID( l.module:id, l.report:module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00081', 'Module not found' ) }">
 	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Insert report
+	|
+	</MvCOMMENT>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Insert_LowLevel( l.report ) }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.module:id, 'report' ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ l.report:display }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
 	</MvIF>
-
-	<MvASSIGN NAME = "l.report:module" VALUE = "{ l.module }">
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
 	{
@@ -358,8 +449,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Report_Update" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 1, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
 	<MvIF EXPR = "{ NOT JSON_Report_Load( l.report ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
@@ -381,6 +472,10 @@
 
 	<MvIF EXPR = "{ NOT l.module:active }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00060', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:conv_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00085', 'Reports generated by AI Insights cannot be updated' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(		'O',		'Date_Group',	l.report:date_group,	'H,D,W,M,Y', 'H,D,W,M,Y' )					OR
@@ -419,12 +514,26 @@
 	<MvASSIGN NAME = "l.report:lastrun"	VALUE = 0>
 	<MvASSIGN NAME = "l.report:data"	VALUE = "">
 
-	<MvIF EXPR = "{ NOT JSON_Report_Validate_Module( l.report, l.module ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
+	<MvIF EXPR = "{ l.module:api_ver GE 26.01 }">
+		<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_ModuleFieldUI_Settings( 'Settings', l.module, 'ReportModule_Properties', l.null_data, l.settings ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Update( l.module, l.report ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Settings_Validate( l.module, l.settings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_ModuleFieldUI_Response_Errors( 'Settings' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Settings_Update( l.module, l.report, l.settings ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT JSON_Report_Validate_Module( l.report, l.module ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].ReportModule_Update( l.module, l.report ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Update( l.report ) OR
@@ -434,7 +543,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ l.report:display }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_SCH_UT ].ScheduledTask_Trigger( 'dashboardreports' ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.report:module" VALUE = "{ l.module }">
@@ -475,13 +584,15 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Report_Delete" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 0, 0, 0, 1 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
-	<MvASSIGN NAME = "g.Report_ID"		VALUE = "{ int( g.Report_ID ) }">
-
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_RPT_DB ].Report_Load_ID( g.Report_ID, l.report ) }">
+	<MvIF EXPR = "{ NOT JSON_Report_Load( l.report ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.report:conv_id }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00086', 'Reports generated by AI Insights cannot be deleted' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Decrement_ReferenceCount( l.report:module_id, 'report' ) OR
@@ -490,6 +601,55 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Success() }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ReportData_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Report_Load( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_ID( l.report:module_id, l.module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00082', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:feature_hash:report }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00083', 'Module \'' $ l.module:name $ '\' does not implement the report feature' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.module:active }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00084', 'Module \'' $ l.module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Integer( 'R', 'Set_ID', l.set_id ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_RPT_UT ].Report_Calculate_Intervals_LastRun( l.report, l.module, l.intervals, l.interval_count ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_RPT_DB ].ReportDataList_Load_Set( l.report:id, l.set_id, l.set_data ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_RPT_UT ].ReportDataSet_Expand( l.intervals, l.interval_count, l.set_data ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	[
+		<MvASSIGN NAME = "l.output_count" VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.reportdata" ARRAY = "l.set_data">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.output_count ) }">
+				"report_id":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.report:id ) }">,		<MvCOMMENT> ReportDataSet_Expand does not initialize report_id </MvCOMMENT>
+				"set_id":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.set_id ) }">,			<MvCOMMENT> ReportDataSet_Expand does not initialize set_id </MvCOMMENT>
+				"dt_start":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.reportdata:dt_start ) }">,
+				"dt_end":		<MvEVAL EXPR = "{ encodejavascriptnumber( l.reportdata:dt_end ) }">,
+				"data":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.reportdata:data ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
+		</MvFOREACH>
+	]
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_ReportData_Graph_Line" STANDARDOUTPUTLEVEL = "">
@@ -750,6 +910,38 @@
 	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageDestroy( l.graph ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Report_Display" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'REPT', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Report_Load( l.report ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].ModuleAndFeatures_Load_ID( l.report:module_id, l.report:module ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00087', 'Report module not found' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT l.report:module:feature_hash:report }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00088', 'Module \'' $ l.report:module:name $ '\' does not implement the report feature' ) }">
+	<MvELSEIF EXPR = "{ NOT l.report:module:active }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-RPT-JSN-00089', 'Module \'' $ l.report:module:name $ '\' has been deactivated' ) }">
+	</MvIF>
+
+	<MvCAPTURE VARIABLE = "l.content" STANDARDOUTPUTLEVEL = "">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.report:module:module ].ReportModule_Display( l.report:module, l.report ) }">
+	</MvCAPTURE>
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
+	{
+		<MvEVAL EXPR = "{ JSON_Report( l.report ) }">,
+		"display_content": "<MvEVAL EXPR = "{ encodejavascriptstring( l.content ) }">"
+	}
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CSV_Format" PARAMETERS = "value" STANDARDOUTPUTLEVEL = "">

@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-PRD-
@@ -36,6 +36,8 @@
 	"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.product:price ) }">,
 	"formatted_price":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.product:price ) ) }">",
 	"cost":				<MvEVAL EXPR = "{ encodejavascriptnumber( l.product:cost ) }">,
+	"profit":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.product:profit ) }">,
+	"margin":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.product:margin ) }">,
 	"formatted_cost":	"<MvEVAL EXPR = "{ JSON_Encode( [ g.Store_Module_Currency ].CurrencyModule_AddFormatting( g.Store_Module_Currency, l.product:cost ) ) }">",
 	"page_code":		"<MvEVAL EXPR = "{ JSON_Encode( l.product:page_code ) }">",
 	"page_id":			<MvEVAL EXPR = "{ int( l.product:page_id ) }">,
@@ -1620,6 +1622,8 @@
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(			l.available_filters, 'prod.image',		'image' ) }">
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(			l.available_filters, 'prod.price',		'price' ) }">
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(			l.available_filters, 'prod.cost',		'cost' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(			l.available_filters, 'prod.profit',		'profit' ) }">
+	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(			l.available_filters, 'prod.margin',		'margin' ) }">
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(			l.available_filters, 'prod.descrip',	'descrip' ) }">
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_NUMBER(			l.available_filters, 'prod.weight',		'weight' ) }">
 	<MvEVAL EXPR = "{ JSON_AvailableFilter_BOOL(			l.available_filters, 'prod.taxable',	'taxable' ) }">
@@ -1641,7 +1645,7 @@
 	</MvCOMMENT>
 
 	<MvFUNCTIONRETURN VALUE = "id:prod.id,code:prod.code,sku:prod.sku,cancat_code:cat.code:null_char,page_code:prod.page_code:null_char,name:prod.name,thumbnail:prod.thumbnail,
-							   image:prod.image,price:prod.price,cost:prod.cost,descrip:prod.descrip,weight:prod.weight,taxable:prod.taxable,
+							   image:prod.image,price:prod.price,cost:prod.cost,profit:prod.profit,margin:prod.margin,descrip:prod.descrip,weight:prod.weight,taxable:prod.taxable,
 							   active:prod.active,page_title:prod.page_title,dt_created:prod.dt_created,dt_updated:prod.dt_updated">
 </MvFUNCTION>
 
@@ -2092,7 +2096,7 @@
 				<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
 				<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.query, 'ips.active = 1', '' ) }">
 				<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.query, 'NULL_INTEGER', 'ipc.inventory', l.search_operator, l.search_value, 'AND', '' ) }">
-				<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.query, 'OR', 'AND' ) }">
+				<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.query, 'AND', 'AND' ) }">
 			</MvIF>
 		</MvIF>
 
@@ -4254,11 +4258,15 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Input_Boolean(	'O', 'ShipsInOwnPackaging',		l.productshippingrules:ownpackage )		OR
-					NOT JSON_Input_Number(	'O', 'Width',					l.productshippingrules:width,	10, 2 )	OR
-					NOT JSON_Input_Number(	'O', 'Length',					l.productshippingrules:length,	10, 2 )	OR
-					NOT JSON_Input_Number(	'O', 'Height',					l.productshippingrules:height,	10, 2 )	OR
-					NOT JSON_Input_Boolean(	'O', 'LimitShippingMethods',	l.productshippingrules:limitmeths ) }">
+	<MvIF EXPR = "{ NOT JSON_Input_Boolean(	'O',	'ShipsInOwnPackaging',	l.productshippingrules:ownpackage )		OR
+					NOT JSON_Input_Number(	'O',	'Width',				l.productshippingrules:width,	10, 2 )	OR
+					NOT JSON_Input_Number(	'O',	'Length',				l.productshippingrules:length,	10, 2 )	OR
+					NOT JSON_Input_Number(	'O',	'Height',				l.productshippingrules:height,	10, 2 )	OR
+					NOT JSON_Input_Text(	'o:2',	'CountryOfOrigin',		l.productshippingrules:origcntry )		OR
+					NOT JSON_Input_Text(	'o:15',	'HSCode',				l.productshippingrules:hscode )			OR
+					NOT JSON_Input_Text(	'o:10',	'NMFCClass',			l.productshippingrules:nmfcclass )		OR
+					NOT JSON_Input_Text(	'o:10',	'NMFCCode',				l.productshippingrules:nmfccode )		OR
+					NOT JSON_Input_Boolean(	'O',	'LimitShippingMethods',	l.productshippingrules:limitmeths )	}">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
 

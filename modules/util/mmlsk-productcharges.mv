@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-UTIL-PRCG-
-| Next Error Code: 120   
+| Next Error Code: 129   
 |
 </MvCOMMENT>
 
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-productcharges">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Product Charges and Fees">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0100">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.11">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "The Product Charges and Fees module offers powerful options to attach additional fees and charges to specific products, or groups of products. Perfect for anything from simple additional Environmental Fees, to complex Automotive Core Charges. Additional Charges and Fees are represented by a unique type of inactive product, allowing tight control over how these extras interact with sales tax, discount, and shipping calculations.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, data_store, provision_store, not_prod, not_basketitem, not_quoteitem, not_orderitem, rt_basketitem, colprod, vis_productbe, vis_product, component, component_frag, clientside, json">
@@ -47,7 +47,9 @@
 						  (
 							id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
 							product_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
-							type		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ '
+							type		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
+							ptype		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )	$ ',
+							squantity	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ '
 						  )' }">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00001', g.MvQUERY_Error ) }">
@@ -248,7 +250,7 @@
 
 	<MvASSIGN NAME = "l.settings:product_id"		VALUE = "{ l.all_settings:product:id }">
 	<MvASSIGN NAME = "l.settings:chargetypes"		VALUE = "">
-	<MvASSIGN NAME = "l.settings:chargetype_count"	VALUE = "{ Runtime_ProductChargeTypeList_Load_Product( l.all_settings:product:id, l.settings:chargetypes ) }">
+	<MvASSIGN NAME = "l.settings:chargetype_count"	VALUE = "{ Runtime_ProductChargeTypeList_Load_Product( l.all_settings:product, l.settings:chargetypes ) }">
 
 	<MvFOREACH ITERATOR = "l.productchargetype" ARRAY = "l.settings:chargetypes" COUNT = "{ l.settings:chargetype_count }">
 		<MvASSIGN NAME = "l.productchargetype:formatted_price"  VALUE = "{ [ g.Module_Root $ g.Store:currncy_mod:module ].CurrencyModule_AddFormatting( g.Store:currncy_mod, l.productchargetype:price ) }">
@@ -329,21 +331,31 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Module_Provision_Store_ProductChargeType_Add" PARAMETERS = "module var, provide_xml var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.product"			VALUE = "">
-	<MvASSIGN NAME = "l.product:price"		VALUE = 0.00>
-	<MvASSIGN NAME = "l.product:cost"		VALUE = 0.00>
-	<MvASSIGN NAME = "l.product:weight"		VALUE = 0.00>
-	<MvASSIGN NAME = "l.product:taxable"	VALUE = 1>
-	<MvASSIGN NAME = "l.product:active"		VALUE = 0>
+	<MvASSIGN NAME = "l.product"						VALUE = "">
+	<MvASSIGN NAME = "l.product:price"					VALUE = 0.00>
+	<MvASSIGN NAME = "l.product:cost"					VALUE = 0.00>
+	<MvASSIGN NAME = "l.product:weight"					VALUE = 0.00>
+	<MvASSIGN NAME = "l.product:taxable"				VALUE = 1>
+	<MvASSIGN NAME = "l.product:active"					VALUE = 0>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'R',		l.provide_xml,	'Type',				l.product:type,
+	<MvASSIGN NAME = "l.productchargetype"				VALUE = "">
+	<MvASSIGN NAME = "l.productchargetype:type"			VALUE = "">
+	<MvASSIGN NAME = "l.productchargetype:ptype"		VALUE = "fixed">
+	<MvASSIGN NAME = "l.productchargetype:product_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.productchargetype:squantity"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'R',		l.provide_xml,	'Type',						l.productchargetype:type,
 																									'Core,Fee,Other',
-																									'core,fee,other' )								OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code(		'R',		l.provide_xml,	'Code',				l.product:code )			OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'R:100',	l.provide_xml,	'Name',				l.product:name )			OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Price(		'O',		l.provide_xml,	'Price',			l.product:price )			OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o',		l.provide_xml,	'Description',		l.product:descrip )			OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml,	'Taxable',			l.product:taxable ) }">
+																									'core,fee,other' )											OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'O',		l.provide_xml,	'PricingType',				l.productchargetype:ptype,
+																									'Fixed,Percent',
+																									'fixed,percent' )											OR												
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml,	'SingleChargePerLineItem',	l.productchargetype:squantity )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code(		'R',		l.provide_xml,	'Code',						l.product:code )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'R:100',	l.provide_xml,	'Name',						l.product:name )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Price(		'O',		l.provide_xml,	'Price',					l.product:price )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o',		l.provide_xml,	'Description',				l.product:descrip )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml,	'Taxable',					l.product:taxable ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -367,9 +379,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Feature_PRV_AD ].PRV_LogError( l.provide_xml ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.productchargetype"				VALUE = "">
-	<MvASSIGN NAME = "l.productchargetype:type"			VALUE = "{ l.product:type }">
-	<MvASSIGN NAME = "l.productchargetype:product_id"	VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.productchargetype:product_id" VALUE = "{ l.product:id }">
 
 	<MvIF EXPR = "{ NOT ProductChargeType_Insert( l.productchargetype ) }">
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Delete( l.product ) }">
@@ -409,14 +419,18 @@
 		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'o',		l.provide_xml,	'Type',				l.productchargetype:type,
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'o',		l.provide_xml,	'Type',						l.productchargetype:type,
 																									'Core,Fee,Other',
-																									'core,fee,other' )						OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code(		'O',		l.provide_xml,	'Code',				l.product:code )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o:100',	l.provide_xml,	'Name',				l.product:name )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Price(		'O',		l.provide_xml,	'Price',			l.product:price )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o',		l.provide_xml,	'Description',		l.product:descrip )	OR
-					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml,	'Taxable',			l.product:taxable ) }">
+																									'core,fee,other' )											OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_List(		'O',		l.provide_xml,	'PricingType',				l.productchargetype:ptype,
+																									'Fixed,Percent',
+																									'fixed,percent' )											OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml,	'SingleChargePerLineItem',	l.productchargetype:squantity )	OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Code(		'O',		l.provide_xml,	'Code',						l.product:code )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o:100',	l.provide_xml,	'Name',						l.product:name )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Price(		'O',		l.provide_xml,	'Price',					l.product:price )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Text(		'o',		l.provide_xml,	'Description',				l.product:descrip )				OR
+					NOT [ g.Module_Feature_PRV_AD ].PRV_Tag_Boolean(	'O',		l.provide_xml,	'Taxable',					l.product:taxable ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -832,8 +846,10 @@
 	<MvASSIGN NAME = "g.Product_Code"			VALUE = "{ trim( g.Product_Code ) }">
 	<MvASSIGN NAME = "g.Product_Name"			VALUE = "{ trim( g.Product_Name ) }">
 	<MvASSIGN NAME = "g.Product_Type"			VALUE = "{ trim( g.Product_Type ) }">
+	<MvASSIGN NAME = "g.Product_PricingType"	VALUE = "{ trim( g.Product_PricingType ) }">
 	<MvASSIGN NAME = "g.Product_Price"			VALUE = "{ trim( g.Product_Price ) }">
 	<MvASSIGN NAME = "g.Product_Taxable"		VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_Taxable ) }">
+	<MvASSIGN NAME = "g.Product_SingleQuantity"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.Product_SingleQuantity ) }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Code( g.Product_Code ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'PCHG', 'Product_Code', g.Validation_Message ) }">
@@ -855,6 +871,10 @@
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Price_NonNegative_Required( g.Product_Price ) }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'PCHG', 'Product_Price', g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Value_In_List( g.Product_PricingType, 'fixed,percent' ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( 'PCHG', 'Product_PricingType', 'Please select a pricing type' ) }">
 	</MvIF>
 
 	<MvFOREACH ITERATOR = "l.product_tax_module" ARRAY = "l.product_tax_modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Features_Cached( 'vis_product,tax', l.product_tax_modules ) }">
@@ -906,13 +926,15 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00085', 'Product charge type not found' ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.productchargetype:type" VALUE = "{ g.Product_Type }">
+	<MvASSIGN NAME = "l.productchargetype:type"			VALUE = "{ g.Product_Type }">
+	<MvASSIGN NAME = "l.productchargetype:ptype"		VALUE = "{ g.Product_PricingType }">	
+	<MvASSIGN NAME = "l.productchargetype:squantity"	VALUE = "{ g.Product_SingleQuantity }">
 
-	<MvASSIGN NAME = "l.product:code"			VALUE = "{ g.Product_Code }">
-	<MvASSIGN NAME = "l.product:name"			VALUE = "{ g.Product_Name }">
-	<MvASSIGN NAME = "l.product:price"			VALUE = "{ g.Product_Price }">
-	<MvASSIGN NAME = "l.product:taxable"		VALUE = "{ g.Product_Taxable }">
-	<MvASSIGN NAME = "l.product:descrip"		VALUE = "{ g.Product_Description }">
+	<MvASSIGN NAME = "l.product:code"					VALUE = "{ g.Product_Code }">
+	<MvASSIGN NAME = "l.product:name"					VALUE = "{ g.Product_Name }">
+	<MvASSIGN NAME = "l.product:price"					VALUE = "{ g.Product_Price }">
+	<MvASSIGN NAME = "l.product:taxable"				VALUE = "{ g.Product_Taxable }">
+	<MvASSIGN NAME = "l.product:descrip"				VALUE = "{ g.Product_Description }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Transaction_Begin() }">
 		<MvFUNCTIONRETURN VALUE = 0>
@@ -1028,9 +1050,11 @@
 		<MvASSIGN NAME = "g.Product_Code"			VALUE = "{ l.product:code }">
 		<MvASSIGN NAME = "g.Product_Name"			VALUE = "{ l.product:name }">
 		<MvASSIGN NAME = "g.Product_Type"			VALUE = "{ l.productchargetype:type }">
+		<MvASSIGN NAME = "g.Product_PricingType"	VALUE = "{ l.productchargetype:ptype }">
 		<MvASSIGN NAME = "g.Product_Price"			VALUE = "{ [ g.Module_Library_Utilities ].Price_Pad( l.product:price ) }">
 		<MvASSIGN NAME = "g.Product_Description" 	VALUE = "{ l.product:descrip }">
 		<MvASSIGN NAME = "g.Product_Taxable" 		VALUE = "{ l.product:taxable }">
+		<MvASSIGN NAME = "g.Product_SingleQuantity" VALUE = "{ l.productchargetype:squantity }">
 	</MvIF>
 
 	<MvASSIGN NAME = "g.ProductChargeType_Action"	VALUE = "PCHU">
@@ -1100,28 +1124,19 @@
 
 			var ProductChargeTypeDashboard = class
 			{
-				#button_taxability_taxable;
-				#button_taxability_nontaxable;
+				#selector_chargesapplied;
+				#selector_chargesapplied_item;
 
 				constructor()
 				{
-					this.#button_taxability_taxable				= document.getElementById( 'productchargetype_chargesettings_item_taxability_taxable' );
-					this.#button_taxability_nontaxable			= document.getElementById( 'productchargetype_chargesettings_item_taxability_nontaxable' );
-					this.#button_taxability_taxable.onclick		= ( e ) => { this.#setTaxability( true ); };
-					this.#button_taxability_nontaxable.onclick	= ( e ) => { this.#setTaxability( false ); };
+					this.#selector_chargesapplied_item	= document.getElementById( 'productchargetype_chargesettings_item_chargesapplied_item' );
+					this.#selector_chargesapplied		= document.getElementById( 'productchargetype_chargesettings_item_chargesapplied' );
 
-					this.#setTaxability( <MvEVAL EXPR = "{ encodejavascriptboolean( g.Product_Taxable ) }"> );
-				}
-
-				#setTaxability( taxable )
-				{
-					document.forms[ Screen ].elements[ 'Product_Taxable' ].value = taxable ? 'Yes' : '';
-
-					this.#button_taxability_taxable.button().RemoveClassName( 'selected' );
-					this.#button_taxability_nontaxable.button().RemoveClassName( 'selected' );
-
-					if ( taxable )	this.#button_taxability_taxable.button().AddClassName( 'selected' );
-					else			this.#button_taxability_nontaxable.button().AddClassName( 'selected' );
+					this.#selector_chargesapplied.onchange = ( e ) =>
+					{
+						if ( this.#selector_chargesapplied.value == 1 )	this.#selector_chargesapplied_item.setAttribute( 'sub-prompt', 'One charge regardless of quantity' );
+						else											this.#selector_chargesapplied_item.setAttribute( 'sub-prompt', 'Charge x quantity ordered' );
+					};
 				}
 			}
 
@@ -1163,159 +1178,6 @@
 		</MvIF>
 	</MvFOREACH>
 
-	<style type="text/css">
-		.productchargetype_chargesettings_content
-		{
-			position: relative;
-			display: block;
-		}
-
-		.productchargetype_chargesettings_group
-		{
-			position: relative;
-			display: flex;
-			align-items: center;
-		}
-
-		.productchargetype_chargesettings_group.half
-		{
-			width: 50%;
-		}
-
-		.productchargetype_chargesettings_group + .productchargetype_chargesettings_group
-		{
-			margin-top: 20px;
-		}
-
-		.productchargetype_chargesettings_item
-		{
-			position: relative;
-			display: inline-block;
-			width: 0;
-			flex-grow: 1;
-		}
-
-		.productchargetype_chargesettings_item + .productchargetype_chargesettings_item
-		{
-			margin-left: 20px;
-		}
-
-		.productchargetype_chargesettings_item.flex_half
-		{
-			flex-basis: 50%;
-			flex-shrink: 0;
-			flex-grow: 0;
-		}
-
-		.productchargetype_chargesettings_item.flex_noshrink
-		{
-			width: auto;
-			flex-grow: 0;
-			flex-shrink: 0;
-		}
-
-		.productchargetype_chargesettings_item_prompt
-		{
-			position: relative;
-			display: block;
-			margin-bottom: 9px;
-			color: #494a53;
-			font-size: 13px;
-			font-weight: 700;
-		}
-
-		.productchargetype_chargesettings_item_content
-		{
-			position: relative;
-			display: block;
-		}
-
-		.productchargetype_chargesettings_item_taxability
-		{
-			position: relative;
-			display: flex;
-			align-items: center;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item_button
-		{
-			position: relative;
-			display: flex;
-			padding: 0 16px;
-			height: 40px;
-			align-items: center;
-			justify-content: center;
-			line-height: 1;
-			background-color: #fff;
-			border: 1px solid #e0e1e4;
-			cursor: pointer;
-			outline: none;
-			box-sizing: border-box;
-			user-select: none;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item + .productchargetype_chargesettings_item_taxability_item .productchargetype_chargesettings_item_taxability_item_button
-		{
-			margin-left: -1px;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item:first-child .productchargetype_chargesettings_item_taxability_item_button
-		{
-			border-radius: 4px 0 0 4px;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item:last-child .productchargetype_chargesettings_item_taxability_item_button
-		{
-			border-radius: 0 4px 4px 0;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item_button.active,
-		.productchargetype_chargesettings_item_taxability_item_button:hover,
-		.productchargetype_chargesettings_item_taxability_item_button.selected
-		{
-			border-color: #539cff;
-			z-index: 1;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item_button .mm9_button_text
-		{
-			position: relative;
-			display: block;
-			font-size: 14px;
-			color: #6a6e79;
-		}
-
-		.productchargetype_chargesettings_item_taxability_item_button.active .mm9_button_text,
-		.productchargetype_chargesettings_item_taxability_item_button:hover .mm9_button_text,
-		.productchargetype_chargesettings_item_taxability_item_button.selected .mm9_button_text
-		{
-			color: #2f75ff;
-		}
-
-		.productchargetype_chargesettings_timestamps
-		{
-			position: relative;
-			display: grid;
-			margin-top: 30px;
-			grid-template-columns: auto 1fr;
-			grid-column-gap: 32px;
-			grid-row-gap: 7px;
-			color: #6a6e79;
-			font-size: 12px;
-			line-height: 18px;
-		}
-
-		.productchargetype_chargesettings_timestamps_prompt
-		{
-			grid-column: 1 / 2;
-		}
-
-		.productchargetype_chargesettings_timestamps_content
-		{
-			grid-column: 2 / 3;
-		}
-	</style>
-
 	<MvASSIGN NAME = "l.context:productchargetype"					VALUE = "{ l.productchargetype }">
 	<MvASSIGN NAME = "l.context:productchargetype:code"				VALUE = "{ l.product:code }">
 	<MvASSIGN NAME = "l.context:productchargetype:name"				VALUE = "{ l.product:name }">
@@ -1332,84 +1194,90 @@
 
 	<MvIF EXPR = "{ [ g.Module_Admin ].Tab_Visible( g.Tab, 'PCHG' ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_Start( 'GT_PROD', 'PCHG' ) }">
-			<span class="productchargetype_chargesettings_content">
-				<span class="productchargetype_chargesettings_group">
-					<mm-input type="text" title="Name" name="Product_Name" value="{ encodeentities( g.Product_Name ) }" class="productchargetype_chargesettings_item flex_half" input-class="mm_input_common whole_width" required></mm-input>
-					<mm-input type="text" title="Code" name="Product_Code" value="{ encodeentities( g.Product_Code ) }" class="productchargetype_chargesettings_item" input-class="mm_input_common whole_width" required></mm-input>
-					<mm-select type="text" title="Type" name="Product_Type" class="productchargetype_chargesettings_item" select-class="mm_select_common whole_width" required>
-						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'core',	g.Product_Type, 'Core' ) }">
-						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'fee',		g.Product_Type, 'Fee' ) }">
-						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'other',	g.Product_Type, 'Other' ) }">
-					</mm-select>
-				</span>
-				<span class="productchargetype_chargesettings_group half">
-					<mm-input type="text" title="Price" Name="Product_Price" value="{ encodeentities( g.Product_Price ) }" class="productchargetype_chargesettings_item" input-class="mm_input_common whole_width" required></mm-input>
-					<span class="productchargetype_chargesettings_item flex_noshrink">
-						<span class="productchargetype_chargesettings_item_prompt">Taxability</span>
-						<span class="productchargetype_chargesettings_item_content">
-							<input type="hidden" name="Product_Taxable" value="{ [ g.Module_Admin ].Trim_Boolean( g.Product_Taxable ) }">
-							<span class="productchargetype_chargesettings_item_taxability">
-								<mm-button id="productchargetype_chargesettings_item_taxability_taxable" text="Taxable" class="productchargetype_chargesettings_item_taxability_item" button-class="productchargetype_chargesettings_item_taxability_item_button"></mm-button>
-								<mm-button id="productchargetype_chargesettings_item_taxability_nontaxable" text="Non-Taxable" class="productchargetype_chargesettings_item_taxability_item" button-class="productchargetype_chargesettings_item_taxability_item_button"></mm-button>
-							</span>
-						</span>
-					</span>
-				</span>
-				<span class="productchargetype_chargesettings_group">
-					<span class="productchargetype_chargesettings_item">
-						<span class="productchargetype_chargesettings_item_prompt">Charge Description</span>
-						<span class="productchargetype_chargesettings_item_content">
-							<MvIF EXPR = "{ [ g.Module_Library_DB ].MMTextEditor_Enabled( g.Store:id, g.Screen, g.Tab, 'Product_Description' ) }">
+			<mm-flex-container>
+				<mm-grid columns="4" column-sizes="repeat(4, 1fr)">
+					<mm-grid-row>
+						<mm-grid-column grid-column="span 2">
+							<mm-flex-item prompt="Name" required>
+								<mm-input type="text" name="Product_Name" value="{ encodeentities( g.Product_Name ) }" size="full"></mm-input>
+							</mm-flex-item>
+						</mm-grid-column>
+
+						<mm-grid-column>
+							<mm-flex-item prompt="Code" required>
+								<mm-input type="text" name="Product_Code" value="{ encodeentities( g.Product_Code ) }" size="full"></mm-input>
+							</mm-flex-item>
+						</mm-grid-column>
+
+						<mm-grid-column>
+							<mm-flex-item prompt="Type">
+								<mm-select type="text" name="Product_Type" size="full">
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'core',	g.Product_Type, 'Core' ) }">
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'fee',		g.Product_Type, 'Fee' ) }">
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'other',	g.Product_Type, 'Other' ) }">
+								</mm-select>
+							</mm-flex-item>
+						</mm-grid-column>
+					</mm-grid-row>
+
+					<mm-grid-row>
+						<mm-grid-column>
+							<mm-flex-item id="productchargetype_chargesettings_item_pricingtype_item" prompt="Price" required>
+								<mm-input type="text" name="Product_Price" value="{ encodeentities( g.Product_Price ) }" size="full">
+									<mm-select name="Product_PricingType" size="100px" location="left">
+										<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'fixed', g.Product_PricingType, 'Fixed' ) }">
+										<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'percent', g.Product_PricingType, 'Percent' ) }">
+									</mm-select>
+								</mm-input>
+							</mm-flex-item>
+						</mm-grid-column>
+
+						<mm-grid-column grid-column="span 2">
+							<mm-flex-item id="productchargetype_chargesettings_item_chargesapplied_item" prompt="Charge Applies" sub-prompt="Charge x quantity ordered">
+								<mm-selector id="productchargetype_chargesettings_item_chargesapplied" name="Product_SingleQuantity" size="full">
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '0', g.Product_SingleQuantity, 'Per Unit' ) }">
+									<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( '1', g.Product_SingleQuantity, 'Once Per Item' ) }">
+								</mm-selector>
+							</mm-flex-item>
+						</mm-grid-column>
+					</mm-grid-row>
+
+					<mm-grid-row>
+						<mm-grid-column>
+							<mm-flex-item>
+								<mm-checkbox text="Taxable" name="Product_Taxable" value="Yes" checked="{ ternary( g.Product_Taxable, 'true', 'false' ) }"></mm-checkbox>
+							</mm-flex-item>
+						</mm-grid-column>
+					</mm-grid-row>
+
+					<mm-grid-row>
+						<mm-grid-column grid-column="span 4">
+							<mm-flex-item prompt="Charge Description">
 								<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawMMTextEditor( 'Product_Description', g.Product_Description, 20, 58, 1, 0 ) }">
-							<MvELSE>
-								<MvASSIGN NAME = "l.parent_id" VALUE = "{ MakeSessionID() }">
+							</mm-flex-item>
+						</mm-grid-column>
+					</mm-grid-row>
 
-								<MvIF EXPR = "{ NOT g.User:wwdescrip }">	<MvASSIGN NAME = "l.wrap" VALUE = "off">
-								<MvELSE>									<MvASSIGN NAME = "l.wrap" VALUE = "soft">
-								</MvIF>
+					<mm-grid-row>
+						<mm-grid-column grid-column="span 4">
+							<mm-grid columns="2" column-sizes="auto 1fr" row-gap="6px">
+								<mm-grid-row>
+									<mm-grid-column>Last Updated</mm-grid-column>
+									<mm-grid-column><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FormatDateTime_ClientLocale( l.product:dt_updated, 'N/A' ) }"></mm-grid-column>
+								</mm-grid-row>
 
-								<table cellspacing="0" cellpadding="0" border="0"><tr>
-									<td valign="top"><textarea name="Product_Description" class="mm_template_textarea" rows="10" cols="58" wrap="{ l.wrap }"><MIVA STANDARDOUTPUTLEVEL = "text, html"><MvEVAL EXPR = "{ encodeentities( g.Product_Description ) }"><MIVA STANDARDOUTPUTLEVEL = "text, html, compresswhitespace"></textarea></td>
-
-									<td valign="top" align="right" style="width: 45px;">
-										<span id="{ l.parent_id }" class="mm_template_textarea_button_container"></span>
-
-										<script type="text/javascript">
-											(function()
-											{
-												var editor, parent_id;
-
-												parent_id				= '<MvEVAL EXPR = "{ encodejavascriptstring( l.parent_id ) }">';
-												editor					= new MMTemplateTextArea( parent_id, 'Product_Description' );
-												editor.onSetModified	= function() { SetItemModified( '<MvEVAL EXPR = "{ encodejavascriptstring( l.product:code ) }">' ); };
-
-												editor.SetModified_Enable();
-											})();
-										</script>
-									</td>
-								</tr></table>
-
-								<br />
-
-								<MvIF EXPR = "{ NOT g.User:wwdescrip }">	<input type="checkbox" onclick="TextArea_WordWrap_Toggle( 'Product_Description' );" />
-								<MvELSE>									<input type="checkbox" onclick="TextArea_WordWrap_Toggle( 'Product_Description' );" checked />
-								</MvIF>
-
-								Wrap Text
-							</MvIF>
-						</span>
-					</span>
-				</span>
-				<span class="productchargetype_chargesettings_timestamps">
-					<span class="productchargetype_chargesettings_timestamps_prompt">Created:</span>
-					<span class="productchargetype_chargesettings_timestamps_content"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FormatDateTime_ClientLocale( l.product:dt_created, 'N/A' ) }"></span>
-					<span class="productchargetype_chargesettings_timestamps_prompt">Last Updated:</span>
-					<span class="productchargetype_chargesettings_timestamps_content"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FormatDateTime_ClientLocale( l.product:dt_updated, 'N/A' ) }"></span>
-				</span>
-			</span>
+								<mm-grid-row>
+									<mm-grid-column>Created</mm-grid-column>
+									<mm-grid-column><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].FormatDateTime_ClientLocale( l.product:dt_created, 'N/A' ) }"></mm-grid-column>
+								</mm-grid-row>
+							</mm-grid>
+						</mm-grid-column>
+					</mm-grid-row>
+				</mm-grid>
+			</mm-flex-container>
 		<MvEVAL EXPR = "{ [ g.Module_Admin ].DrawGroupTabEntry_End() }">
 	<MvELSE>
-		<MvHIDE FIELDS = "g.Product_Name, g.Product_Code, g.Product_Type, g.Product_Price, g.Product_Taxable, g.Product_Description">
+		<MvHIDE FIELDS = "g.Product_Name, g.Product_Code, g.Product_Type, g.Product_PricingType, g.Product_Price, g.Product_Taxable, g.Product_Description, g.Product_SingleQuantity">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_PAY_AD ].ProductPaymentRules_Content( l.product ) }">
@@ -1491,28 +1359,33 @@
 								pctxp.ovr_price	AS pctxp_ovr_price,
 								pctxp.price		AS pctxp_price,
 								pct.type		AS pct_type,
+								pct.ptype		AS pct_ptype,
 								pct.product_id	AS pct_product_id,
+								pct.squantity	AS pct_squantity,
 								p.code			AS product_code,
 								p.name			AS product_name,
 								p.sku			AS product_sku,
 								p.price			AS product_price,
 								p.weight		AS product_weight,
-								p.taxable		AS product_taxable,
-								bi.product_id	AS bi_product_id,
-								bi.type			AS bi_type
+								p.taxable		AS product_taxable
 							  FROM
 								' $ g.Store_Table_Prefix $ 'ProductChargeTypeXProduct pctxp,
 								' $ g.Store_Table_Prefix $ 'ProductChargeTypes pct
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Products p ON p.id = pct.product_id
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'BasketItems bi ON bi.basket_id = ? AND bi.parent_id = ? AND bi.product_id = pct.product_id AND bi.type = pct.type
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'BasketItems bi ON bi.basket_id = ? AND bi.parent_id = ? AND bi.product_id = pct.product_id AND bi.type = pct.type,
+								' $ g.Store_Table_Prefix $ 'Products p
 							  WHERE
-								pctxp.product_id	= ?				AND
-								pct.id				= pctxp.pct_id	AND
-								bi.line_id			IS NULL' }"
+								pctxp.product_id	= ?					AND
+								p.id				= pct.product_id	AND
+								pct.id				= pctxp.pct_id		AND
+								bi.line_id			IS NULL
+							  ORDER BY
+								p.disp_order' }"
 				FIELDS	= "l.basketitem:basket_id, l.basketitem:line_id, l.basketitem:product_id">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00026', g.MvOPENVIEW_Error ) }">
 	</MvIF>
+
+	<MvASSIGN NAME = "l.existing_basketitem_count"			VALUE = 0>
 
 	<MvWHILE EXPR = "{ NOT ProductChargeTypeXProductAndProduct.d.EOF }">
 		<MvASSIGN NAME = "l.child_basketitem"				VALUE = "">
@@ -1528,9 +1401,32 @@
 		<MvASSIGN NAME = "l.child_basketitem:upsold"		VALUE = 0>
 		<MvASSIGN NAME = "l.child_basketitem:quantity"		VALUE = "{ l.basketitem:quantity }">
 
-		<MvIF EXPR = "{ ProductChargeTypeXProductAndProduct.d.pctxp_ovr_price }">	<MvASSIGN NAME = "l.child_basketitem:price" VALUE = "{ ProductChargeTypeXProductAndProduct.d.pctxp_price }">
-		<MvELSE>																	<MvASSIGN NAME = "l.child_basketitem:price" VALUE = "{ ProductChargeTypeXProductAndProduct.d.product_price }">
+		<MvIF EXPR = "{ ProductChargeTypeXProductAndProduct.d.pct_squantity }">
+			<MvCOMMENT>
+			|
+			| Check for any basket items which are duplicates of the product being added, if a matching
+			| item is found and it also has the same charge being added then skip it.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT l.existing_basketitem_count }">
+				<MvASSIGN NAME = "l.existing_basketitem_count" VALUE = "{ [ g.Module_Library_DB ].BasketItemList_Load_Basket( l.basketitem:basket_id, l.existing_basketitems ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.existing_basketitem" ARRAY = "l.existing_basketitems" COUNT = "{ l.existing_basketitem_count }">
+				<MvIF EXPR = "{ l.existing_basketitem:parent_id EQ 0 AND l.existing_basketitem:product_id EQ l.basketitem:product_id }">
+					<MvIF EXPR = "{ miva_array_search( l.existing_basketitems, 1, l.existing_basketitem_charge, 'l.existing_basketitem_charge:parent_id EQ l.existing_basketitem:line_id AND l.existing_basketitem_charge:product_id EQ l.child_basketitem:product_id' ) }">
+						<MvSKIP NAME = "Merchant" VIEW = "ProductChargeTypeXProductAndProduct" ROWS = 1>
+
+						<MvWHILECONTINUE>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.child_basketitem:quantity"	VALUE = 1>
 		</MvIF>
+
+		<MvASSIGN NAME = "l.child_basketitem:price" VALUE = "{ ProductChargeType_Calculate_Price( ProductChargeTypeXProductAndProduct.d.pct_ptype, ProductChargeTypeXProductAndProduct.d.product_price, ProductChargeTypeXProductAndProduct.d.pctxp_ovr_price, ProductChargeTypeXProductAndProduct.d.pctxp_price, l.basketitem:price ) }">
 
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketItem_Insert( l.child_basketitem ) }">
 			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductChargeTypeXProductAndProduct">
@@ -1545,7 +1441,53 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Module_Notify_BasketItem_Update" PARAMETERS = "module var, original_basketitem var, basketitem var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "Module_Notify_BasketItem_Update" PARAMETERS = "module var, original_basketitem var, basketitem var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.basketitem:parent_id NE 0 OR
+					l.basketitem:base_price EQ l.original_basketitem:base_price }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "BasketItems"
+				QUERY 	= "{ 'SELECT
+								bi.*,
+								pctxp.ovr_price	AS pctxp_ovr_price,
+								pctxp.price		AS pctxp_price,
+								p.price			AS product_price
+							  FROM
+								' $ g.Store_Table_Prefix $ 'BasketItems bi,
+								' $ g.Store_Table_Prefix $ 'ProductChargeTypeXProduct pctxp,
+								' $ g.Store_Table_Prefix $ 'ProductChargeTypes pct
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Products p ON p.id = pct.product_id
+							  WHERE
+								bi.basket_id		= ? 				AND
+								bi.parent_id		= ? 				AND
+								bi.product_id		= pct.product_id 	AND
+								bi.type				= pct.type			AND
+								pctxp.product_id	= ?					AND
+								pct.id				= pctxp.pct_id		AND
+								pct.ptype			= \'percent\'' }"
+				FIELDS	= "l.basketitem:basket_id, l.basketitem:line_id, l.basketitem:product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00126', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT BasketItems.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].BasketItem_Read( l.child_basketitem ) }">
+
+		<MvASSIGN NAME = "l.original_child_basketitem" 		VALUE = "{ l.child_basketitem }">	
+		<MvASSIGN NAME = "l.child_basketitem:base_price"	VALUE = "{ ProductChargeType_Calculate_Price( 'percent', BasketItems.d.product_price, BasketItems.d.pctxp_ovr_price, BasketItems.d.pctxp_price, l.basketitem:base_price ) }">
+		<MvASSIGN NAME = "l.child_basketitem:price"			VALUE = "{ l.child_basketitem:price + ( l.child_basketitem:base_price -  l.original_child_basketitem:base_price ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_BasketItem_Update( l.original_child_basketitem, l.child_basketitem ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+		
+		<MvSKIP NAME = "Merchant" VIEW = "BasketItems" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "BasketItems">
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -1575,28 +1517,33 @@
 								pctxp.ovr_price	AS pctxp_ovr_price,
 								pctxp.price		AS pctxp_price,
 								pct.type		AS pct_type,
+								pct.ptype		AS pct_ptype,
 								pct.product_id	AS pct_product_id,
+								pct.squantity	AS pct_squantity,
 								p.code			AS product_code,
 								p.name			AS product_name,
 								p.sku			AS product_sku,
 								p.price			AS product_price,
 								p.weight		AS product_weight,
-								p.taxable		AS product_taxable,
-								qi.product_id	AS qi_product_id,
-								qi.type			AS qi_type
+								p.taxable		AS product_taxable
 							  FROM
 								' $ g.Store_Table_Prefix $ 'ProductChargeTypeXProduct pctxp,
 								' $ g.Store_Table_Prefix $ 'ProductChargeTypes pct
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Products p ON p.id = pct.product_id
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'QuoteItems qi ON qi.quote_id = ? AND qi.parent_id = ? AND qi.product_id = pct.product_id AND qi.type = pct.type
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'QuoteItems qi ON qi.quote_id = ? AND qi.parent_id = ? AND qi.product_id = pct.product_id AND qi.type = pct.type,
+								' $ g.Store_Table_Prefix $ 'Products p
 							  WHERE
-								pctxp.product_id	= ?				AND
-								pct.id				= pctxp.pct_id	AND
-								qi.line_id			IS NULL' }"
+								pctxp.product_id	= ?					AND
+								p.id				= pct.product_id	AND
+								pct.id				= pctxp.pct_id		AND
+								qi.line_id			IS NULL
+							  ORDER BY
+								p.disp_order' }"
 				FIELDS	= "l.quoteitem:quote_id, l.quoteitem:line_id, l.quoteitem:product_id">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00027', g.MvOPENVIEW_Error ) }">
 	</MvIF>
+
+	<MvASSIGN NAME = "l.existing_quoteitem_count"			VALUE = 0>
 
 	<MvWHILE EXPR = "{ NOT ProductChargeTypeXProductAndProduct.d.EOF }">
 		<MvASSIGN NAME = "l.child_quoteitem"				VALUE = "">
@@ -1612,10 +1559,33 @@
 		<MvASSIGN NAME = "l.child_quoteitem:upsold"			VALUE = 0>
 		<MvASSIGN NAME = "l.child_quoteitem:quantity"		VALUE = "{ l.quoteitem:quantity }">
 
-		<MvIF EXPR = "{ ProductChargeTypeXProductAndProduct.d.pctxp_ovr_price }">	<MvASSIGN NAME = "l.child_quoteitem:price" VALUE = "{ ProductChargeTypeXProductAndProduct.d.pctxp_price }">
-		<MvELSE>																	<MvASSIGN NAME = "l.child_quoteitem:price" VALUE = "{ ProductChargeTypeXProductAndProduct.d.product_price }">
+		<MvIF EXPR = "{ ProductChargeTypeXProductAndProduct.d.pct_squantity }">
+			<MvCOMMENT>
+			|
+			| Check for any quote items which are duplicates of the product being added, if a matching
+			| item is found and it also has the same charge being added then skip it.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT l.existing_quoteitem_count }">
+				<MvASSIGN NAME = "l.existing_quoteitem_count" VALUE = "{ [ g.Module_Root $ l.quote_module:module ].QuoteItemList_Load_Quote( l.quoteitem:quote_id, l.existing_quoteitems ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.existing_quoteitem" ARRAY = "l.existing_quoteitems" COUNT = "{ l.existing_quoteitem_count }">
+				<MvIF EXPR = "{ l.existing_quoteitem:parent_id EQ 0 AND l.existing_quoteitem:product_id EQ l.quoteitem:product_id }">
+					<MvIF EXPR = "{ miva_array_search( l.existing_quoteitems, 1, l.existing_quoteitem_charge, 'l.existing_quoteitem_charge:parent_id EQ l.existing_quoteitem:line_id AND l.existing_quoteitem_charge:product_id EQ l.child_quoteitem:product_id' ) }">
+						<MvSKIP NAME = "Merchant" VIEW = "ProductChargeTypeXProductAndProduct" ROWS = 1>
+
+						<MvWHILECONTINUE>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.child_quoteitem:quantity"	VALUE = 1>
 		</MvIF>
 
+		<MvASSIGN NAME = "l.child_quoteitem:price" VALUE = "{ ProductChargeType_Calculate_Price( ProductChargeTypeXProductAndProduct.d.pct_ptype, ProductChargeTypeXProductAndProduct.d.product_price, ProductChargeTypeXProductAndProduct.d.pctxp_ovr_price, ProductChargeTypeXProductAndProduct.d.pctxp_price, l.quoteitem:price ) }">
+	
 		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.quote_module:module ].QuoteItem_Insert( l.child_quoteitem ) }">
 			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductChargeTypeXProductAndProduct">
 			<MvFUNCTIONRETURN VALUE = 0>
@@ -1629,7 +1599,58 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Module_Notify_QuoteItem_Update" PARAMETERS = "module var, original_quoteitem var, quoteitem var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "Module_Notify_QuoteItem_Update" PARAMETERS = "module var, original_quoteitem var, quoteitem var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.quoteitem:parent_id NE 0 OR
+					l.quoteitem:base_price EQ l.original_quoteitem:base_price }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code( 'quote', l.quote_module ) }">					<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT l.quote_module:active }">															<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Library_DB ].StoreModule_Load( l.quote_module:id, 'util', l.null ) }">	<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "QuoteItems"
+				QUERY 	= "{ 'SELECT
+								qi.*,
+								pctxp.ovr_price	AS pctxp_ovr_price,
+								pctxp.price		AS pctxp_price,
+								p.price			AS product_price
+							  FROM
+								' $ g.Store_Table_Prefix $ 'QuoteItems qi,
+								' $ g.Store_Table_Prefix $ 'ProductChargeTypeXProduct pctxp,
+								' $ g.Store_Table_Prefix $ 'ProductChargeTypes pct
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Products p ON p.id = pct.product_id
+							  WHERE
+								qi.quote_id			= ? 				AND
+								qi.parent_id		= ? 				AND
+								qi.product_id		= pct.product_id 	AND
+								qi.type				= pct.type			AND
+								pctxp.product_id	= ?					AND
+								pct.id				= pctxp.pct_id		AND
+								pct.ptype			= \'percent\'' }"
+				FIELDS	= "l.quoteitem:quote_id, l.quoteitem:line_id, l.quoteitem:product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00127', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT QuoteItems.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Root $ l.quote_module:module ].QuoteItem_Read( l.child_quoteitem ) }">
+
+		<MvASSIGN NAME = "l.original_child_quoteitem" 	VALUE = "{ l.child_quoteitem }">	
+		<MvASSIGN NAME = "l.child_quoteitem:base_price"	VALUE = "{ ProductChargeType_Calculate_Price( 'percent', QuoteItems.d.product_price, QuoteItems.d.pctxp_ovr_price, QuoteItems.d.pctxp_price, l.quoteitem:base_price ) }">
+		<MvASSIGN NAME = "l.child_quoteitem:price"		VALUE = "{ l.child_quoteitem:price + ( l.child_quoteitem:base_price -  l.original_child_quoteitem:base_price ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Root $ l.quote_module:module ].QuoteItem_Update( l.original_child_quoteitem, l.child_quoteitem ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "QuoteItems">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+		
+		<MvSKIP NAME = "Merchant" VIEW = "QuoteItems" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "QuoteItems">
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -1654,28 +1675,33 @@
 								pctxp.ovr_price	AS pctxp_ovr_price,
 								pctxp.price		AS pctxp_price,
 								pct.type		AS pct_type,
+								pct.ptype		AS pct_ptype,
 								pct.product_id	AS pct_product_id,
+								pct.squantity	AS pct_squantity,
 								p.code			AS product_code,
 								p.name			AS product_name,
 								p.sku			AS product_sku,
 								p.price			AS product_price,
 								p.weight		AS product_weight,
-								p.taxable		AS product_taxable,
-								oi.product_id	AS oi_product_id,
-								oi.type			AS oi_type
+								p.taxable		AS product_taxable
 							  FROM
 								' $ g.Store_Table_Prefix $ 'ProductChargeTypeXProduct pctxp,
 								' $ g.Store_Table_Prefix $ 'ProductChargeTypes pct
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Products p ON p.id = pct.product_id
-								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderItems oi ON oi.order_id = ? AND oi.parent_id = ? AND oi.product_id = pct.product_id AND oi.type = pct.type
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'OrderItems oi ON oi.order_id = ? AND oi.parent_id = ? AND oi.product_id = pct.product_id AND oi.type = pct.type,
+								' $ g.Store_Table_Prefix $ 'Products p
 							  WHERE
-								pctxp.product_id	= ?				AND
-								pct.id				= pctxp.pct_id	AND
-								oi.line_id			IS NULL' }"
+								pctxp.product_id	= ?					AND
+								p.id				= pct.product_id	AND
+								pct.id				= pctxp.pct_id		AND
+								oi.line_id			IS NULL
+							  ORDER BY
+								p.disp_order' }"
 				FIELDS	= "l.orderitem:order_id, l.orderitem:line_id, l.orderitem:product_id">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00028', g.MvOPENVIEW_Error ) }">
 	</MvIF>
+
+	<MvASSIGN NAME = "l.existing_orderitem_count"		VALUE = 0>
 
 	<MvWHILE EXPR = "{ NOT ProductChargeTypeXProductAndProduct.d.EOF }">
 		<MvASSIGN NAME = "l.child_orderitem"			VALUE = "">
@@ -1696,10 +1722,33 @@
 		<MvASSIGN NAME = "l.child_orderitem:upsold"		VALUE = 0>
 		<MvASSIGN NAME = "l.child_orderitem:quantity"	VALUE = "{ l.orderitem:quantity }">
 
-		<MvIF EXPR = "{ ProductChargeTypeXProductAndProduct.d.pctxp_ovr_price }">	<MvASSIGN NAME = "l.child_orderitem:price" VALUE = "{ ProductChargeTypeXProductAndProduct.d.pctxp_price }">
-		<MvELSE>																	<MvASSIGN NAME = "l.child_orderitem:price" VALUE = "{ ProductChargeTypeXProductAndProduct.d.product_price }">
+		<MvIF EXPR = "{ ProductChargeTypeXProductAndProduct.d.pct_squantity }">
+			<MvCOMMENT>
+			|
+			| Check for any order items which are duplicates of the product being added, if a matching
+			| item is found and it also has the same charge being added then skip it.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT l.existing_orderitem_count }">
+				<MvASSIGN NAME = "l.existing_orderitem_count" VALUE = "{ [ g.Module_Library_DB ].OrderItemList_Load_Order( l.orderitem:order_id, l.existing_orderitems ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.existing_orderitem" ARRAY = "l.existing_orderitems" COUNT = "{ l.existing_orderitem_count }">
+				<MvIF EXPR = "{ l.existing_orderitem:parent_id EQ 0 AND l.existing_orderitem:product_id EQ l.orderitem:product_id }">
+					<MvIF EXPR = "{ miva_array_search( l.existing_orderitems, 1, l.existing_orderitem_charge, 'l.existing_orderitem_charge:parent_id EQ l.existing_orderitem:line_id AND l.existing_orderitem_charge:product_id EQ l.child_orderitem:product_id' ) }">
+						<MvSKIP NAME = "Merchant" VIEW = "ProductChargeTypeXProductAndProduct" ROWS = 1>
+
+						<MvWHILECONTINUE>
+					</MvIF>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.child_orderitem:quantity" VALUE = 1>
 		</MvIF>
 
+		<MvASSIGN NAME = "l.child_orderitem:price" VALUE = "{ ProductChargeType_Calculate_Price( ProductChargeTypeXProductAndProduct.d.pct_ptype, ProductChargeTypeXProductAndProduct.d.product_price, ProductChargeTypeXProductAndProduct.d.pctxp_ovr_price, ProductChargeTypeXProductAndProduct.d.pctxp_price, l.orderitem:price ) }">
+	
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].OrderItem_Insert( l.child_orderitem ) }">
 			<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductChargeTypeXProductAndProduct">
 			<MvFUNCTIONRETURN VALUE = 0>
@@ -1713,7 +1762,53 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Module_Notify_OrderItem_Update" PARAMETERS = "module var, original_orderitem var, orderitem var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "Module_Notify_OrderItem_Update" PARAMETERS = "module var, original_orderitem var, orderitem var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.orderitem:parent_id NE 0 OR
+					l.orderitem:base_price EQ l.original_orderitem:base_price }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "OrderItems"
+				QUERY 	= "{ 'SELECT
+								oi.*,
+								pctxp.ovr_price	AS pctxp_ovr_price,
+								pctxp.price		AS pctxp_price,
+								p.price			AS product_price
+							  FROM
+								' $ g.Store_Table_Prefix $ 'OrderItems oi,
+								' $ g.Store_Table_Prefix $ 'ProductChargeTypeXProduct pctxp,
+								' $ g.Store_Table_Prefix $ 'ProductChargeTypes pct
+								LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Products p ON p.id = pct.product_id
+							  WHERE
+								oi.order_id			= ? 				AND
+								oi.parent_id		= ? 				AND
+								oi.product_id		= pct.product_id 	AND
+								oi.type				= pct.type			AND
+								pctxp.product_id	= ?					AND
+								pct.id				= pctxp.pct_id		AND
+								pct.ptype			= \'percent\'' }"
+				FIELDS	= "l.orderitem:order_id, l.orderitem:line_id, l.orderitem:product_id">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00128', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT OrderItems.d.EOF }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].OrderItem_Read( l.child_orderitem ) }">
+
+		<MvASSIGN NAME = "l.original_child_orderitem" 	VALUE = "{ l.child_orderitem }">	
+		<MvASSIGN NAME = "l.child_orderitem:base_price"	VALUE = "{ ProductChargeType_Calculate_Price( 'percent', OrderItems.d.product_price, OrderItems.d.pctxp_ovr_price, OrderItems.d.pctxp_price, l.orderitem:base_price ) }">
+		<MvASSIGN NAME = "l.child_orderitem:price"		VALUE = "{ l.child_orderitem:price + ( l.child_orderitem:base_price -  l.original_child_orderitem:base_price ) }">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].v10_OrderItem_Update( l.original_child_orderitem, l.child_orderitem ) }">
+			<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItems">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+		
+		<MvSKIP NAME = "Merchant" VIEW = "OrderItems" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "OrderItems">
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -1786,6 +1881,22 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Module_Runtime_BasketItem_Update" PARAMETERS = "module var, original_basketitem var, basketitem var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT l.basketitem:parent_id }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ProductChargeType_Load_BasketItem( l.basketitem, l.productchargetype ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.productchargetype:squantity AND l.original_basketitem:quantity EQ 1 AND l.basketitem:quantity NE 1 }">
+		<MvASSIGN NAME = "l.basketitem:quantity" VALUE = 1>
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
@@ -1904,7 +2015,9 @@
 	"name":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.productchargetype:name ) }">",
 	"price":			<MvEVAL EXPR = "{ encodejavascriptnumber( l.productchargetype:price ) }">,
 	"formatted_price":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.formatted_price ) }">",
-	"type":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.productchargetype:type ) }">"
+	"type":				"<MvEVAL EXPR = "{ encodejavascriptstring( l.productchargetype:type ) }">",
+	"ptype":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.productchargetype:ptype ) }">",
+	"squantity":		<MvEVAL EXPR = "{ encodejavascriptboolean( l.productchargetype:squantity ) }">
 
 	<MvIF EXPR = "{ l.ondemandcolumns:descrip }">
 		, "descrip":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.productchargetype:descrip ) }">"
@@ -1975,11 +2088,13 @@
 	<MvASSIGN NAME = "l.count"				VALUE = 0>
 	<MvASSIGN NAME = "l.query"				VALUE = "">
 
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'pct.id',		'id' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'p.code',		'code' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'p.name',		'name' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'p.price',		'price' ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'pct.type',	'type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'pct.id',			'id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'p.code',			'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'p.name',			'name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'p.price',			'price' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'pct.type',		'type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'pct.ptype',		'ptype' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'pct.squantity',	'squantity' ) }">
 
 	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
 					NOT [ g.Module_JSON ].JSON_Input_Text(		'o', 'Sort',	l.sort )	OR
@@ -1997,7 +2112,7 @@
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'p.id = pct.product_id', '' ) }">
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.query, l.filter, l.available_filters, g.Module_Root $ l.module:module, 'JSON_ProductChargeTypeList_Load_Query_Filter', '', l.data ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, 'p.code,p.name,p.price,pct.type', 'pct.id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, 'p.code,p.name,p.price,pct.type,pct.ptype,pct.squantity', 'pct.id' ) }">
 
 	<MvIF EXPR = "{ l.data:ondemandcolumns:descrip }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'p.descrip	AS descrip' ) }">
@@ -2060,12 +2175,22 @@
 	<MvASSIGN NAME = "l.product:taxable"				VALUE = 1>
 	<MvASSIGN NAME = "l.product:active"					VALUE = 0>
 
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Type',			l.type, 'Core,Fee,Other', 'core,fee,other' )	OR
-					NOT [ g.Module_JSON ].JSON_Input_Code(		'R',		'Code',			l.product:code )								OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'Name',			l.product:name )								OR
-					NOT [ g.Module_JSON ].JSON_Input_Price(		'O',		'Price',		l.product:price )								OR
-					NOT [ g.Module_JSON ].JSON_Input_Text(		'o',		'Description',	l.product:descrip )								OR
-					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Taxable',		l.product:taxable ) }">
+	<MvASSIGN NAME = "l.productchargetype"				VALUE = "">
+	<MvASSIGN NAME = "l.productchargetype:type"			VALUE = "">
+	<MvASSIGN NAME = "l.productchargetype:ptype"		VALUE = "fixed">
+	<MvASSIGN NAME = "l.productchargetype:product_id"	VALUE = 0>
+	<MvASSIGN NAME = "l.productchargetype:squantity"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_List(		'R',		'Type',						l.productchargetype:type,  'Core,Fee,Other',
+																																   'core,fee,other' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_List(		'O',		'PricingType',				l.productchargetype:ptype, 'Fixed,Percent',
+																																   'fixed,percent' )	OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'SingleChargePerLineItem',	l.productchargetype:squantity )					OR
+					NOT [ g.Module_JSON ].JSON_Input_Code(		'R',		'Code',						l.product:code )								OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'R:100',	'Name',						l.product:name )								OR
+					NOT [ g.Module_JSON ].JSON_Input_Price(		'O',		'Price',					l.product:price )								OR
+					NOT [ g.Module_JSON ].JSON_Input_Text(		'o',		'Description',				l.product:descrip )								OR
+					NOT [ g.Module_JSON ].JSON_Input_Boolean(	'O',		'Taxable',					l.product:taxable )  }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
 	</MvIF>
 
@@ -2087,9 +2212,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.productchargetype"				VALUE = "">
-	<MvASSIGN NAME = "l.productchargetype:type"			VALUE = "{ l.type }">
-	<MvASSIGN NAME = "l.productchargetype:product_id"	VALUE = "{ l.product:id }">
+	<MvASSIGN NAME = "l.productchargetype:product_id" VALUE = "{ l.product:id }">
 
 	<MvIF EXPR = "{ NOT ProductChargeType_Insert( l.productchargetype ) }">
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Library_DB ].Product_Delete( l.product ) }">
@@ -2291,6 +2414,7 @@
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'pct.id',			'id' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'pct.type',		'type' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'pct.squantity',	'squantity' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'p.code',			'code' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'p.name',			'name' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'p.price',			'price' ) }">
@@ -2318,7 +2442,7 @@
 																		 p.id				= pct.product_id', [ g.Module_Library_DB ].SQL_Query_Field( l.product:id ) ) }">
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback( l.query, l.filter, l.available_filters, g.Module_Root $ l.module:module, 'JSON_ProductChargeTypeList_Load_Query_Filter', '', l.data ) }">
-	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, 'p.code,p.name,pct.type,p.price,custom_price:pctxp.price,ovr_price:pctxp.ovr_price', 'pct.id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_OrderBy( l.query, l.sort, 'p.code,p.name,pct.type,pct.squantity,p.price,custom_price:pctxp.price,ovr_price:pctxp.ovr_price', 'pct.id' ) }">
 
 	<MvIF EXPR = "{ l.data:ondemandcolumns:descrip }">
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'p.descrip	AS descrip' ) }">
@@ -2812,6 +2936,8 @@
 	<MvASSIGN NAME = "l.productchargetype:id"			VALUE = "{ ProductChargeTypes.d.id }">
 	<MvASSIGN NAME = "l.productchargetype:product_id"	VALUE = "{ ProductChargeTypes.d.product_id }">
 	<MvASSIGN NAME = "l.productchargetype:type"			VALUE = "{ ProductChargeTypes.d.type }">
+	<MvASSIGN NAME = "l.productchargetype:ptype"		VALUE = "{ ProductChargeTypes.d.ptype }">
+	<MvASSIGN NAME = "l.productchargetype:squantity"	VALUE = "{ ProductChargeTypes.d.squantity }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductChargeType_Insert" PARAMETERS = "productchargetype var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
@@ -2819,10 +2945,10 @@
 
 	<MvQUERY NAME 	= "Merchant"
 			QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'ProductChargeTypes
-						( id, product_id, type )
+						( id, product_id, type, ptype, squantity )
 						VALUES
-						( ?, ?, ? )' }"
-			FIELDS = "l.productchargetype:id, l.productchargetype:product_id, l.productchargetype:type">
+						( ?, ?, ?, ?, ? )' }"
+			FIELDS = "l.productchargetype:id, l.productchargetype:product_id, l.productchargetype:type, l.productchargetype:ptype, l.productchargetype:squantity">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00030', g.MvQUERY_Error ) }">
 	</MvIF>
@@ -2835,10 +2961,12 @@
 			QUERY 	= "{ 'UPDATE
 							' $ g.Store_Table_Prefix $ 'ProductChargeTypes
 			 			  SET
-			 				type	= ?
+			 				type		= ?,
+							ptype		= ?,
+							squantity	= ?
 						  WHERE
-							id		= ?' }"
-			FIELDS = "l.productchargetype:type,
+							id			= ?' }"
+			FIELDS = "l.productchargetype:type, l.productchargetype:ptype, l.productchargetype:squantity,
 					  l.productchargetype:id">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00031', g.MvQUERY_Error ) }">
@@ -2945,7 +3073,7 @@
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTIL-PRCG-00113', l.productchargetype_count ) }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Runtime_ProductChargeTypeList_Load_Product" PARAMETERS = "product_id, productchargetypes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+<MvFUNCTION NAME = "Runtime_ProductChargeTypeList_Load_Product" PARAMETERS = "product var, productchargetypes var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW 	= "ProductChargeTypes"
 				QUERY 	= "{ 'SELECT
@@ -2965,7 +3093,7 @@
 								pctxp.product_id	= ?				AND
 								pct.id				= pctxp.pct_id	AND
 								p.id				= pct.product_id' }"
-				FIELDS	= "l.product_id">
+				FIELDS	= "l.product:id">
 	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00118', g.MvOPENVIEW_Error ) }">
 	</MvIF>
@@ -2979,16 +3107,33 @@
 		<MvASSIGN NAME = "l.productchargetypes" INDEX = "{ l.productchargetype_count }" MEMBER = "name"		VALUE = "{ ProductChargeTypes.d.product_name }">
 		<MvASSIGN NAME = "l.productchargetypes" INDEX = "{ l.productchargetype_count }" MEMBER = "descrip"	VALUE = "{ ProductChargeTypes.d.product_descrip }">
 		<MvASSIGN NAME = "l.productchargetypes" INDEX = "{ l.productchargetype_count }" MEMBER = "taxable"	VALUE = "{ ProductChargeTypes.d.product_taxable }">
-
-		<MvIF EXPR = "{ ProductChargeTypes.d.pctxp_ovr_price }">	<MvASSIGN NAME = "l.productchargetypes" INDEX = "{ l.productchargetype_count }" MEMBER = "price" VALUE = "{ ProductChargeTypes.d.pctxp_price }">
-		<MvELSE>													<MvASSIGN NAME = "l.productchargetypes" INDEX = "{ l.productchargetype_count }" MEMBER = "price" VALUE = "{ ProductChargeTypes.d.product_price }">
-		</MvIF>
+		<MvASSIGN NAME = "l.productchargetypes" INDEX = "{ l.productchargetype_count }" MEMBER = "price"	VALUE = "{ ProductChargeType_Calculate_Price( ProductChargeTypes.d.ptype, ProductChargeTypes.d.product_price, ProductChargeTypes.d.pctxp_ovr_price, ProductChargeTypes.d.pctxp_price, l.product:price ) }">
 
 		<MvSKIP NAME = "Merchant" VIEW = "ProductChargeTypes" ROWS = 1>
 	</MvWHILE>
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductChargeTypes">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-UTIL-PRCG-00119', l.productchargetype_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductChargeType_Load_BasketItem" PARAMETERS = "basketitem var, productchargetype var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW 	= "ProductChargeTypes"
+				QUERY 	= "{ 'SELECT * FROM ' $ g.Store_Table_Prefix $ 'ProductChargeTypes WHERE product_id	= ? AND type = ?' }"
+				FIELDS	= "l.basketitem:product_id, l.basketitem:type">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PRCG-00120', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ ProductChargeTypes.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductChargeTypes">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-UTIL-PRCG-00125' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ ProductChargeType_Read( l.productchargetype ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ProductChargeTypes">
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -4050,6 +4195,20 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductChargeType_Calculate_Price" PARAMETERS = "charge_pricing_type, charge_price, charge_price_override, charge_price_override_price, parent_price" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.charge_pricing_type EQ 'percent' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Price_IsHighPrecision( l.parent_price ) }">	<MvASSIGN NAME = "l.scale" VALUE = 2>
+		<MvELSE>																						<MvASSIGN NAME = "l.scale" VALUE = 8>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ ( l.parent_price * ( ternary( l.charge_price_override, l.charge_price_override_price, l.charge_price ) / 100 ) ) ROUND l.scale }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.charge_price_override }">	<MvFUNCTIONRETURN VALUE = "{ l.charge_price_override_price }">
+	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ l.charge_price }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvINCLUDE FILE = "modules/util/productcharges/functions.mv">

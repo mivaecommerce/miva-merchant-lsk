@@ -1,0 +1,480 @@
+<MIVA STANDARDOUTPUTLEVEL = "">
+
+<MvCOMMENT>
+|
+| Miva Merchant
+|
+| This file and the source codes contained herein are the property of
+| Miva, Inc.  Use of this file is restricted to the specific terms and
+| conditions in the License Agreement associated with this file.  Distribution
+| of this file or portions of this file for uses not covered by the License
+| Agreement is not allowed without a written agreement signed by an officer of
+| Miva, Inc.
+|
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
+| http://www.miva.com
+|
+| Prefix         : MER-JSN-MFU-
+| Next Error Code: 4
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Properties_Load" PARAMETERS = "module var, callback_function, data var, properties var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.callback_function EQ 'ReportModule_Properties' }">
+		<MvCAPTURE VARIABLE = "l.raw_properties"><MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].ReportModule_Properties( l.module ) }"></MvCAPTURE>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-JSN-MFU-00001', 'Invalid callback function' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_json_decode( l.raw_properties, l.properties ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-JSN-MFU-00002', miva_json_decode_last_error() ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings" PARAMETERS = "param, module var, callback_function, data var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.settings" VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Structure( 'R', l.param, l.input_settings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_ModuleFieldUI_Properties_Load( l.module, l.callback_function, l.data, l.properties ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.processed_properties" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.property_code" ARRAY = "l.property_codes" COUNT = "{ miva_struct_members( l.properties, l.property_codes ) }">
+		<MvIF EXPR = "{ NOT JSON_ModuleFieldUI_Settings_Property_WithVisibilityConditions( l.input_settings, l.properties, l.property_code, l.processed_properties, l.settings ) }">
+			<MvIF EXPR = "{ JSON_Have_Input_Errors() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_WithVisibilityConditions" PARAMETERS = "input_settings var, properties var, property_code, processed_properties var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.property_processed" VARIABLE = "l.processed_properties">
+		<MvMEMBER NAME = "{ l.property_code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.property_processed }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.property_processed" VALUE = 1>
+
+	<MvREFERENCEARRAY NAME = "l.property" VARIABLE = "l.properties">
+		<MvMEMBER NAME = "{ l.property_code }">
+	</MvREFERENCEARRAY>
+
+	<MvREFERENCEARRAY NAME = "l.output_property_settings" VARIABLE = "l.output_settings">
+		<MvMEMBER NAME = "{ l.property_code }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT ISNULL l.property:visibility_conditions }">
+		<MvFOREACH ITERATOR = "l.condition_property_code" ARRAY = "l.condition_property_codes" COUNT = "{ miva_struct_members( l.property:visibility_conditions, l.condition_property_codes ) }">
+			<MvIF EXPR = "{ strcasecmp( l.condition_property_code, l.property_code ) EQ 0 }">
+				<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.visibility_condition_property" VARIABLE = "l.property:visibility_conditions">
+				<MvMEMBER NAME = "{ l.condition_property_code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT miva_member_exists( l.properties, l.condition_property_code ) }">
+				<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT JSON_ModuleFieldUI_Settings_Property_WithVisibilityConditions( l.input_settings, l.properties, l.condition_property_code, l.processed_properties, l.output_settings ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvREFERENCEARRAY NAME = "l.output_condition_property_settings" VARIABLE = "l.output_settings">
+				<MvMEMBER NAME = "{ l.condition_property_code }">
+			</MvREFERENCEARRAY>
+
+			<MvREFERENCEARRAY NAME = "l.condition_property" VARIABLE = "l.properties">
+				<MvMEMBER NAME = "{ l.condition_property_code }">
+			</MvREFERENCEARRAY>
+
+			<MvIF EXPR = "{ NOT ISNULL l.condition_property:visibility_conditions AND NOT l.output_condition_property_settings:visible }">
+				<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.value_member_name" ARRAY = "l.value_member_names" COUNT = "{ miva_struct_members( l.visibility_condition_property, l.value_member_names ) }">
+				<MvREFERENCEARRAY NAME = "l.values" VARIABLE = "l.visibility_condition_property">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvREFERENCEARRAY NAME = "l.property_value" VARIABLE = "l.output_condition_property_settings">
+					<MvMEMBER NAME = "{ l.value_member_name }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ NOT miva_array_search( l.values, 1, l.search_value, 'l.search_value EQ l.property_value' ) }">
+					<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 0>
+
+					<MvFUNCTIONRETURN VALUE = 1>
+				</MvIF>
+			</MvFOREACH>
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.output_property_settings:visible" VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Structure( l.input_settings, ternary( l.property:required, 'R', 'O' ), l.property_code, l.input_property_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_ModuleFieldUI_Settings_Property( l.input_property_settings, l.property, l.output_property_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property" PARAMETERS = "input_property_settings var, property var, output_property_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.property:type EQ 'categorylookup' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_CategoryLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'collectionlookup' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_CollectionLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'countryselect' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_CountrySelect( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'multiselect' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_MultiSelect( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'pricegrouplookup' }">				<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_PriceGroupLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'productlookup' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_ProductLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'select' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Select( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'selector' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Selector( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'stateselect' }">					<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_StateSelect( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'subscriptiontermmultilookup' }">	<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_SubscriptionTermMultiLookup( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSEIF EXPR = "{ l.property:type EQ 'text' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Text( l.input_property_settings, l.property, l.output_property_settings ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_CategoryLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'code', l.output_settings:code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.output_settings:code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_Code( l.output_settings:code, l.output_settings:category ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'code', 'Category not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Modifier( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_CollectionLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'code', l.output_settings:code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.output_settings:code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_COL_DB ].Collection_Load_Code( l.output_settings:code, l.output_settings:collection ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'code', 'Collection not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Modifier( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_CountrySelect" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Element_Exists( l.input_settings, 'value' ) }">
+		<MvIF EXPR = "{ l.property:required AND ( NOT ISNULL l.property:selectone ) AND ( l.property:selectone:value EQ l.output_settings:value ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please select a country' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( ISNULL l.property:selectone ) OR ( l.property:selectone:value NE l.output_settings:value ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Country_Load_Alpha( l.output_settings:value, l.output_settings:country ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Country not found' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_MultiSelect" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.output_settings:values" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.input_value" ARRAY = "l.input_values" COUNT = "{ JSON_Input_Element_Array( l.input_settings, 'values', l.input_values ) }">
+		<MvASSIGN NAME = "l.value" VALUE = "{ JSON_Input_Element_Value( l.input_value ) }">
+
+		<MvIF EXPR = "{ NOT miva_array_search( l.property:options, 1, l.option, 'strcmp( l.option:value, l.value ) EQ 0' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'values', 'Please select a valid value' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.output_settings:values, l.value, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.property:required AND miva_array_elements( l.output_settings:values ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'values', 'Please select at least one value' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_PriceGroupLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'name', l.output_settings:name ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.output_settings:name }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_DB ].PriceGroup_Load_Name( l.output_settings:name, l.output_settings:pricegroup ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'name', 'Price Group not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Modifier( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_ProductLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'code', l.output_settings:code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.output_settings:code }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Product_Load_Code( l.output_settings:code, l.output_settings:product ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'code', 'Product not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Modifier( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_Modifier" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.property:modifier:member }">
+		<MvREFERENCEARRAY NAME = "l.output_settings_modifier" VARIABLE = "l.output_settings">
+			<MvMEMBER NAME = "{ l.property:modifier:member }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), l.property:modifier:member, l.output_settings_modifier ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ JSON_Input_Element_Exists( l.input_settings, l.property:modifier:member ) }">
+			<MvIF EXPR = "{ NOT miva_array_search( l.property:modifier:options, 1, l.option, 'strcmp( l.option:value, l.output_settings_modifier ) EQ 0' ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, l.property:modifier:member, 'Please select a value' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_Select" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Element_Exists( l.input_settings, 'value' ) }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.property:options, 1, l.option, 'strcmp( l.option:value, l.output_settings:value ) EQ 0' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please select a value' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.property:required AND l.option:selectone }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please select a value' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_Selector" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Element_Exists( l.input_settings, 'value' ) }">
+		<MvIF EXPR = "{ NOT miva_array_search( l.property:options, 1, l.option, 'strcmp( l.option:value, l.output_settings:value ) EQ 0' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please select a value' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_StateSelect" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Element_Exists( l.input_settings, 'value' ) }">
+		<MvIF EXPR = "{ l.property:required AND ( NOT ISNULL l.property:selectone ) AND ( l.property:selectone:value EQ l.output_settings:value ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please select a state' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( ISNULL l.property:selectone ) OR ( l.property:selectone:value NE l.output_settings:value ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].State_Load_Code( l.output_settings:value, l.output_settings:state ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'State not found' ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_SubscriptionTermMultiLookup" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.output_settings:ids"	VALUE = "">
+	<MvASSIGN NAME = "l.output_settings:terms"	VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.input_id" ARRAY = "l.input_ids" COUNT = "{ JSON_Input_Element_Array( l.input_settings, 'ids', l.input_ids ) }">
+		<MvASSIGN NAME = "l.id"		VALUE = "{ JSON_Input_Element_Value( l.input_id ) }">
+		<MvASSIGN NAME = "l.term"	VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SUB_DB ].ProductSubscriptionTerm_Load_ID( l.id, l.term ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'ids', 'One or more selected product subscription terms not found' ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.output_settings:ids, l.id, -1 ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.output_settings:terms, l.term, -1 ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.property:required AND miva_array_elements( l.output_settings:ids ) EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'ids', 'Please select at least one subscription term' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Settings_Property_Text" PARAMETERS = "input_settings var, property var, output_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Input_Element_Text( l.input_settings, ternary( l.property:required, 'R', 'o' ), 'value', l.output_settings:value ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Element_Exists( l.input_settings, 'value' ) }">
+		<MvIF EXPR = "{ l.property:text_type EQ 'number' AND NOT ISNULL l.output_settings:value }">
+			<MvIF EXPR = "{ l.property:wholenumber }">
+				<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber( l.output_settings:value ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', g.Validation_Message ) }">
+				</MvIF>
+			<MvELSE>
+				<MvIF EXPR = "{ NOT ISNULL l.property:max_left_digits }">	<MvASSIGN NAME = "l.max_left_digits" VALUE = "{ l.property:max_left_digits }">
+				<MvELSE>													<MvASSIGN NAME = "l.max_left_digits" VALUE = 8>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT ISNULL l.property:max_right_digits }">	<MvASSIGN NAME = "l.max_right_digits" VALUE = "{ l.property:max_right_digits }">
+				<MvELSE>													<MvASSIGN NAME = "l.max_right_digits" VALUE = 2>
+				</MvIF>
+
+				<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Decimal( l.output_settings:value, l.max_left_digits + l.max_right_digits, l.max_right_digits ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', g.Validation_Message ) }">
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.property:min AND NOT ISNULL l.property:max }">
+				<MvIF EXPR = "{ ( l.output_settings:value LT l.property:min ) OR ( l.output_settings:value GT l.property:max ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please specify a number between ' $ l.property:min $ ' and ' $ l.property:max ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT ISNULL l.property:min }">
+				<MvIF EXPR = "{ l.output_settings:value LT l.property:min }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please specify a number greater than or equal to ' $ l.property:min ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT ISNULL l.property:max }">
+				<MvIF EXPR = "{ l.output_settings:value GT l.property:max }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please specify a number less than or equal to ' $ l.property:max ) }">
+				</MvIF>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.property:text_type NE 'number' AND NOT ISNULL l.output_settings:value }">
+			<MvIF EXPR = "{ l.property:can_validate_length AND ( l.property:minlength GT 0 OR l.property:maxlength GT 0 ) }">
+				<MvIF EXPR = "{ l.property:minlength GT 0 AND l.property:maxlength GT 0 }">
+					<MvIF EXPR = "{ ( len_var( l.output_settings:value ) LT l.property:minlength ) OR ( len_var( l.output_settings:value ) GT l.property:maxlength ) }">
+						<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please specify a value between ' $ l.property:minlength $ ' and ' $ l.property:maxlength $ ' characters' ) }">
+					</MvIF>
+				<MvELSEIF EXPR = "{ l.property:minlength GT 0 }">
+					<MvIF EXPR = "{ len_var( l.output_settings:value ) LT l.property:minlength }">
+						<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please specify a value greater than or equal to ' $ l.property:minlength $ ' characters' ) }">
+					</MvIF>
+				<MvELSEIF EXPR = "{ l.property:maxlength GT 0 }">
+					<MvIF EXPR = "{ len_var( l.output_settings:value ) GT l.property:maxlength }">
+						<MvFUNCTIONRETURN VALUE = "{ JSON_Input_Element_Error( l.input_settings, 'value', 'Please specify a value less than less than or equal to ' $ l.property:maxlength $ ' characters' ) }">
+					</MvIF>
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_ModuleFieldUI_Settings_Property_Modifier( l.input_settings, l.property, l.output_settings ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Response_Errors" PARAMETERS = "param" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	{
+		"success":				0,
+		"error_code":			"MER-JSN-MFU-00003",
+		"error_message":		"One or more parameters are invalid",
+
+		"validation_error":		true,
+		"error_field":			"<MvEVAL EXPR = "{ encodejavascriptstring( g.Session:modulefieldui_errors[ 1 ]:error_field ) }">",
+		"error_field_message":	"<MvEVAL EXPR = "{ encodejavascriptstring( g.Session:modulefieldui_errors[ 1 ]:error_message ) }">",
+
+		"input_errors":			true,
+		"error_fields":
+		[
+			<MvASSIGN NAME = "l.error_count" VALUE = 0>
+			<MvFOREACH ITERATOR = "l.error" ARRAY = "g.Session:modulefieldui_errors" COUNT = "{ g.Session:modulefieldui_error_count }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.error_count ) }">
+					"error_field":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.param $ ':' $ l.error:error_field ) }">",
+					"error_message":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.error:error_message ) }">"
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
+		]
+	}
+
+	<MvASSIGN NAME = "g.Session:modulefieldui_error_count"	VALUE = 0>
+	<MvASSIGN NAME = "g.Session:modulefieldui_errors"		VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_ModuleFieldUI_Error" PARAMETERS = "error_field, error_message" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.error:error_field"					VALUE = "{ l.error_field }">
+	<MvASSIGN NAME = "l.error:error_message"				VALUE = "{ l.error_message }">
+
+	<MvASSIGN NAME = "g.Session:modulefieldui_error_count"	VALUE = "{ miva_array_insert_var( g.Session:modulefieldui_errors, l.error, -1 ) }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>

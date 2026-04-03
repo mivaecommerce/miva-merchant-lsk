@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-RNT-
@@ -1961,6 +1961,10 @@
 			<MvASSIGN NAME = "l.query_params:data:sort_dir"			VALUE = "ASC">
 
 			<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search }">
+				<MvIF EXPR = "{ MarginSettings_Load_Cached( l.marginsettings ) AND l.marginsettings:relevance NE 'none' }">
+					<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_MarginSort( l.query, l.marginsettings:relevance, l.marginsettings:relcount ) }">
+				</MvIF>
+
 				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, 'plxp_search.disp_order', 'plxp_search_disp_order', l.query_params:data:sort_dir, '' ) }">
 			</MvIF>
 
@@ -1971,6 +1975,10 @@
 			</MvIF>
 
 			<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search }">
+				<MvIF EXPR = "{ MarginSettings_Load_Cached( l.marginsettings ) AND l.marginsettings:relevance NE 'none' }">
+					<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_MarginSort( l.query, l.marginsettings:relevance, l.marginsettings:relcount ) }">
+				</MvIF>
+
 				<MvIF EXPR = "{ l.searchsettings:code_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.code',		'FULLTEXT_NATURAL',	l.searchsettings:code_wt ) }">	</MvIF>
 				<MvIF EXPR = "{ l.searchsettings:name_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.name',		'FULLTEXT_NATURAL',	l.searchsettings:name_wt ) }">	</MvIF>
 				<MvIF EXPR = "{ l.searchsettings:sku_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.sku',		'FULLTEXT_NATURAL',	l.searchsettings:sku_wt ) }">	</MvIF>
@@ -2094,6 +2102,18 @@
 		<MvIF EXPR = "{ l.break_ties }">
 			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, l.query_params:data:disp_order, l.sort_dir ) }">
 		</MvIF>
+	</MvIF>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_MarginSort" PARAMETERS = "query var, field, count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.field EQ 'profit' OR l.field EQ 'margin' ) AND l.count GT 0 }">
+		<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+		<MvASSIGN NAME = "l.query_params:data:margin:field" VALUE = "{ l.field }">
+		<MvASSIGN NAME = "l.query_params:data:margin:count" VALUE = "{ l.count }">
+
+		<MvEVAL EXPR = "{ SQL_Query_Set_Signature_Data( l.query, 'margin_sort_field', l.field ) }">
+		<MvEVAL EXPR = "{ SQL_Query_Set_Signature_Data( l.query, 'margin_sort_count', l.count ) }">
 	</MvIF>
 </MvFUNCTION>
 
@@ -3266,6 +3286,18 @@
 		</MvIF>
 	<MvELSE>
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00054', 'Unsupported DBAPI' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.query_params:data:margin }">
+		<MvIF EXPR = "{ l.query_params:data:margin:field EQ 'margin' }">
+			<MvIF EXPR = "{ NOT CachedProductList_Sort_Margin( l.cachedproductlist, l.query_params:data:margin:count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.query_params:data:margin:field EQ 'profit' }">
+			<MvIF EXPR = "{ NOT CachedProductList_Sort_Profit( l.cachedproductlist, l.query_params:data:margin:count ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ CachedProductList_Recalculate_ProductCount( l.cachedproductlist ) }">

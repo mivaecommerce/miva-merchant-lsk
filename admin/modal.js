@@ -795,13 +795,14 @@ function MMDialog_Skin( dialog )
 
 	classNameAddIfMissing( this.orig_dialog, 'mm9_skinned_dialog' );
 
-	this.dialog						= newElement( 'div', { 'class': 'mm9_skinned_dialog_container' },				null, this.orig_dialog.parentNode );
-	this.content_container			= newElement( 'div', { 'class': 'mm_dialog_content_container' },				null, this.orig_dialog );
-	this.content					= newElement( 'div', { 'class': 'mm_dialog_content' },							null, this.content_container );
-	this.top_controls				= newElement( 'div', { 'class': 'mm9_dialog_top_controls' },					null, this.orig_dialog );
-	this.help						= newElement( 'div', { 'class': 'mm9_dialog_help' },							null, this.top_controls );
-	this.close						= newElement( 'div', { 'class': 'mm9_dialog_close mm9_mivaicon icon-cancel' },	null, this.top_controls );
-	this.actionbar					= newElement( 'div', { 'class': 'mm9_dialog_actionbar' },						null, this.orig_dialog );
+	this.dialog						= newElement( 'div',		{ 'class': 'mm9_skinned_dialog_container' },											null, this.orig_dialog.parentNode );
+	this.content_container			= newElement( 'div',		{ 'class': 'mm_dialog_content_container' },												null, this.orig_dialog );
+	this.content					= newElement( 'div',		{ 'class': 'mm_dialog_content' },														null, this.content_container );
+	this.top_controls				= newElement( 'div',		{ 'class': 'mm9_dialog_top_controls' },													null, this.orig_dialog );
+	this.help						= newElement( 'div',		{ 'class': 'mm9_dialog_help' },															null, this.top_controls );
+	this.close						= newElement( 'mm-button',	{ 'class': 'mm9_dialog_close', 'button-class': 'mm9_dialog_top_control_button_close' },	null, this.top_controls );
+									  newElement( 'mm-icon',	{ 'icon': 'dialog-top-button-icon-close' },												null, this.close );
+	this.actionbar					= newElement( 'div',		{ 'class': 'mm9_dialog_actionbar' },													null, this.orig_dialog );
 
 	scrollbar_element				= newElement( 'div', { 'class': 'mm_dialog_skinned_scrollbar_width' },			null, document.body );
 	this.scrollbar_width			= scrollbar_element.offsetWidth - scrollbar_element.clientWidth;
