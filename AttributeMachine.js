@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -29,7 +29,7 @@ function AttributeMachine_Initialize()
 	FireEvent( window, 'attributemachine_initialize' );
 }
 
-function AttributeMachine( product_code, dependency_resolution, inventory_element_id, inv_long, price_element_id, swatch_element_id, invalid_msg, missing_text_msg, missing_radio_msg )
+function AttributeMachine( product_code, dependency_resolution, inventory_element_id, inv_long, price_element_id, swatch_element_id, invalid_msg, missing_text_msg, missing_radio_msg, attribute_swatch_id )
 {
 	this.purchase_disabled					= false;
 
@@ -73,6 +73,7 @@ function AttributeMachine( product_code, dependency_resolution, inventory_elemen
 		this.settings.inv_long				= inv_long;
 		this.settings.price_element_id		= price_element_id;
 		this.settings.swatch_element_id		= swatch_element_id;
+		this.settings.attribute_swatch_id	= attribute_swatch_id;
 		this.settings.invalid_msg			= invalid_msg ? invalid_msg : '';
 		this.settings.missing_text_msg		= missing_text_msg ? missing_text_msg : '';
 		this.settings.missing_radio_msg		= missing_radio_msg ? missing_radio_msg : '';
@@ -1808,7 +1809,7 @@ AttributeMachine.prototype.Initialize_Swatches = function( attributes, possible 
 	var self = this;
 	var i, j;
 	var possible_lookup;
-	var attribute, template_attribute, current, swatch, attr_ul;
+	var attribute, template_attribute, current, swatch, attr_ul, attr_swatch;
 
 	if ( !this.Lookup_Attribute_Form() )
 	{
@@ -1850,6 +1851,9 @@ AttributeMachine.prototype.Initialize_Swatches = function( attributes, possible 
 
 		current = template_attribute ? template_attribute : attribute;
 
+		attr_swatch = this.Find_Attribute_Swatch( current );
+		if ( attr_swatch ) this.Empty_Element( attr_swatch );
+
 		possible_sublookup		= ( possible_lookup ) ? possible_lookup[ attribute.id ] : null;
 
 		if ( possible_sublookup )
@@ -1890,10 +1894,12 @@ AttributeMachine.prototype.Initialize_Swatches = function( attributes, possible 
 				if ( node ) self.onswatchclick( node.mm5_input, node.mm5_attribute, node.mm5_option );
 			} );
 
-			if ( this.swatches ) attr_ul.appendChild( swatch );
-		}		
+			if ( attr_swatch )	attr_ul.appendChild( swatch );
+			else if ( this.swatches )	attr_ul.appendChild( swatch );
+		}
 
-		if ( this.swatches )	this.swatches.appendChild( attr_ul );
+		if ( attr_swatch )	attr_swatch.appendChild( attr_ul );
+		else if ( this.swatches )	this.swatches.appendChild( attr_ul );
 	}
 }
 
@@ -1918,4 +1924,18 @@ AttributeMachine.prototype.Empty_Element = function( container )
 	{
 		container.removeChild( container.lastChild );
 	}
+}
+
+AttributeMachine.prototype.Find_Attribute_Swatch = function( attribute )
+{
+	var selector = this.settings.attribute_swatch_id;
+
+	if ( !selector )
+	{
+		return null;
+	}
+
+	selector = selector.replace( '%attribute_id%', attribute.id );
+
+	return this.getElementById( selector );
 }

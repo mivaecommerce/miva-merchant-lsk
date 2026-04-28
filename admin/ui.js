@@ -1045,7 +1045,7 @@ function ParseFormData( list )
 				'value':		list[ i ].checked ? list[ i ].value : undefined
 			} );
 		}
-		else if ( node == 'mm-radio' && list[ i ].checked )
+		else if ( ( node == 'mm-radio' || node == 'mm-radio-card' ) && list[ i ].checked )
 		{
 			fieldlist.push(
 			{
@@ -1731,45 +1731,27 @@ function windowDimensions()
 
 function dispatchNewEvent_WithOptions( target, type, options )
 {
-	dispatchNewEvent( target,
-					  type,
-					  options ? options.screenX			: null,
-					  options ? options.screenY			: null,
-					  options ? options.clientX			: null,
-					  options ? options.clientY			: null,
-					  options ? options.ctrlKey			: null,
-					  options ? options.altKey			: null,
-					  options ? options.shiftKey		: null,
-					  options ? options.metaKey			: null,
-					  options ? options.button			: null,
-					  options ? options.relatedTarget	: null );
+	const e = new MouseEvent( type, Object.assign( { bubbles: true, cancelable: true, view: window }, options ) );
+	target.dispatchEvent( e );
 }
 
 function dispatchNewEvent( target, type, screenX, screenY, clientX, clientY, ctrlKey, altKey, shiftKey, metaKey, button, relatedTarget )
 {
-	var e;
-
-	if ( document.createEvent )					// all browsers except IE before version 9
+	const options =
 	{
-		e			= document.createEvent( 'MouseEvent' );
-		e.initMouseEvent( type, true, true, window, 0, screenX ? screenX : 0, screenY ? screenY : 0, clientX ? clientX : 0, clientY ? clientY : 0, ctrlKey ? ctrlKey : false, altKey ? altKey : false, shiftKey ? shiftKey : false, metaKey ? metaKey : false, button ? button : 0, relatedTarget ? relatedTarget : null );
-		target.dispatchEvent( e );
-	}
-	else if ( document.createEventObject )		// IE before version 9
-	{
-		e			= document.createEventObject();
-		e.button	= 1;						// left button is down
-		e.screenX	= screenX ? screenX : 0;
-		e.screenY	= screenY ? screenY : 0;
-		e.clientX	= clientX ? clientX : 0;
-		e.clientY	= clientY ? clientY : 0;
-		e.ctrlKey	= ctrlKey ? ctrlKey : false;
-		e.altKey	= altKey ? altKey : false;
-		e.shiftKey	= shiftKey ? shiftKey : false;
-		e.metaKey	= metaKey ? metaKey : false;
+		screenX: screenX ?? 0,
+		screenY: screenY ?? 0,
+		clientX: clientX ?? 0,
+		clientY: clientY ?? 0,
+		ctrlKey: ctrlKey ?? false,
+		altKey: altKey ?? false,
+		shiftKey: shiftKey ?? false,
+		metaKey: metaKey ?? false,
+		button: button ?? 0,
+		relatedTarget: relatedTarget ?? null
+	};
 
-		target.fireEvent( 'on' + type, e );
-	}
+	return dispatchNewEvent_WithOptions( target, type, options );
 }
 
 function elementCanFocus( element )
@@ -1882,20 +1864,9 @@ function timezone( date )
 
 function mouseClickType( e )
 {
-	var type = 'LEFT';
-
-	if ( e.which )
-	{
-		if ( e.which == 3 )			type = 'RIGHT';
-		else if ( e.which == 2 )	type = 'MIDDLE';
-	}
-	else if ( e.button )
-	{
-		if ( e.button == 2 )		type = 'RIGHT';
-		else if ( e.button == 4 )	type = 'MIDDLE';
-	}
-
-	return type;
+	if ( e?.button == 1 )		return 'MIDDLE';
+	else if ( e?.button == 2 )	return 'RIGHT';
+	else						return 'LEFT';
 }
 
 function base64_encode( string )
@@ -4905,8 +4876,6 @@ MMSelect.prototype.onClearInvalid	= function() { ; };
 
 function MMInput( parent, name, value )
 {
-	var self = this;
-
 	this.visible								= true;
 	this.disabled								= false;
 	this.readonly								= false;
@@ -4927,35 +4896,36 @@ function MMInput( parent, name, value )
 	this.tab_index								= 0;
 
 	this.element_parent							= typeof parent === 'string' ? document.getElementById( parent ) : parent;
-	this.element_container						= newElement( 'span', 	{ 'class': 'mm_input_common', 'data-mm-input': '' }, 	null, this.element_parent );
-	this.element_title							= newElement( 'span', 	{ 'class': 'mm_input_title' },		 					null, this.element_container );
-	this.element_title_text						= newElement( 'span', 	{ 'class': 'mm_input_title_text' },						null, this.element_title );
-	this.element_title_tooltip					= newElement( 'span', 	{ 'class': 'mm_input_title_tooltip' }, 					null, this.element_title );
-	this.element_prefix							= newElement( 'span', 	{ 'class': 'mm_input_prefix' },		 					null, this.element_container );
+	this.element_container						= newElement( 'span', 	{ 'class': 'mm_input_common', 'data-mm-input': '' }, 		null, this.element_parent );
+	this.element_title							= newElement( 'span', 	{ 'class': 'mm_input_title' },		 						null, this.element_container );
+	this.element_title_text						= newElement( 'span', 	{ 'class': 'mm_input_title_text' },							null, this.element_title );
+	this.element_title_tooltip					= newElement( 'span', 	{ 'class': 'mm_input_title_tooltip' }, 						null, this.element_title );
+	this.element_prefix							= newElement( 'span', 	{ 'class': 'mm_input_prefix' },		 						null, this.element_container );
 	this.element_input							= this.Create_Input( name, this.element_container );
-	this.element_label							= newElement( 'span', 	{ 'class': 'mm_input_label' },		 					null, this.element_container );
-	this.element_error_icon						= newElement( 'span', 	{ 'class': 'mm_input_error_icon' },	 					null, this.element_container );
-	this.element_error_container				= newElement( 'span',	{ 'class': 'mm_input_error_container' },				null, null );
-	this.element_error_message					= newElement( 'span',	{ 'class': 'mm_input_error_message' },					null, this.element_error_container );
-	this.element_error_tail						= newElement( 'span',	{ 'class': 'mm_input_error_tail' },						null, this.element_error_container );
+	this.element_label							= newElement( 'span', 	{ 'class': 'mm_input_label' },		 						null, this.element_container );
+	this.element_error_icon						= newElement( 'span', 	{ 'class': 'mm_input_error_icon' },	 						null, this.element_container );
+	this.element_error_container				= newElement( 'span',	{ 'class': 'mm_input_error_container', 'popover': '' },		null, this.element_container );
+	this.element_error_message					= newElement( 'span',	{ 'class': 'mm_input_error_message' },						null, this.element_error_container );
+	this.element_error_tail						= newElement( 'span',	{ 'class': 'mm_input_error_tail' },							null, this.element_error_container );
 
 	this.element_error_icon.innerHTML			= MivaSVGIconMap( 'field-warning-icon' );
 	this.element_input.tabIndex					= this.tab_index;
 
-	this.event_render_autosize					= function() { self.Render_AutoSize(); self.render_autosize_id = requestAnimationFrame( self.event_render_autosize ); };
-	this.event_render_error						= function() { self.Render_Error(); self.render_error_id = requestAnimationFrame( self.event_render_error ); };
-	this.event_mouseover_container				= function( event ) { return self.Event_OnMouseOver_Container( event ? event : window.event ); }
-	this.event_mouseout_container				= function( event ) { return self.Event_OnMouseOut_Container( event ? event : window.event ); }
+	this.event_render_autosize					= () => { this.Render_AutoSize(); this.render_autosize_id = requestAnimationFrame( this.event_render_autosize ); };
+	this.event_render_error						= () => { this.Render_Error(); this.render_error_id = requestAnimationFrame( this.event_render_error ); };
+	this.event_mouseover_container				= () => { this.Show_Error(); }
+	this.event_mouseout_container				= () => { this.Hide_Error(); }
 
-	AddEvent( this.element_container,	'mousedown',	function( event ) { return self.Event_OnMouseDown_Container( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'focus',		function( event ) { return self.Event_OnFocus_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'blur',			function( event ) { return self.Event_OnBlur_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'change',		function( event ) { return self.Event_OnChange_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'input',		function( event ) { return self.Event_OnInput_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'keydown',		function( event ) { return self.Event_OnKeyDown_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'keyup',		function( event ) { return self.Event_OnKeyUp_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'cut',			function( event ) { return self.Event_OnCut_Input( event ? event : window.event ); } );
-	AddEvent( this.element_input,		'paste',		function( event ) { return self.Event_OnPaste_Input( event ? event : window.event ); } );
+	this.element_container.addEventListener( 		'mousedown',	( e ) => { this.Event_OnMouseDown_Container( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'focus',		( e ) => { this.Event_OnFocus_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'blur',			( e ) => { this.Event_OnBlur_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'change',		( e ) => { this.Event_OnChange_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener(			'input',		( e ) => { this.Event_OnInput_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'keydown',		( e ) => { this.Event_OnKeyDown_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'keyup',		( e ) => { this.Event_OnKeyUp_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'cut',			( e ) => { this.Event_OnCut_Input( e ? e : window.e ); } );
+	this.element_input.addEventListener( 			'paste',		( e ) => { this.Event_OnPaste_Input( e ? e : window.e ); } );
+	this.element_error_container.addEventListener(  'toggle',		( e ) => { this.Event_OnToggle_ErrorContainer( e ? e : window.e ); } );
 
 	this.SetValue( this.value );
 }
@@ -5292,6 +5262,9 @@ MMInput.prototype.Select = function()
 MMInput.prototype.SetInvalid = function( error_message )
 {
 	this.invalid_error_message = error_message;
+	
+	this.element_container.removeEventListener( 'mouseover',	this.event_mouseover_container, false );
+	this.element_container.removeEventListener( 'mouseout',		this.event_mouseout_container, false );
 
 	if ( this.invalid )
 	{
@@ -5299,25 +5272,22 @@ MMInput.prototype.SetInvalid = function( error_message )
 		{
 			this.element_error_message.textContent = error_message;
 
-			RemoveEvent( this.element_container, 'mouseover',	this.event_mouseover_container );
-			RemoveEvent( this.element_container, 'mouseout',	this.event_mouseout_container );
-
-			AddEvent( this.element_container, 'mouseover',	this.event_mouseover_container );
-			AddEvent( this.element_container, 'mouseout',	this.event_mouseout_container );
+			this.element_container.addEventListener( 'mouseover',		this.event_mouseover_container, false );
+			this.element_container.addEventListener( 'mouseout',		this.event_mouseout_container, false );
 		}
 
 		return;
 	}
 
-	this.invalid							= true;
-	this.element_container.className		= classNameAdd( this.element_container, 'invalid' );
+	this.invalid = true;
+	this.element_container.classList.add( 'invalid' );
 
 	if ( typeof error_message === 'string' && error_message.length )
 	{
 		this.element_error_message.textContent = error_message;
 
-		AddEvent( this.element_container, 'mouseover',	this.event_mouseover_container );
-		AddEvent( this.element_container, 'mouseout',	this.event_mouseout_container );
+		this.element_container.addEventListener( 'mouseover',		this.event_mouseover_container, false );
+		this.element_container.addEventListener( 'mouseout',		this.event_mouseout_container, false );
 	}
 
 	this.onSetInvalid();
@@ -5330,13 +5300,19 @@ MMInput.prototype.ClearInvalid = function()
 		return;
 	}
 
+	if ( this.error_visible )
+	{
+		this.element_error_container.hidePopover?.();
+	}
+
 	this.invalid							= false;
 	this.invalid_error_message				= '';
 	this.element_error_message.textContent	= '';
-	this.element_container.className		= classNameRemove( this.element_container, 'invalid' );
 
-	RemoveEvent( this.element_container, 'mouseover',	this.event_mouseover_container );
-	RemoveEvent( this.element_container, 'mouseout',	this.event_mouseout_container );
+	this.element_container.classList.remove( 'invalid' );
+
+	this.element_container.removeEventListener( 'mouseover',	this.event_invalid_mouseover_container, false );
+	this.element_container.removeEventListener( 'mouseout',		this.event_invalid_mouseout_container, false );
 
 	this.Hide_Error();
 	this.onClearInvalid();
@@ -5354,15 +5330,16 @@ MMInput.prototype.GetInvalid_Message = function()
 
 MMInput.prototype.Show_Error = function()
 {
-	if ( this.error_visible )
+	if ( this.error_visible || !this.invalid || !this.element_error_message.textContent.length )
 	{
 		return;
 	}
 
+	this.element_error_container.showPopover?.();
+
 	this.error_visible		= true;
 	this.render_error_id	= requestAnimationFrame( this.event_render_error );
 
-	document.body.appendChild( this.element_error_container );
 	this.Redraw_Error();
 }
 
@@ -5373,32 +5350,44 @@ MMInput.prototype.Hide_Error = function()
 		return;
 	}
 
+	this.element_error_container.hidePopover?.();
+	
 	this.error_visible = false;
-	this.element_error_container.parentNode.removeChild( this.element_error_container );
 	cancelAnimationFrame( window[ this.render_error_id ] );
+}
+
+MMInput.prototype.Event_OnToggle_ErrorContainer = function( e )
+{
+	if ( e.newState === 'open' ) 	this.Show_Error();
+	else							this.Hide_Error();
 }
 
 MMInput.prototype.Redraw_Error = function()
 {
-	var node, rect_node, dimensions, overflow_x, overflow_y, scrollfromtop, rect_container;
-	var scrollfromleft, rect_error_container, rect_container_parent, rect_error_container_parent;
+	var node;
 
 	if ( !this.error_visible )
 	{
 		return;
 	}
 
-	dimensions					= windowDimensions();
-	rect_container				= this.element_container.getBoundingClientRect();
-	rect_container_parent		= this.element_container.parentNode.getBoundingClientRect();
-	rect_error_container		= this.element_error_container.getBoundingClientRect();
-	rect_error_container_parent	= this.element_error_container.parentNode.getBoundingClientRect();
+	const dimensions			= windowDimensions();
+	const rect_container		= this.element_container.getBoundingClientRect();
+	const scrollY				= window.scrollY || window.pageYOffset;
+
+	//
+	// Detect if container is scrolled off-page
+	//
 
 	if ( rect_container.bottom < 0 || rect_container.top > dimensions.y || rect_container.right < 0 || rect_container.left > dimensions.x )
 	{
 		this.element_error_container.style.visibility = 'hidden';
 		return;
 	}
+
+	//
+	// Detect if container is hidden within a parent
+	//
 
 	node = this.element_container;
 
@@ -5412,7 +5401,7 @@ MMInput.prototype.Redraw_Error = function()
 			 ( ( overflow_y === 'scroll' || overflow_y === 'auto' ) && node.scrollHeight > node.clientHeight ) ||
 			 ( ( overflow_x === 'scroll' || overflow_x === 'auto' ) && node.scrollWidth > node.clientWidth ) )
 		{
-			rect_node = node.getBoundingClientRect();
+			const rect_node = node.getBoundingClientRect();
 
 			if ( rect_container.bottom < rect_node.top || rect_container.top > rect_node.bottom || rect_container.right < rect_node.left || rect_container.left > rect_node.right )
 			{
@@ -5422,32 +5411,34 @@ MMInput.prototype.Redraw_Error = function()
 		}
 	}
 
-	overflow_x		= computedStyleValue( this.element_error_container.parentNode, 'overflow-x' );
-	overflow_y		= computedStyleValue( this.element_error_container.parentNode, 'overflow-y' );
-	scrollfromtop	= ( ( overflow_y === 'scroll' || overflow_y === 'auto' ) ? this.element_error_container.parentNode.scrollTop : 0 );
-	scrollfromleft	= ( ( overflow_x === 'scroll' || overflow_x === 'auto' ) ? this.element_error_container.parentNode.scrollLeft : 0 );
+	//
+	// Position error container (above or below, depending on available space)
+	//
+
+	this.element_error_container.style.width		= '';
+	this.element_error_container.style.left			= '0px';
+	
+	const rect_error_container_pre					= this.element_error_container.getBoundingClientRect();
+
+	if ( ( rect_error_container_pre.width < ( rect_container.width ) + 20 ) || rect_container.width > 300 )		this.element_error_container.style.width = `${rect_container.width + 20}px`;
+	else if ( rect_error_container_pre.width > 300 )															this.element_error_container.style.width = '300px';
+	else																										this.element_error_container.style.width = `${rect_error_container_pre.width}px`;
+
+	const rect_error_container						= this.element_error_container.getBoundingClientRect();
+
+	this.element_error_container.style.left			= `${(rect_container.left - 10) - ( ( ( rect_error_container.width - 20) - rect_container.width ) / 2 )}px`;
 
 	if ( ( rect_container.bottom + rect_error_container.height ) > dimensions.y )
 	{
-		this.element_error_container.style.top		= ( rect_container.top - rect_error_container.height - rect_error_container_parent.top + scrollfromtop ) + 'px';
-		this.element_error_container.className		= classNameAdd( this.element_error_container, 'above' );
+		this.element_error_container.style.top 		= `${rect_container.top - rect_error_container.height + scrollY}px`;
+		this.element_error_container.classList.add( 'above' );
 	}
 	else
 	{
-		this.element_error_container.style.top		= ( rect_container.bottom - rect_error_container_parent.top + scrollfromtop ) + 'px';
-		this.element_error_container.className		= classNameRemove( this.element_error_container, 'above' );
+		this.element_error_container.style.top 		= `${rect_container.bottom + scrollY}px`;
+		this.element_error_container.classList.remove( 'above' );
 	}
 
-	if ( this.error_match_container_width )
-	{
-		this.element_error_container.style.width	= rect_container.width + 'px';
-	}
-	else
-	{
-		this.element_error_container.style.width	= '';
-	}
-
-	this.element_error_container.style.left			= stoi_range( rect_container.left - rect_error_container_parent.left + scrollfromleft, 0 - rect_error_container_parent.left + scrollfromleft, dimensions.x - rect_error_container_parent.left + scrollfromleft ) + 'px';
 	this.element_error_container.style.visibility	= '';
 }
 
@@ -5624,12 +5615,10 @@ MMInput.prototype.CalculateAutoSize = function()
 
 MMInput.prototype.Render_Error = function()
 {
-	var dimensions, rect_container;
-
 	if ( this.error_visible )
 	{
-		dimensions		= windowDimensions();
-		rect_container	= this.element_container.getBoundingClientRect();
+		const dimensions		= windowDimensions();
+		const rect_container	= this.element_container.getBoundingClientRect();
 
 		if ( rect_container.top !== this.last_container_top ||
 			 rect_container.left !== this.last_container_left ||
@@ -8859,8 +8848,6 @@ MMAutoCompleteInput.prototype.onEntrySelected	= function( entry, data ) { ; }
 
 function MMTextArea( parent, name, value )
 {
-	var self = this;
-
 	value									= GetNormalizedValue( value );
 
 	this.visible							= true;
@@ -8901,30 +8888,31 @@ function MMTextArea( parent, name, value )
 	this.element_textarea					= newElement( 'textarea',	{ 'class': 'mm_textarea_editor', 'name': name },			null, this.element_textarea_scroller );
 	this.element_resizer					= newElement( 'span',		{ 'class': 'mm_textarea_resizer' },							null, this.element_textarea_container );
 	this.element_error_icon					= newElement( 'span', 		{ 'class': 'mm_textarea_error_icon' },	 					null, this.element_textarea_container );
-	this.element_error_container			= newElement( 'span',		{ 'class': 'mm_textarea_error_container' },					null, null );
+	this.element_error_container			= newElement( 'span',		{ 'class': 'mm_textarea_error_container', 'popover': '' },	null, this.element_container );
 	this.element_error_message				= newElement( 'span',		{ 'class': 'mm_textarea_error_message' },					null, this.element_error_container );
 	this.element_error_tail					= newElement( 'span',		{ 'class': 'mm_textarea_error_tail' },						null, this.element_error_container );
 
 	this.element_error_icon.innerHTML		= MivaSVGIconMap( 'field-warning-icon' );
 
-	this.event_render_read					= function( data ) { self.Render_Read( data ); };
-	this.event_render_write					= function( data ) { self.Render_Write( data ); };
-	this.event_resizer_mousedown			= function( event ) { return self.Event_ResizerMouseDown( event ? event : window.event ); };
-	this.event_resizer_mousemove			= function( event ) { return self.Event_ResizerMouseMove( event ? event : window.event ); };
-	this.event_resizer_mouseup				= function( event ) { return self.Event_ResizerMouseUp( event ? event : window.event ); };
-	this.event_mouseover_textarea_container	= function( event ) { return self.Event_OnMouseOver_TextArea_Container( event ? event : window.event ); }
-	this.event_mouseout_textarea_container	= function( event ) { return self.Event_OnMouseOut_TextArea_Container( event ? event : window.event ); }
+	this.event_render_read					= ( data ) => { this.Render_Read( data ); };
+	this.event_render_write					= ( data ) => { this.Render_Write( data ); };
+	this.event_resizer_mousedown			= ( e ) => { this.Event_ResizerMouseDown( e ); };
+	this.event_resizer_mousemove			= ( e ) => { this.Event_ResizerMouseMove( e ); };
+	this.event_resizer_mouseup				= ( e ) => { this.Event_ResizerMouseUp( e ); };
+	this.event_mouseover_textarea_container	= () => { this.Show_Error(); };
+	this.event_mouseout_textarea_container	= () => { this.Hide_Error(); };
 
-	AddEvent( this.element_textarea_container,	'mousedown',	function( event ) { return self.Event_OnMouseDown_TextArea_Container( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'focus',		function( event ) { return self.Event_OnFocus_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'blur',			function( event ) { return self.Event_OnBlur_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'input',		function( event ) { return self.Event_OnInput_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'change',		function( event ) { return self.Event_OnChange_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'keydown',		function( event ) { return self.Event_OnKeyDown_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'keyup',		function( event ) { return self.Event_OnKeyUp_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'cut',			function( event ) { return self.Event_OnCut_Input( event ? event : window.event ); } );
-	AddEvent( this.element_textarea,			'paste',		function( event ) { return self.Event_OnPaste_Input( event ? event : window.event ); } );
-	AddEvent( this.element_title_text,			'click',		function( event ) { return self.Event_OnClick_Title( event ? event : window.event ); } );
+	this.element_textarea_container.addEventListener( 	'mousedown',	( e ) => { this.Event_OnMouseDown_TextArea_Container( e ); } );
+	this.element_textarea.addEventListener( 			'focus',		( e ) => { this.Event_OnFocus_Input( e ); } );
+	this.element_textarea.addEventListener( 			'blur',			( e ) => { this.Event_OnBlur_Input( e ); } );
+	this.element_textarea.addEventListener( 			'input',		( e ) => { this.Event_OnInput_Input( e ); } );
+	this.element_textarea.addEventListener( 			'change',		( e ) => { this.Event_OnChange_Input( e ); } );
+	this.element_textarea.addEventListener( 			'keydown',		( e ) => { this.Event_OnKeyDown_Input( e ); } );
+	this.element_textarea.addEventListener( 			'keyup',		( e ) => { this.Event_OnKeyUp_Input( e ); } );
+	this.element_textarea.addEventListener( 			'cut',			( e ) => { this.Event_OnCut_Input( e ); } );
+	this.element_textarea.addEventListener( 			'paste',		( e ) => { this.Event_OnPaste_Input( e ); } );
+	this.element_title_text.addEventListener( 			'click',		( e ) => { this.Event_OnClick_Title( e ); } );
+	this.element_error_container.addEventListener(		'toggle',		( e ) => { this.Event_OnToggle_ErrorContainer( e ); } );
 
 	MMRender_onRender_AddHook( this.event_render_read, this.event_render_write );
 
@@ -9287,32 +9275,31 @@ MMTextArea.prototype.SetInvalid = function( error_message )
 {
 	this.invalid_error_message = error_message;
 
+	this.element_container.removeEventListener( 'mouseover', this.event_mouseover_container, false );
+	this.element_container.removeEventListener( 'mouseout',	 this.event_mouseout_container, false );
+
 	if ( this.invalid )
 	{
 		if ( typeof error_message === 'string' && error_message.length && error_message !== this.element_error_message.textContent )
 		{
 			this.element_error_message.textContent = error_message;
 
-			RemoveEvent( this.element_textarea_container, 'mouseover',	this.event_mouseover_textarea_container );
-			RemoveEvent( this.element_textarea_container, 'mouseout',	this.event_mouseout_textarea_container );
-
-			AddEvent( this.element_textarea_container, 'mouseover',	this.event_mouseover_textarea_container );
-			AddEvent( this.element_textarea_container, 'mouseout',	this.event_mouseout_textarea_container );
+			this.element_container.addEventListener( 'mouseover', this.event_mouseover_textarea_container, false );
+			this.element_container.addEventListener( 'mouseout',  this.event_mouseout_textarea_container, false );
 		}
 
 		return;
 	}
 
 	this.invalid = true;
-
-	classNameAddIfMissing( this.element_container, 'invalid' );
+	this.element_container.classList.add( 'invalid' );
 
 	if ( typeof error_message === 'string' && error_message.length )
 	{
 		this.element_error_message.textContent = error_message;
 
-		AddEvent( this.element_textarea_container, 'mouseover',	this.event_mouseover_textarea_container );
-		AddEvent( this.element_textarea_container, 'mouseout',	this.event_mouseout_textarea_container );
+		this.element_container.addEventListener( 'mouseover', this.event_mouseover_textarea_container, false );
+		this.element_container.addEventListener( 'mouseout',  this.event_mouseout_textarea_container, false );
 	}
 
 	this.onSetInvalid();
@@ -9325,14 +9312,19 @@ MMTextArea.prototype.ClearInvalid = function()
 		return;
 	}
 
+	if ( this.error_visible )
+	{
+		this.element_error_container.hidePopover?.();
+	}
+
 	this.invalid							= false;
 	this.invalid_error_message				= '';
 	this.element_error_message.textContent	= '';
 
-	classNameRemoveIfPresent( this.element_container, 'invalid' );
+	this.element_container.classList.remove( 'invalid' );
 
-	RemoveEvent( this.element_textarea_container, 'mouseover',	this.event_mouseover_textarea_container );
-	RemoveEvent( this.element_textarea_container, 'mouseout',	this.event_mouseout_textarea_container );
+	this.element_container.removeEventListener( 'mouseover', this.element_container, false );
+	this.element_container.removeEventListener( 'mouseout',	 this.element_container, false );
 
 	this.Hide_Error();
 	this.onClearInvalid();
@@ -9350,14 +9342,15 @@ MMTextArea.prototype.GetInvalid_Message = function()
 
 MMTextArea.prototype.Show_Error = function()
 {
-	if ( this.error_visible )
+	if ( this.error_visible || !this.invalid || !this.element_error_message.textContent.length )
 	{
 		return;
 	}
 
+	this.element_error_container.showPopover?.();
+
 	this.error_visible = true;
 
-	this.onRetrieveErrorParent().appendChild( this.element_error_container );
 	this.Redraw_Error();
 }
 
@@ -9368,33 +9361,42 @@ MMTextArea.prototype.Hide_Error = function()
 		return;
 	}
 
+	this.element_error_container.hidePopover?.();
 	this.error_visible = false;
+}
 
-	this.element_error_container.parentNode.removeChild( this.element_error_container );
-	cancelAnimationFrame( window[ this.render_error_id ] );
+MMTextArea.prototype.Event_OnToggle_ErrorContainer = function( e )
+{
+	if ( e.newState === 'open' ) 	this.Show_Error();
+	else							this.Hide_Error();
 }
 
 MMTextArea.prototype.Redraw_Error = function()
 {
-	var node, rect_node, dimensions, overflow_x, overflow_y, scrollfromtop, rect_container;
-	var scrollfromleft, rect_error_container, rect_container_parent, rect_error_container_parent;
+	var node;
 
 	if ( !this.error_visible )
 	{
 		return;
 	}
 
-	dimensions					= windowDimensions();
-	rect_container				= this.element_textarea_container.getBoundingClientRect();
-	rect_container_parent		= this.element_textarea_container.parentNode.getBoundingClientRect();
-	rect_error_container		= this.element_error_container.getBoundingClientRect();
-	rect_error_container_parent	= this.element_error_container.parentNode.getBoundingClientRect();
+	const dimensions		= windowDimensions();
+	const rect_container	= this.element_container.getBoundingClientRect();
+	const scrollY			= window.scrollY || window.pageYOffset;
+
+	//
+	// Detect if container is scrolled off-page
+	//
 
 	if ( rect_container.bottom < 0 || rect_container.top > dimensions.y || rect_container.right < 0 || rect_container.left > dimensions.x )
 	{
 		this.element_error_container.style.visibility = 'hidden';
 		return;
 	}
+
+	//
+	// Detect if container is hidden within a parent
+	//
 
 	node = this.element_textarea_container;
 
@@ -9418,32 +9420,34 @@ MMTextArea.prototype.Redraw_Error = function()
 		}
 	}
 
-	overflow_x		= computedStyleValue( this.element_error_container.parentNode, 'overflow-x' );
-	overflow_y		= computedStyleValue( this.element_error_container.parentNode, 'overflow-y' );
-	scrollfromtop	= ( ( overflow_y === 'scroll' || overflow_y === 'auto' ) ? this.element_error_container.parentNode.scrollTop : 0 );
-	scrollfromleft	= ( ( overflow_x === 'scroll' || overflow_x === 'auto' ) ? this.element_error_container.parentNode.scrollLeft : 0 );
+	//
+	// Position error container (above or below, depending on available space)
+	//
+
+	this.element_error_container.style.width		= '';
+	this.element_error_container.style.left			= '0px';
+	
+	const rect_error_container_pre					= this.element_error_container.getBoundingClientRect();
+
+	if ( ( rect_error_container_pre.width < ( rect_container.width ) + 20 ) || rect_container.width > 300 )		this.element_error_container.style.width = `${rect_container.width + 20}px`;
+	else if ( rect_error_container_pre.width > 300 )															this.element_error_container.style.width = '300px';
+	else																										this.element_error_container.style.width = `${rect_error_container_pre.width}px`;
+
+	const rect_error_container	= this.element_error_container.getBoundingClientRect();
+
+	this.element_error_container.style.left			= `${(rect_container.left - 10) - ( ( ( rect_error_container.width - 20) - rect_container.width ) / 2 )}px`;
 
 	if ( ( rect_container.bottom + rect_error_container.height ) > dimensions.y )
 	{
-		this.element_error_container.style.top		= ( rect_container.top - rect_error_container.height - rect_error_container_parent.top + scrollfromtop ) + 'px';
-		this.element_error_container.className		= classNameAdd( this.element_error_container, 'above' );
+		this.element_error_container.style.top 		= `${rect_container.top - rect_error_container.height + scrollY}px`;
+		this.element_error_container.classList.add( 'above' );
 	}
 	else
 	{
-		this.element_error_container.style.top		= ( rect_container.bottom - rect_error_container_parent.top + scrollfromtop ) + 'px';
-		this.element_error_container.className		= classNameRemove( this.element_error_container, 'above' );
+		this.element_error_container.style.top 		= `${rect_container.bottom + scrollY}px`;
+		this.element_error_container.classList.remove( 'above' );
 	}
 
-	if ( this.error_match_container_width )
-	{
-		this.element_error_container.style.width	= rect_container.width + 'px';
-	}
-	else
-	{
-		this.element_error_container.style.width	= '';
-	}
-
-	this.element_error_container.style.left			= stoi_range( rect_container.left - rect_error_container_parent.left + scrollfromleft, 0 - rect_error_container_parent.left + scrollfromleft, dimensions.x - rect_error_container_parent.left + scrollfromleft ) + 'px';
 	this.element_error_container.style.visibility	= '';
 }
 
@@ -10539,6 +10543,21 @@ function MivaIconMap( name )
 		default										: return '';
 	}
 }
+
+(() =>
+{
+	const lookup = new Object();
+
+	window.MivaSVGIconMap_Extend = ( icon, svg ) =>
+	{
+		lookup[ icon ] = svg;
+	}
+
+	window.MivaSVGIconMap_Extensions = ( icon ) =>
+	{
+		return lookup[ icon ] ?? '';
+	}
+})();
 
 function MivaSVGIconMap( icon )
 {
@@ -11652,9 +11671,21 @@ function MivaSVGIconMap( icon )
 				<path class="mm10_svg_icon_color" d="M7.33301 1.375C10.6236 1.375 13.2918 4.04246 13.292 7.33301C13.292 8.75294 12.7931 10.0553 11.9639 11.0791L14.4414 13.5576C14.6855 13.8017 14.6855 14.1973 14.4414 14.4414C14.1973 14.6854 13.8017 14.6855 13.5576 14.4414L11.0791 11.9639C10.0553 12.7931 8.75294 13.292 7.33301 13.292C4.04246 13.2918 1.375 10.6236 1.375 7.33301C1.37518 4.04257 4.04257 1.37518 7.33301 1.375ZM7.33301 2.625C4.73292 2.62518 2.62518 4.73292 2.625 7.33301C2.625 9.93325 4.73281 12.0418 7.33301 12.042C9.93336 12.042 12.042 9.93336 12.042 7.33301C12.0418 4.73281 9.93325 2.625 7.33301 2.625Z" />
 			</svg>`;
 		}
+		case 'mm-generic-production-icon':
+		{
+			return `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path class="mm10_svg_icon_color" d="M14.2031 2.1875C14.4288 2.18754 14.6493 2.25192 14.8389 2.37207L14.918 2.42676L14.9922 2.48828C15.1359 2.61622 15.2467 2.77691 15.3145 2.95703L15.3447 3.04883L16.3506 6.5791C16.3528 6.58679 16.3536 6.59481 16.3555 6.60254C16.3583 6.61419 16.3611 6.6258 16.3633 6.6377C16.3694 6.67081 16.3723 6.70402 16.373 6.7373C16.3731 6.74154 16.375 6.74575 16.375 6.75V7.875C16.375 8.6375 16.0724 9.36904 15.5332 9.9082C15.4444 9.99696 15.3485 10.0767 15.25 10.1523V15.1875C15.2497 15.5325 14.97 15.8125 14.625 15.8125H3.375C3.02998 15.8125 2.75025 15.5325 2.75 15.1875V10.1523C2.65153 10.0767 2.55556 9.99696 2.4668 9.9082C1.92763 9.36904 1.625 8.6375 1.625 7.875V6.75C1.625 6.74575 1.62589 6.74153 1.62598 6.7373C1.62666 6.70406 1.6297 6.67077 1.63574 6.6377C1.63777 6.62652 1.63996 6.61545 1.64258 6.60449C1.64469 6.59568 1.64691 6.58688 1.64941 6.57812L2.65723 3.04883L2.6875 2.95703C2.76617 2.74779 2.90283 2.56451 3.08203 2.42871C3.28695 2.27355 3.53693 2.18862 3.79395 2.1875H14.2031ZM6.75 9.66211C6.68227 9.74741 6.61098 9.83043 6.5332 9.9082C5.99404 10.4474 5.2625 10.75 4.5 10.75C4.33105 10.75 4.16415 10.7321 4 10.7031V14.5625H14V10.7031C13.8358 10.7321 13.6689 10.75 13.5 10.75C12.7375 10.75 12.006 10.4474 11.4668 9.9082C11.389 9.83043 11.3177 9.74741 11.25 9.66211C11.1823 9.74741 11.111 9.83043 11.0332 9.9082C10.494 10.4474 9.7625 10.75 9 10.75C8.2375 10.75 7.50596 10.4474 6.9668 9.9082C6.88902 9.83043 6.81773 9.74741 6.75 9.66211ZM2.875 7.875C2.875 8.30598 3.04584 8.71967 3.35059 9.02441C3.43079 9.10462 3.51868 9.17535 3.6123 9.23633C3.66093 9.25631 3.7055 9.28347 3.74707 9.31445C3.9775 9.43479 4.23529 9.5 4.5 9.5C4.93098 9.5 5.34467 9.32916 5.64941 9.02441C5.95416 8.71967 6.125 8.30598 6.125 7.875V7.375H2.875V7.875ZM7.375 7.875C7.375 8.30598 7.54584 8.71967 7.85059 9.02441C8.15533 9.32916 8.56902 9.5 9 9.5C9.43098 9.5 9.84467 9.32916 10.1494 9.02441C10.4542 8.71967 10.625 8.30598 10.625 7.875V7.375H7.375V7.875ZM11.875 7.375V7.875C11.875 8.30598 12.0458 8.71967 12.3506 9.02441C12.6553 9.32916 13.069 9.5 13.5 9.5C13.7644 9.5 14.0217 9.43454 14.252 9.31445C14.2935 9.28344 14.3382 9.25636 14.3867 9.23633C14.4806 9.17525 14.569 9.10482 14.6494 9.02441C14.9542 8.71967 15.125 8.30598 15.125 7.875V7.375H11.875ZM3.07812 6.125H14.9219L14.1553 3.4375H3.84668L3.07812 6.125Z" />
+			</svg>`;
+		}
+		case 'mm-generic-sandbox-icon':
+		{
+			return `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path class="mm10_svg_icon_color" d="M15.75 4.4375C16.4058 4.4375 16.9375 4.96916 16.9375 5.625V10.6875C16.9375 11.3433 16.4058 11.875 15.75 11.875H14.125V14.0625C14.125 14.4077 13.8452 14.6875 13.5 14.6875C13.1548 14.6875 12.875 14.4077 12.875 14.0625V11.875H5.125V14.0625C5.125 14.4077 4.84518 14.6875 4.5 14.6875C4.15482 14.6875 3.875 14.4077 3.875 14.0625V11.875H2.25C1.59416 11.875 1.0625 11.3433 1.0625 10.6875V5.91602C1.06239 5.90918 1.06238 5.90235 1.0625 5.89551V5.625C1.0625 4.96916 1.59416 4.4375 2.25 4.4375H15.75ZM2.3125 10.625H5.52148L2.3125 7.41602V10.625ZM7.29102 10.625H10.584L5.64648 5.6875H2.35352L7.29102 10.625ZM12.3535 10.625H15.6465L10.709 5.6875H7.41602L12.3535 10.625ZM15.6875 8.89648V5.6875H12.4785L15.6875 8.89648Z" />
+			</svg>`;
+		}
 		default:
 		{
-			return '';
+			return MivaSVGIconMap_Extensions( icon );
 		}
 	}
 }

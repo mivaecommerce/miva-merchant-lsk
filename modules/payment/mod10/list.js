@@ -7,74 +7,67 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2025 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
 // MOD10 Card List
 ////////////////////////////////////////////////////
 
-function MOD10CardList()
+var MOD10CardList = class extends MMList
 {
-	MMBatchList.call( this, 'mm9_batchlist_mod10cardlist' );
-
-	if ( CanI( 'PMNT', 0, 0, 1, 0 ) )
+	constructor()
 	{
-		this.Feature_Add_Enable( 'Add Credit Card', 'Save Credit Card' );
-		this.Feature_Edit_Enable( 'Edit Credit Card(s)', 'Save Credit Card(s)' );
-		this.Feature_Delete_Enable( 'Delete Credit Card(s)' );
-		this.Feature_RowDoubleClick_Enable();
+		super( 'mod10cardlist' );
+
+		if ( CanI( 'PMNT', 0, 0, 1, 0 ) )
+		{
+			this.Feature_Add_Enable( 'Add Credit Card', 'Save Credit Card' );
+			this.Feature_Edit_Enable( 'Edit Credit Card(s)', 'Save Credit Card(s)' );
+			this.Feature_Delete_Enable( 'Delete Credit Card(s)' );
+		}
+
+		this.SetEmptyListMessage( 'No Credit Cards' );
+		this.Feature_Controls_SetSearchPlaceholderText( 'Search Credit Cards...' );
+		this.SetDefaultSort( 'name' );
 	}
 
-	this.SetEmptyListMessage( 'No Credit Cards' );
-	this.Feature_SearchBar_SetPlaceholderText( 'Search Credit Cards...' );
-	this.SetDefaultSort( 'name' );
-}
+	onLoad( filter, sort, offset, count, callback, delegator )
+	{
+		MOD10CardList_Load_Query( filter, sort, offset, count, callback, delegator );
+	}
 
-DeriveFrom( MMBatchList, MOD10CardList );
+	DisplayNoEncryptionWarning()
+	{
+		this.Feature_Persistent_Filters_Enable( 'mod10cardlist' );
+	}
 
-MOD10CardList.prototype.onLoad = MOD10CardList_Load_Query;
+	onCreate()
+	{
+		return { name: '', prefixes: '', lengths: '' };
+	}
 
-MOD10CardList.prototype.DisplayNoEncryptionWarning = function()
-{
-	this.Feature_Persistent_Filters_Enable( 'mod10cardlist' );
-}
+	onInsert( item, callback, delegator )
+	{
+		MOD10Card_Insert( item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-MOD10CardList.prototype.onCreate = function()
-{
-	var record;
+	onSave( item, callback, delegator )
+	{
+		MOD10Card_Update( item.record.id, item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-	record			= new Object();
-	record.name		= '';
-	record.prefixes	= '';
-	record.lengths	= '';
+	onDelete( item, callback, delegator )
+	{
+		MOD10Card_Delete( item.record.id, callback, delegator );
+	}
 
-	return record;
-}
-
-MOD10CardList.prototype.onInsert = function( item, callback, delegator )
-{
-	MOD10Card_Insert( item.record.mmbatchlist_fieldlist, callback, delegator );
-}
-
-MOD10CardList.prototype.onSave = function( item, callback, delegator )
-{
-	MOD10Card_Update( item.record.id, item.record.mmbatchlist_fieldlist, callback, delegator );
-}
-
-MOD10CardList.prototype.onDelete = function( item, callback, delegator )
-{
-	MOD10Card_Delete( item.record.id, callback, delegator );
-}
-
-MOD10CardList.prototype.onCreateRootColumnList = function()
-{
-	var columnlist =
-	[
-		new MMBatchList_Column_Text( 'Credit Card', 'name', 'Name' ),
-		new MMBatchList_Column_Text( 'Allowable Prefixes', 'prefixes', 'Prefixes' ),
-		new MMBatchList_Column_Text( 'Allowable Lengths', 'lengths', 'Lengths' )
-	];
-
-	return columnlist;
+	onCreateRootColumnList()
+	{
+		return [
+			new MMList_Column_Text( 'Credit Card', 'name', 'Name' ),
+			new MMList_Column_Text( 'Allowable Prefixes', 'prefixes', 'Prefixes' ),
+			new MMList_Column_Text( 'Allowable Lengths', 'lengths', 'Lengths' )
+		];
+	}
 }

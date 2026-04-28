@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2025 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 // Prefix         : MER-ADM-FCN-
@@ -721,8 +721,6 @@ function ProductKit_Update_Parts( product_id, attr_id, attmpat_id, option_id,
 function ProductKit_Variant_Count( product_id, callback )							{ return AJAX_Call( callback, 'admin', 'ProductKit_Variant_Count',				'Product_ID=' + encodeURIComponent( product_id ) ); }
 function ProductKit_Generate_Variants( product_id, pricing_method, callback )		{ return AJAX_Call( callback, 'admin', 'ProductKit_Generate_Variants',			'Product_ID=' + encodeURIComponent( product_id ) + '&Pricing_Method=' + encodeURIComponent( pricing_method ) ); }
 
-function ProductInventoryList_Load_ProductKit( product_id, callback )				{ return AJAX_Call( callback, 'admin', 'ProductInventoryList_Load_ProductKit',
-																																									'Product_ID=' + encodeURIComponent( product_id ) ); }
 function ProductVariantList_Load_Product( product_id,
 										  limit_attr_ids, limit_attmpat_ids, limit_option_ids,
 										  exclude_attr_ids, exclude_attmpat_ids,
@@ -807,27 +805,6 @@ function ProductVariant_Reprice( product_id, pricing_method, callback, delegator
 		Product_ID:		product_id,
 		Pricing_Method:	pricing_method
 	}, delegator );
-}
-
-function ProductInventoryList_Load_ProductVariants( product_id,
-													limit_attr_ids, limit_attmpat_ids, limit_option_ids,
-													exclude_attr_ids, exclude_attmpat_ids,
-													include_default_variant,
-													callback )						{ return AJAX_Call( callback, 'admin', 'ProductInventoryList_Load_ProductVariants',
-																																									'Product_ID=' + encodeURIComponent( product_id ) +
-																																									'&Limit_Attribute_IDs=' + EncodeArray( limit_attr_ids ) + 
-																																									'&Limit_AttributeTemplateAttribute_IDs=' + EncodeArray( limit_attmpat_ids ) +
-																																									'&Limit_Option_IDs=' + EncodeArray( limit_option_ids ) +
-																																									'&Exclude_Attribute_IDs=' + EncodeArray( exclude_attr_ids ) + 
-																																									'&Exclude_AttributeTemplateAttribute_IDs=' + EncodeArray( exclude_attmpat_ids ) +
-																																									'&Include_Default_Variant=' + ( include_default_variant ? '1' : '0' ) ); }
-
-function ProductInventoryList_Load_ProductVariants_Filter( product_id, filter, callback, delegator )
-{
-	return AJAX_Call( callback, 'admin', 'ProductInventoryList_Load_ProductVariants_Filter',
-					  'Product_ID='	+ encodeURIComponent( product_id )	+
-					  '&Filter='	+ EncodeArray( filter ),
-					  delegator );
 }
 
 function ProductVariant_Insert( product_id, data, callback, delegator )
@@ -1292,8 +1269,18 @@ function ShipmentTrackingLinkList_Load_Query( filter, sort, offset, count, callb
 function ShipmentTrackingLink_Insert( fieldlist, callback, delegator )				{ return AJAX_Call_FieldList( callback, 'admin', 'ShipmentTrackingLink_Insert',							'', fieldlist, delegator ); }
 function ShipmentTrackingLink_Update( fieldlist, callback, delegator )				{ return AJAX_Call_FieldList( callback, 'admin', 'ShipmentTrackingLink_Update',							'', fieldlist, delegator ); }
 function ShipmentTrackingLink_Delete( type, callback, delegator )					{ return AJAX_Call( callback, 'admin', 'ShipmentTrackingLink_Delete',									'TrackingLink_Type=' + encodeURIComponent( type ), delegator ); }
+
 function DomainCountryList_Load_Query( filter, sort, offset, count, callback, delegator )
-																					{ return AJAX_Call( callback, 'admin', 'DomainCountryList_Load_Query',									'Filter=' + EncodeArray( filter ) + '&Sort=' + encodeURIComponent( sort ) + '&Offset=' + encodeURIComponent( offset ) + '&Count=' + encodeURIComponent( count ), delegator ); }
+{
+	return AJAX_Call_JSON( callback, 'admin', 'DomainCountryList_Load_Query',
+	{
+		Filter:	filter,
+		Sort:	sort,
+		Offset:	offset,
+		Count:	count
+	}, delegator );
+}
+
 function DomainCountry_Insert( fieldlist, callback, delegator )						{ return AJAX_Call_FieldList( callback, 'admin', 'DomainCountry_Insert',								'', fieldlist, delegator ); }
 function DomainCountry_Update( id, fieldlist, callback, delegator )					{ return AJAX_Call_FieldList( callback, 'admin', 'DomainCountry_Update',								'Country_ID=' + encodeURIComponent( id ), fieldlist, delegator ); }
 function DomainCountry_Delete( id, callback, delegator )							{ return AJAX_Call( callback, 'admin', 'DomainCountry_Delete',											'Country_ID=' + encodeURIComponent( id ), delegator ); }

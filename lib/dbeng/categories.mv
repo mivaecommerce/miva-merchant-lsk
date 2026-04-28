@@ -11,13 +11,66 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-CTG-
 | Next Error Code: 45   
 |
 </MvCOMMENT>
+
+<MvFUNCTION NAME = "Category_Transaction_Begin" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "g.Session:cache:category_transaction"			VALUE = "">
+	<MvASSIGN NAME = "g.Session:cache:category_transaction:active"	VALUE = 1>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Transaction_Commit" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT g.Session:cache:category_transaction:active }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ g.Session:cache:category_transaction:type EQ 'insert' }">		<MvASSIGN NAME = "l.null" VALUE = "{ Category_Transaction_Finalize_Insert( g.Session:cache:category_transaction:category ) }">
+	<MvELSEIF EXPR = "{ g.Session:cache:category_transaction:type EQ 'update' }">	<MvASSIGN NAME = "l.null" VALUE = "{ Category_Transaction_Finalize_Update( g.Session:cache:category_transaction:category ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "g.Session:cache:category_transaction" VALUE = "">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Transaction_Commit_PreserveError" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.error_is_eof"	VALUE = "{ g.Error_DB_EOF }">
+	<MvASSIGN NAME = "l.error_code"		VALUE = "{ g.Error_Code }">
+	<MvASSIGN NAME = "l.error_message"	VALUE = "{ g.Error_Message }">
+
+	<MvASSIGN NAME = "l.null"			VALUE = "{ Category_Transaction_Commit() }">
+
+	<MvASSIGN NAME = "g.Error_DB_EOF"	VALUE = "{ l.error_is_eof }">
+	<MvASSIGN NAME = "g.Error_Code"		VALUE = "{ l.error_code }">
+	<MvASSIGN NAME = "g.Error_Message"	VALUE = "{ l.error_message }">
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Transaction_Finalize_Insert" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Category_Insert( l.module, l.category ) }">
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Category_Transaction_Finalize_Update" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
+		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Category_Update( l.module, l.category ) }">
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
 
 <MvFUNCTION NAME = "Category_Insert" PARAMETERS = "category var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT Category_Calculate_Depth( l.category, l.category:depth ) }">
@@ -28,9 +81,12 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
-		<MvDO FILE = "{ g.Module_Root $ l.module:module }" NAME = "l.null"	VALUE = "{ Module_Notify_Category_Insert( l.module, l.category ) }">
-	</MvFOREACH>
+	<MvIF EXPR = "{ NOT g.Session:cache:category_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Category_Transaction_Finalize_Insert( l.category ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "g.Session:cache:category_transaction:type"		VALUE = "insert">
+		<MvREFERENCE NAME = "g.Session:cache:category_transaction:category"	VARIABLE = "l.category">
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -50,11 +106,15 @@
 		</MvIF>
 	</MvIF>	
 
-	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ StoreModuleList_Load_Features_Cached( 'not_cat', l.modules ) }">
-		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }">
-			<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_Category_Update( l.module, l.category ) }">
+	<MvIF EXPR = "{ NOT g.Session:cache:category_transaction:active }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ Category_Transaction_Finalize_Update( l.category ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ ( l.category:id NE g.Session:cache:category_transaction:category:id ) OR ( g.Session:cache:category_transaction:type NE 'insert' ) }">
+			<MvASSIGN NAME = "g.Session:cache:category_transaction:type" VALUE = "update">
 		</MvIF>
-	</MvFOREACH>
+
+		<MvREFERENCE NAME = "g.Session:cache:category_transaction:category" VARIABLE = "l.category">
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>

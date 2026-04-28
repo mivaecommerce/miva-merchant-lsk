@@ -7,52 +7,51 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2021 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
 // Weight Table Based Shipping Charge List
 ////////////////////////////////////////////////////
 
-function WeightTableBasedShippingChargeList( product_id )
+var WeightTableBasedShippingChargeList = class extends MMList
 {
-	MMBatchList.call( this, 'mm9_batchlist_weighttablebasedshippingchargelist' );
+	#product_id;
 
-	this.product_id = product_id;
-
-	if ( CanI( 'PROD', 0, 0, 1, 0 ) )
+	constructor( product_id )
 	{
-		this.Feature_Edit_Enable( 'Edit Shipping Charge(s)', 'Save Shipping Charge(s)' );
-		this.Feature_RowDoubleClick_Enable();
+		super( 'weighttablebasedshippingchargelist' );
+
+		this.#product_id = product_id;
+
+		if ( CanI( 'PROD', 0, 0, 1, 0 ) )
+		{
+			this.Feature_Edit_Enable( 'Edit Shipping Charge(s)', 'Save Shipping Charge(s)' );
+		}
+
+		this.Feature_Controls_SetSearchPlaceholderText( 'Search Shipping Charges...' );
+		this.SetDefaultSort( 'method' );
 	}
 
-	this.Feature_SearchBar_SetPlaceholderText( 'Search Shipping Charges...' );
-	this.SetDefaultSort( 'method' );
-}
+	onLoad( filter, sort, offset, count, callback, delegator )
+	{
+		WeightTableBasedShippingChargeList_Load_Query( this.#product_id, filter, sort, offset, count, callback, delegator );
+	}
 
-DeriveFrom( MMBatchList, WeightTableBasedShippingChargeList );
+	onSave( item, callback, delegator )
+	{
+		WeightTableBasedShippingCharge_Update( this.#product_id, item.record.method_id, item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-WeightTableBasedShippingChargeList.prototype.onLoad = function( filter, sort, offset, count, callback, delegator )
-{
-	WeightTableBasedShippingChargeList_Load_Query( this.product_id, filter, sort, offset, count, callback, delegator );
-}
-
-WeightTableBasedShippingChargeList.prototype.onSave = function( item, callback, delegator )
-{
-	WeightTableBasedShippingCharge_Update( this.product_id, item.record.method_id, item.record.mmbatchlist_fieldlist, callback, delegator );
-}
-
-WeightTableBasedShippingChargeList.prototype.onCreateRootColumnList = function()
-{
-	var columnlist =
-	[
-		new MMBatchList_Column_Text( 'Code', 'code', '' )
-			.SetOnDisplayEdit( function( record ) { return DrawMMBatchListString_Data( record.code ); } ),
-		new MMBatchList_Column_Text( 'Method', 'method', '' )
-			.SetOnDisplayEdit( function( record ) { return DrawMMBatchListString_Data( record.method ); } ),
-		new MMBatchList_Column_Numeric( 'Charge', 'rate', 'Rate', 2 )
-			.SetSearchable( false )
-	];
-
-	return columnlist;
+	onCreateRootColumnList()
+	{
+		return [
+			new MMList_Column_Text( 'Code', 'code' )
+				.SetOnDisplayEdit( ( record ) => DrawMMListString_Data( record.code ) ),
+			new MMList_Column_Text( 'Method', 'method' )
+				.SetOnDisplayEdit( ( record ) => DrawMMListString_Data( record.method ) ),
+			new MMList_Column_Numeric( 'Charge', 'rate', 'Rate', 2 )
+				.SetSearchable( false )
+		];
+	}
 }

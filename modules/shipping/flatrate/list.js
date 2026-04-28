@@ -7,67 +7,61 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2021 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
 // Flat Rate List
 ////////////////////////////////////////////////////
 
-function FlatRateList()
+var FlatRateList = class extends MMList
 {
-	MMList.call( this, 'mm_list_flatratemethodlist' );
-
-	if ( CanI( 'SHIP', 0, 0, 1, 0 ) )
+	constructor()
 	{
-		this.Feature_Add_Enable( 'Add Shipping Method', 'Save Shipping Method' );
-		this.Feature_Edit_Enable( 'Edit Shipping Method(s)', 'Save Shipping Method(s)' );
-		this.Feature_Delete_Enable( 'Delete Shipping Method(s)' );
+		super( 'flatratemethodlist' );
+
+		if ( CanI( 'SHIP', 0, 0, 1, 0 ) )
+		{
+			this.Feature_Add_Enable( 'Add Shipping Method', 'Save Shipping Method' );
+			this.Feature_Edit_Enable( 'Edit Shipping Method(s)', 'Save Shipping Method(s)' );
+			this.Feature_Delete_Enable( 'Delete Shipping Method(s)' );
+		}
+
+		this.Feature_Controls_SetSearchPlaceholderText( 'Search Methods...' );
+		this.SetDefaultSort( 'method', '' );
 	}
 
-	this.Feature_Controls_SetSearchPlaceholderText( 'Search Methods...' );
-	this.SetDefaultSort( 'method', '' );
-}
+	onLoad( filter, sort, offset, count, callback, delegator )
+	{
+		FlatRateMethodList_Load_Query( filter, sort, offset, count, callback, delegator );
+	}
 
-DeriveFrom( MMList, FlatRateList );
+	onCreate()
+	{
+		return { code: '', method: '', cost: 0.00 };
+	}
 
-FlatRateList.prototype.onLoad = FlatRateMethodList_Load_Query;
+	onInsert( item, callback, delegator )
+	{
+		FlatRateMethod_Insert( item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-FlatRateList.prototype.onCreate = function()
-{
-	var record;
+	onSave( item, callback, delegator )
+	{
+		FlatRateMethod_Update( item.record.id, item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-	record			= new Object();
-	record.code		= '';
-	record.method	= '';
-	record.cost		= 0.00;
+	onDelete( item, callback, delegator )
+	{
+		FlatRateMethod_Delete( item.record.id, callback, delegator );
+	}
 
-	return record;
-}
-
-FlatRateList.prototype.onInsert = function( item, callback, delegator )
-{
-	FlatRateMethod_Insert( item.record.mmlist_fieldlist, callback, delegator );
-}
-
-FlatRateList.prototype.onSave = function( item, callback, delegator )
-{
-	FlatRateMethod_Update( item.record.id, item.record.mmlist_fieldlist, callback, delegator );
-}
-
-FlatRateList.prototype.onDelete = function( item, callback, delegator )
-{
-	FlatRateMethod_Delete( item.record.id, callback, delegator );
-}
-
-FlatRateList.prototype.onCreateRootColumnList = function()
-{
-	var columnlist =
-	[
-		new MMList_Column_Name( 'Code',			'code',		'Code' ),
-		new MMList_Column_Name( 'Method',		'method',	'Method' ),
-		new MMList_Column_Currency( 'Amount',	'cost',		'Cost' )
-	];
-
-	return columnlist;
+	onCreateRootColumnList()
+	{
+		return [
+			new MMList_Column_Name( 'Code',			'code',		'Code' ),
+			new MMList_Column_Name( 'Method',		'method',	'Method' ),
+			new MMList_Column_Currency( 'Amount',	'cost',		'Cost' )
+		];
+	}
 }

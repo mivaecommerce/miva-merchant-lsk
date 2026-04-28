@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2019 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -175,15 +175,15 @@ MMSearchField.prototype.Menu_Append_Header = function()
 
 MMSearchField.prototype.Menu_Append_Item = function( data )
 {
-	var self = this;
 	var item;
 
 	if ( item = this.onMenuAppendItem( data.menuitem ) )
 	{
 		item.mm_data		= data;
 		item.action			= data.product_link;
-		item.onclick		= function( event ) { self.Menu_Item_OnClick( event ? event : window.event, this.action ); };
-		item.onmousemove	= function( event ) { self.Event_MenuItem_MouseMove( event ? event : window.event, item ); };
+		item.onclick		= ( e ) => { this.Menu_Item_OnClick( e, item.action ); };
+		item.onauxclick		= ( e ) => { this.Menu_Item_OnClick( e, item.action ); };
+		item.onmousemove	= ( e ) => { this.Event_MenuItem_MouseMove( e, item ); };
 		this.element_menu.appendChild( item );
 		this.menu_items.push( item );
 	}
@@ -191,14 +191,14 @@ MMSearchField.prototype.Menu_Append_Item = function( data )
 
 MMSearchField.prototype.Menu_Append_StoreSearch = function()
 {
-	var self = this;
 	var item;
 
 	if ( item = this.onMenuAppendStoreSearch( this.element_search.value ) )
 	{
-		item.action					= this.GetSearchURL() + encodeURIComponent( this.element_search.value );
-		item.onclick				= function( event ) { self.Menu_Item_OnClick( event ? event : window.event, this.action ); };
-		item.onmousemove			= function( event ) { self.Event_MenuItem_MouseMove( event ? event : window.event, item ); };
+		item.action			= this.GetSearchURL() + encodeURIComponent( this.element_search.value );
+		item.onclick		= ( e ) => { this.Menu_Item_OnClick( e, item.action ); };
+		item.onauxclick		= ( e ) => { this.Menu_Item_OnClick( e, item.action ); };
+		item.onmousemove	= ( e ) => { this.Event_MenuItem_MouseMove( e, item ); };
 
 		this.element_menu.appendChild( item );
 
@@ -209,14 +209,14 @@ MMSearchField.prototype.Menu_Append_StoreSearch = function()
 
 MMSearchField.prototype.Menu_Replace_StoreSearch = function()
 {
-	var self = this;
 	var item;
 
 	if ( item = this.onMenuAppendStoreSearch( this.element_search.value ) )
 	{
 		item.action			= this.GetSearchURL() + encodeURIComponent( this.element_search.value );
-		item.onclick		= function( event ) { self.Menu_Item_OnClick( event ? event : window.event, this.action ); };
-		item.onmousemove	= function( event ) { self.Event_MenuItem_MouseMove( event ? event : window.event, item ); };
+		item.onclick		= ( e ) => { this.Menu_Item_OnClick( e, item.action ); };
+		item.onauxclick		= ( e ) => { this.Menu_Item_OnClick( e, item.action ); };
+		item.onmousemove	= ( e ) => { this.Event_MenuItem_MouseMove( e, item ); };
 
 		this.element_menu.appendChild( item );
 
@@ -248,7 +248,7 @@ MMSearchField.prototype.Menu_Item_Select = function( item )
 
 MMSearchField.prototype.Menu_Item_OnClick = function( e, url )
 {
-	window.location.href = url;
+	window.open( url, ( e.ctrlKey || e.metaKey || e.button === 1 ) ? '_blank' : '_self', 'noreferrer' );
 }
 
 MMSearchField.prototype.SetFocus = function()

@@ -7,75 +7,69 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2019 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
 // Order Workflow: Queue List 
 ////////////////////////////////////////////////////
 
-function OWFQueue_List()
+var OWFQueueList = class extends MMList
 {
-	MMBatchList.call( this, 'mm_batchlist_owfqueuelist' );
-
-	if ( CanI( 'OWFP', 0, 1, 0, 0 ) )
+	constructor()
 	{
-		this.Feature_Add_Enable( 'Add Queue', 'Save Queue' );
+		super( 'owfqueuelist' );
+
+		if ( CanI( 'OWFP', 0, 1, 0, 0 ) )
+		{
+			this.Feature_Add_Enable( 'Add Queue', 'Save Queue' );
+		}
+
+		if ( CanI( 'OWFP', 0, 0, 1, 0 ) )
+		{
+			this.Feature_Edit_Enable( 'Edit Queue(s)', 'Save Queue(s)' );
+		}
+
+		if ( CanI( 'OWFP', 0, 0, 0, 1 ) )
+		{
+			this.Feature_Delete_Enable( 'Delete Queue(s)' );
+		}
+
+		this.Feature_Controls_SetSearchPlaceholderText( 'Search Queues...' );
+		this.SetDefaultSort( 'id', '' );
 	}
 
-	if ( CanI( 'OWFP', 0, 0, 1, 0 ) )
+	onLoad( filter, sort, offset, count, callback, delegator )
 	{
-		this.Feature_Edit_Enable( 'Edit Queue(s)', 'Save Queue(s)' );
-		this.Feature_RowDoubleClick_Enable();
+		OWFQueueList_Load_Query( filter, sort, offset, count, callback, delegator );
 	}
 
-	if ( CanI( 'OWFP', 0, 0, 0, 1 ) )
+	onCreate()
 	{
-		this.Feature_Delete_Enable( 'Delete Queue(s)' );
+		return { code: '', name: '' };
 	}
 
-	this.Feature_SearchBar_SetPlaceholderText( 'Search Queues...' );
-	this.SetDefaultSort( 'id', '' );
-}
+	onInsert( item, callback, delegator )
+	{
+		OWFQueue_Insert( item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-DeriveFrom( MMBatchList, OWFQueue_List );
+	onSave( item, callback, delegator )
+	{
+		OWFQueue_Update( item.record.id, item.record.mmlist_fieldlist, callback, delegator );
+	}
 
-OWFQueue_List.prototype.onLoad = OWFQueueList_Load_Query;
+	onDeleteList( queue_ids, callback, delegator )
+	{
+		OWFQueueList_Delete( queue_ids, callback, delegator );
+	}
 
-OWFQueue_List.prototype.onCreate = function()
-{
-	var record;
-
-	record			= new Object();
-	record.code		= '';
-	record.name		= '';
-
-	return record;
-}
-
-OWFQueue_List.prototype.onInsert = function( item, callback, delegator )
-{
-	OWFQueue_Insert( item.record.mmbatchlist_fieldlist, callback, delegator );
-}
-
-OWFQueue_List.prototype.onSave = function( item, callback, delegator )
-{
-	OWFQueue_Update( item.record.id, item.record.mmbatchlist_fieldlist, callback, delegator );
-}
-
-OWFQueue_List.prototype.onDeleteList = function( queue_ids, callback, delegator )
-{
-	OWFQueueList_Delete( queue_ids, callback, delegator );
-}
-
-OWFQueue_List.prototype.onCreateRootColumnList = function()
-{
-	var columnlist =
-	[
-		new MMBatchList_Column_SortOnlyColumn( 'ID', 'id' ),
-		new MMBatchList_Column_Code( 'Code', 'code', 'Queue_Code' ),
-		new MMBatchList_Column_Name( 'Name', 'name', 'Queue_Name' )
-	];
-
-	return columnlist;
+	onCreateRootColumnList()
+	{
+		return [
+			new MMList_Column_SortOnlyColumn( 'ID', 'id' ),
+			new MMList_Column_Code( 'Code', 'code', 'Queue_Code' ),
+			new MMList_Column_Name( 'Name', 'name', 'Queue_Name' )
+		];
+	}
 }

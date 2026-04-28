@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-SEA-DB-
-| Next Error Code: 31
+| Next Error Code: 34
 |
 </MvCOMMENT>
 
@@ -122,6 +122,7 @@
 							ip			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 50 )	$ ',
 							useragent	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
 							search		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 254 )	$ ',
+							incrcount	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
 							prodcount	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
 							origin		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 100 )	$ ',
 							index_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
@@ -547,6 +548,7 @@
 	<MvASSIGN NAME = "l.searchlogentry:ip"			VALUE = "{ SearchLogEntries.d.ip }">
 	<MvASSIGN NAME = "l.searchlogentry:useragent"	VALUE = "{ SearchLogEntries.d.useragent }">
 	<MvASSIGN NAME = "l.searchlogentry:search"		VALUE = "{ SearchLogEntries.d.search }">
+	<MvASSIGN NAME = "l.searchlogentry:incrcount"	VALUE = "{ SearchLogEntries.d.incrcount }">
 	<MvASSIGN NAME = "l.searchlogentry:prodcount"	VALUE = "{ SearchLogEntries.d.prodcount }">
 	<MvASSIGN NAME = "l.searchlogentry:origin"		VALUE = "{ SearchLogEntries.d.origin }">
 	<MvASSIGN NAME = "l.searchlogentry:index_id"	VALUE = "{ SearchLogEntries.d.index_id }">
@@ -573,8 +575,31 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "SearchLogEntry_Load_MostRecent_Search_Session" PARAMETERS = "srchses_id, searchlogentry var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'SearchLogEntries',
+																			   'SELECT * FROM ' $ g.Store_Table_Prefix $ 'SearchLogEntries WHERE ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'srchses_id' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( '?' ) $ ' ORDER BY id DESC',
+																			   [ g.Module_Library_DB ].SQL_Query_Field( l.srchses_id ),
+																			   0, 1 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SEA-DB-00031', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ SearchLogEntries.d.EOF }">
+		<MvCLOSEVIEW NAME = "Merchant" VIEW = "SearchLogEntries">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].Error_Load_EOF( 'MER-SEA-DB-00032' ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ SearchLogEntry_Read( l.searchlogentry ) }">
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "SearchLogEntries">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "SearchLogEntry_Insert" PARAMETERS = "searchlogentry var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.searchlogentry:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'SearchLogEntries' ) }">
+
+	<MvIF EXPR = "{ ISNULL l.searchlogentry:incrcount }">
+		<MvASSIGN NAME = "l.searchlogentry:incrcount" VALUE = 0>
+	</MvIF>
 
 	<MvIF EXPR = "{ ISNULL l.searchlogentry:index_id }">
 		<MvASSIGN NAME = "l.searchlogentry:index_id" VALUE = 0>
@@ -586,14 +611,43 @@
 
 	<MvQUERY NAME 	= "Merchant"
 			 QUERY 	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'SearchLogEntries
-						  ( id, srchses_id, cust_id, order_id, dtstamp, ip, useragent, search, prodcount, origin, index_id, prompt_id )
+						  ( id, srchses_id, cust_id, order_id, dtstamp, ip, useragent, search, incrcount, prodcount, origin, index_id, prompt_id )
 						  VALUES
-						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
 			 FIELDS	= "l.searchlogentry:id, l.searchlogentry:srchses_id, l.searchlogentry:cust_id, l.searchlogentry:order_id, l.searchlogentry:dtstamp, 
-			 		   l.searchlogentry:ip, l.searchlogentry:useragent, l.searchlogentry:search, l.searchlogentry:prodcount, l.searchlogentry:origin,
+			 		   l.searchlogentry:ip, l.searchlogentry:useragent, l.searchlogentry:search, l.searchlogentry:incrcount, l.searchlogentry:prodcount, l.searchlogentry:origin,
 			 		   l.searchlogentry:index_id, l.searchlogentry:prompt_id">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SEA-DB-00022', g.MvQUERY_Error ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SearchLogEntry_Update_Incremental" PARAMETERS = "searchlogentry var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvQUERY NAME 	= "Merchant"
+			 QUERY 	= "{ 'UPDATE ' $ g.Store_Table_Prefix $ 'SearchLogEntries
+			 			  SET
+			 			  	srchses_id	= ?,
+			 			  	cust_id		= ?,
+			 			  	order_id	= ?,
+			 			  	dtstamp		= ?,
+			 			  	ip			= ?,
+			 			  	useragent	= ?,
+			 			  	search		= ?,
+			 			  	incrcount	= incrcount + 1,
+			 			  	prodcount	= ?,
+			 			  	origin		= ?,
+			 			  	index_id	= ?,
+			 			  	prompt_id	= ?
+			 			  WHERE
+			 			  	id 			= ?' }"
+			 FIELDS	= "l.searchlogentry:srchses_id, l.searchlogentry:cust_id, l.searchlogentry:order_id, l.searchlogentry:dtstamp, l.searchlogentry:ip,
+			 		   l.searchlogentry:useragent, l.searchlogentry:search, l.searchlogentry:prodcount, l.searchlogentry:origin,
+			 		   l.searchlogentry:index_id, l.searchlogentry:prompt_id,
+					   l.searchlogentry:id">
+	<MvIF EXPR = "{ g.MvQUERY_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-SEA-DB-00033', g.MvQUERY_Error ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
