@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2025 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -1475,6 +1475,14 @@ function ValueIsNonEmptyString( value )
 {
 	if ( typeof value !== 'string' )		return false;
 	else if ( value.trim().length === 0 )	return false;
+
+	return true;
+}
+
+function ValueIsNonEmptyArray( value )
+{
+	if ( !Array.isArray( value ) )			return false;
+	else if ( value.length === 0 )			return false;
 
 	return true;
 }

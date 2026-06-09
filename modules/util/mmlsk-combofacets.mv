@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-UTL-CBF-
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-combofacets">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Combination Facets">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0102">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "9.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Combination Facets (a combination of multiple facets) gives you the ability to create your own facet type.  For example: year, make and model.  Once a combination facet is selected, all product lists that use facets will automatically be filtered to only show products matching the selected facet.  This module also provides easy to customize menus, which update dynamically as customers choose facets that are linked together.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_store, vis_product, prod_facet, fields_prod, not_prod, data_store, component, provision_store, clientside, clientside_sri, json, copy_prod, rt_basketitem, vis_cust, vis_custbe, log, not_cust">
@@ -2457,7 +2457,8 @@
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_Start( l.count ) }">
 				"code":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.field:code ) }">",
 				"name":			"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.field:name ) }">",
-				"sort_desc":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.field:sort_desc ) }">
+				"sort_desc":	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Boolean( l.field:sort_desc ) }">,
+				"fitlist":		"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.field:fitlist ) }">"
 			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_ArrayElement_End() }">
 		</MvFOREACH>
 		]
@@ -4883,28 +4884,30 @@
 	<MvFOREACH ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ l.field_count }">
 		<MvASSIGN NAME = "l.field_prefix" VALUE = "{ 'f' $ int( l.field:id ) }">
 
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.load_query, l.field_prefix $ '.value AS ' $ l.field_prefix $ '_value' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.load_query, [ g.Module_Library_Native_DBAPI ].DB_IFNULL( l.field_prefix $ '.value', '\'\'' ) $ ' AS ' $ l.field_prefix $ '_value' ) }">
 
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'CombinationFacetValues', l.field_prefix ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+		<MvIF EXPR = "{ ISNULL l.previous_field_prefix }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'CombinationFacetValues', l.field_prefix ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
 
-		<MvIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = pvp.part_id', '' ) }">
-		<MvELSEIF EXPR = "{ l.facet:variantsrc EQ 'master' }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product_id ) ) }">
+			<MvIF EXPR = "{ l.facet:variantsrc EQ 'master' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product_id ) ) }">
+			<MvELSEIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = pvp.part_id', '' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.load_query, 'f' $ int( l.fields[ 1 ]:id ), g.Store_Table_Prefix $ 'CombinationFacetValues', l.field_prefix, l.field_prefix $ '.record_id = ' $ l.previous_field_prefix $ '.record_id AND ' $ l.field_prefix $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+
+			<MvIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.previous_field_prefix $ '.product_id = pvp.part_id', '' ) }">
+			</MvIF>
 		</MvIF>
 
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.load_query,	l.field_prefix $ '.value', '' ) }">
-
-		<MvIF EXPR = "{ NOT ISNULL l.previous_field_prefix }">
-			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.record_id = ' $ l.previous_field_prefix $ '.record_id', '' ) }">
-		</MvIF>
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.load_query,	l.field_prefix $ '_value', '' ) }">
 
 		<MvASSIGN NAME = "l.previous_field_prefix"	VALUE = "{ l.field_prefix }">
 	</MvFOREACH>
-
-	<MvIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, 'pvp.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product_id ) ) }">
-	</MvIF>
 
 	<MvASSIGN NAME = "l.load_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.load_query, l.load_fields ) }">
 
@@ -4957,28 +4960,30 @@
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.load_query, 'MAX( ' $ l.field_prefix $ '.value ) AS ' $ l.field_prefix $ '_value_max' ) }">
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.load_query, 'COUNT( DISTINCT ' $ l.field_prefix $ '.value ) AS ' $ l.field_prefix $ '_value_distinct' ) }">
 		<MvELSE>
-			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.load_query, l.field_prefix $ '.value AS ' $ l.field_prefix $ '_value' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.load_query, [ g.Module_Library_Native_DBAPI ].DB_IFNULL( l.field_prefix $ '.value', '\'\'' ) $ ' AS ' $ l.field_prefix $ '_value' ) }">
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_GROUP_BY( l.load_query, l.field_prefix $ '_value' ) }">
 		</MvIF>
 
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'CombinationFacetValues', l.field_prefix ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+		<MvIF EXPR = "{ ISNULL l.previous_field_prefix }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'CombinationFacetValues', l.field_prefix ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
 
-		<MvIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = pvp.part_id', '' ) }">
-		<MvELSEIF EXPR = "{ l.facet:variantsrc EQ 'master' }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product_id ) ) }">
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT ISNULL l.previous_field_prefix }">
-			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.record_id = ' $ l.previous_field_prefix $ '.record_id', '' ) }">
+			<MvIF EXPR = "{ l.facet:variantsrc EQ 'master' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product_id ) ) }">
+			<MvELSEIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.product_id = pvp.part_id', '' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.load_query, 'f' $ int( l.fields[ 1 ]:id ), g.Store_Table_Prefix $ 'CombinationFacetValues', l.field_prefix, l.field_prefix $ '.record_id = ' $ l.previous_field_prefix $ '.record_id AND ' $ l.field_prefix $ '.field_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.field:id ) ) }">
+	
+			<MvIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.previous_field_prefix $ '.product_id = pvp.part_id', '' ) }">
+			</MvIF>
 		</MvIF>
 
 		<MvASSIGN NAME = "l.previous_field_prefix"	VALUE = "{ l.field_prefix }">
 	</MvFOREACH>
-
-	<MvIF EXPR = "{ l.facet:variantsrc EQ 'parts' }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.load_query, g.Store_Table_Prefix $ 'ProductVariantParts', 'pvp' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, 'pvp.product_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.product_id ) ) }">
-	</MvIF>
 
 	<MvASSIGN NAME = "l.load_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.load_query, l.load_fields ) }">
 
@@ -4991,9 +4996,10 @@
 	</MvIF>
 
 	<MvWHILE EXPR = "{ NOT CombinationFacetRecords.d.EOF }">
-		<MvASSIGN NAME = "l.sparse_range_found"	VALUE = 0>
-		<MvASSIGN NAME = "l.field_value"		VALUE = "">
-		<MvASSIGN NAME = "l.value"				VALUE = "">
+		<MvASSIGN NAME = "l.sparse_range_field_members"	VALUE = "">
+		<MvASSIGN NAME = "l.sparse_range_found"			VALUE = 0>
+		<MvASSIGN NAME = "l.field_value"				VALUE = "">
+		<MvASSIGN NAME = "l.value"						VALUE = "">
 
 		<MvFOREACH INDEX = "l.pos" ITERATOR = "l.field" ARRAY = "l.fields" COUNT = "{ l.field_count }">
 			<MvIF EXPR = "{ l.field:fitlist NE 'range' }">
@@ -5017,11 +5023,11 @@
 				</MvIF>
 			</MvIF>
 
+			<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.sparse_range_field_members, l.field_value, l.field:id ) }">
+
 			<MvIF EXPR = "{ ISNULL l.field_value }">
 				<MvFOREACHSTOP>
 			</MvIF>
-
-			<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.sparse_range_field_members, l.field_value, l.field:id ) }">
 
 			<MvIF EXPR = "{ l.pos GT 1 }">
 				<MvASSIGN NAME = "l.value" VALUE = "{ l.value $ ' > ' }">
@@ -5076,6 +5082,10 @@
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT_DISTINCT( l.load_query, l.field_prefix $ '.value' ) }">
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.load_query,	l.field_prefix $ '.value', '' ) }">
 		<MvELSE>
+			<MvIF EXPR = "{ ISNULL l.sparse_range_field_members[ l.field:id ] }">
+				<MvFOREACHSTOP>
+			</MvIF>
+
 			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.load_query, l.field_prefix $ '.value = ?', [ g.Module_Library_DB ].SQL_Query_Field( l.sparse_range_field_members[ l.field:id ] ) ) }">
 		</MvIF>
 
@@ -5569,10 +5579,10 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "CombinationFacetFieldList_Load_Facet_Visible_Cached" PARAMETERS = "facet_id, fields var" STANDARDOUTPUTLEVEL = "">
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Reference( 'combinationfacetfieldlist_load_facet_visible', 'fields', l.ref ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Reference( 'combinationfacetfieldlist_load_facet_visible_cached', l.facet_id, l.ref ) }">
 
 	<MvIF EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Requires_Load( l.ref ) }">
-		<MvASSIGN NAME = "l.result" VALUE = "{  CombinationFacetFieldList_Load_Facet_Visible( l.facet_id, l.fields ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ CombinationFacetFieldList_Load_Facet_Visible( l.facet_id, l.fields ) }">
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].DB_Cache_Data_Store_Result( l.ref, l.result, l.fields ) }">
 	</MvIF>

@@ -4274,11 +4274,26 @@ MMSelect.prototype.InsertOption = function( text, value, index, options )
 	else																				return this.InsertOptionLowLevel( text, value, index, options );
 }
 
-MMSelect.prototype.InsertOptionLowLevel = function( text, value, index, { element = null, selected = false, selectone = false, prevent_selection = false, callback = ( event, option ) => { this.SetValue( value ); } } = {} )
+MMSelect.prototype.InsertOptionLowLevel = function( text, value, index, { element = null, selected = false, selectone = false, prevent_selection = false, divider = false, callback = ( event, option ) => { this.SetValue( value ); } } = {} )
 {
 	var option;
 
 	index						= stoi_max( stoi_def_nonneg( index, this.options.length ), this.options.length );
+
+	if ( divider )
+	{
+		//
+		// Divider options are disabled / non-selectable options used purely for display
+		//
+
+		text					= undefined;
+		value					= undefined;
+		selectone				= false;
+		prevent_selection		= true;
+		selected				= false;
+		element					= null;
+		callback				= null;
+	}
 
 	if ( selectone )
 	{
@@ -4298,7 +4313,9 @@ MMSelect.prototype.InsertOptionLowLevel = function( text, value, index, { elemen
 	option.value				= value;
 	option.element				= element;
 	option.prevent_selection	= prevent_selection; // Allows the option to be clicked, but the option cannot be set as the selected option (ie, it will never be set as the selectedIndex)
-	option.menu_option			= new MMMenuButton_Item( null, element ? element : option.text, callback, option.value );
+
+	if ( divider )	option.menu_option = new MMMenuButton_Item_Divider( null );
+	else			option.menu_option = new MMMenuButton_Item( null, element ? element : option.text, callback, option.value );
 
 	this.menubutton.MenuItem_Insert( option.menu_option, index );
 	this.options.splice( index, 0, option );

@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-SHP-UTL-
@@ -78,6 +78,19 @@
 
 			<MvASSIGN NAME = "l.basketcharge:amount"	VALUE = "{ l.basketcharge:amount + l.amount }">
 			<MvASSIGN NAME = "l.basketcharge:disp_amt"	VALUE = "{ l.basketcharge:disp_amt + l.amount }">
+
+			<MvIF EXPR = "{ [ g.Module_Feature_SHP_DB ].ShippingDetails_Load_Basket_Cached( g.Basket:basket_id, l.shipping_details ) }">
+				<MvASSIGN NAME = "l.shipping_details:price" VALUE = "{ l.shipping_details:price + l.amount }">
+
+				<MvASSIGN NAME = "l.breakdown"				VALUE = "">
+				<MvASSIGN NAME = "l.breakdown:descrip"		VALUE = "Handling Charge">
+				<MvASSIGN NAME = "l.breakdown:amount"		VALUE = "{ l.amount }">
+				<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_insert_var( l.shipping_details:breakdown, l.breakdown, -1 ) }">
+
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingDetails_Update_Basket( g.Basket:basket_id, l.shipping_details ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
 
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].BasketCharge_Update( l.basketcharge ) }">
 		</MvIF>
@@ -543,10 +556,13 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ShippingMethod_ApplyAdjustments" PARAMETERS = "shippingmethodrules var, basketcharges var, basketcharge_count" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.total_amount" 			VALUE = 0>
-	<MvASSIGN NAME = "l.total_disp_amount" 		VALUE = 0>
-	<MvASSIGN NAME = "l.adjusted_amount" 		VALUE = 0>
-	<MvASSIGN NAME = "l.adjusted_disp_amount" 	VALUE = 0>
+	<MvASSIGN NAME = "l.total_amount" 				VALUE = 0>
+	<MvASSIGN NAME = "l.total_disp_amount" 			VALUE = 0>
+	<MvASSIGN NAME = "l.adjusted_amount" 			VALUE = 0>
+	<MvASSIGN NAME = "l.adjusted_disp_amount" 		VALUE = 0>
+	<MvASSIGN NAME = "l.rounding_difference"		VALUE = 0>
+	<MvASSIGN NAME = "l.rounding_disp_difference"	VALUE = 0>
+	<MvASSIGN NAME = "l.total_difference"			VALUE = 0>
 
 	<MvIF EXPR = "{ l.shippingmethodrules:adjusttype EQ 'fixed' }">
 		<MvFOREACH ITERATOR = "l.basketcharge" ARRAY = "l.basketcharges" COUNT = "{ l.basketcharge_count }">
@@ -575,10 +591,11 @@
 			</MvIF>
 		</MvFOREACH>
 		
-		<MvASSIGN NAME = "l.total_difference" 								VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_amount ) - l.adjusted_amount }">
-		<MvASSIGN NAME = "l.total_disp_difference" 							VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_disp_amount ) - l.adjusted_disp_amount }">
-		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "amount" 		VALUE = "{ l.basketcharges[ 1 ]:amount + l.total_difference }">
-		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "disp_amt" 	VALUE = "{ l.basketcharges[ 1 ]:disp_amt + l.total_disp_difference }">
+		<MvASSIGN NAME = "l.total_difference"								VALUE = "{ l.adjusted_amount - l.total_amount }">
+		<MvASSIGN NAME = "l.rounding_difference" 							VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_amount ) - l.adjusted_amount }">
+		<MvASSIGN NAME = "l.rounding_disp_difference" 						VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.total_disp_amount ) - l.adjusted_disp_amount }">
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "amount" 		VALUE = "{ l.basketcharges[ 1 ]:amount + l.rounding_difference }">
+		<MvASSIGN NAME = "l.basketcharges" INDEX = 1 MEMBER = "disp_amt" 	VALUE = "{ l.basketcharges[ 1 ]:disp_amt + l.rounding_disp_difference }">
 	</MvIF>
 
 	<MvCOMMENT>
@@ -594,6 +611,28 @@
 
 	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].BasketCharge_Update( l.basketcharges[ 1 ] ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:descrip OR l.total_difference }">
+		<MvIF EXPR = "{ [ g.Module_Feature_SHP_DB ].ShippingDetails_Load_Basket_Cached( g.Basket:basket_id, l.shipping_details ) }">
+			<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:descrip }">
+				<MvASSIGN NAME = "l.shipping_details:original_name"	VALUE = "{ l.shipping_details:name }">
+				<MvASSIGN NAME = "l.shipping_details:name"			VALUE = "{ l.shippingmethodrules:descrip }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.total_difference }">
+				<MvASSIGN NAME = "l.shipping_details:price"	VALUE = "{ l.shipping_details:price + l.total_difference }">
+
+				<MvASSIGN NAME = "l.breakdown"				VALUE = "">
+				<MvASSIGN NAME = "l.breakdown:descrip"		VALUE = "Shipping Method Rate Adjustment">
+				<MvASSIGN NAME = "l.breakdown:amount"		VALUE = "{ l.total_difference }">
+				<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_insert_var( l.shipping_details:breakdown, l.breakdown, -1 ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].ShippingDetails_Update_Basket( g.Basket:basket_id, l.shipping_details ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvIF>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -622,7 +661,14 @@
 		<MvIF EXPR = "{ NOT l.handlingcharge:separate }">
 			<MvIF EXPR = "{ HandlingCharge_Applies( l.handlingcharge, g.Basket:subtotal, g.Basket:quantity, g.Basket:weight ) }">
 				<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
-					<MvASSIGN NAME = "l.method:price"	VALUE = "{ l.method:price + HandlingCharge_Calculate( l.handlingcharge, l.method:price, g.Basket:subtotal ) }">
+					<MvASSIGN NAME = "l.handlingcharge_amount"	VALUE = "{ HandlingCharge_Calculate( l.handlingcharge, l.method:price, g.Basket:subtotal ) }">
+
+					<MvASSIGN NAME = "l.method:price"			VALUE = "{ l.method:price + l.handlingcharge_amount }">
+
+					<MvASSIGN NAME = "l.breakdown"				VALUE = "">
+					<MvASSIGN NAME = "l.breakdown:descrip"		VALUE = "Handling Charge">
+					<MvASSIGN NAME = "l.breakdown:amount"		VALUE = "{ l.handlingcharge_amount }">
+					<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_insert_var( l.method:breakdown, l.breakdown, -1 ) }">
 				</MvFOREACH>
 			</MvIF>
 		</MvIF>
@@ -677,10 +723,13 @@
 			</MvREFERENCEARRAY>
 		</MvIF>
 
+		<MvASSIGN NAME = "l.module_packages"			VALUE = "{ l.packages }">
+		<MvASSIGN NAME = "l.module_package_count"		VALUE = "{ l.package_count }">
+
 		<MvIF EXPR = "{ l.module:api_ver LT 5.71 }">
 			<MvASSIGN NAME = "l.module_method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Shipping_Methods( l.module, l.module_methods ) }">
 		<MvELSE>
-			<MvASSIGN NAME = "l.module_method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Basket_Methods( l.module, l.packages, l.package_count, l.module_methods ) }">
+			<MvASSIGN NAME = "l.module_method_count"	VALUE = "{ [ g.Module_Root $ l.module:module ].ShippingModule_Basket_Methods( l.module, l.module_packages, l.module_package_count, l.module_methods ) }">
 		</MvIF>
 
 		<MvFOREACH ITERATOR = "l.method" ARRAY = "l.module_methods" COUNT = "{ l.module_method_count }">
@@ -691,6 +740,10 @@
 			</MvIF>
 
 			<MvASSIGN NAME = "l.method:module"			VALUE = "{ l.module }">
+
+			<MvIF EXPR = "{ ISNULL l.method:packages }">
+				<MvASSIGN NAME = "l.method:packages"	VALUE = "{ l.module_packages }">
+			</MvIF>
 
 			<MvASSIGN NAME = "l.method_count"							VALUE = "{ l.method_count + 1 }">
 			<MvASSIGN NAME = "l.methods" INDEX = "{ l.method_count }"	VALUE = "{ l.method }">
@@ -795,10 +848,20 @@
 			<MvASSIGN NAME = "l.method:priority"	VALUE = "{ l.shippingmethodrules:priority }">
 
 			<MvIF EXPR = "{ NOT ISNULL l.shippingmethodrules:descrip }">
-				<MvASSIGN NAME = "l.method:name"	VALUE = "{ l.shippingmethodrules:descrip }">
+				<MvASSIGN NAME = "l.method:original_name"	VALUE = "{ l.method:name }">
+				<MvASSIGN NAME = "l.method:name"			VALUE = "{ l.shippingmethodrules:descrip }">
 			</MvIF>
 
-			<MvASSIGN NAME = "l.method:price" 		VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.method:price ) }">
+			<MvASSIGN NAME = "l.original_price" VALUE = "{ l.method:price }">
+			<MvASSIGN NAME = "l.adjusted_price" VALUE = "{ ShippingMethodRules_Adjusted_Price( l.shippingmethodrules, l.method:price ) }">
+			<MvASSIGN NAME = "l.method:price" 	VALUE = "{ l.adjusted_price }">
+
+			<MvIF EXPR = "{ l.original_price NE l.adjusted_price }">
+				<MvASSIGN NAME = "l.breakdown"				VALUE = "">
+				<MvASSIGN NAME = "l.breakdown:descrip"		VALUE = "Shipping Method Rate Adjustment">
+				<MvASSIGN NAME = "l.breakdown:amount"		VALUE = "{ l.adjusted_price - l.original_price }">
+				<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_insert_var( l.method:breakdown, l.breakdown, -1 ) }">
+			</MvIF>
 		</MvIF>
 	</MvFOREACH>
 
@@ -1071,7 +1134,13 @@
 	|
 	</MvCOMMENT>
 
-	<MvASSIGN NAME = "l.weight"							VALUE = "{ l.basketitem:weight + [ g.Module_Library_DB ].BasketOption_Line_Weight( l.basketitem:line_id ) }">
+	<MvASSIGN NAME = "l.basketitem:option_count"	VALUE = "{ [ g.Module_Library_DB ].BasketOptionList_Load_Line( l.basketitem:line_id, l.basketitem:options ) }">
+	<MvASSIGN NAME = "l.weight"						VALUE = "{ l.basketitem:weight }">
+
+	<MvFOREACH ITERATOR = "l.option" ARRAY = "l.basketitem:options" COUNT = "{ l.basketitem:option_count }">
+		<MvASSIGN NAME = "l.weight" VALUE = "{ l.weight + l.option:weight }">
+	</MvFOREACH>
+
 	<MvASSIGN NAME = "l.part_count"						VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.basketitem:product_id, l.basketitem:variant_id, l.part_products ) }">
 
 	<MvIF EXPR = "{ ( l.part_count EQ 0 ) OR ( l.packagingrules:vp_mode EQ 'master' ) }">
@@ -1120,7 +1189,12 @@
 	|
 	</MvCOMMENT>
 
-	<MvASSIGN NAME = "l.weight"							VALUE = "{ l.orderitem:weight + [ g.Module_Library_DB ].OrderOption_Line_Weight( l.orderitem:line_id ) }">
+	<MvASSIGN NAME = "l.orderitem:option_count"	VALUE = "{ [ g.Module_Library_DB ].OrderOptionList_Load_Line( l.orderitem:line_id, l.orderitem:options ) }">
+	<MvASSIGN NAME = "l.weight"					VALUE = "{ l.orderitem:weight }">
+
+	<MvFOREACH ITERATOR = "l.option" ARRAY = "l.orderitem:options" COUNT = "{ l.orderitem:option_count }">
+		<MvASSIGN NAME = "l.weight" VALUE = "{ l.weight + l.option:weight }">
+	</MvFOREACH>
 
 	<MvIF EXPR = "{ NOT l.product:id }">
 		<MvASSIGN NAME = "l.product:code"				VALUE = "{ l.orderitem:code }">
@@ -1284,6 +1358,7 @@
 			<MvDIMENSION INDEX = "{ l.package_count }">
 		</MvREFERENCEARRAY>
 
+		<MvASSIGN NAME = "l.package:source"				VALUE = "separate">
 		<MvASSIGN NAME = "l.package:weight"				VALUE = "{ l.separate_item:weight }">
 		<MvASSIGN NAME = "l.package:width"				VALUE = "{ l.separate_item:width }">
 		<MvASSIGN NAME = "l.package:length"				VALUE = "{ l.separate_item:length }">
@@ -1300,6 +1375,8 @@
 		<MvASSIGN NAME = "l.module_package_count"	VALUE = "{ [ g.Module_Root $ g.Store:boxpack_mod:module ].BoxPackingModule_Pack_Items( g.Store:boxpack_mod, l.packable_items, l.packable_item_count, l.module_packages ) }">
 		<MvIF EXPR = "{ l.module_package_count }">
 			<MvFOREACH ITERATOR = "l.module_package" ARRAY = "l.module_packages" COUNT = "{ l.module_package_count }">
+				<MvASSIGN NAME = "l.module_package:source"					VALUE = "module">
+
 				<MvIF EXPR = "{ ISNULL l.module_package:item_count }">
 					<MvASSIGN NAME = "l.module_package:item_count"			VALUE = "{ miva_array_elements( l.module_package:items ) }">
 				</MvIF>
@@ -1326,6 +1403,7 @@
 		<MvDIMENSION INDEX = "{ l.package_count }">
 	</MvREFERENCEARRAY>
 
+	<MvASSIGN NAME = "l.package:source"				VALUE = "fallback">
 	<MvASSIGN NAME = "l.package:width"				VALUE = "{ l.packagingrules:fb_width }">
 	<MvASSIGN NAME = "l.package:length"				VALUE = "{ l.packagingrules:fb_length }">
 	<MvASSIGN NAME = "l.package:height"				VALUE = "{ l.packagingrules:fb_height }">

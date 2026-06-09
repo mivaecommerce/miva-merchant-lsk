@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -9953,318 +9953,7 @@ function OWFWorkflow_AvailableFields()
 				{
 					field: 'items',
 					type: 'array',
-					children: [
-						{
-							field: 'order_id',
-							type: 'integer'
-						},
-						{
-							field: 'line_id',
-							type: 'integer'
-						},
-						{
-							field: 'status',
-							type: 'integer'
-						},
-						{
-							field: 'subscrp_id',
-							type: 'integer'
-						},
-						{
-							field: 'subterm_id',
-							type: 'integer'
-						},
-						{
-							field: 'rma_id',
-							type: 'integer'
-						},
-						{
-							field: 'rma_code',
-							type: 'string'
-						},
-						{
-							field: 'rma_dt_issued',
-							type: 'timestamp'
-						},
-						{
-							field: 'rma_dt_recvd',
-							type: 'timestamp'
-						},
-						{
-							field: 'dt_instock',
-							type: 'timestamp'
-						},
-						{
-							field: 'code',
-							type: 'string'
-						},
-						{
-							field: 'name',
-							type: 'string'
-						},
-						{
-							field: 'sku',
-							type: 'string'
-						},
-						{
-							field: 'retail',
-							type: 'double'
-						},
-						{
-							field: 'base_price',
-							type: 'double'
-						},
-						{
-							field: 'price',
-							type: 'double'
-						},
-						{
-							field: 'weight',
-							type: 'double'
-						},
-						{
-							field: 'taxable',
-							type: 'boolean'
-						},
-						{
-							field: 'upsold',
-							type: 'boolean'
-						},
-						{
-							field: 'quantity',
-							type: 'integer'
-						},
-						{
-							field: 'total',
-							type: 'double'
-						},
-						{
-							field: 'shipment',
-							type: 'object',
-							children: [
-								{
-									field: 'id',
-									type: 'integer'
-								},
-								{
-									field: 'code',
-									type: 'string'
-								},
-								{
-									field: 'order_id',
-									type: 'integer'
-								},
-								{
-									field: 'status',
-									type: 'integer'
-								},
-								{
-									field: 'labelcount',
-									type: 'integer'
-								},
-								{
-									field: 'ship_date',
-									type: 'timestamp'
-								},
-								{
-									field: 'tracknum',
-									type: 'string'
-								},
-								{
-									field: 'tracktype',
-									type: 'string'
-								},
-								{
-									field: 'tracklink',
-									type: 'string'
-								},
-								{
-									field: 'weight',
-									type: 'double'
-								},
-								{
-									field: 'cost',
-									type: 'double'
-								},
-								{
-									field: 'formatted_cost',
-									type: 'string'
-								}
-							]
-						},
-						{
-							field: 'discounts',
-							type: 'array',
-							children: [
-								{
-									field: 'order_id',
-									type: 'integer'
-								},
-								{
-									field: 'line_id',
-									type: 'integer'
-								},
-								{
-									field: 'pgrp_id',
-									type: 'integer'
-								},
-								{
-									field: 'display',
-									type: 'boolean'
-								},
-								{
-									field: 'descrip',
-									type: 'string'
-								},
-								{
-									field: 'discount',
-									type: 'double'
-								}
-							]
-						},
-						{
-							field: 'options',
-							type: 'array',
-							children: [
-								{
-									field: 'attribute',
-									type: 'string'
-								},
-								{
-									field: 'value',
-									type: 'string'
-								},
-								{
-									field: 'weight',
-									type: 'double'
-								},
-								{
-									field: 'retail',
-									type: 'double'
-								},
-								{
-									field: 'base_price',
-									type: 'double'
-								},
-								{
-									field: 'price',
-									type: 'double'
-								},
-								{
-									field: 'discounts',
-									type: 'array',
-									children: [
-										{
-											field: 'order_id',
-											type: 'integer'
-										},
-										{
-											field: 'line_id',
-											type: 'integer'
-										},
-										{
-											field: 'attr_id',
-											type: 'integer'
-										},
-										{
-											field: 'attmpat_id',
-											type: 'integer'
-										},
-										{
-											field: 'pgrp_id',
-											type: 'integer'
-										},
-										{
-											field: 'display',
-											type: 'boolean'
-										},
-										{
-											field: 'descrip',
-											type: 'string'
-										},
-										{
-											field: 'discount',
-											type: 'double'
-										}
-									]
-								}
-							]
-						},
-						{
-							field: 'subscription',
-							type: 'object',
-							children: [
-								{
-									field: 'method',
-									type: 'string'
-								},
-								{
-									field: 'productsubscriptionterm',
-									type: 'object',
-									children: [
-										{
-											field: 'id',
-											type: 'integer'
-										},
-										{
-											field: 'product_id',
-											type: 'integer'
-										},
-										{
-											field: 'frequency',
-											type: 'string'
-										},
-										{
-											field: 'term',
-											type: 'integer'
-										},
-										{
-											field: 'descrip',
-											type: 'string'
-										},
-										{
-											field: 'n',
-											type: 'integer'
-										},
-										{
-											field: 'fixed_dow',
-											type: 'integer'
-										},
-										{
-											field: 'fixed_dom',
-											type: 'integer'
-										},
-										{
-											field: 'sub_count',
-											type: 'integer'
-										}
-									]
-								},
-								{
-									field: 'options',
-									type: 'array',
-									children: [
-										{
-											field: 'subscrp_id',
-											type: 'integer'
-										},
-										{
-											field: 'templ_code',
-											type: 'string'
-										},
-										{
-											field: 'attr_code',
-											type: 'string'
-										},
-										{
-											field: 'value',
-											type: 'string'
-										}
-									]
-								}
-							]
-						}
-					]
+					children: OWFWorkflow_AvailableFields_Items()
 				},
 				{
 					field: 'charges',
@@ -10416,6 +10105,684 @@ function OWFWorkflow_AvailableFields()
 						},
 						{
 							field: 'admin_user',
+							type: 'string'
+						}
+					]
+				},
+				{
+					field: 'shipments',
+					type: 'array',
+					children: [
+						{
+							field: 'id',
+							type: 'integer'
+						},
+						{
+							field: 'code',
+							type: 'string'
+						},
+						{
+							field: 'batch_id',
+							type: 'integer'
+						},
+						{
+							field: 'order_id',
+							type: 'integer'
+						},
+						{
+							field: 'user_id',
+							type: 'integer'
+						},
+						{
+							field: 'status',
+							type: 'integer'
+						},
+						{
+							field: 'labelcount',
+							type: 'integer'
+						},
+						{
+							field: 'ship_date',
+							type: 'integer'
+						},
+						{
+							field: 'tracknum',
+							type: 'string'
+						},
+						{
+							field: 'tracktype',
+							type: 'string'
+						},
+						{
+							field: 'tracklink',
+							type: 'string'
+						},
+						{
+							field: 'weight',
+							type: 'double'
+						},
+						{
+							field: 'cost',
+							type: 'double'
+						},
+						{
+							field: 'formatted_cost',
+							type: 'string'
+						},
+						{
+							field: 'items',
+							type: 'array',
+							children: OWFWorkflow_AvailableFields_Items()
+						}
+					]
+				},
+				{
+					field: 'returns',
+					type: 'array',
+					children: [
+						{
+							field: 'id',
+							type: 'integer'
+						},
+						{
+							field: 'order_id',
+							type: 'integer'
+						},
+						{
+							field: 'code',
+							type: 'string'
+						},
+						{
+							field: 'status',
+							type: 'integer'
+						},
+						{
+							field: 'dt_issued',
+							type: 'integer'
+						},
+						{
+							field: 'dt_recvd',
+							type: 'integer'
+						},
+						{
+							field: 'items',
+							type: 'array',
+							children: OWFWorkflow_AvailableFields_Items()
+						}
+					]
+				},
+				{
+					field: 'shipping_details',
+					type: 'object',
+					children: [
+						{
+							field: 'original_name',
+							type: 'string',
+						},
+						{
+							field: 'breakdown',
+							type: 'array',
+							children:
+							[
+								{
+									field:	'amount',
+									type:	'double'
+								},
+								{
+									field:	'descrip',
+									type:	'string'
+								}
+							]
+						},
+						{
+							field: 'notes',
+							type: 'array'
+						},
+						{
+							field: 'packages',
+							type: 'array',
+							children:
+							[
+								{
+									field: 'box',
+									type: 'object',
+									children:
+									[
+										{
+											field:	'id',
+											type:	'integer'
+										},
+										{
+											field:	'descrip',
+											type:	'string'
+										},
+										{
+											field:	'enabled',
+											type:	'boolean'
+										},
+										{
+											field:	'height',
+											type:	'double'
+										},
+										{
+											field:	'length',
+											type:	'double'
+										},
+										{
+											field:	'width',
+											type:	'double'
+										},
+										{
+											field:	'weight',
+											type:	'double'
+										}
+									]
+								},
+								{
+									field:	'width',
+									type:	'double'
+								},
+								{
+									field:	'length',
+									type:	'double'
+								},
+								{
+									field:	'height',
+									type:	'double'
+								},
+								{
+									field:	'weight',
+									type:	'double'
+								},
+								{
+									field: 'items',
+									type: 'array',
+									children:
+									[
+										{
+											field:		'basketitem',
+											type:		'object',
+											children:	OWFWorkflow_AvailableFields_Items()
+										},
+										{
+											field:		'product',
+											type:		'object',
+											children:
+											[
+												{
+													field:	'active',
+													type:	'boolean'
+												},
+												{
+													field:	'agrpcount',
+													type:	'integer'
+												},
+												{
+													field:	'cancat_id',
+													type:	'integer'
+												},
+												{
+													field:	'catcount',
+													type:	'integer'
+												},
+												{
+													field:	'code',
+													type:	'string'
+												},
+												{
+													field:	'cost',
+													type:	'double'
+												},
+												{
+													field:	'descrip',
+													type:	'string'
+												},
+												{
+													field:	'disp_order',
+													type:	'integer'
+												},
+												{
+													field:	'dt_created',
+													type:	'timestamp'
+												},
+												{
+													field:	'dt_updated',
+													type:	'timestamp'
+												},
+												{
+													field:	'exsearch',
+													type:	'boolean'
+												},
+												{
+													field:	'id',
+													type:	'integer'
+												},
+												{
+													field:	'image',
+													type:	'string'
+												},
+												{
+													field:	'margin',
+													type:	'double'
+												},
+												{
+													field:	'name',
+													type:	'string'
+												},
+												{
+													field:	'original_active',
+													type:	'boolean'
+												},
+												{
+													field:	'page_code',
+													type:	'string'
+												},
+												{
+													field:	'page_title',
+													type:	'string'
+												},
+												{
+													field:	'pgrpcount',
+													type:	'integer'
+												},
+												{
+													field:	'price',
+													type:	'double'
+												},
+												{
+													field:	'profit',
+													type:	'double'
+												},
+												{
+													field:	'sku',
+													type:	'string'
+												},
+												{
+													field:	'taxable',
+													type:	'boolean'
+												},
+												{
+													field:	'thumbnail',
+													type:	'string'
+												},
+												{
+													field:	'weight',
+													type:	'double'
+												}
+											]
+										},
+										{
+											field:		'width',
+											type:		'double'
+										},
+										{
+											field:		'length',
+											type:		'double'
+										},
+										{
+											field:		'height',
+											type:		'double'
+										},
+										{
+											field:		'weight',
+											type:		'double'
+										},
+									]
+								},
+								{
+									field:	'product_ids',
+									type:	'array'
+								},
+								{
+									field:	'source',
+									type:	'string'
+								},
+								{
+									field: 'breakdown',
+									type: 'array',
+									children:
+									[
+										{
+											field:	'amount',
+											type:	'double'
+										},
+										{
+											field:	'descrip',
+											type:	'string'
+										}
+									]
+								},
+								{
+									field: 'options',
+									type: 'array',
+									children:
+									[
+										{
+											field:	'name',
+											type:	'string'
+										},
+										{
+											field:	'value',
+											type:	'string'
+										}
+									]
+								}
+							]
+						}
+					]
+				}
+			]
+		}
+	];
+}
+
+function OWFWorkflow_AvailableFields_Items()
+{
+	return [
+		{
+			field: 'order_id',
+			type: 'integer'
+		},
+		{
+			field: 'line_id',
+			type: 'integer'
+		},
+		{
+			field: 'status',
+			type: 'integer'
+		},
+		{
+			field: 'subscrp_id',
+			type: 'integer'
+		},
+		{
+			field: 'subterm_id',
+			type: 'integer'
+		},
+		{
+			field: 'rma_id',
+			type: 'integer'
+		},
+		{
+			field: 'rma_code',
+			type: 'string'
+		},
+		{
+			field: 'rma_dt_issued',
+			type: 'timestamp'
+		},
+		{
+			field: 'rma_dt_recvd',
+			type: 'timestamp'
+		},
+		{
+			field: 'dt_instock',
+			type: 'timestamp'
+		},
+		{
+			field: 'code',
+			type: 'string'
+		},
+		{
+			field: 'name',
+			type: 'string'
+		},
+		{
+			field: 'sku',
+			type: 'string'
+		},
+		{
+			field: 'retail',
+			type: 'double'
+		},
+		{
+			field: 'base_price',
+			type: 'double'
+		},
+		{
+			field: 'price',
+			type: 'double'
+		},
+		{
+			field: 'weight',
+			type: 'double'
+		},
+		{
+			field: 'taxable',
+			type: 'boolean'
+		},
+		{
+			field: 'upsold',
+			type: 'boolean'
+		},
+		{
+			field: 'quantity',
+			type: 'integer'
+		},
+		{
+			field: 'total',
+			type: 'double'
+		},
+		{
+			field: 'shipment',
+			type: 'object',
+			children: [
+				{
+					field: 'id',
+					type: 'integer'
+				},
+				{
+					field: 'code',
+					type: 'string'
+				},
+				{
+					field: 'order_id',
+					type: 'integer'
+				},
+				{
+					field: 'status',
+					type: 'integer'
+				},
+				{
+					field: 'labelcount',
+					type: 'integer'
+				},
+				{
+					field: 'ship_date',
+					type: 'timestamp'
+				},
+				{
+					field: 'tracknum',
+					type: 'string'
+				},
+				{
+					field: 'tracktype',
+					type: 'string'
+				},
+				{
+					field: 'tracklink',
+					type: 'string'
+				},
+				{
+					field: 'weight',
+					type: 'double'
+				},
+				{
+					field: 'cost',
+					type: 'double'
+				},
+				{
+					field: 'formatted_cost',
+					type: 'string'
+				}
+			]
+		},
+		{
+			field: 'discounts',
+			type: 'array',
+			children: [
+				{
+					field: 'order_id',
+					type: 'integer'
+				},
+				{
+					field: 'line_id',
+					type: 'integer'
+				},
+				{
+					field: 'pgrp_id',
+					type: 'integer'
+				},
+				{
+					field: 'display',
+					type: 'boolean'
+				},
+				{
+					field: 'descrip',
+					type: 'string'
+				},
+				{
+					field: 'discount',
+					type: 'double'
+				}
+			]
+		},
+		{
+			field: 'options',
+			type: 'array',
+			children: [
+				{
+					field: 'attribute',
+					type: 'string'
+				},
+				{
+					field: 'value',
+					type: 'string'
+				},
+				{
+					field: 'weight',
+					type: 'double'
+				},
+				{
+					field: 'retail',
+					type: 'double'
+				},
+				{
+					field: 'base_price',
+					type: 'double'
+				},
+				{
+					field: 'price',
+					type: 'double'
+				},
+				{
+					field: 'discounts',
+					type: 'array',
+					children: [
+						{
+							field: 'order_id',
+							type: 'integer'
+						},
+						{
+							field: 'line_id',
+							type: 'integer'
+						},
+						{
+							field: 'attr_id',
+							type: 'integer'
+						},
+						{
+							field: 'attmpat_id',
+							type: 'integer'
+						},
+						{
+							field: 'pgrp_id',
+							type: 'integer'
+						},
+						{
+							field: 'display',
+							type: 'boolean'
+						},
+						{
+							field: 'descrip',
+							type: 'string'
+						},
+						{
+							field: 'discount',
+							type: 'double'
+						}
+					]
+				}
+			]
+		},
+		{
+			field: 'subscription',
+			type: 'object',
+			children: [
+				{
+					field: 'method',
+					type: 'string'
+				},
+				{
+					field: 'productsubscriptionterm',
+					type: 'object',
+					children: [
+						{
+							field: 'id',
+							type: 'integer'
+						},
+						{
+							field: 'product_id',
+							type: 'integer'
+						},
+						{
+							field: 'frequency',
+							type: 'string'
+						},
+						{
+							field: 'term',
+							type: 'integer'
+						},
+						{
+							field: 'descrip',
+							type: 'string'
+						},
+						{
+							field: 'n',
+							type: 'integer'
+						},
+						{
+							field: 'fixed_dow',
+							type: 'integer'
+						},
+						{
+							field: 'fixed_dom',
+							type: 'integer'
+						},
+						{
+							field: 'sub_count',
+							type: 'integer'
+						}
+					]
+				},
+				{
+					field: 'options',
+					type: 'array',
+					children: [
+						{
+							field: 'subscrp_id',
+							type: 'integer'
+						},
+						{
+							field: 'templ_code',
+							type: 'string'
+						},
+						{
+							field: 'attr_code',
+							type: 'string'
+						},
+						{
+							field: 'value',
 							type: 'string'
 						}
 					]
