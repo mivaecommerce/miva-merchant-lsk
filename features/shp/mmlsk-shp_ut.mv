@@ -711,6 +711,9 @@
 																						  l.packable_items, l.packable_item_count,
 																						  l.packages ) }">
 
+	<MvASSIGN NAME = "l.consolidated_packages"			VALUE = "{ l.packages }">
+	<MvEVAL EXPR = "{ ProductShippingRules_Consolidate_Package_Items( l.consolidated_packages, l.package_count ) }">
+	
 	<MvASSIGN NAME = "l.method_count"					VALUE = 0>
 	<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Module_Library_DB ].StoreModuleList_Load_Feature( 'shipping', l.modules ) }">
 		<MvIF EXPR = "{ l.restricted_product_count }">
@@ -742,7 +745,7 @@
 			<MvASSIGN NAME = "l.method:module"			VALUE = "{ l.module }">
 
 			<MvIF EXPR = "{ ISNULL l.method:packages }">
-				<MvASSIGN NAME = "l.method:packages"	VALUE = "{ l.module_packages }">
+				<MvASSIGN NAME = "l.method:packages"	VALUE = "{ l.consolidated_packages }">
 			</MvIF>
 
 			<MvASSIGN NAME = "l.method_count"							VALUE = "{ l.method_count + 1 }">
@@ -901,17 +904,17 @@
 	|
 	</MvCOMMENT>
 
-	<MvASSIGN NAME = "l.collapsed_count"									VALUE = 0>
+	<MvASSIGN NAME = "l.consolidated_count"											VALUE = 0>
 
 	<MvFOREACH ITERATOR = "l.method" ARRAY = "l.methods" COUNT = "{ l.method_count }">
 		<MvIF EXPR = "{ NOT l.method:excluded }">
-			<MvASSIGN NAME = "l.collapsed_count"							VALUE = "{ l.collapsed_count + 1 }">
-			<MvASSIGN NAME = "l.collapsed" INDEX = "{ l.collapsed_count }"	VALUE = "{ l.method }">
+			<MvASSIGN NAME = "l.consolidated_count"									VALUE = "{ l.consolidated_count + 1 }">
+			<MvASSIGN NAME = "l.consolidated" INDEX = "{ l.consolidated_count }"	VALUE = "{ l.method }">
 		</MvIF>
 	</MvFOREACH>
 
-	<MvASSIGN NAME = "l.methods"											VALUE = "{ l.collapsed }">
-	<MvFUNCTIONRETURN VALUE = "{ l.collapsed_count }">
+	<MvASSIGN NAME = "l.methods"													VALUE = "{ l.consolidated }">
+	<MvFUNCTIONRETURN VALUE = "{ l.consolidated_count }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "FallbackShippingMethod_Valid_ForBasket" STANDARDOUTPUTLEVEL = "">
@@ -1286,6 +1289,7 @@
 			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "length"				VALUE = "{ l.productshippingrules:length }">
 			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "height"				VALUE = "{ l.productshippingrules:height }">
 			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "weight"				VALUE = "{ l.weight }">
+			<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "quantity"			VALUE = 1>
 		</MvFOR>
 	<MvELSE>
 		<MvASSIGN NAME = "l.item_count"															VALUE = "{ l.item_count + 1 }">
@@ -1295,18 +1299,7 @@
 		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "length"					VALUE = "{ l.productshippingrules:length }">
 		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "height"					VALUE = "{ l.productshippingrules:height }">
 		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "weight"					VALUE = "{ l.quantity * l.weight }">
-
-		<MvASSIGNARRAY NAME = "l.items" VALUE = "{ l.product:name $ ' x ' $ l.quantity }">
-			<MvDIMENSION INDEX = "{ l.item_count }">
-			<MvMEMBER NAME = "product">
-			<MvMEMBER NAME = "name">
-		</MvASSIGNARRAY>
-
-		<MvASSIGNARRAY NAME = "l.items" VALUE = "{ l.item:name $ ' x ' $ l.quantity }">
-			<MvDIMENSION INDEX = "{ l.item_count }">
-			<MvMEMBER NAME = "{ l.item_type }">
-			<MvMEMBER NAME = "name">
-		</MvASSIGNARRAY>
+		<MvASSIGN NAME = "l.items" INDEX = "{ l.item_count }" MEMBER = "quantity"				VALUE = "{ l.quantity }">
 	</MvIF>
 </MvFUNCTION>
 
@@ -1417,7 +1410,67 @@
 	<MvASSIGN NAME = "l.package:item_count"			VALUE = "{ l.packable_item_count }">
 
 	<MvEVAL EXPR = "{ ProductShippingRules_BuildProductIDArray( l.package ) }">
+
 	<MvFUNCTIONRETURN VALUE = "{ l.package_count }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Consolidate_Package_Items_Compare" PARAMETERS = "left var, right var, field var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCEARRAY NAME = "l.left_line_id" VARIABLE = "l.left">
+		<MvMEMBER NAME = "{ l.field }">
+		<MvMEMBER NAME = "line_id">
+	</MvREFERENCEARRAY>
+
+	<MvREFERENCEARRAY NAME = "l.right_line_id" VARIABLE = "l.right">
+		<MvMEMBER NAME = "{ l.field }">
+		<MvMEMBER NAME = "line_id">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ l.left_line_id LT l.right_line_id }">				<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.left_line_id GT l.right_line_id }">			<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.left:product:id LT l.right:product:id }">		<MvFUNCTIONRETURN VALUE = -1>
+	<MvELSEIF EXPR = "{ l.right:product:id GT l.right:product:id }">	<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ProductShippingRules_Consolidate_Package_Items" PARAMETERS = "packages var, package_count" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT ISNULL l.packages[ 1 ]:items[ 1 ]:orderitem  }">	<MvASSIGN NAME = "l.field" VALUE = "orderitem">
+	<MvELSE>																<MvASSIGN NAME = "l.field" VALUE = "basketitem">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.package" ARRAY = "l.packages" COUNT = "{ l.package_count }">
+		<MvIF EXPR = "{ l.package:item_count LE 0 }">								<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ NOT miva_member_exists( l.package, 'items' ) }">		<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ miva_variable_type( l.package:items ) NE 'ARRAY' }">	<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.null"									VALUE = "{ miva_array_sort( l.package:items, 'ProductShippingRules_Consolidate_Package_Items_Compare', l.field ) }">
+		<MvASSIGN NAME = "l.consolidated_item"						VALUE = "">
+		<MvASSIGN NAME = "l.consolidated_items"						VALUE = "">
+		<MvASSIGN NAME = "l.consolidated_item_count"				VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.item" ARRAY = "l.package:items" COUNT = "{ l.package:item_count }">
+			<MvIF EXPR = "{ NOT ISNULL l.consolidated_item }">
+				<MvIF EXPR = "{ ProductShippingRules_Consolidate_Package_Items_Compare( l.consolidated_item, l.item, l.field ) EQ 0 }">
+					<MvASSIGN NAME = "l.consolidated_item:quantity"	VALUE = "{ l.consolidated_item:quantity + l.item:quantity }">
+					<MvASSIGN NAME = "l.consolidated_item:weight"	VALUE = "{ l.consolidated_item:weight + l.item:weight }">
+
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.consolidated_item_count"		VALUE = "{ miva_array_insert_var( l.consolidated_items, l.consolidated_item, -1 ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.consolidated_item"					VALUE = "{ l.item }">
+			<MvASSIGN NAME = "l.consolidated_item:quantity"			VALUE = "{ l.item:quantity }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.consolidated_item_count"				VALUE = "{ miva_array_insert_var( l.consolidated_items, l.consolidated_item, -1 ) }">
+
+		<MvASSIGN NAME = "l.package:items"							VALUE = "{ l.consolidated_items }">
+		<MvASSIGN NAME = "l.package:item_count"						VALUE = "{ l.consolidated_item_count }">
+	</MvFOREACH>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ProductShippingRules_BuildProductIDArray" PARAMETERS = "package var" STANDARDOUTPUTLEVEL = "">
