@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-RPT-DTB-
-| Next Error Code: 35   
+| Next Error Code: 39   
 |
 </MvCOMMENT>
 
@@ -33,7 +33,7 @@
 	</MvIF>
 
 	<MvQUERY	NAME = "Merchant"
-				QUERY = "{ 'CREATE TABLE ' $  g.Store_Table_Prefix $ 'Reports
+				QUERY = "{ 'CREATE TABLE ' $ g.Store_Table_Prefix $ 'Reports
 							(
 								id			' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
 								module_id	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
@@ -43,6 +43,7 @@
 								date_end	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 10 )	$ ',
 								date_group	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_CHAR( 1 )		$ ',
 								display		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
+								mch_disp	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_BOOL()		$ ',
 								rinterval	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
 								lastrun		' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
 								last_start	' $ [ g.Module_Library_Native_DBAPI ].DB_Type_INTEGER()		$ ',
@@ -110,6 +111,7 @@
 	<MvASSIGN NAME = "l.report:date_end"	VALUE = "{ Reports.d.date_end }">
 	<MvASSIGN NAME = "l.report:date_group"	VALUE = "{ Reports.d.date_group }">
 	<MvASSIGN NAME = "l.report:display"		VALUE = "{ Reports.d.display }">
+	<MvASSIGN NAME = "l.report:mch_disp"	VALUE = "{ Reports.d.mch_disp }">
 	<MvASSIGN NAME = "l.report:rinterval"	VALUE = "{ Reports.d.rinterval }">
 	<MvASSIGN NAME = "l.report:lastrun"		VALUE = "{ Reports.d.lastrun }">
 	<MvASSIGN NAME = "l.report:last_start"	VALUE = "{ Reports.d.last_start }">
@@ -125,6 +127,7 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Report_Insert_LowLevel" PARAMETERS = "report var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL l.report:mch_disp }">	<MvASSIGN NAME = "l.report:mch_disp"	VALUE = 0>	</MvIF>
 	<MvIF EXPR = "{ ISNULL l.report:conv_id }">		<MvASSIGN NAME = "l.report:conv_id"		VALUE = 0>	</MvIF>
 	<MvIF EXPR = "{ ISNULL l.report:lastrun }">		<MvASSIGN NAME = "l.report:lastrun"		VALUE = 0>	</MvIF>
 	<MvIF EXPR = "{ ISNULL l.report:last_start }">	<MvASSIGN NAME = "l.report:last_start"	VALUE = 0>	</MvIF>
@@ -136,11 +139,11 @@
 	<MvQUERY NAME	= "Merchant"
 			 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'Reports
 					      ( id, module_id, conv_id, descrip, date_start, date_end, date_group, display,
-						    rinterval, lastrun, last_start, last_end, last_state, config )
+						    mch_disp, rinterval, lastrun, last_start, last_end, last_state, config )
 						  VALUES
-						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
+						  ( ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ? )' }"
 			 FIELDS	= "l.report:id, l.report:module_id, l.report:conv_id, l.report:descrip, l.report:date_start,
-					   l.report:date_end, l.report:date_group, l.report:display, l.report:rinterval,
+					   l.report:date_end, l.report:date_group, l.report:display, l.report:mch_disp, l.report:rinterval,
 					   l.report:lastrun, l.report:last_start, l.report:last_end, l.last_state, l.config">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00006', g.MvQUERY_Error ) }">
@@ -159,11 +162,12 @@
 							date_end	= ?,
 							date_group	= ?,
 							display		= ?,
+							mch_disp	= ?,
 							rinterval	= ?
 						  WHERE
 							id			= ?' }"
 			 FIELDS	= "l.report:module_id, l.report:descrip, l.report:date_start, l.report:date_end,
-					   l.report:date_group, l.report:display, l.report:rinterval,
+					   l.report:date_group, l.report:display, l.report:mch_disp, l.report:rinterval,
 					   l.report:id">
 	<MvIF EXPR = "{ g.MvQUERY_Error }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00007', g.MvQUERY_Error ) }">
@@ -296,6 +300,39 @@
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00012', l.report_count ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "ReportList_Load_Dashboard" PARAMETERS = "reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Reports"
+				QUERY	= "{ 'SELECT
+								r.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Reports r,
+								Modules m
+							  WHERE
+								(
+									r.display	= 1 OR
+									r.mch_disp	= 1
+								) AND
+								m.id		= r.module_id AND
+								m.active	= 1
+							  ORDER BY
+								id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00035', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Reports.d.EOF }">
+		<MvEVAL EXPR = "{ Report_Read( l.reports[ ++l.report_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Reports" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00036', l.report_count ) }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "ReportList_Load_Display" PARAMETERS = "reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
 	<MvOPENVIEW NAME	= "Merchant"
 				VIEW	= "Reports"
@@ -324,6 +361,36 @@
 
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00014', l.report_count ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ReportList_Load_MerchandisingDisplay" PARAMETERS = "reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">
+	<MvOPENVIEW NAME	= "Merchant"
+				VIEW	= "Reports"
+				QUERY	= "{ 'SELECT
+								r.*
+							  FROM
+								' $ g.Store_Table_Prefix $ 'Reports r,
+								Modules m
+							  WHERE
+								r.mch_disp	= 1				AND
+								m.id		= r.module_id	AND
+								m.active	= 1
+							  ORDER BY
+								id' }">
+	<MvIF EXPR = "{ g.MvOPENVIEW_Error }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-RPT-DTB-00037', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.report_count" VALUE = 0>
+
+	<MvWHILE EXPR = "{ NOT Reports.d.EOF }">
+		<MvEVAL EXPR = "{ Report_Read( l.reports[ ++l.report_count ] ) }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Reports" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Reports">
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_DB ].ListLoad_EOF_Return( 'MER-RPT-DTB-00038', l.report_count ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ReportList_Load_Conversation" PARAMETERS = "conv_id, reports var" STANDARDOUTPUTLEVEL = "" ERROROUTPUTLEVEL = "">

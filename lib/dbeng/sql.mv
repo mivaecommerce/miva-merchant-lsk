@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-SQL-
@@ -167,6 +167,7 @@
 	<MvASSIGN NAME = "l.query:select"			VALUE = "">
 	<MvASSIGN NAME = "l.query:select_count"		VALUE = 0>
 	<MvASSIGN NAME = "l.query:select_distinct"	VALUE = 0>
+	<MvASSIGN NAME = "l.query:select_fields"	VALUE = "">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SQL_Query_SELECT_DISTINCT" PARAMETERS = "query var, select" STANDARDOUTPUTLEVEL = "">
@@ -176,6 +177,14 @@
 
 <MvFUNCTION NAME = "SQL_Query_SELECT" PARAMETERS = "query var, select" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.query:select_count"	VALUE = "{ miva_array_insert_var( l.query:select, l.select, -1 ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_SELECT_With_Fields" PARAMETERS = "query var, select, fields" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.query:select_count"	VALUE = "{ miva_array_insert_var( l.query:select, l.select, -1 ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.fields }">
+		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert_var( l.query:select_fields, l.fields, -1 ) }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SQL_Query_SELECT_NULL_CHAR" PARAMETERS = "query var, column, alias" STANDARDOUTPUTLEVEL = "">
@@ -298,6 +307,45 @@
 	</MvIF>
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "SQL_Query_SUB_WHERE_Extract" PARAMETERS = "query var, default_inner_joining_clause, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.query:subwhere_pos LE 0 }">
+		<MvASSIGN NAME = "l.fields"	VALUE = "">
+		<MvFUNCTIONRETURN VALUE = "">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.subwhere" VARIABLE = "l.query:subwheres">
+		<MvDIMENSION INDEX = "{ l.query:subwhere_pos }">
+	</MvREFERENCEARRAY>
+
+	<MvASSIGN NAME = "l.query:subwhere_pos"	VALUE = "{ l.query:subwhere_pos - 1 }">
+
+	<MvASSIGN NAME = "l.fields"		VALUE = "{ l.subwhere:fields }">
+
+	<MvIF EXPR = "{ l.subwhere:where_count }">
+		<MvCAPTURE VARIABLE = "l.sql">
+			<MvEVAL EXPR = "( ">
+
+			<MvFOREACH ITERATOR = "l.entry" ARRAY = "l.subwhere:where" INDEX = "l.pos" COUNT = "{ l.subwhere:where_count }">
+				<MvIF EXPR = "{ l.pos GT 1 }">
+					<MvEVAL EXPR = " ">
+
+					<MvIF EXPR = "{ NOT ISNULL l.entry:joining_clause }">	<MvEVAL EXPR = "{ l.entry:joining_clause }">
+					<MvELSE>												<MvEVAL EXPR = "{ l.default_inner_joining_clause }">
+					</MvIF>
+					
+					<MvEVAL EXPR = " ">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ l.entry:sql }">
+			</MvFOREACH>
+
+			<MvEVAL EXPR = " )">
+		</MvCAPTURE>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.sql }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "SQL_Query_WHERE" PARAMETERS = "query var, where_sql, fields" STANDARDOUTPUTLEVEL = "">
 	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_WHERE_Clause( l.query, '', l.where_sql, l.fields ) }">
 </MvFUNCTION>
@@ -344,8 +392,6 @@
 <MvFUNCTION NAME = "SQL_Query_ORDER_BY_Clear" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.query:orderby"					VALUE = "">
 	<MvASSIGN NAME = "l.query:orderby_count"			VALUE = 0>
-	<MvASSIGN NAME = "l.query:orderby_relevance"		VALUE = "">
-	<MvASSIGN NAME = "l.query:orderby_relevance_count"	VALUE = 0>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SQL_Query_ORDER_BY" PARAMETERS = "query var, column, direction" STANDARDOUTPUTLEVEL = "">
@@ -356,32 +402,66 @@
 	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, l.column, '', l.direction, l.flag ) }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag_With_Alias" PARAMETERS = "query var, column, column_alias, direction, flag" STANDARDOUTPUTLEVEL = "">
-	<MvFUNCTIONRETURN VALUE = "{ SQL_Query_ORDER_BY_Flag_With_Alias_And_Member( l.query, l.column, l.column_alias, l.column, l.direction, l.flag ) }">
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag_With_Alias_And_Member" PARAMETERS = "query var, column, column_alias, member, direction, flag" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ miva_array_search( l.query:orderby, 1, l.existing_orderby, 'l.existing_orderby:column EQ l.column' ) EQ 0 }">
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Alias_With_Fields" PARAMETERS = "query var, column, column_alias, direction, fields" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ miva_array_search( l.query:orderby, 1, l.existing_orderby, 'l.existing_orderby:column_alias EQ l.column_alias' ) EQ 0 }">
 		<MvASSIGN NAME = "l.orderby"				VALUE = "">
+		<MvASSIGN NAME = "l.orderby:is_relevance"	VALUE = 0>
 		<MvASSIGN NAME = "l.orderby:column"			VALUE = "{ l.column }">
 		<MvASSIGN NAME = "l.orderby:column_alias"	VALUE = "{ l.column_alias }">
-		<MvASSIGN NAME = "l.orderby:member"			VALUE = "{ l.member }">
+		<MvASSIGN NAME = "l.orderby:member"			VALUE = "">
 		<MvASSIGN NAME = "l.orderby:direction"		VALUE = "{ l.direction }">
-		<MvASSIGN NAME = "l.orderby:flag"			VALUE = "{ l.flag }">
+		<MvASSIGN NAME = "l.orderby:flag"			VALUE = "prefer_alias">
+		<MvASSIGN NAME = "l.orderby:fields"			VALUE = "{ l.fields }">
 
 		<MvASSIGN NAME = "l.query:orderby_count"	VALUE = "{ miva_array_insert_ref( l.query:orderby, l.orderby, -1 ) }">
 	</MvIF>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Relevance" PARAMETERS = "query var, search, columns, operator, weight" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.orderby_relevance"				VALUE = "">
-	<MvASSIGN NAME = "l.orderby_relevance:search"		VALUE = "{ l.search }">
-	<MvASSIGN NAME = "l.orderby_relevance:columns"		VALUE = "{ l.columns }">
-	<MvASSIGN NAME = "l.orderby_relevance:operator"		VALUE = "{ l.operator }">
-	<MvASSIGN NAME = "l.orderby_relevance:weight"		VALUE = "{ l.weight }">
-
-	<MvASSIGN NAME = "l.query:orderby_relevance_count"	VALUE = "{ miva_array_insert_ref( l.query:orderby_relevance, l.orderby_relevance, -1 ) }">
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag_With_Alias" PARAMETERS = "query var, column, column_alias, direction, flag" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias_And_Member( l.query, l.column, l.column_alias, l.column, l.direction, l.flag ) }">
 </MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_ORDER_BY_Flag_With_Alias_And_Member" PARAMETERS = "query var, column, column_alias, member, direction, flag" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ miva_array_search( l.query:orderby, 1, l.existing_orderby, 'l.existing_orderby:column EQ l.column' ) EQ 0 }">
+		<MvASSIGN NAME = "l.orderby"				VALUE = "">
+		<MvASSIGN NAME = "l.orderby:is_relevance"	VALUE = 0>
+		<MvASSIGN NAME = "l.orderby:column"			VALUE = "{ l.column }">
+		<MvASSIGN NAME = "l.orderby:column_alias"	VALUE = "{ l.column_alias }">
+		<MvASSIGN NAME = "l.orderby:member"			VALUE = "{ l.member }">
+		<MvASSIGN NAME = "l.orderby:direction"		VALUE = "{ l.direction }">
+		<MvASSIGN NAME = "l.orderby:flag"			VALUE = "{ l.flag }">
+		<MvASSIGN NAME = "l.orderby:fields"			VALUE = "">
+
+		<MvASSIGN NAME = "l.query:orderby_count"	VALUE = "{ miva_array_insert_ref( l.query:orderby, l.orderby, -1 ) }">
+	</MvIF>
+</MvFUNCTION>
+
+ <MvFUNCTION NAME = "SQL_Query_ORDER_BY_Relevance" PARAMETERS = "query var, search, columns, operator, weight" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Multiple relevance sorts are joined with the + operator.  Find an existing entry or append
+	| a new one.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ miva_array_search( l.query:orderby, 1, l.existing_orderby, 'l.existing_orderby:is_relevance EQ 1' ) GE 1 }">
+		<MvREFERENCE NAME = "l.orderby"					VARIABLE = "l.existing_orderby">
+	<MvELSE>
+		<MvASSIGN NAME = "l.orderby"					VALUE = "">
+		<MvASSIGN NAME = "l.orderby:is_relevance"		VALUE = 1>
+		<MvASSIGN NAME = "l.orderby:relevance_count"	VALUE = 0>
+
+		<MvASSIGN NAME = "l.query:orderby_count"		VALUE = "{ miva_array_insert_ref( l.query:orderby, l.orderby, -1 ) }">
+	</MvIF>
+
+ 	<MvASSIGN NAME = "l.orderby_relevance"				VALUE = "">
+ 	<MvASSIGN NAME = "l.orderby_relevance:search"		VALUE = "{ l.search }">
+ 	<MvASSIGN NAME = "l.orderby_relevance:columns"		VALUE = "{ l.columns }">
+ 	<MvASSIGN NAME = "l.orderby_relevance:operator"		VALUE = "{ l.operator }">
+ 	<MvASSIGN NAME = "l.orderby_relevance:weight"		VALUE = "{ l.weight }">
+ 
+	<MvASSIGN NAME = "l.orderby:relevance_count"		VALUE = "{ miva_array_insert_ref( l.orderby:relevance, l.orderby_relevance, -1 ) }">
+ </MvFUNCTION>
 
 <MvFUNCTION NAME = "SQL_Query_GROUP_BY" PARAMETERS = "query var, columns" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.query:groupby_count"	VALUE = "{ miva_array_insert_var( l.query:groupby, l.columns, -1 ) }">
@@ -397,6 +477,7 @@
 
 <MvFUNCTION NAME = "SQL_Query_Build_Count" PARAMETERS = "query, fields var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.query:orderby_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.query:select_fields"		VALUE = "">
 
 	<MvIF EXPR = "{ NOT l.query:select_distinct }">
 		<MvASSIGN NAME = "l.query:select"			VALUE = "COUNT( * ) AS total_count">
@@ -424,6 +505,7 @@
 			</MvIF>
 
 			<MvEVAL EXPR = "{ l.query:select }">
+
 			<MvEVAL EXPR = " FROM ">
 
 			<MvFOREACH INDEX = "l.pos" ITERATOR = "l.table" ARRAY = "l.query:from" COUNT = "{ l.query:from_count }">
@@ -465,6 +547,10 @@
 			</MvIF>
 		</MvIF>
 
+		<MvIF EXPR = "{ NOT ISNULL l.query:select_fields }">
+			<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_merge_ref( l.query:select_fields, 1, -1, l.all_fields, -1 ) }">
+		</MvIF>
+
 		<MvASSIGN NAME = "l.field_count"		VALUE = "{ miva_array_merge_ref( l.left_fields, 1, l.left_field_count, l.all_fields, -1 ) }">
 		<MvASSIGN NAME = "l.field_count"		VALUE = "{ miva_array_merge_ref( l.query:where_fields, 1, l.query:where_field_count, l.all_fields, -1 ) }">
 
@@ -494,7 +580,7 @@
 			<MvASSIGN NAME = "l.field_count"	VALUE = "{ miva_array_insert_var( l.all_fields, l.union_fields, -1 ) }">
 		</MvFOREACH>
 
-		<MvIF EXPR = "{ l.query:orderby_count OR l.query:orderby_relevance_count }">
+		<MvIF EXPR = "{ l.query:orderby_count }">
 			<MvEVAL EXPR = " ">
 			<MvEVAL EXPR = "{ SQL_Query_Build_ORDER_BY_With_Relevance( l.query, l.orderby_fields ) }">
 
@@ -507,53 +593,70 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY_With_Relevance" PARAMETERS = "query var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.output_count"			VALUE = 0>
+
 	<MvCAPTURE VARIABLE = "l.order_by">
-		<MvIF EXPR = "{ ( ( l.query:orderby_relevance_count ) AND ( g.Native_DBAPI EQ 'mysql' ) ) OR
-						( l.query:orderby_count ) }">
-			<MvEVAL EXPR = "ORDER BY ">
-		</MvIF>
+		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" COUNT = "{ l.query:orderby_count }">
+			<MvCOMMENT>
+			|
+			| Relevance ORDER BY is supported only on MySQL
+			|
+			</MvCOMMENT>
 
-		<MvIF EXPR = "{ ( l.query:orderby_relevance_count ) AND ( g.Native_DBAPI EQ 'mysql' ) }">
-			<MvEVAL EXPR = "( ">
+			<MvIF EXPR = "{ l.orderby:is_relevance AND ( g.Native_DBAPI NE 'mysql' ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
 
-			<MvFOREACH ITERATOR = "l.orderby_relevance" ARRAY = "l.query:orderby_relevance" INDEX = "l.pos" COUNT = "{ l.query:orderby_relevance_count }">
-				<MvIF EXPR = "{ l.pos GT 1 }">
-					<MvEVAL EXPR = " + ">
-				</MvIF>
-
-				<MvIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_BOOLEAN' }">
-					<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) ) * ? )' }">
-					<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) * ? )' }">
-					</MvIF>
-				<MvELSEIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_NATURAL' }">
-					<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) ) * ? )' }">
-					<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) * ? )' }">
-					</MvIF>
-				</MvIF>
-
-				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:search ), -1 ) }">
-				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:weight ), -1 ) }">
-			</MvFOREACH>
-
-			<MvEVAL EXPR = " ) DESC">
-
-			<MvIF EXPR = "{ l.query:orderby_count }">
+			<MvIF EXPR = "{ ++l.output_count EQ 1 }">
+				<MvEVAL EXPR = "ORDER BY ">
+			<MvELSE>
 				<MvEVAL EXPR = ", ">
 			</MvIF>
-		</MvIF>
 
-		<MvIF EXPR = "{ l.query:orderby_count }">
-			<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" INDEX = "l.pos" COUNT = "{ l.query:orderby_count }">
-				<MvIF EXPR = "{ l.pos GT 1 }">
-					<MvEVAL EXPR = ", ">
+			<MvIF EXPR = "{ NOT l.orderby:is_relevance }">
+				<MvASSIGN NAME = "l.use_alias"	VALUE = 0>
+
+				<MvIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">
+					<MvIF EXPR = "{ l.query:union_count }">						<MvASSIGN NAME = "l.use_alias" VALUE = 1>
+					<MvELSEIF EXPR = "{ ( 'null' IN l.orderby:flag ) EQ 1 }">	<MvASSIGN NAME = "l.use_alias" VALUE = 1>
+					<MvELSEIF EXPR = "{ l.orderby:flag EQ 'prefer_alias' }">	<MvASSIGN NAME = "l.use_alias" VALUE = 1>
+					</MvIF>
 				</MvIF>
 
-				<MvIF EXPR = "{ l.query:union_count AND ( NOT ISNULL l.orderby:column_alias ) }">							<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
-				<MvELSEIF EXPR = "{ ( ( 'null_' IN l.orderby:flag ) EQ 1 ) AND ( NOT ISNULL l.orderby:column_alias ) }">	<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
-				<MvELSE>																									<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+				<MvIF EXPR = "{ l.use_alias }">
+					<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
+				<MvELSE>
+					<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+
+					<MvIF EXPR = "{ NOT ISNULL l.orderby:fields }">
+						<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.fields, l.orderby:fields, -1 ) }">
+					</MvIF>
 				</MvIF>
-			</MvFOREACH>
-		</MvIF>
+			<MvELSE>
+				<MvEVAL EXPR = "( ">
+
+				<MvFOREACH ITERATOR = "l.orderby_relevance" ARRAY = "l.orderby:relevance" INDEX = "l.pos" COUNT = "{ l.orderby:relevance_count }">
+					<MvIF EXPR = "{ l.pos GT 1 }">
+						<MvEVAL EXPR = " + ">
+					</MvIF>
+
+					<MvIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_BOOLEAN' }">
+						<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) ) * ? )' }">
+						<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) * ? )' }">
+						</MvIF>
+					<MvELSEIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_NATURAL' }">
+						<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) ) * ? )' }">
+						<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) * ? )' }">
+						</MvIF>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:search ), -1 ) }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:weight ), -1 ) }">
+				</MvFOREACH>
+
+				<MvEVAL EXPR = " ) DESC">
+			</MvIF>
+		</MvFOREACH>
 	</MvCAPTURE>
 
 	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">
@@ -561,20 +664,40 @@
 
 <MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
 	<MvCAPTURE VARIABLE = "l.order_by">
-		<MvIF EXPR = "{ l.query:orderby_count }">
-			<MvEVAL EXPR = "ORDER BY ">
+		<MvASSIGN NAME = "l.output_count"	VALUE = 0>
 
-			<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" INDEX = "l.pos" COUNT = "{ l.query:orderby_count }">
-				<MvIF EXPR = "{ l.pos GT 1 }">
-					<MvEVAL EXPR = ", ">
-				</MvIF>
+		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" COUNT = "{ l.query:orderby_count }">
+			<MvCOMMENT>
+			|
+			| This function ignores relevance sort and any order by with fields, as there is no way to return the necessary fields
+			|
+			</MvCOMMENT>
 
-				<MvIF EXPR = "{ l.query:union_count AND ( NOT ISNULL l.orderby:column_alias ) }">							<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
-				<MvELSEIF EXPR = "{ ( ( 'null_' IN l.orderby:flag ) EQ 1 ) AND ( NOT ISNULL l.orderby:column_alias ) }">	<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
-				<MvELSE>																									<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+			<MvIF EXPR = "{ l.orderby:is_relevance OR ( NOT ISNULL l.orderby:fields ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ ++l.output_count EQ 1 }">
+				<MvEVAL EXPR = "ORDER BY ">
+			<MvELSE>
+				<MvEVAL EXPR = ", ">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.use_alias"	VALUE = 0>
+
+			<MvIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">
+				<MvIF EXPR = "{ l.query:union_count }">						<MvASSIGN NAME = "l.use_alias" VALUE = 1>
+				<MvELSEIF EXPR = "{ ( 'null' IN l.orderby:flag ) EQ 1 }">	<MvASSIGN NAME = "l.use_alias" VALUE = 1>
+				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'prefer_alias' }">	<MvASSIGN NAME = "l.use_alias" VALUE = 1>
 				</MvIF>
-			</MvFOREACH>
-		</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.use_alias }">
+				<MvEVAL EXPR = "{ l.orderby:column_alias $ ' ' $ l.orderby:direction }">
+			<MvELSE>
+				<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+			</MvIF>
+		</MvFOREACH>
 	</MvCAPTURE>
 
 	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">
@@ -582,22 +705,96 @@
 
 <MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY_Unaliased" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
 	<MvCAPTURE VARIABLE = "l.order_by">
-		<MvIF EXPR = "{ l.query:orderby_count }">
-			<MvEVAL EXPR = "ORDER BY ">
+		<MvASSIGN NAME = "l.output_count"	VALUE = 0>
 
-			<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" INDEX = "l.pos" COUNT = "{ l.query:orderby_count }">
-				<MvIF EXPR = "{ l.pos GT 1 }">
-					<MvEVAL EXPR = ", ">
-				</MvIF>
+		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" COUNT = "{ l.query:orderby_count }">
+			<MvCOMMENT>
+			|
+			| This function ignores relevance sort and any order by with fields, as there is no way to return the necessary fields
+			|
+			</MvCOMMENT>
 
+			<MvIF EXPR = "{ l.orderby:is_relevance OR ( NOT ISNULL l.orderby:fields ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ ++l.output_count EQ 1 }">
+				<MvEVAL EXPR = "ORDER BY ">
+			<MvELSE>
+				<MvEVAL EXPR = ", ">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.orderby:flag EQ 'null_char' }">			<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '\'\'' ) $ ' ' $ l.orderby:direction }">
+			<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_integer' }">	<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
+			<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_number' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
+			<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_bool' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
+			<MvELSE>													<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.orderby:fields }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.fields, l.orderby:fields, -1 ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvCAPTURE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "SQL_Query_Build_ORDER_BY_Unaliased_With_Fields" PARAMETERS = "query var, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvCAPTURE VARIABLE = "l.order_by">
+		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" COUNT = "{ l.query:orderby_count }">
+			<MvCOMMENT>
+			|
+			| Relevance ORDER BY is supported only on MySQL
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ l.orderby:is_relevance AND ( g.Native_DBAPI NE 'mysql' ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvIF EXPR = "{ ++l.output_count EQ 1 }">
+				<MvEVAL EXPR = "ORDER BY ">
+			<MvELSE>
+				<MvEVAL EXPR = ", ">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT l.orderby:is_relevance }">
 				<MvIF EXPR = "{ l.orderby:flag EQ 'null_char' }">			<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '\'\'' ) $ ' ' $ l.orderby:direction }">
 				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_integer' }">	<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
 				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_number' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
 				<MvELSEIF EXPR = "{ l.orderby:flag EQ 'null_bool' }">		<MvEVAL EXPR = "{ [ g.Library_Filename_Native_DBAPI ].DB_IFNULL( l.orderby:column, '0' ) $ ' ' $ l.orderby:direction }">
 				<MvELSE>													<MvEVAL EXPR = "{ l.orderby:column $ ' ' $ l.orderby:direction }">
 				</MvIF>
-			</MvFOREACH>
-		</MvIF>
+
+				<MvIF EXPR = "{ NOT ISNULL l.orderby:fields }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.fields, l.orderby:fields, -1 ) }">
+				</MvIF>
+			<MvELSE>
+				<MvEVAL EXPR = "( ">
+
+				<MvFOREACH ITERATOR = "l.orderby_relevance" ARRAY = "l.orderby:relevance" INDEX = "l.pos" COUNT = "{ l.orderby:relevance_count }">
+					<MvIF EXPR = "{ l.pos GT 1 }">
+						<MvEVAL EXPR = " + ">
+					</MvIF>
+
+					<MvIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_BOOLEAN' }">
+						<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) ) * ? )' }">
+						<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN BOOLEAN MODE ) * ? )' }">
+						</MvIF>
+					<MvELSEIF EXPR = "{ l.orderby_relevance:operator EQ 'FULLTEXT_NATURAL' }">
+						<MvIF EXPR = "{ l.query:groupby_count }">	<MvEVAL EXPR = "{ '( MAX( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) ) * ? )' }">
+						<MvELSE>									<MvEVAL EXPR = "{ '( MATCH( ' $ l.orderby_relevance:columns $ ' ) AGAINST ( ? IN NATURAL LANGUAGE MODE ) * ? )' }">
+						</MvIF>
+					</MvIF>
+
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:search ), -1 ) }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert( l.fields, SQL_Query_Field( l.orderby_relevance:weight ), -1 ) }">
+				</MvFOREACH>
+
+				<MvEVAL EXPR = " ) DESC">
+			</MvIF>
+		</MvFOREACH>
 	</MvCAPTURE>
 
 	<MvFUNCTIONRETURN VALUE = "{ l.order_by }">

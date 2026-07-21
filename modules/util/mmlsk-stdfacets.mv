@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-UTL-FCT-
-| Next Error Code: 109
+| Next Error Code: 112
 |
 </MvCOMMENT>
 
@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-stdfacets">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Standard Facets">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "10.1300">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0200">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.00">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "This module will expose product price, category, and attributes as facets for search and navigation.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "data_store, vis_util, util, prod_facet, provision_store, scheduledtask, not_cat, json, clientside, clientside_sri, vis_productbe">
@@ -1680,7 +1680,7 @@
 	<MvASSIGN NAME = "l.facet"					VALUE = "">
 	<MvASSIGN NAME = "l.facet:code"				VALUE = "category">
 	<MvASSIGN NAME = "l.facet:name"				VALUE = "Category">
-	<MvASSIGN NAME = "l.facet:allowed_types"	VALUE = "nested">
+	<MvASSIGN NAME = "l.facet:allowed_types"	VALUE = "nested,checkbox">
 
 	<MvFUNCTIONRETURN VALUE = "{ miva_array_insert_var( l.facets, l.facet, -1 ) }">
 </MvFUNCTION>
@@ -1696,6 +1696,14 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_Category" PARAMETERS = "query var, facet var, values var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.facet:type EQ 'nested' }">		<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Values_Query_Category_Nested( l.query, l.facet, l.values ) }">
+	<MvELSEIF EXPR = "{ l.facet:type EQ 'checkbox' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Values_Query_Category_Checkbox( l.query, l.facet, l.values ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_Category_Nested" PARAMETERS = "query var, facet var, values var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.values" 		VALUE = "">
 	<MvASSIGN NAME = "l.value_count" 	VALUE = 0>
 
@@ -1777,8 +1785,90 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Values_Query_Category_Checkbox" PARAMETERS = "query var, facet var, values var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.values" 		VALUE = "">
+	<MvASSIGN NAME = "l.value_count" 	VALUE = 0>
+
+	<MvCOMMENT>
+	|
+	| Do not provide a category facet for category product list loads, because the present category product list load behavior
+	| is to display only products in the immediately selected category (i.e., products from child categories are not included),
+	| which means that the facet would only ever load the category we are already displaying, or would have to change the
+	| default/established behavior of category product list loads.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Get_Category( l.query, l.category ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.query, 'facet_category.id AS facet_cat_id, facet_category.name AS facet_cat_name, COUNT( DISTINCT prod.id ) AS facet_cat_count, facet_category.disp_order AS facet_disp_order' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'CategoryXProduct', 'facet_catxprod' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'Categories', 'facet_category' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_catxprod.product_id		= prod.id				AND
+																		 facet_category.id				= facet_catxprod.cat_id	AND
+																		 facet_category.active			= 1', '' ) }">
+
+	<MvIF EXPR = "{ ( g.Basket:cust_id EQ 0 ) OR ( ( g.Customer:agrpcount EQ 0 ) AND ( g.BusinessAccount:agrpcount EQ 0 ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_category.agrpcount = 0', '' ) }">
+	<MvELSE>
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, '(
+																				( facet_category.agrpcount = 0 ) OR
+																				(
+																					facet_category.id IN
+																					(
+																						SELECT
+																							agxcat.cat_id
+																						FROM ' $
+																							g.Store_Table_Prefix $ 'AvailGroupXCategory agxcat
+																							LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'Customers cust ON cust.id = ?
+																							LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXCustomer agxcust ON cust.id = agxcust.cust_id AND agxcust.agrp_id = agxcat.agrp_id
+																							LEFT OUTER JOIN ' $ g.Store_Table_Prefix $ 'AvailGroupXBusinessAccount agxba ON cust.account_id = agxba.account_id AND agxba.agrp_id = agxcat.agrp_id
+																						WHERE
+																							agxcat.cat_id = facet_category.id 	AND
+																							(
+																								agxcust.cust_id	IS NOT NULL 	OR
+																								agxba.account_id IS NOT NULL
+																							)
+																					)
+																				)
+																			 )', [ g.Module_Library_DB ].SQL_Query_Field( g.Basket:cust_id ) ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_GROUP_BY( l.query, 'facet_category.id, facet_category.name, facet_category.disp_order' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query, 'facet_cat_count', 'DESC' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_ORDER_BY( l.query, 'facet_disp_order', 'ASC' ) }">
+
+	<MvASSIGN NAME = "l.facet_sql"		VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.query, l.facet_fields ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'Category_Facets', l.facet_sql, l.facet_fields, 0, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00109', g.MvOPENVIEW_Error ) }">
+	</MvIF>
+
+	<MvWHILE EXPR = "{ NOT Category_Facets.d.EOF }">
+		<MvASSIGN NAME = "l.values" INDEX = "{ ++l.value_count }"	MEMBER = "value" VALUE = "{ Category_Facets.d.facet_cat_id $ '-' $ Category_Facets.d.facet_cat_name }">
+		<MvASSIGN NAME = "l.values" INDEX = "{ l.value_count }"		MEMBER = "count" VALUE = "{ Category_Facets.d.facet_cat_count }">
+
+		<MvSKIP NAME = "Merchant" VIEW = "Category_Facets" ROWS = 1>
+	</MvWHILE>
+
+	<MvCLOSEVIEW NAME = "Merchant" VIEW = "Category_Facets">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.value_count }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "StandardFacets_Product_Facet_Query_Search_Category" PARAMETERS = "query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.entries"	VALUE = "{ miva_array_max( l.facet_values ) }">
+	<MvIF EXPR = "{ l.facet:type EQ 'nested' }">		<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Query_Search_Category_Nested( l.query, l.facet, l.facet_values ) }">
+	<MvELSEIF EXPR = "{ l.facet:type EQ 'checkbox' }">	<MvFUNCTIONRETURN VALUE = "{ StandardFacets_Product_Facet_Query_Search_Category_Checkbox( l.query, l.facet, l.facet_values ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00110', 'Invalid facet type' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Query_Search_Category_Nested" PARAMETERS = "query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.entries" VALUE = "{ miva_array_max( l.facet_values ) }">
+
 	<MvIF EXPR = "{ l.entries LT 1 }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00026', 'Invalid input value for category facet' ) }">
 	</MvIF>
@@ -1795,6 +1885,33 @@
 																		 facet_catxprod.cat_id		= facet_cathierarchy.child_id AND
 																		 prod.id					= facet_catxprod.product_id',
 															   [ g.Module_Library_DB ].SQL_Query_Field( l.cat_id ) ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_First( l.query, 'AND' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StandardFacets_Product_Facet_Query_Search_Category_Checkbox" PARAMETERS = "query var, facet var, facet_values var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.entries" VALUE = "{ miva_array_max( l.facet_values ) }">
+
+	<MvIF EXPR = "{ l.entries LT 1 }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTL-FCT-00111', 'Invalid input value for category facet' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.cat_id" VALUE = "{ int( gettoken( l.facet_values[ l.entries ], '-', 1 ) ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_DISTINCT( l.query ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM_Before( l.query, 'prod', g.Store_Table_Prefix $ 'CategoryXProduct', 'facet_catxprod' ) }">
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_catxprod.product_id	= prod.id', '' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.query ) }">
+
+	<MvFOREACH ITERATOR = "l.value" ARRAY = "l.facet_values">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'facet_catxprod.cat_id = ?', [ g.Module_Library_DB ].SQL_Query_Field( int( gettoken( l.value, '-', 1 ) ) ) ) }">
+	</MvFOREACH>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_First( l.query, 'OR' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_First( l.query, 'AND' ) }">
 
 	<MvFUNCTIONRETURN VALUE = 1>

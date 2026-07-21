@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-RTM-
-| Next Error Code: 63    
+| Next Error Code: 66    
 |
 </MvCOMMENT>
 
@@ -3201,7 +3201,8 @@
 </MvCOMMENT>
 
 <MvFUNCTION NAME = "JSON_Runtime_CategoryList_Load_Query" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">						<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT JSON_Runtime_CORS_Preflight_Headers() }">	<MvFUNCTIONRETURN> </MvIF>
 
 	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Enabled( 'json_runtime_categorylist_load_query', l.cache ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_CategoryList_Load_Query_LowLevel() }">
@@ -3751,30 +3752,60 @@
 	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.search_query, 'rlp.disp_order AS output_disp_order' ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "JSON_MaintenanceMode_Bypass_Runtime_ProductList_Load_Query" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_ProductList_Load_Query_ValidatePreviewSession( l.previewsession ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_ProductList_Load_Query_ValidatePreviewSession" PARAMETERS = "previewsession var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_ValidatePreviewSession( l.previewsession, l.user ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].CanI( l.user:admin, l.user:id, 'MRCH', 0, 0, 1, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "JSON_Runtime_ProductList_Load_Query" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">						<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT JSON_Runtime_CORS_Preflight_Headers() }">	<MvFUNCTIONRETURN> </MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Enabled( 'json_runtime_productlist_load_query', l.cache ) }">
-		<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
+	<MvCOMMENT>
+	|
+	| Attempt to serve cached results immediately.  Caching is bypassed when a Preview Session ID is present.
+	|
+	</MvCOMMENT>
 
-		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
+	<MvASSIGN NAME = "l.cache_result"			VALUE = 0>
+
+	<MvIF EXPR = "{ JSON_Runtime_Cache_Enabled( 'json_runtime_productlist_load_query', l.cache ) AND ( NOT JSON_Input_Exists( 'PreviewSession_ID' ) ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Connect( l.conn_id ) }">
+			<MvASSIGN NAME = "l.null"			VALUE = "{ miva_output_header( 'X-Miva-Cache', 'fail connection-failed' ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.cache_result"	VALUE = 1>
+		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Connect( l.conn_id ) }">
-		<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'X-Miva-Cache', 'fail connection-failed' ) }">
-		<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
-
-		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
+	<MvIF EXPR = "{ l.cache_result }">
+		<MvIF EXPR = "{ JSON_Runtime_Cache_Output( l.conn_id, l.cache, l.cache_key ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ JSON_Runtime_Cache_Output( l.conn_id, l.cache, l.cache_key ) }">
-		<MvFUNCTIONRETURN VALUE = 1>
+	<MvCOMMENT>
+	|
+	| Cache and output, or directly output the results
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT l.cache_result }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_ProductList_Load_Query_LowLevel() }">
 	</MvIF>
 
 	<MvCAPTURE VARIABLE = "l.response">
-		<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
-
-		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_Runtime_ProductList_Load_Query_LowLevel() }">
 	</MvCAPTURE>
 
 	<MvCOMMENT>
@@ -3791,46 +3822,156 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.result }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "JSON_Runtime_ProductList_Load_Query_LowLevel" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.previewsession"	VALUE = "">
+	<MvASSIGN NAME = "l.boosts"			VALUE = "">
+	<MvASSIGN NAME = "l.sorts"			VALUE = "">
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+	<MvASSIGN NAME = "l.filter"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',	l.filter )	OR
+					NOT JSON_Input_Text(	'o', 'Sort',	l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load boosting rules.  Load logic is bypassed if Sort is overridden.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
+		<MvIF EXPR = "{ JSON_Filter_Retrieve( l.filter, 'runtime_search', l.runtime_search ) }">
+			<MvIF EXPR = "{ miva_variable_type( l.runtime_search ) NE 'STRUCTURE' }">	<MvASSIGN NAME = "l.search" VALUE = "{ l.runtime_search }">
+			<MvELSE>																	<MvASSIGN NAME = "l.search" VALUE = "{ l.runtime_search:search }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].BoostingRules_Load_Search( l.search, l.boosts, l.sorts ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_ID' ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_ProductList_Load_Query_ValidatePreviewSession( l.previewsession ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Allow overrides of boosting rules
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_Boosts' ) }">
+			<MvASSIGN NAME = "l.null"				VALUE = "{ miva_json_decode( '[]', l.boosts ) }">
+			<MvASSIGN NAME = "l.preview_boosts"		VALUE = "">
+
+			<MvIF EXPR = "{ JSON_Input_Retrieve_Raw( 'PreviewSession_Boosts', l.preview_boosts ) AND ( NOT ISNULL l.preview_boosts ) }">
+				<MvIF EXPR = "{ miva_variable_type( l.preview_boosts ) NE 'ARRAY' }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Error( 'PreviewSession_Boosts', 'Invalid PreviewSession_Boosts format: Boosts filter must be an array' ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+				</MvIF>
+
+				<MvFOREACH ITERATOR = "l.boost" ARRAY = "l.preview_boosts">
+					<MvEVAL EXPR = "{ JSON_Filter_Structify( l.boost ) }">
+
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.boosts, l.boost, -1 ) }">
+				</MvFOREACH>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_Sorts' ) }">
+			<MvASSIGN NAME = "l.sorts"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Text_Array( 'O', 'PreviewSession_Sorts', l.sorts, l.null ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Build the query
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.previewsession }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_Flag( l.search_query, 'preview' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply boosting rules only when using default sort
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.boosts, l.sorts ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_MaintenanceMode_Bypass_Runtime_CategoryProductList_Load_Query" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_CategoryProductList_Load_Query_ValidatePreviewSession( l.previewsession ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_CategoryProductList_Load_Query_ValidatePreviewSession" PARAMETERS = "previewsession var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_ValidatePreviewSession( l.previewsession, l.user ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].CanI( l.user:admin, l.user:id, 'MRCH', 0, 0, 1, 0 ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "JSON_Runtime_CategoryProductList_Load_Query" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT JSON_Store_Open() }"> <MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">						<MvFUNCTIONRETURN> </MvIF>
+	<MvIF EXPR = "{ NOT JSON_Runtime_CORS_Preflight_Headers() }">	<MvFUNCTIONRETURN> </MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Enabled( 'json_runtime_categoryproductlist_load_query', l.cache ) }">
-		<MvIF EXPR = "{ NOT JSON_Runtime_Category_Load( l.category ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	<MvCOMMENT>
+	|
+	| Attempt to serve cached results immediately.  Caching is bypassed when a Preview Session ID is present.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.cache_result"			VALUE = 0>
+
+	<MvIF EXPR = "{ JSON_Runtime_Cache_Enabled( 'json_runtime_categoryproductlist_load_query', l.cache ) AND ( NOT JSON_Input_Exists( 'PreviewSession_ID' ) ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Connect( l.conn_id ) }">
+			<MvASSIGN NAME = "l.null"			VALUE = "{ miva_output_header( 'X-Miva-Cache', 'fail connection-failed' ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.cache_result"	VALUE = 1>
 		</MvIF>
-
-		<MvEVAL EXPR = "{ JSON_Runtime_CategoryProductList_Build_Query( l.search_query, l.category ) }">
-
-		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Connect( l.conn_id ) }">
-		<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'X-Miva-Cache', 'fail connection-failed' ) }">
+	<MvIF EXPR = "{ l.cache_result }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve_Integer( 'Category_ID',	l.cache:keys:category_id ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'Category_Code',			l.cache:keys:category_code ) }">
 
-		<MvIF EXPR = "{ NOT JSON_Runtime_Category_Load( l.category ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		<MvIF EXPR = "{ JSON_Runtime_Cache_Output( l.conn_id, l.cache, l.cache_key ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
-
-		<MvEVAL EXPR = "{ JSON_Runtime_CategoryProductList_Build_Query( l.search_query, l.category ) }">
-
-		<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve_Integer( 'Category_ID', l.cache:keys:category_id ) }">
-	<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'Category_Code', l.cache:keys:category_code ) }">
+	<MvCOMMENT>
+	|
+	| Cache and output, or directly output the results
+	|
+	</MvCOMMENT>
 
-	<MvIF EXPR = "{ JSON_Runtime_Cache_Output( l.conn_id, l.cache, l.cache_key ) }">
-		<MvFUNCTIONRETURN VALUE = 1>
+	<MvIF EXPR = "{ NOT l.cache_result }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_CategoryProductList_Load_Query_LowLevel() }">
 	</MvIF>
 
 	<MvCAPTURE VARIABLE = "l.response">
-		<MvIF EXPR = "{ NOT JSON_Runtime_Category_Load( l.category ) }">
-			<MvASSIGN NAME = "l.result" VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		<MvELSE>
-			<MvEVAL EXPR = "{ JSON_Runtime_CategoryProductList_Build_Query( l.search_query, l.category ) }">
-
-			<MvASSIGN NAME = "l.result" VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
-		</MvIF>
+		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_Runtime_CategoryProductList_Load_Query_LowLevel() }">
 	</MvCAPTURE>
 
 	<MvCOMMENT>
@@ -3845,6 +3986,96 @@
 	<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Runtime_Cache_Redis_Set_Response( l.conn_id, l.cache_key, l.response ) }">
 
 	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_CategoryProductList_Load_Query_LowLevel" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.previewsession"	VALUE = "">
+	<MvASSIGN NAME = "l.boosts"			VALUE = "">
+	<MvASSIGN NAME = "l.sorts"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Runtime_Category_Load( l.category ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.sort"			VALUE = "">
+
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'o', 'Sort', l.sort ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load category boosting rules.  Load logic is bypassed if Sort is overridden.
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].BoostingRules_Load_Category( l.category, l.boosts, l.sorts ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_ID' ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_CategoryProductList_Load_Query_ValidatePreviewSession( l.previewsession ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Allow overrides of boosting rules
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_Boosts' ) }">
+			<MvASSIGN NAME = "l.null"				VALUE = "{ miva_json_decode( '[]', l.boosts ) }">
+			<MvASSIGN NAME = "l.preview_boosts"		VALUE = "">
+
+			<MvIF EXPR = "{ JSON_Input_Retrieve_Raw( 'PreviewSession_Boosts', l.preview_boosts ) AND ( NOT ISNULL l.preview_boosts ) }">
+				<MvIF EXPR = "{ miva_variable_type( l.preview_boosts ) NE 'ARRAY' }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Error( 'PreviewSession_Boosts', 'Invalid PreviewSession_Boosts format: Boosts filter must be an array' ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+				</MvIF>
+
+				<MvFOREACH ITERATOR = "l.boost" ARRAY = "l.preview_boosts">
+					<MvEVAL EXPR = "{ JSON_Filter_Structify( l.boost ) }">
+
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.boosts, l.boost, -1 ) }">
+				</MvFOREACH>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_Sorts' ) }">
+			<MvASSIGN NAME = "l.sorts"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Text_Array( 'O', 'PreviewSession_Sorts', l.sorts, l.null ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Build the category query
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ JSON_Runtime_CategoryProductList_Build_Query( l.search_query, l.category ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.previewsession }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_Flag( l.search_query, 'preview' ) }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply boosting rules only when using default sort
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.boosts, l.sorts ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_MaintenanceMode_Bypass_Runtime_MerchandisingProductList_Load_Query" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">
@@ -3867,65 +4098,83 @@
 	<MvIF EXPR = "{ NOT JSON_Store_Open() }">						<MvFUNCTIONRETURN> </MvIF>
 	<MvIF EXPR = "{ NOT JSON_Runtime_CORS_Preflight_Headers() }">	<MvFUNCTIONRETURN> </MvIF>
 
-	<MvASSIGN NAME = "l.previewsession"	VALUE = "">
-
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_JSON ].JSON_MerchandisingPrompt_Load( l.merchandisingprompt ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_ID' ) }">
-		<MvIF EXPR = "{ NOT JSON_Runtime_MerchandisingProductList_Load_Query_ValidatePreviewSession( l.previewsession ) }">
-			<MvFUNCTIONRETURN>
-		</MvIF>
-
-		<MvIF EXPR = "{ NOT JSON_Input_Text( 'O', 'PreviewSession_Prompt', l.merchandisingprompt:prompt ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
-		</MvIF>
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT JSON_Input_Retrieve_Raw( 'MerchandisingPrompt_Context', l.merchandisingcontext ) OR ( miva_variable_type( l.merchandisingcontext ) NE 'STRUCTURE' ) }">
-		<MvASSIGN NAME = "l.merchandisingcontext"		VALUE = "">
-	</MvIF>
-
-	<MvASSIGN NAME = "l.merchandisingcontext:basket_id"	VALUE = "{ g.Basket:basket_id }">
-
 	<MvCOMMENT>
 	|
-	| In addition to the normal cache enablement logic, we also bypass caching for preview sessions
+	| Attempt to serve cached results immediately.  Caching is bypassed when a Preview Session ID is present.
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Enabled( 'json_runtime_merchandisingproductlist_load_query', l.cache ) OR ( NOT ISNULL l.previewsession ) }">
-		<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
+	<MvASSIGN NAME = "l.cache_result"			VALUE = 0>
 
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel( l.search_query, l.merchandisingprompt, l.merchandisingcontext ) }">
+	<MvIF EXPR = "{ JSON_Runtime_Cache_Enabled( 'json_runtime_merchandisingproductlist_load_query', l.cache ) AND ( NOT JSON_Input_Exists( 'PreviewSession_ID' ) ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Connect( l.conn_id ) }">
+			<MvASSIGN NAME = "l.null"			VALUE = "{ miva_output_header( 'X-Miva-Cache', 'fail connection-failed' ) }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.cache_result"	VALUE = 1>
+		</MvIF>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Runtime_Cache_Connect( l.conn_id ) }">
-		<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'X-Miva-Cache', 'fail connection-failed' ) }">
+	<MvIF EXPR = "{ l.cache_result }">
+		<MvCOMMENT>
+		|
+		| Legacy MerchandisingPrompt Loaders
+		|
+		</MvCOMMENT>
 
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_JSON ].JSON_MerchandisingPrompt_Load( l.merchandisingprompt ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve_Integer( 'MerchandisingPrompt_ID',		l.cache:keys:merchandisingprompt_id ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'Edit_MerchandisingPrompt',			l.cache:keys:edit_merchandisingprompt ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'MerchandisingPrompt_Code',			l.cache:keys:merchandisingprompt_code ) }">
+
+		<MvCOMMENT>
+		|
+		| MerchandisingShowcase Loaders
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve_Integer( 'MerchandisingShowcase_ID',	l.cache:keys:merchandisingshowcase_id ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'Edit_MerchandisingShowcase',			l.cache:keys:edit_merchandisingshowcase ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'MerchandisingShowcase_Code',			l.cache:keys:merchandisingshowcase_code ) }">
+
+		<MvCOMMENT>
+		|
+		| Search related inputs
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'Search_Index',					l.cache:keys:search_index ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve( 'Search_Origin',					l.cache:keys:search_origin ) }">
+
+		<MvCOMMENT>
+		|
+		| Merchandising_Context
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'MerchandisingPrompt_Context' ) }">	<MvASSIGN NAME = "l.context_param" VALUE = "MerchandisingPrompt_Context"> <MvCOMMENT> Legacy / Backwards Compatibility </MvCOMMENT>
+		<MvELSE>																<MvASSIGN NAME = "l.context_param" VALUE = "Merchandising_Context">
 		</MvIF>
 
-		<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Retrieve_Raw( l.context_param,					l.cache:keys:merchandisingcontext ) }">
 
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel( l.search_query, l.merchandisingprompt, l.merchandisingcontext ) }">
+	    <MvEVAL EXPR = "{ miva_member_delete( l.cache:keys:merchandisingcontext, 'basket_id' ) }">
+
+		<MvIF EXPR = "{ JSON_Runtime_Cache_Output( l.conn_id, l.cache, l.cache_key ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.cache:keys:merchandisingprompt"		VALUE = "{ l.merchandisingprompt }">
-	<MvASSIGN NAME = "l.cache:keys:merchandisingcontext"	VALUE = "{ l.merchandisingcontext }">
+	<MvCOMMENT>
+	|
+	| Cache and output, or directly output the results
+	|
+	</MvCOMMENT>
 
-	<MvEVAL EXPR = "{ miva_member_delete( l.cache:keys:merchandisingcontext, 'basket_id' ) }">
-
-	<MvIF EXPR = "{ JSON_Runtime_Cache_Output( l.conn_id, l.cache, l.cache_key ) }">
-		<MvFUNCTIONRETURN VALUE = 1>
+	<MvIF EXPR = "{ NOT l.cache_result }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel() }">
 	</MvIF>
 
 	<MvCAPTURE VARIABLE = "l.response">
-		<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
-
-		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel( l.search_query, l.merchandisingprompt, l.merchandisingcontext ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel() }">
 	</MvCAPTURE>
 
 	<MvCOMMENT>
@@ -3942,73 +4191,174 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.result }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel" PARAMETERS = "search_query var, merchandisingprompt var, merchandisingcontext var" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Data_Reference( l.search_query, 'Runtime_ProductList', l.query_params ) }">
+<MvFUNCTION NAME = "JSON_Runtime_MerchandisingProductList_Load_Query_LowLevel" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.previewsession"			VALUE = "">
+	<MvASSIGN NAME = "l.merchandising_data"		VALUE = "">
+	<MvASSIGN NAME = "l.merchandisingshowcase"	VALUE = "">
 
-	<MvASSIGN NAME = "l.available_filters"	VALUE = "">
-	<MvASSIGN NAME = "l.filter"				VALUE = "">
-	<MvASSIGN NAME = "l.sort"				VALUE = "">
-	<MvASSIGN NAME = "l.offset"				VALUE = 0>
-	<MvASSIGN NAME = "l.count"				VALUE = 0>
-	<MvASSIGN NAME = "l.search_term"		VALUE = "">
-	<MvASSIGN NAME = "l.search_index"		VALUE = "">
-	<MvASSIGN NAME = "l.search_origin"		VALUE = "{ 'Merchandising: ' $ l.merchandisingprompt:code }">
+	<MvIF EXPR = "{ [ g.Module_Feature_MCH_JSON ].JSON_MerchandisingPrompt_Loaders_Present() }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_JSON ].JSON_MerchandisingPrompt_Load( l.merchandisingshowcase ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_JSON ].JSON_MerchandisingShowcase_Load( l.merchandisingshowcase ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+	</MvIF>
 
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'prod.code',		'code' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'prod.name',		'name' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'prod.sku',		'sku' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'prod.image',		'image' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_CHAR(	l.available_filters, 'prod.thumbnail',	'thumbnail' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_DOUBLE(	l.available_filters, 'prod.price',		'price' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_DOUBLE(	l.available_filters, 'prod.weight',		'weight' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_BOOL(	l.available_filters, 'prod.taxable',	'taxable' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_RFC3339(	l.available_filters, 'prod.dt_created',	'dt_created' ) }">
-	<MvEVAL EXPR = "{ JSON_AvailableFilter_RFC3339(	l.available_filters, 'prod.dt_updated',	'dt_updated' ) }">
+	<MvASSIGN NAME = "l.sort"					VALUE = "">
+	<MvASSIGN NAME = "l.search_index"			VALUE = "">
+	<MvASSIGN NAME = "l.search_origin"			VALUE = "{ 'Merchandising: ' $ l.merchandisingshowcase:code }">
 
-	<MvIF EXPR = "{ NOT JSON_Input_Filter(	'o', 'Filter',			l.filter )	OR
-					NOT JSON_Input_Text(	'o', 'Sort',			l.sort )	OR
-					NOT JSON_Input_Integer(	'o', 'Offset',			l.offset )	OR
-					NOT JSON_Input_Integer(	'o', 'Count',			l.count )	OR
-					NOT JSON_Input_Text(	'O', 'Search_Index',	l.search_index ) OR
-					NOT JSON_Input_Text(	'O', 'Search_Origin',	l.search_origin ) }">
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'o', 'Sort',			l.sort )			OR
+					NOT JSON_Input_Text( 'O', 'Search_Index',	l.search_index )	OR
+					NOT JSON_Input_Text( 'O', 'Search_Origin',	l.search_origin ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_UT ].MerchandisingPrompt_Complete( l.merchandisingprompt, l.merchandisingcontext, l.search_term, l.tokens_present ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
+	<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_ID' ) }">
+		<MvIF EXPR = "{ NOT JSON_Runtime_MerchandisingProductList_Load_Query_ValidatePreviewSession( l.previewsession ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
 
-	<MvEVAL EXPR = "{ JSON_Filter_Callback_With_FilteredCustomFields( l.search_query, l.filter, l.available_filters, g.Module_JSON, 'JSON_Runtime_ProductList_Load_Query_Filter', '', 'JSON_Product_CustomFields_Query_Filter', 'JSON_Runtime_Product_CustomField_Filter', l.data ) }">
+		<MvCOMMENT>
+		|
+		| Allow override of the showcase source
+		|
+		</MvCOMMENT>
 
-	<MvIF EXPR = "{ l.data:filters:product_display }">
-		<MvIF EXPR = "{ JSON_Filter_Contains( l.filter, 'search' ) OR JSON_Filter_Contains( l.filter, 'search_OR' ) OR JSON_Filter_Contains( l.filter, 'search_AND' ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00061', 'A "product_display" filter cannot be combined with any other "search" filter' ) }">
+		<MvIF EXPR = "{ NOT JSON_Input_List( 'O', 'PreviewSession_Source', l.merchandisingshowcase:source, 'search,prompt,category,collection', 'search,prompt,category,collection' ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Allow overrides of showcase source values, including prompt
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ l.merchandisingshowcase:source EQ 'search' }">
+			<MvIF EXPR = "{ NOT JSON_Input_Text( 'O', 'PreviewSession_Search', l.merchandisingshowcase:search ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'prompt' }">
+			<MvIF EXPR = "{ NOT JSON_Input_Text( 'O', 'PreviewSession_Prompt', l.merchandisingshowcase:prompt ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'category' }">
+			<MvIF EXPR = "{ NOT JSON_Input_Integer( 'O', 'PreviewSession_Category_ID', l.merchandisingshowcase:cat_id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'collection' }">
+			<MvIF EXPR = "{ NOT JSON_Input_Integer( 'O', 'PreviewSession_Collection_ID', l.merchandisingshowcase:col_id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
+		</MvIF>
+
+		<MvCOMMENT>
+		|
+		| Allow overrides of boosting rules
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_Boosts' ) }">
+			<MvASSIGN NAME = "l.null"		VALUE = "{ miva_json_decode( '[]', l.merchandisingshowcase:boosts ) }">
+			<MvASSIGN NAME = "l.boosts"		VALUE = "">
+
+			<MvIF EXPR = "{ JSON_Input_Retrieve_Raw( 'PreviewSession_Boosts', l.boosts ) AND ( NOT ISNULL l.boosts ) }">
+				<MvIF EXPR = "{ miva_variable_type( l.boosts ) NE 'ARRAY' }">
+					<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Input_Error( 'PreviewSession_Boosts', 'Invalid PreviewSession_Boosts format: Boosts filter must be an array' ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+				</MvIF>
+
+				<MvFOREACH ITERATOR = "l.boost" ARRAY = "l.boosts">
+					<MvEVAL EXPR = "{ JSON_Filter_Structify( l.boost ) }">
+
+					<MvASSIGN NAME = "l.null" VALUE = "{ miva_array_insert_var( l.merchandisingshowcase:boosts, l.boost, -1 ) }">
+				</MvFOREACH>
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ JSON_Input_Exists( 'PreviewSession_Sorts' ) }">
+			<MvASSIGN NAME = "l.merchandisingshowcase:sorts"	VALUE = "">
+
+			<MvIF EXPR = "{ NOT JSON_Input_Text_Array( 'O', 'PreviewSession_Sorts', l.merchandisingshowcase:sorts, l.null ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+			</MvIF>
 		</MvIF>
 	</MvIF>
+
+	<MvIF EXPR = "{ l.merchandisingshowcase:source EQ 'category' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Category_Load_ID( l.merchandisingshowcase:cat_id, l.merchandising_data:category ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00063', 'Category not found' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'collection' }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_COL_DB ].Collection_Load_ID( l.merchandisingshowcase:col_id, l.merchandising_data:collection ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00064', 'Collection not found' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ JSON_Input_Exists( 'MerchandisingPrompt_Context' ) }">	<MvASSIGN NAME = "l.context_param" VALUE = "MerchandisingPrompt_Context"> <MvCOMMENT> Legacy / Backwards Compatibility </MvCOMMENT>
+	<MvELSE>																<MvASSIGN NAME = "l.context_param" VALUE = "Merchandising_Context">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Retrieve_Raw( l.context_param, l.merchandising_data:context ) OR ( miva_variable_type( l.merchandising_data:context ) NE 'STRUCTURE' ) }">
+		<MvASSIGN NAME = "l.merchandising_data:context"			VALUE = "">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.merchandising_data:context:basket_id"	VALUE = "{ g.Basket:basket_id }">
 
 	<MvCOMMENT>
 	|
-	| Apply the merchandising search to the query
+	| Apply the merchandising source to the query
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT ISNULL l.search_index }">
-		<MvIF EXPR = "{ ( NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.search_index, l.ai_index ) ) OR ( NOT l.ai_index:active ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00057', 'Invalid or inactive runtime_search index' ) }">
-		</MvIF>
-	<MvELSE>
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Load_Cached( l.merchandisingsettings ) OR NOT l.merchandisingsettings:index_id }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00059', 'Invalid or inactive runtime_search index' ) }">
-		<MvELSEIF EXPR = "{ ( NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_ID( l.merchandisingsettings:index_id, l.ai_index ) ) OR ( NOT l.ai_index:active ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00060', 'Invalid or inactive runtime_search index' ) }">
-		</MvIF>
+	<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Build_Query( l.search_query ) }">
+
+	<MvIF EXPR = "{ NOT ISNULL l.previewsession }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_Flag( l.search_query, 'preview' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_AI( l.search_query, l.search_term, l.ai_index ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
+	<MvIF EXPR = "{ l.merchandisingshowcase:source EQ 'category' }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Category( l.search_query, l.merchandising_data:category ) }">
+	<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'collection' }">
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Collection( l.search_query, l.merchandising_data:collection ) }">
+	<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'search' OR l.merchandisingshowcase:source EQ 'prompt' }">
+		<MvIF EXPR = "{ l.merchandisingshowcase:source EQ 'search' }">
+			<MvASSIGN NAME = "l.search_term" VALUE = "{ l.merchandisingshowcase:search }">
+		<MvELSEIF EXPR = "{ l.merchandisingshowcase:source EQ 'prompt' }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_UT ].MerchandisingPrompt_Complete( l.merchandisingshowcase, l.merchandising_data:context, l.search_term, l.tokens_present ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			</MvIF>
+		</MvIF>
 
-	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_Origin( l.search_query, l.search_origin ) }">
+		<MvIF EXPR = "{ NOT ISNULL l.search_index }">
+			<MvIF EXPR = "{ ( NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_Code( l.search_index, l.ai_index ) ) OR ( NOT l.ai_index:active ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00057', 'Invalid or inactive runtime_search index' ) }">
+			</MvIF>
+		<MvELSE>
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_MCH_DB ].MerchandisingSettings_Load_Cached( l.merchandisingsettings ) OR NOT l.merchandisingsettings:index_id }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00059', 'Invalid or inactive runtime_search index' ) }">
+			<MvELSEIF EXPR = "{ ( NOT [ g.Module_Feature_AI_DB ].AISearchIndex_Load_ID( l.merchandisingsettings:index_id, l.ai_index ) ) OR ( NOT l.ai_index:active ) }">
+				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00060', 'Invalid or inactive runtime_search index' ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_AI( l.search_query, l.search_term, l.ai_index ) }">
+			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_Origin_Merchandising( l.search_query, l.search_origin, l.merchandisingshowcase:id, l.tokens_present ) }">
+	</MvIF>
 
 	<MvCOMMENT>
 	|
@@ -4016,200 +4366,23 @@
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ l.merchandisingcontext:product_id }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.search_query, 'INTEGER', 'prod.id', 'NE', l.merchandisingcontext:product_id, 'AND', 'AND' ) }">
-	<MvELSEIF EXPR = "{ NOT ISNULL l.merchandisingcontext:product_code }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.search_query, 'CHAR', 'prod.code', 'NE', l.merchandisingcontext:product_code, 'AND', 'AND' ) }">
-	</MvIF>
-
-	<MvEVAL EXPR = "{ JSON_Runtime_Product_OrderBy( l.search_query, l.sort ) }">
-
-	<MvIF EXPR = "{ l.data:ondemandcolumns:sale_price }">
-		<MvIF EXPR = "{ [ g.Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.data:discount_signature ) }">
-			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_DiscountSignature( l.search_query, l.data:discount_signature ) }">
-		</MvIF>
-	</MvIF>
-
-	<MvASSIGN NAME = "l.facets_with_values"			VALUE = "">
-	<MvASSIGN NAME = "l.facets_with_values_count"	VALUE = 0>
-
-	<MvIF EXPR = "{ l.data:ondemandcolumns:facets }">
-		<MvIF EXPR = "{ l.query_params:data:category }">	<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Category_Query_Cached( l.query_params:data:category, l.search_query, l.possible_facets ) }">
-		<MvELSE>											<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Query_Cached( l.search_query, l.possible_facets ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.enabled_facet_count" VALUE = "{ miva_array_filter_ref( l.possible_facets, 1, l.facet, 'l.facet:handle EQ \'show\'', l.enabled_facets ) }">
-
-		<MvFOREACH ITERATOR = "l.facet" ARRAY = "l.enabled_facets" COUNT = "{ l.enabled_facet_count }">
-			<MvIF EXPR = "{ miva_array_search( l.data:query_facets, 1, l.search_facet, 'l.search_facet:code EQ l.facet:code' ) }">
-				<MvASSIGN NAME = "l.facet:input_values" 		VALUE = "{ l.search_facet:input_values }">
-				<MvASSIGN NAME = "l.facet:input_value_count" 	VALUE = "{ l.search_facet:input_value_count }">
-			</MvIF>
-		</MvFOREACH>
-
-		<MvASSIGN NAME = "l.facets_with_values_count" VALUE = "{ [ g.Module_Feature_FCT_UT ].FacetList_Load_Values_Query( l.search_query, l.enabled_facets, l.enabled_facet_count, l.facets_with_values ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ l.data:query_facet_count }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Facets( l.search_query, l.data:query_facets, l.data:query_facet_count ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Feature_INV_DB ].InventorySettings_Load_Cached( l.data:inventorysettings ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_ProductList_Cache( l.search_query, l.cachedproductlist ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-	</MvIF>
-
-	<MvASSIGN NAME = "l.cached_query" VALUE = "{ l.search_query }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Data_Clear( l.cached_query ) }">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Data_Copy_Key( l.cached_query, l.search_query, 'Runtime_ProductList' ) }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_Clear( l.cached_query ) }">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_FROM_Clear( l.cached_query ) }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Data_Reference( l.cached_query, 'Runtime_ProductList', l.query_params ) }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE_Clear( l.cached_query ) }">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY_Clear( l.cached_query ) }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_FROM( l.cached_query, g.Store_Table_Prefix $ 'CachedProductListXProduct', 'plxp' ) }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_FROM( l.cached_query ) }">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_Inventory( l.cached_query ) }">
-	<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_SELECT_DiscountPrices( l.cached_query ) }">
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT( l.cached_query, 'plxp.disp_order AS output_disp_order' ) }">
-
-	<MvEVAL EXPR = "{ JSON_Query_Callback_With_FilteredCustomFields( l.cached_query, l.filter, g.Module_JSON, 'JSON_Runtime_Product_CustomFields_Query', 'JSON_Runtime_Product_CustomField_Filter' ) }">
-
-	<MvIF EXPR = "{ l.data:ondemandcolumns:page }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_INTEGER( l.cached_query,	'pv.page_id',	'page_id' ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.cached_query, 		'pv.code',		'alt_page_code' ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.cached_query, 		'pv.title',		'alt_page_title' ) }">
-
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.cached_query, 'prod', g.Store_Table_Prefix $ 'PageBranchVersions', 'pbv', 'prod.page_code <> \'\' AND pbv.branch_id = ? AND pbv.head = 1 AND ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'pbv.code' ) $ ' = ' $ [ g.Module_Library_Native_DBAPI ].DB_Compare_UPPER( 'prod.page_code' ), [ g.Module_Library_DB ].SQL_Query_Field( [ g.Module_Feature_TUI_MGR ].TemplateManager_Working_Branch_ID() ) ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.cached_query, 'prod', g.Store_Table_Prefix $ 'PageVersions', 'pv', 'pv.id = pbv.version_id', '' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ l.data:ondemandcolumns:category }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.cached_query, 'cat.code', 'cancat_code' ) }">
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_SELECT_NULL_CHAR( l.cached_query, 'cat.name', 'cancat_name' ) }">
-
-		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_LEFT_OUTER_JOIN( l.cached_query, 'prod', g.Store_Table_Prefix $ 'Categories', 'cat', 'prod.cancat_id = cat.id', '' ) }">
-	</MvIF>
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_WHERE( l.cached_query, 'plxp.cache_id = ? AND prod.id = plxp.product_id', [ g.Library_DB ].SQL_Query_Field( l.cachedproductlist:id ) ) }">
-
-	<MvIF EXPR = "{ ISNULL l.query_params:data:sort_dir }">	<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
-	<MvELSE>												<MvASSIGN NAME = "l.sort_dir" VALUE = "{ l.query_params:data:sort_dir }">
-	</MvIF>
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_ORDER_BY( l.cached_query, 'plxp.disp_order', l.sort_dir ) }">
-
-	<MvIF EXPR = "{ ( l.data:filters:product_display ) OR ( NOT l.data:inventorysettings:active ) OR ( ( NOT l.data:inventorysettings:out_hide ) AND ( NOT l.cachedproductlist:out_hide ) ) }">
-		<MvASSIGN NAME = "l.total_count" VALUE = "{ l.cachedproductlist:prodcount }">
-	<MvELSE>
-		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_HideOutOfStockProducts( l.cached_query ) }">
-
-		<MvIF EXPR = "{ NOT [ g.Library_DB ].SQL_Query_Count( l.cached_query, l.total_count ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-	</MvIF>
-
-	<MvASSIGN NAME = "l.search_sql" VALUE = "{ [ g.Library_DB ].SQL_Query_Build( l.cached_query, l.search_fields ) }">
-
-	<MvCOMMENT>
-	|
-	| Copy the Product_CustomFields key back to the original search_query so
-	| JSON_Product_CustomFields_With_Query can use Module_Product_Field_Query_Value
-	|
-	</MvCOMMENT>
-
-	<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Data_Copy_Key( l.search_query, l.cached_query, 'Product_CustomFields' ) }">
-
-	<MvIF EXPR = "{ l.offset EQ 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Runtime_Merchandising( l.search_term, l.total_count, l.query_params:data:search_origin, int( l.query_params:data:ai_index_id ), l.merchandisingprompt:id ) }">
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
+	<MvIF EXPR = "{ l.merchandising_data:context:product_id }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.search_query, 'INTEGER', 'prod.id', 'NE', l.merchandising_data:context:product_id, 'AND', 'AND' ) }">
+	<MvELSEIF EXPR = "{ NOT ISNULL l.merchandising_data:context:product_code }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.search_query, 'CHAR', 'prod.code', 'NE', l.merchandising_data:context:product_code, 'AND', 'AND' ) }">
 	</MvIF>
 
 	<MvCOMMENT>
 	|
-	| Use the "RuntimeProducts" view to avoid potential conflicts with other helper functions that may be called and use the "Products" view
+	| Apply boosting rules only when using default sort
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT [ g.Library_Native_DBAPI ].DB_OPENVIEW_Range( 'Merchant', 'RuntimeProducts', l.search_sql, l.search_fields, l.offset, l.count ) }">
-		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-RTM-00058', g.MvOPENVIEW_Error ) }">
+	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.merchandisingshowcase:boosts, l.merchandisingshowcase:sorts ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.product_output_count"			VALUE = 0>
-	<MvASSIGN NAME = "l.tokens_present_output_count"	VALUE = 0>
-	<MvASSIGN NAME = "l.fragment_rendering"				VALUE = "{ l.data:filters:fragments }">
-
-	<MvEVAL EXPR = "{ JSON_Runtime_Product_CustomFields_Initialize( l.filter, l.data:customfield_state ) }">
-	<MvEVAL EXPR = "{ JSON_Response_Start() }">
-	{
-		"total_count": <MvEVAL EXPR = "{ encodejavascriptnumber( l.total_count ) }">,
-		"start_offset": <MvEVAL EXPR = "{ encodejavascriptnumber( l.offset ) }">,
-		"data":
-		[
-		<MvWHILE EXPR = "{ ( NOT RuntimeProducts.d.EOF ) AND ( ( l.count EQ 0 ) OR ( l.product_output_count LT l.count ) ) }">
-			<MvEVAL EXPR = "{ JSON_Runtime_Product_Read( l.product, l.data ) }">
-
-			<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.product_output_count ) }">
-
-			<MvCOMMENT>
-			|
-			| If no fragments were requested, the record can be immediately output. Otherwise, the record is captured, output, decoded,
-			| and then used to render the requested fragments, allowing the fragments to operate on the exact product record that is output.
-			|
-			</MvCOMMENT>
-
-			<MvIF EXPR = "{ NOT l.fragment_rendering }">
-				<MvEVAL EXPR = "{ JSON_Runtime_Product( l.product, l.data ) }">
-				<MvEVAL EXPR = "{ JSON_Product_CustomFields_With_Query( l.search_query, l.data:customfield_state, l.product:id, 'RuntimeProducts' ) }">
-			<MvELSE>
-				<MvCAPTURE VARIABLE = "l.json_product">
-					<MvEVAL EXPR = "{ JSON_Runtime_Product( l.product, l.data ) }">
-					<MvEVAL EXPR = "{ JSON_Product_CustomFields_With_Query( l.search_query, l.data:customfield_state, l.product:id, 'RuntimeProducts' ) }">
-				</MvCAPTURE>
-
-				<MvEVAL EXPR = "{ l.json_product }">
-				<MvEVAL EXPR = "{ JSON_Runtime_Product_Fragments( l.json_product, l.data ) }">
-			</MvIF>
-
-			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
-
-			<MvSKIP NAME = "Merchant" VIEW = "RuntimeProducts" ROWS = 1>
-		</MvWHILE>
-		],
-		"search_term": "<MvEVAL EXPR = "{ encodejavascriptstring( l.search_term ) }">",
-		"tokens_present":
-		[
-			<MvFOREACH ITERATOR = "l.token_name" ARRAY = "l.token_names" COUNT = "{ miva_struct_members( l.tokens_present, l.token_names ) }">
-				<MvREFERENCEARRAY NAME = "l.token_present" VARIABLE = "l.tokens_present">
-					<MvMEMBER NAME = "{ l.token_name }">
-				</MvREFERENCEARRAY>
-
-				<MvIF EXPR = "{ l.token_present }">
-					<MvIF EXPR = "{ l.tokens_present_output_count++ }">
-						,
-					</MvIF>
-
-					"<MvEVAL EXPR = "{ encodejavascriptstring( l.token_name ) }">"
-				</MvIF>
-			</MvFOREACH>
-		]
-		<MvIF EXPR = "{ l.facets_with_values_count }">
-			,<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Facets( l.facets_with_values, l.facets_with_values_count ) }">
-		</MvIF>
-	}
-	<MvCLOSEVIEW NAME = "Merchant" VIEW = "RuntimeProducts">
-	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_Runtime_RelatedProductList_Load_Query" STANDARDOUTPUTLEVEL = "">
@@ -4318,11 +4491,11 @@
 
 	<MvCOMMENT>
 	|
-	| Handle runtime_search filter
+	| Handle runtime_search filter, if a search has not already been applied
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT ISNULL l.data:runtime_search }">
+	<MvIF EXPR = "{ ( ISNULL l.query_params:data:search ) AND ( NOT ISNULL l.data:runtime_search ) }">
 		<MvIF EXPR = "{ l.data:runtime_search:type EQ 'system' }">
 			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search( l.search_query, l.data:runtime_search:search ) }">
 		<MvELSEIF EXPR = "{ l.data:runtime_search:type EQ 'relational' }">
@@ -4342,12 +4515,20 @@
 		<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Search_Origin( l.search_query, l.data:runtime_search:origin ) }">
 	</MvIF>
 
-	<MvEVAL EXPR = "{ JSON_Runtime_Product_OrderBy( l.search_query, l.sort ) }">
-
 	<MvIF EXPR = "{ l.data:ondemandcolumns:sale_price }">
 		<MvIF EXPR = "{ [ g.Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.data:discount_signature ) }">
 			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_DiscountSignature( l.search_query, l.data:discount_signature ) }">
 		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply OrderBy only if boosting rules have not been applied to the query
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ ISNULL l.query_params:data:flags:boostingrules }">
+		<MvEVAL EXPR = "{ JSON_Runtime_Product_OrderBy( l.search_query, l.sort ) }">
 	</MvIF>
 
 	<MvASSIGN NAME = "l.facets_with_values"			VALUE = "">
@@ -4378,7 +4559,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT l.query_params:data:cache }">
+	<MvIF EXPR = "{ l.query_params:data:flags:preview OR ( NOT l.query_params:data:cache ) }">
 		<MvIF EXPR = "{ l.data:inventorysettings:active AND NOT l.data:filters:product_display }">
 			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_HideOutOfStockProducts( l.search_query ) }">
 		</MvIF>
@@ -4482,7 +4663,7 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search AND l.offset EQ 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Runtime_Search( l.query_params:data:search, l.total_count, l.query_params:data:search_origin, int( l.query_params:data:ai_index_id ) ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_UT ].SearchLogEntry_Process_Runtime_Merchandising( l.query_params:data:search, l.total_count, l.query_params:data:search_origin, int( l.query_params:data:ai_index_id ), int( l.query_params:data:search_prompt_id ) ) }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 	</MvIF>
@@ -4532,11 +4713,42 @@
 				<MvEVAL EXPR = "{ JSON_Runtime_Product_Fragments( l.json_product, l.data ) }">
 			</MvIF>
 
+			<MvIF EXPR = "{ l.query_params:data:flags:preview AND ( NOT ISNULL l.query_params:data:flags:boostingrules ) }">
+				,"boost_score": <MvEVAL EXPR = "{ encodejavascriptnumber( RuntimeProducts.d.boost_score ) }">
+			</MvIF>
+
 			<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 
 			<MvSKIP NAME = "Merchant" VIEW = "RuntimeProducts" ROWS = 1>
 		</MvWHILE>
 		]
+		<MvIF EXPR = "{ l.query_params:data:flags:preview }">
+			<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search }">
+				,"search_term": "<MvEVAL EXPR = "{ encodejavascriptstring( l.query_params:data:search ) }">"
+			</MvIF>
+
+			<MvIF EXPR = "{ l.query_params:data:search_prompt_id }">
+				<MvASSIGN NAME = "l.tokens_present_output_count" VALUE = 0>
+			
+				,"tokens_present":
+				[
+					<MvFOREACH ITERATOR = "l.token_name" ARRAY = "l.token_names" COUNT = "{ miva_struct_members( l.query_params:data:search_tokens_present, l.token_names ) }">
+						<MvREFERENCEARRAY NAME = "l.token_present" VARIABLE = "l.query_params:data:search_tokens_present">
+							<MvMEMBER NAME = "{ l.token_name }">
+						</MvREFERENCEARRAY>
+
+						<MvIF EXPR = "{ l.token_present }">
+							<MvIF EXPR = "{ l.tokens_present_output_count++ }">
+								,
+							</MvIF>
+
+							"<MvEVAL EXPR = "{ encodejavascriptstring( l.token_name ) }">"
+						</MvIF>
+					</MvFOREACH>
+				]
+			</MvIF>
+		</MvIF>
+
 		<MvIF EXPR = "{ l.facets_with_values_count }">
 			,<MvEVAL EXPR = "{ JSON_Runtime_ProductList_Facets( l.facets_with_values, l.facets_with_values_count ) }">
 		</MvIF>

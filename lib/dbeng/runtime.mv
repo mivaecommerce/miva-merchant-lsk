@@ -1951,78 +1951,84 @@
 	<MvFUNCTIONRETURN VALUE = "{ Runtime_ProductList_Build_Query_ORDER_BY_Direction( l.query, l.sort, '' ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_ORDER_BY_Relevance" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvIF EXPR = "{ ISNULL l.query_params:data:search }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Relevance is always an "ascending" sort--there's no inverse relevance option
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.query_params:data:sort"		VALUE = "relevance">
+	<MvASSIGN NAME = "l.query_params:data:sort_dir"	VALUE = "ASC">
+
+	<MvIF EXPR = "{ l.query_params:data:ai_index_id }">
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, 'plxp_search.disp_order', 'plxp_search_disp_order', l.query_params:data:sort_dir, '' ) }">
+	<MvELSE>
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Load_Cached( l.searchsettings ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Feature_SEA_DB ].SearchSettings_Default( l.searchsettings ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.searchsettings:code_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.code',		'FULLTEXT_NATURAL',	l.searchsettings:code_wt ) }">	</MvIF>
+		<MvIF EXPR = "{ l.searchsettings:name_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.name',		'FULLTEXT_NATURAL',	l.searchsettings:name_wt ) }">	</MvIF>
+		<MvIF EXPR = "{ l.searchsettings:sku_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.sku',		'FULLTEXT_NATURAL',	l.searchsettings:sku_wt ) }">	</MvIF>
+		<MvIF EXPR = "{ l.searchsettings:desc_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.descrip',	'FULLTEXT_NATURAL',	l.searchsettings:desc_wt ) }">	</MvIF>
+
+		<MvIF EXPR = "{ l.searchsettings:acode_rel OR l.searchsettings:aprom_rel }">
+			<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_Attributes( l.query ) }">
+
+			<MvIF EXPR = "{ l.searchsettings:acode_rel }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attr.code',		'FULLTEXT_NATURAL',	l.searchsettings:acode_wt ) }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpat.code',	'FULLTEXT_NATURAL',	l.searchsettings:acode_wt ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.searchsettings:aprom_rel }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attr.prompt',		'FULLTEXT_NATURAL',	l.searchsettings:aprom_wt ) }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpat.prompt',	'FULLTEXT_NATURAL',	l.searchsettings:aprom_wt ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.searchsettings:ocode_rel OR l.searchsettings:oprom_rel }">
+			<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_Options( l.query ) }">
+
+			<MvIF EXPR = "{ l.searchsettings:ocode_rel }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'opt.code',		'FULLTEXT_NATURAL',	l.searchsettings:ocode_wt ) }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpop.code',	'FULLTEXT_NATURAL',	l.searchsettings:ocode_wt ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.searchsettings:oprom_rel }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'opt.prompt',		'FULLTEXT_NATURAL',	l.searchsettings:oprom_wt ) }">
+				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpop.prompt',	'FULLTEXT_NATURAL',	l.searchsettings:oprom_wt ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ [ g.Module_Feature_SEA_UT ].SearchableCustomFieldList_Load_With_Capabilities_Cached( l.customfields ) }">
+			<MvIF EXPR = "{ l.customfield:relevance		AND
+							l.customfield:module:active	AND
+							l.customfield:capabilities:orderby_relevance }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.customfield:module:module ].Module_Product_Field_Query_OrderBy_Relevance( l.module, l.query, l.query_params:data:search, l.customfield:field_code, l.customfield:weight ) }">
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Runtime_ProductList_Build_Query_ORDER_BY_Direction" PARAMETERS = "query var, sort, override_dir" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
 
 	<MvASSIGN NAME = "l.query_params:data:sort"						VALUE = "{ l.sort }">
 
 	<MvIF EXPR = "{ l.sort EQ 'relevance' }">
-		<MvIF EXPR = "{ l.query_params:data:ai_index_id }">
-			<MvASSIGN NAME = "l.query_params:data:sort_dir"			VALUE = "ASC">
-
-			<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search }">
-				<MvIF EXPR = "{ MarginSettings_Load_Cached( l.marginsettings ) AND l.marginsettings:relevance NE 'none' }">
-					<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_MarginSort( l.query, l.marginsettings:relevance, l.marginsettings:relcount ) }">
-				</MvIF>
-
-				<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag_With_Alias( l.query, 'plxp_search.disp_order', 'plxp_search_disp_order', l.query_params:data:sort_dir, '' ) }">
-			</MvIF>
-
-			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, l.query_params:data:disp_order, l.query_params:data:sort_dir ) }">
-		<MvELSE>
-			<MvIF EXPR = "{ NOT [ g.Module_Feature_SEA_DB ].SearchSettings_Load_Cached( l.searchsettings ) }">
-				<MvEVAL EXPR = "{ [ g.Module_Feature_SEA_DB ].SearchSettings_Default( l.searchsettings ) }">
-			</MvIF>
-
-			<MvIF EXPR = "{ NOT ISNULL l.query_params:data:search }">
-				<MvIF EXPR = "{ MarginSettings_Load_Cached( l.marginsettings ) AND l.marginsettings:relevance NE 'none' }">
-					<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_MarginSort( l.query, l.marginsettings:relevance, l.marginsettings:relcount ) }">
-				</MvIF>
-
-				<MvIF EXPR = "{ l.searchsettings:code_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.code',		'FULLTEXT_NATURAL',	l.searchsettings:code_wt ) }">	</MvIF>
-				<MvIF EXPR = "{ l.searchsettings:name_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.name',		'FULLTEXT_NATURAL',	l.searchsettings:name_wt ) }">	</MvIF>
-				<MvIF EXPR = "{ l.searchsettings:sku_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.sku',		'FULLTEXT_NATURAL',	l.searchsettings:sku_wt ) }">	</MvIF>
-				<MvIF EXPR = "{ l.searchsettings:desc_rel }">	<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'prod.descrip',	'FULLTEXT_NATURAL',	l.searchsettings:desc_wt ) }">	</MvIF>
-
-				<MvIF EXPR = "{ l.searchsettings:acode_rel OR l.searchsettings:aprom_rel }">
-					<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_Attributes( l.query ) }">
-
-					<MvIF EXPR = "{ l.searchsettings:acode_rel }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attr.code',		'FULLTEXT_NATURAL',	l.searchsettings:acode_wt ) }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpat.code',	'FULLTEXT_NATURAL',	l.searchsettings:acode_wt ) }">
-					</MvIF>
-
-					<MvIF EXPR = "{ l.searchsettings:aprom_rel }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attr.prompt',		'FULLTEXT_NATURAL',	l.searchsettings:aprom_wt ) }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpat.prompt',	'FULLTEXT_NATURAL',	l.searchsettings:aprom_wt ) }">
-					</MvIF>
-				</MvIF>
-
-				<MvIF EXPR = "{ l.searchsettings:ocode_rel OR l.searchsettings:oprom_rel }">
-					<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_Options( l.query ) }">
-
-					<MvIF EXPR = "{ l.searchsettings:ocode_rel }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'opt.code',		'FULLTEXT_NATURAL',	l.searchsettings:ocode_wt ) }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpop.code',	'FULLTEXT_NATURAL',	l.searchsettings:ocode_wt ) }">
-					</MvIF>
-
-					<MvIF EXPR = "{ l.searchsettings:oprom_rel }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'opt.prompt',		'FULLTEXT_NATURAL',	l.searchsettings:oprom_wt ) }">
-						<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Relevance( l.query, l.query_params:data:search, 'attmpop.prompt',	'FULLTEXT_NATURAL',	l.searchsettings:oprom_wt ) }">
-					</MvIF>
-				</MvIF>
-
-				<MvFOREACH ITERATOR = "l.customfield" ARRAY = "l.customfields" COUNT = "{ [ g.Module_Feature_SEA_UT ].SearchableCustomFieldList_Load_With_Capabilities_Cached( l.customfields ) }">
-					<MvIF EXPR = "{ l.customfield:relevance		AND
-									l.customfield:module:active	AND
-									l.customfield:capabilities:orderby_relevance }">
-						<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.customfield:module:module ].Module_Product_Field_Query_OrderBy_Relevance( l.module, l.query, l.query_params:data:search, l.customfield:field_code, l.customfield:weight ) }">
-					</MvIF>
-				</MvFOREACH>
-			</MvIF>
-
-			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, l.query_params:data:disp_order, l.sort_dir ) }">
+		<MvIF EXPR = "{ MarginSettings_Load_Cached( l.marginsettings ) AND l.marginsettings:relevance NE 'none' }">
+			<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_MarginSort( l.query, l.marginsettings:relevance, l.marginsettings:relcount ) }">
 		</MvIF>
+
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_ORDER_BY_Relevance( l.query ) }">	
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, l.query_params:data:disp_order, '' ) }">
 	<MvELSEIF EXPR = "{ ( ( 'customfield:' IN l.sort ) EQ 1 ) OR
 						( ( 'customfield_desc:' IN l.sort ) ) EQ 1 }">
 		<MvASSIGN NAME = "l.type"									VALUE = "{ gettoken( l.sort, ':', 1 ) }">
@@ -2108,6 +2114,8 @@
 <MvFUNCTION NAME = "Runtime_ProductList_Build_Query_MarginSort" PARAMETERS = "query var, field, count" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ ( l.field EQ 'profit' OR l.field EQ 'margin' ) AND l.count GT 0 }">
 		<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+		<MvASSIGN NAME = "l.query_params:data:cache"		VALUE = 1>
 
 		<MvASSIGN NAME = "l.query_params:data:margin:field" VALUE = "{ l.field }">
 		<MvASSIGN NAME = "l.query_params:data:margin:count" VALUE = "{ l.count }">
@@ -2352,6 +2360,340 @@
 
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.map_data:module:module ].Module_Product_Fields_Mapped( l.map_data:module, l.product:id, l.map_data:field_map, l.module_output ) }">
 	</MvFOREACH>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Runtime Product List: Boosting Rules
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Boost_Filters" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.available_filters" VALUE = "">
+
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'prod.id', 		'id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.code',		'code' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.sku',		'sku' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.name',		'name' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.thumbnail',	'thumbnail' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.image',		'image' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.price',		'price' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.cost',		'cost' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.profit',		'profit' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.margin',		'margin' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.descrip',	'descrip' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_NUMBER(	l.available_filters, 'prod.weight',		'weight' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_BOOL(		l.available_filters, 'prod.taxable',	'taxable' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.page_title',	'page_title' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'prod.dt_created',	'dt_created' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_INTEGER(	l.available_filters, 'prod.dt_updated',	'dt_updated' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_AvailableFilter_CHAR(		l.available_filters, 'prod.page_code',	'page_code' ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ l.available_filters }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_ProductList_Boost_Search_Filter" PARAMETERS = "query var, field_count var, search_field, search_operator, search_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.data:primary_query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvIF EXPR = "{ l.search_field EQ 'on_sale' }">
+		<MvIF EXPR = "{ ( l.search_operator NE 'TRUE' ) AND ( l.search_operator NE 'FALSE' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ ISNULL l.query_params:data:discount_signature }">
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.discount_signature ) }">
+				<MvFUNCTIONRETURN VALUE = 1>
+			</MvIF>
+
+			<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_Set_DiscountSignature( l.data:primary_query, l.discount_signature ) }">
+			<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_DiscountPrices( l.data:primary_query ) }">
+		</MvIF>			
+
+		<MvIF EXPR = "{ l.search_operator EQ 'TRUE' }">		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, 'dp.price < prod.price', '' ) }">
+		<MvELSE>											<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, '( ( dp.price IS NULL ) OR ( dp.price >= prod.price ) )', '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.search_field EQ 'days_since_added' }">
+		<MvASSIGN NAME = "l.days_since_added"	VALUE = "FLOOR( ( ? - prod.dt_created ) / 86400 )">
+		<MvASSIGN NAME = "l.search_value"		VALUE = "{ floor( l.search_value ) }">
+
+		<MvIF EXPR = "{ l.search_operator EQ 'EQ' }">		<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_EQ( 'INTEGER', l.days_since_added, l.search_value ) }">
+		<MvELSEIF EXPR = "{ l.search_operator EQ 'GT' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_GT( 'INTEGER', l.days_since_added, l.search_value ) }">
+		<MvELSEIF EXPR = "{ l.search_operator EQ 'GE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_GE( 'INTEGER', l.days_since_added, l.search_value ) }">
+		<MvELSEIF EXPR = "{ l.search_operator EQ 'LT' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_LT( 'INTEGER', l.days_since_added, l.search_value ) }">
+		<MvELSEIF EXPR = "{ l.search_operator EQ 'LE' }">	<MvASSIGN NAME = "l.where_sql" VALUE = "{ [ g.Library_Filename_Native_DBAPI ].DB_Filter_LE( 'INTEGER', l.days_since_added, l.search_value ) }">
+		<MvELSE>
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.where_sql, 's.time_t, ' $ SQL_Query_Field( l.search_value ) ) }">
+	<MvELSEIF EXPR = "{ l.search_field EQ 'collection' }">
+		<MvIF EXPR = "{ ( l.search_operator NE 'EQ' ) AND ( l.search_operator NE 'NE' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_COL_DB ].Collection_Load_Code( l.search_value, l.loaded_collection ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.join_prefix" VALUE = "{ 'clxp_' $ int( l.loaded_collection:id ) }">
+
+		<MvIF EXPR = "{ NOT miva_member_exists( l.query_params:data:collection_joins, l.loaded_collection:id ) }">
+			<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.data:primary_query, 'prod', g.Store_Table_Prefix $ 'CollectionXProduct', l.join_prefix, l.join_prefix $ '.col_id = ? AND ' $ l.join_prefix $ '.product_id = prod.id', SQL_Query_Field( l.loaded_collection:id ) ) }">
+			<MvASSIGN NAME = "l.query_params:data:collection_joins" MEMBER = "{ l.loaded_collection:id }" VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.search_operator EQ 'EQ' }">	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.join_prefix $ '.type <> \'X\'', '' ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, '( ( ' $ l.join_prefix $ '.type IS NULL ) OR ( ' $ l.join_prefix $ '.type = \'X\' ) )', '' ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ l.search_field EQ 'imagetype' }">
+		<MvIF EXPR = "{ ( l.search_operator NE 'EQ' ) AND ( l.search_operator NE 'NE' ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT ImageType_Load_Code( l.search_value, l.loaded_imagetype ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.join_prefix" VALUE = "{ 'pi_' $ int( l.loaded_imagetype:id ) }">
+
+		<MvIF EXPR = "{ NOT miva_member_exists( l.query_params:data:productimages_joins, l.loaded_imagetype:id ) }">
+			<MvEVAL EXPR = "{ SQL_Query_LEFT_OUTER_JOIN( l.data:primary_query, 'prod', g.Store_Table_Prefix $ 'ProductImages', l.join_prefix, l.join_prefix $ '.type_id = ? AND ' $ l.join_prefix $ '.product_id = prod.id', SQL_Query_Field( l.loaded_imagetype:id ) ) }">
+			<MvASSIGN NAME = "l.query_params:data:productimages_joins" MEMBER = "{ l.loaded_imagetype:id }" VALUE = 1>
+		</MvIF>
+
+		<MvIF EXPR = "{ l.search_operator EQ 'EQ' }">	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.join_prefix $ '.product_id IS NOT NULL', '' ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query, l.join_prefix $ '.product_id IS NULL', '' ) }">
+		</MvIF>
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_ProductList_Boost_CustomFields_Query_Filter" PARAMETERS = "query var, field_count var, module var, filter_name, filter_operator, filter_value, data var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.module:api_ver LT 9.07 ) OR ( NOT l.module:feature_hash:fields_prod ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Capabilities( l.module, l.filter_name, l.capabilities ) }">
+
+	<MvIF EXPR = "{ NOT l.capabilities:boost }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Query_Boost( l.module, l.data:primary_query, l.query, l.filter_name, l.filter_operator, l.filter_value ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_BoostingRules" PARAMETERS = "query var, unboosted_sort, boosts var, sorts var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvIF EXPR = "{ ( miva_array_elements( l.boosts ) EQ 0 ) AND ( miva_array_elements( l.sorts ) EQ 0 ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.query_params:data:cache"				VALUE = 1>
+	<MvASSIGN NAME = "l.query_params:data:sort"					VALUE = "">
+	<MvASSIGN NAME = "l.query_params:data:flags:boostingrules"	VALUE = 1>
+
+	<MvCOMMENT>
+	|
+	| Boosting rules override any previously applied ORDER BY, and are always considered "ascending"
+	| for caching purposes (there is no concept of an inverse boosting rule sort)
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ SQL_Query_ORDER_By_Clear( l.query ) }">
+
+	<MvASSIGN NAME = "l.query_params:data:sort_dir"	VALUE = "ASC">
+	<MvASSIGN NAME = "l.boost_count"				VALUE = "{ miva_array_elements( l.boosts ) }">
+
+	<MvIF EXPR = "{ l.boost_count GT 0 }">
+		<MvCOMMENT>
+		|
+		| Build CASE expressions for boosts
+		|
+		</MvCOMMENT>
+
+		<MvREFERENCE NAME = "l.data:primary_query"		VARIABLE = "l.query">
+
+		<MvASSIGN NAME = "l.available_filters"			VALUE = "{ Runtime_ProductList_Boost_Filters() }">
+		<MvASSIGN NAME = "l.boost_case_count"			VALUE = 0>
+		<MvASSIGN NAME = "l.boost_cases"				VALUE = "">
+		<MvASSIGN NAME = "l.boost_fields"				VALUE = "">
+		<MvASSIGN NAME = "l.case_score"					VALUE = "{ power( 2, l.boost_count - 1 ) }">
+
+		<MvFOREACH ITERATOR = "l.boost" ARRAY = "l.boosts" COUNT = "{ l.boost_count }">
+			<MvASSIGN NAME = "l.boost_query"			VALUE = "">
+			<MvASSIGN NAME = "l.boost_case"				VALUE = "">
+			<MvASSIGN NAME = "l.boost_case:score"		VALUE = "{ l.case_score }">
+
+			<MvEVAL EXPR = "{ SQL_Query_SUB_WHERE_Begin( l.boost_query ) }">
+			<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Filter_Callback_With_CustomFields( l.boost_query, l.boost, l.available_filters, g.Library_DB, '', 'JSON_Runtime_ProductList_Boost_Search_Filter', 'JSON_Runtime_ProductList_Boost_CustomFields_Query_Filter', l.data ) }">
+
+			<MvASSIGN NAME = "l.boost_case:sql"			VALUE = "{ SQL_Query_SUB_WHERE_Extract( l.boost_query, '', l.boost_case:fields ) }">
+			<MvIF EXPR = "{ NOT ISNULL l.boost_case:sql }">
+				<MvASSIGN NAME = "l.boost_case_count"	VALUE = "{ miva_array_insert_var( l.boost_cases, l.boost_case, -1 ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.case_score"				VALUE = "{ l.case_score / 2 }">
+		</MvFOREACH>
+
+		<MvIF EXPR = "{ l.boost_case_count }">
+			<MvCOMMENT>
+			|
+			| Build CASE statement and add to population_query
+			|
+			</MvCOMMENT>
+
+			<MvCAPTURE VARIABLE = "l.case_sql">
+				<MvEVAL EXPR = "(">
+
+				<MvFOREACH INDEX = "l.case_pos" ITERATOR = "l.boost_case" ARRAY = "l.boost_cases" COUNT = "{ l.boost_case_count }">
+					<MvEVAL EXPR = "{ 'CASE WHEN ' $ l.boost_case:sql $ ' THEN ' $ l.boost_case:score $ ' ELSE 0 END' }">
+					<MvIF EXPR = "{ l.case_pos LT l.boost_case_count }">
+						<MvEVAL EXPR = "{ ' + ' }">
+					</MvIF>
+
+					<MvASSIGN NAME = "l.null"		VALUE = "{ miva_array_merge( l.boost_case:fields, 1, -1, l.boost_fields, -1 ) }">
+					<MvASSIGN NAME = "l.rule_score"	VALUE = "{ l.rule_score / 2 }">
+				</MvFOREACH>
+
+				<MvEVAL EXPR = ")">
+			</MvCAPTURE>
+
+			<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.query, l.case_sql $ ' AS boost_score', miva_joinstring( l.boost_fields, ',', 'trim,noeempty' ) ) }">
+
+			<MvCOMMENT>
+			|
+			| Add ORDER BY for boost_score as the first ORDER BY
+			|
+			</MvCOMMENT>
+
+			<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Alias_With_Fields( l.query, l.case_sql, 'boost_score', 'DESC', miva_joinstring( l.boost_fields, ',', 'trim,noempty' ) ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply the compound merchandising sort
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.break_ties"					VALUE = 1>
+	<MvASSIGN NAME = "l.retain_relevance"			VALUE = "{ l.unboosted_sort EQ 'relevance' }">
+
+	<MvCOMMENT>
+	|
+	| Price sorts within boosting rules are always based on sale price, unless for some reason we cannot calculate
+	| a discount signature.
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.price_field"				VALUE = "prod.price">
+
+	<MvIF EXPR = "{ miva_array_search( l.sorts, 1, l.sort, '( l.sort EQ \'price_asc\' ) OR ( l.sort EQ \'price_desc\' )' ) }">
+		<MvIF EXPR = "{ ISNULL l.query_params:data:discount_signature }">
+			<MvIF EXPR = "{ [ g.Module_Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.discount_signature ) }">
+				<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_Set_DiscountSignature( l.query, l.discount_signature ) }">
+			</MvIF>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_SELECT_DiscountPrices( l.query ) }">
+
+		<MvIF EXPR = "{ l.query_params:data:discount_prices_selected }">				
+			<MvASSIGN NAME = "l.price_field"		VALUE = "{ [ g.Module_Library_Native_DBAPI ].DB_IFNULL( 'dp.price', 'prod.price' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ miva_array_search( l.sorts, 1, l.sort, '( l.sort EQ \'bestsellers\' )' ) }">
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_JOIN_ProdStats( l.query ) }">
+	</MvIF>
+
+	<MvFOREACH ITERATOR = "l.sort" ARRAY = "l.sorts">
+		<MvIF EXPR = "{ l.sort EQ 'disp_order' }">			<MvASSIGN NAME = "l.sort_col" VALUE = "{ l.query_params:data:disp_order }">	<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">	<MvASSIGN NAME = "l.break_ties" VALUE = 0>
+		<MvELSEIF EXPR = "{ l.sort EQ 'disp_order_desc' }">	<MvASSIGN NAME = "l.sort_col" VALUE = "{ l.query_params:data:disp_order }">	<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">	<MvASSIGN NAME = "l.break_ties" VALUE = 0>
+		<MvELSEIF EXPR = "{ l.sort EQ 'newest' }">			<MvASSIGN NAME = "l.sort_col" VALUE = "prod.id">							<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">	<MvASSIGN NAME = "l.break_ties" VALUE = 0>
+		<MvELSEIF EXPR = "{ l.sort EQ 'oldest' }">			<MvASSIGN NAME = "l.sort_col" VALUE = "prod.dt_created">					<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'updated' }">			<MvASSIGN NAME = "l.sort_col" VALUE = "prod.dt_updated">					<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'code_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.code">							<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">	<MvASSIGN NAME = "l.break_ties" VALUE = 0>
+		<MvELSEIF EXPR = "{ l.sort EQ 'code_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.code">							<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">	<MvASSIGN NAME = "l.break_ties" VALUE = 0>
+		<MvELSEIF EXPR = "{ l.sort EQ 'name_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.name">							<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'name_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.name">							<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'price_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "{ l.price_field }">					<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'price_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "{ l.price_field }">					<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'cost_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.cost">							<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'cost_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.cost">							<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'weight_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.weight">						<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'weight_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.weight">						<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'bestsellers' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "ps.counter">							<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'margin_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.margin">						<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'margin_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.margin">						<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'profit_asc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.profit">						<MvASSIGN NAME = "l.sort_dir" VALUE = "ASC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'profit_desc' }">		<MvASSIGN NAME = "l.sort_col" VALUE = "prod.profit">						<MvASSIGN NAME = "l.sort_dir" VALUE = "DESC">
+		<MvELSEIF EXPR = "{ l.sort EQ 'relevance' }">
+			<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_ORDER_BY_Relevance( l.query ) }">
+			<MvASSIGN NAME = "l.retain_relevance"	VALUE = 0>
+
+			<MvFOREACHCONTINUE>
+		<MvELSEIF EXPR = "{ ( ( 'customfield:' IN l.sort ) EQ 1 ) OR
+							( ( 'customfield_desc:' IN l.sort ) ) EQ 1 }">
+			<MvASSIGN NAME = "l.type"					VALUE = "{ gettoken( l.sort, ':', 1 ) }">
+			<MvASSIGN NAME = "l.module_code"			VALUE = "{ gettoken( l.sort, ':', 2 ) }">
+			<MvASSIGN NAME = "l.field_code"				VALUE = "{ gettoken( l.sort, ':', 3 ) }">
+
+			<MvIF EXPR = "{ l.type EQ 'customfield_desc' }">	<MvASSIGN NAME = "l.sort_dir"	VALUE = "DESC">
+			<MvELSE>											<MvASSIGN NAME = "l.sort_dir"	VALUE = "ASC">
+			</MvIF>
+
+			<MvIF EXPR = "{ ModuleAndFeatures_Load_Code_Cached( l.module_code, l.module ) }">
+				<MvIF EXPR = "{ l.module:active				AND
+								l.module:api_ver GE 9.07	AND
+								l.module:feature_hash:fields_prod }">
+					<MvIF EXPR = "{ StoreModule_Count_Module_Cached( l.module:id ) }">
+						<MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Capabilities( l.module, l.field_code, l.capabilities ) }">
+
+						<MvIF EXPR = "{ l.capabilities:orderby }">
+							<MvASSIGN NAME = "l.null"	VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Product_Field_Query_OrderBy( l.module, l.query, l.field_code, l.sort_dir ) }">
+						</MvIF>
+					</MvIF>
+				</MvIF>
+			</MvIF>
+
+			<MvFOREACHCONTINUE>
+		<MvELSE>
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY_Flag( l.query, l.sort_col, l.sort_dir, l.sort_flag ) }">
+	</MvFOREACH>
+
+	<MvIF EXPR = "{ l.retain_relevance }">
+		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_ORDER_BY_Relevance( l.query ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.break_ties }">
+		<MvEVAL EXPR = "{ SQL_Query_ORDER_BY( l.query, l.query_params:data:disp_order, 'ASC' ) }">
+	</MvIF>
+</MvFUNCTION>
+
+<MvCOMMENT>
+|
+| Runtime Product List: Collection Products
+|
+</MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Collection" PARAMETERS = "query var, collection var" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvASSIGN NAME = "l.query_params:data:version"		VALUE = "{ l.collection:lastrbld }">
+	<MvASSIGN NAME = "l.query_params:data:disp_order"	VALUE = "prod.disp_order">
+
+	<MvEVAL EXPR = "{ SQL_Query_FROM( l.query, g.Store_Table_Prefix $ 'CollectionXProduct', 'clxp' ) }">
+	<MvEVAL EXPR = "{ SQL_Query_WHERE( l.query,
+									   'clxp.col_id	= ? AND
+										prod.id		= clxp.product_id',
+									   SQL_Query_Field( l.collection:id ) ) }">
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -2828,13 +3170,14 @@
 		</MvCOMMENT>
 
 		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.query:orderby" COUNT = "{ l.query:orderby_count }">
-			<MvIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, l.orderby:column $ ' AS ' $ l.orderby:column_alias ) }">
-			<MvELSEIF EXPR = "{ l.orderby:column EQ 'prod.id' }">	<MvFOREACHCONTINUE>
-			<MvELSE>												<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, l.orderby:column ) }">
+			<MvIF EXPR = "{ l.orderby:is_relevance }">					<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">	<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.query, l.orderby:column $ ' AS ' $ l.orderby:column_alias, l.orderby:fields ) }">
+			<MvELSEIF EXPR = "{ l.orderby:column EQ 'prod.id' }">		<MvFOREACHCONTINUE>
+			<MvELSE>													<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.query, l.orderby:column, l.orderby:fields ) }">
 			</MvIF>
 
 			<MvIF EXPR = "{ l.groupby }">
-				<MvEVAL EXPR = "{ SQL_Query_GROUP_BY( l.query, l.orderby:column ) }">
+				<MvEVAL EXPR = "{ SQL_Query_GROUP_BY( l.query, ternary( NOT ISNULL l.orderby:column_alias, l.orderby:column_alias, l.orderby:column ) ) }">
 			</MvIF>
 		</MvFOREACH>
 
@@ -2866,7 +3209,7 @@
 		</MvCOMMENT>
 
 		<MvASSIGN NAME = "l.distinct"		VALUE = "{ SQL_Query_Is_DISTINCT( l.query ) }">
-		<MvASSIGN NAME = "l.orderby_sql"	VALUE = "{ SQL_Query_Build_ORDER_By_Unaliased( l.query ) }">
+		<MvASSIGN NAME = "l.orderby_sql"	VALUE = "{ SQL_Query_Build_ORDER_By_Unaliased_With_Fields( l.query, l.orderby_fields ) }">
 
 		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_SELECT_Clear( l.query ) }">
 		<MvEVAL EXPR = "{ SQL_Query_ORDER_By_Clear( l.query ) }">
@@ -2875,16 +3218,14 @@
 			<MvEVAL EXPR = "{ SQL_Query_DISTINCT( l.query ) }">
 		</MvIF>
 
-		<MvEVAL EXPR = "{ SQL_Query_SELECT( l.query, 'CAST( ? AS INTEGER ), prod.id, DENSE_RANK() OVER ( ' $ l.orderby_sql $ ' )' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.query, 'CAST( ? AS INTEGER ), prod.id',				'l.cachedproductlist:id' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.query, 'DENSE_RANK() OVER ( ' $ l.orderby_sql $ ' )',	l.orderby_fields ) }">
 
 		<MvASSIGN NAME = "l.population_sql"	VALUE = "{ SQL_Query_Build( l.query, l.population_fields ) $ ' LIMIT ' $ int( l.index:max_res ) }">
 
-		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.fields, 'l.cachedproductlist:id', -1 ) }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert_var( l.fields, l.population_fields, -1 ) }">
-
 		<MvQUERY NAME	= "Merchant"
 				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) ' $ l.population_sql }"
-				 FIELDS	= "{ l.fields }">
+				 FIELDS	= "{ l.population_fields }">
 		<MvIF EXPR = "{ g.MvQUERY_Error }">
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00081', g.MvQUERY_Error ) }">
 		</MvIF>
@@ -3077,9 +3418,15 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Search_Origin" PARAMETERS = "query var, origin" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = "{ Runtime_ProductList_Build_Query_Search_Origin_Merchandising( l.query, l.origin, 0, l.null ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Search_Origin_Merchandising" PARAMETERS = "query var, origin, prompt_id, tokens_present var" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
 
-	<MvASSIGN NAME = "l.query_params:data:search_origin" VALUE = "{ l.origin }">
+	<MvASSIGN NAME = "l.query_params:data:search_origin"			VALUE = "{ l.origin }">
+	<MvASSIGN NAME = "l.query_params:data:search_prompt_id"			VALUE = "{ l.prompt_id }">
+	<MvASSIGN NAME = "l.query_params:data:search_tokens_present"	VALUE = "{ l.tokens_present }">
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -3087,6 +3434,24 @@
 | Runtime Product List: Loading and caching
 |
 </MvCOMMENT>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Set_Flag" PARAMETERS = "query var, flag" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvASSIGN NAME = "l.query_params:data:flags" MEMBER = "{ l.flag }" VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Clear_Flag" PARAMETERS = "query var, flag" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvEVAL EXPR = "{ miva_member_delete( l.query_params:data:flags, l.flag ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Get_Flag" PARAMETERS = "query var, flag" STANDARDOUTPUTLEVEL = "">
+	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_member_exists( l.query_params:data:flags, l.flag ) }">
+</MvFUNCTION>
 
 <MvFUNCTION NAME = "Runtime_ProductList_Build_Query_Cache" PARAMETERS = "query var" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ SQL_Query_Data_Reference( l.query, 'Runtime_ProductList', l.query_params ) }">
@@ -3240,13 +3605,14 @@
 		</MvCOMMENT>
 
 		<MvFOREACH ITERATOR = "l.orderby" ARRAY = "l.population_query:orderby" COUNT = "{ l.population_query:orderby_count }">
-			<MvIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">	<MvEVAL EXPR = "{ SQL_Query_SELECT( l.population_query, l.orderby:column $ ' AS ' $ l.orderby:column_alias ) }">
-			<MvELSEIF EXPR = "{ l.orderby:column EQ 'prod.id' }">	<MvFOREACHCONTINUE>
-			<MvELSE>												<MvEVAL EXPR = "{ SQL_Query_SELECT( l.population_query, l.orderby:column ) }">
+			<MvIF EXPR = "{ l.orderby:is_relevance }">					<MvFOREACHCONTINUE>
+			<MvELSEIF EXPR = "{ NOT ISNULL l.orderby:column_alias }">	<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.population_query, l.orderby:column $ ' AS ' $ l.orderby:column_alias, l.orderby:fields ) }">
+			<MvELSEIF EXPR = "{ l.orderby:column EQ 'prod.id' }">		<MvFOREACHCONTINUE>
+			<MvELSE>													<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.population_query, l.orderby:column, l.orderby:fields ) }">
 			</MvIF>
 
 			<MvIF EXPR = "{ l.groupby }">
-				<MvEVAL EXPR = "{ SQL_Query_GROUP_BY( l.population_query, l.orderby:column ) }">
+				<MvEVAL EXPR = "{ SQL_Query_GROUP_BY( l.population_query, ternary( NOT ISNULL l.orderby:column_alias, l.orderby:column_alias, l.orderby:column ) ) }">
 			</MvIF>
 		</MvFOREACH>
 
@@ -3278,7 +3644,7 @@
 		</MvCOMMENT>
 
 		<MvASSIGN NAME = "l.distinct"		VALUE = "{ SQL_Query_Is_DISTINCT( l.population_query ) }">
-		<MvASSIGN NAME = "l.orderby_sql"	VALUE = "{ SQL_Query_Build_ORDER_By_Unaliased( l.population_query ) }">
+		<MvASSIGN NAME = "l.orderby_sql"	VALUE = "{ SQL_Query_Build_ORDER_By_Unaliased_With_Fields( l.population_query, l.orderby_fields ) }">
 
 		<MvEVAL EXPR = "{ Runtime_ProductList_Build_Query_SELECT_Clear( l.population_query ) }">
 		<MvEVAL EXPR = "{ SQL_Query_ORDER_By_Clear( l.population_query ) }">
@@ -3287,16 +3653,14 @@
 			<MvEVAL EXPR = "{ SQL_Query_DISTINCT( l.population_query ) }">
 		</MvIF>
 
-		<MvEVAL EXPR = "{ SQL_Query_SELECT( l.population_query, 'CAST( ? AS INTEGER ), prod.id, DENSE_RANK() OVER ( ' $ l.orderby_sql $ ' )' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.population_query, 'CAST( ? AS INTEGER ), prod.id',				'l.cachedproductlist:id' ) }">
+		<MvEVAL EXPR = "{ SQL_Query_SELECT_With_Fields( l.population_query, 'DENSE_RANK() OVER ( ' $ l.orderby_sql $ ' )',	l.orderby_fields ) }">
 
 		<MvASSIGN NAME = "l.population_sql"	VALUE = "{ SQL_Query_Build( l.population_query, l.population_fields ) $ ternary( l.max_results GT 0, ' LIMIT ' $ l.max_results, '' ) }">
 
-		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert( l.fields, 'l.cachedproductlist:id', -1 ) }">
-		<MvASSIGN NAME = "l.null"			VALUE = "{ miva_array_insert_var( l.fields, l.population_fields, -1 ) }">
-
 		<MvQUERY NAME	= "Merchant"
 				 QUERY	= "{ 'INSERT INTO ' $ g.Store_Table_Prefix $ 'CachedProductListXProduct ( cache_id, product_id, disp_order ) ' $ l.population_sql }"
-				 FIELDS	= "{ l.fields }">
+				 FIELDS	= "{ l.population_fields }">
 		<MvIF EXPR = "{ g.MvQUERY_Error }">
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-RNT-00058', g.MvQUERY_Error ) }">
 		</MvIF>

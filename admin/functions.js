@@ -1564,20 +1564,6 @@ function UserList_Load_Query( filter, sort, offset, count, callback, delegator )
 	}, delegator );
 }
 
-function GroupUserList_Load_Query( group_id, assigned, unassigned, filter, sort, offset, count, callback, delegator )
-{
-	return AJAX_Call_Domain_JSON( callback, 'admin', 'GroupUserList_Load_Query',
-	{
-		Group_ID:	group_id,
-		Filter:		filter,
-		Sort:		sort,
-		Offset:		offset,
-		Count:		count,
-		Assigned:	assigned,
-		Unassigned:	unassigned
-	}, delegator );
-}
-
 function User_Insert( data, callback, delegator )
 {
 	return AJAX_Call_Domain_JSON( callback, 'admin', 'User_Insert',

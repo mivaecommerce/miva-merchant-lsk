@@ -745,14 +745,19 @@ function TemplateSearchAndReplace_Interface_ResultItem( result, can_modify )
 
 	this.element_title.textContent			= this.GenerateTitle();
 
-	if ( this.result.hasOwnProperty( 'page' ) )								this.BuildView( 'View Page',				{ Screen: 'PAGE', Store_Code: Store_Code, Edit_Page: self.result.page.code } );
-	else if ( this.result.hasOwnProperty( 'cssresource' ) )					this.BuildView( 'View CSS Resource',		{ Screen: 'UIRS', Store_Code: Store_Code, Tab: 'CSSR', Filter_CSSResource_Code: self.result.cssresource.code } );
+	if ( this.result.hasOwnProperty( 'cssresource' ) )						this.BuildView( 'View CSS Resource',		{ Screen: 'UIRS', Store_Code: Store_Code, Tab: 'CSSR', Filter_CSSResource_Code: self.result.cssresource.code } );
 	else if ( this.result.hasOwnProperty( 'scriptresource' ) )				this.BuildView( 'View JavaScript Resource',	{ Screen: 'UIRS', Store_Code: Store_Code, Tab: 'JSRS', Filter_JavaScriptResource_Code: self.result.scriptresource.code } );
 	else if ( this.result.hasOwnProperty( 'readytheme_contentsection' ) )	this.BuildView( 'View Content Section',		{ Screen: 'SUTL', Store_Code: Store_Code, Module_Code: 'readytheme', Module_Screen: 'RTCS', Edit_ContentSection: self.result.readytheme_contentsection.code } );
 	else if ( this.result.hasOwnProperty( 'readytheme_navigationset' ) )	this.BuildView( 'View Navigation Set',		{ Screen: 'SUTL', Store_Code: Store_Code, Module_Code: 'readytheme', Module_Screen: 'RTNS', Edit_NavigationSet: self.result.readytheme_navigationset.code } );
 	else if ( this.result.hasOwnProperty( 'readytheme_productlisting' ) )	this.BuildView( 'View Product Listing',		{ Screen: 'SUTL', Store_Code: Store_Code, Module_Code: 'readytheme', Module_Screen: 'RTPL', Edit_ProductListing: self.result.readytheme_productlisting.code } );
 	else if ( this.result.hasOwnProperty( 'product' ) )						this.BuildView( 'View Product',				{ Screen: 'PROD', Store_Code: Store_Code, Edit_Product: self.result.product.code } );
 	else if ( this.result.hasOwnProperty( 'category' ) )					this.BuildView( 'View Category',			{ Screen: 'CTGY', Store_Code: Store_Code, Edit_Category: self.result.category.code } );
+	else if ( this.result.hasOwnProperty( 'page' ) )
+	{
+		if ( this.result.page.layout )										this.BuildView( 'View Layout',				{ Screen: 'PAGE', Store_Code: Store_Code, Edit_Page: self.result.page.code, Page_Layout: 1 } );
+		else if ( this.result.page.fragment )								this.BuildView( 'View Fragment',			{ Screen: 'PAGE', Store_Code: Store_Code, Edit_Page: self.result.page.code, Page_Fragment: 1 } );
+		else																this.BuildView( 'View Page',				{ Screen: 'PAGE', Store_Code: Store_Code, Edit_Page: self.result.page.code } );
+	}
 
 	for ( i = 0, i_len = this.result.matchlist.length; i < i_len; i++ )
 	{
@@ -764,14 +769,19 @@ function TemplateSearchAndReplace_Interface_ResultItem( result, can_modify )
 
 TemplateSearchAndReplace_Interface_ResultItem.prototype.GenerateTitle = function()
 {
-	if ( this.result.hasOwnProperty( 'page' ) )								return 'Page: ' + this.result.page.name + ' (' + this.result.template_name + ')';
-	else if ( this.result.hasOwnProperty( 'cssresource' ) )					return 'CSS Resource: ' + this.result.cssresource.code;
+	if ( this.result.hasOwnProperty( 'cssresource' ) )						return 'CSS Resource: ' + this.result.cssresource.code;
 	else if ( this.result.hasOwnProperty( 'scriptresource' ) )				return 'JavaScript Resource: ' + this.result.scriptresource.code;
 	else if ( this.result.hasOwnProperty( 'readytheme_contentsection' ) )	return 'ReadyTheme Content Section: ' + this.result.readytheme_contentsection.name;
 	else if ( this.result.hasOwnProperty( 'readytheme_navigationset' ) )	return 'ReadyTheme Navigation Set: ' + this.result.readytheme_navigationset.name;
 	else if ( this.result.hasOwnProperty( 'readytheme_productlisting' ) )	return 'ReadyTheme Product Listing: ' + this.result.readytheme_productlisting.name;
 	else if ( this.result.hasOwnProperty( 'product' ) )						return 'Product: ' + this.result.product.name + ' (' + this.result.template_name + ')';
 	else if ( this.result.hasOwnProperty( 'category' ) )					return 'Category: ' + this.result.category.name + ' (' + this.result.template_name + ')';
+	else if ( this.result.hasOwnProperty( 'page' ) )
+	{
+		if ( this.result.page.layout )										return 'Layout: ' + this.result.page.name + ' (' + this.result.page.code + ')';
+		else if ( this.result.page.fragment )								return 'Fragment: ' + this.result.page.name + ' (' + this.result.page.code + ')';
+		else																return 'Page: ' + this.result.page.name + ' (' + this.result.page.code + ')';
+	}
 	else																	return 'Template: ' + this.result.template_name;
 }
 

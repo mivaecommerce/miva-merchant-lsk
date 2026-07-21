@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0100">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0200">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -1365,18 +1365,21 @@
 		<MvASSIGN NAME = "l.capabilities:query"				VALUE = 0>
 		<MvASSIGN NAME = "l.capabilities:search"			VALUE = 0>
 		<MvASSIGN NAME = "l.capabilities:search_fulltext"	VALUE = 0>
+		<MvASSIGN NAME = "l.capabilities:boost"				VALUE = 0>
 		<MvASSIGN NAME = "l.capabilities:orderby"			VALUE = 0>
 		<MvASSIGN NAME = "l.capabilities:orderby_relevance"	VALUE = 0>
 	<MvELSEIF EXPR = "{ l.field:fieldtype EQ 'multitext' }">
 		<MvASSIGN NAME = "l.capabilities:query"				VALUE = 0>
 		<MvASSIGN NAME = "l.capabilities:search"			VALUE = 1>
 		<MvASSIGN NAME = "l.capabilities:search_fulltext"	VALUE = 0>
+		<MvASSIGN NAME = "l.capabilities:boost"				VALUE = 1>
 		<MvASSIGN NAME = "l.capabilities:orderby"			VALUE = 0>
 		<MvASSIGN NAME = "l.capabilities:orderby_relevance"	VALUE = 0>
 	<MvELSE>
 		<MvASSIGN NAME = "l.capabilities:query"				VALUE = 1>
 		<MvASSIGN NAME = "l.capabilities:search"			VALUE = 1>
 		<MvASSIGN NAME = "l.capabilities:search_fulltext"	VALUE = 1>
+		<MvASSIGN NAME = "l.capabilities:boost"				VALUE = 1>
 		<MvASSIGN NAME = "l.capabilities:orderby"			VALUE = 1>
 		<MvASSIGN NAME = "l.capabilities:orderby_relevance"	VALUE = 1>
 	</MvIF>
@@ -1398,6 +1401,86 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ CustomFields_Generic_Query_Search( l.data, l.query, l.code, l.operator, l.value ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Module_Product_Field_Query_Boost" PARAMETERS = "module var, record_query var, boost_query var, code, operator, value" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT CustomFields_Generic_Data_Product( l.code, l.data ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Data_Reference( l.record_query, 'customfld', l.ref ) }">
+
+	<MvCOMMENT>
+	|
+	| Boost queries are never conjunctive--they do not limit the output of the query, only alter the
+	| resulting order.
+	|
+	| CustomFields_Generic_Query will add a LEFT OUTER JOIN with the appropriate ON clause to record_query
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT CustomFields_Generic_Query( l.data, l.record_query, l.code ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT miva_array_search( l.ref:data:customfield_codes, 1, l.element, 'l.element:code EQ l.code' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Add boost conditions to boost_query
+	|
+	</MvCOMMENT>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.boost_query ) }">
+
+	<MvIF EXPR = "{ l.data:field:fieldtype EQ 'multitext' }">
+		<MvASSIGN NAME = "l.alias" VALUE = "{ CustomFields_Generic_Query_MultiText_Field_Alias( l.element:field, ++l.element:join_count ) }">
+
+		<MvIF EXPR = "{ NOT l.data:field:separate }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues ' $ l.alias $ ' WHERE ' $ l.alias $ '.field_id = ? AND ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	[ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
+		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.data:field:id ) $ ' ' $ l.alias $ ' WHERE ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	[ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
+		</MvIF>
+	<MvELSE>
+		<MvIF EXPR = "{ ( l.operator EQ 'NC' )		OR
+						( l.operator EQ 'NE' )		OR
+						( l.operator EQ 'NOT_IN' )	OR
+						( l.operator EQ 'NOTLIKE' )	OR
+						( l.operator EQ 'NULL' ) }">
+			<MvASSIGN NAME = "l.inner_joining_clause" VALUE = "AND">
+		<MvELSE>
+			<MvASSIGN NAME = "l.inner_joining_clause" VALUE = "OR">
+		</MvIF>
+
+		<MvIF EXPR = "{ l.operator EQ 'TRUE' }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.boost_query ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, '( ' $ l.element:alias $ '.value <> \'0\' AND ' $ l.element:alias $ '.value_long IS NULL )', '' ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, '( ' $ l.element:alias $ '.value IS NULL AND ' $ l.element:alias $ '.value_long <> \'0\' )' , '' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.boost_query, 'OR' ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'FALSE' }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.boost_query ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, '( ( ' $ l.element:alias $ '.value = \'0\' OR ' $ l.element:alias $ '.value IS NULL ) AND ' $ l.element:alias $ '.value_long IS NULL )', '' ) }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, '( ( ' $ l.element:alias $ '.value_long = \'0\' OR ' $ l.element:alias $ '.value_long IS NULL ) AND ' $ l.element:alias $ '.value IS NULL )' , '' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END( l.boost_query, 'OR' ) }">
+		<MvELSEIF EXPR = "{ ( l.operator EQ 'IN' ) OR
+							( l.operator EQ 'NOT_IN' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.boost_query ) }">
+				<MvEVAL EXPR = "{ CustomFields_Query_Search_CommaSeparatedList_With_Type( l.boost_query, 'NULL_CHAR', l.element:alias $ '.value', l.element:alias $ '.value_long', l.operator, l.value ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.boost_query, 'AND', l.inner_joining_clause ) }">
+		<MvELSEIF EXPR = "{ l.operator EQ 'CO'		OR
+							l.operator EQ 'NC'		OR
+							l.operator EQ 'LIKE'	OR
+							l.operator EQ 'NOTLIKE' OR
+							l.operator EQ 'NULL' }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.boost_query, 'NULL_CHAR', l.element:alias $ '.value,' $ l.element:alias $ '.value_long', l.operator, l.value, 'AND', l.inner_joining_clause ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.boost_query, 'NULL_CHAR', l.element:alias $ ternary( len_var( l.value ) GT 254, '.value_long', '.value' ), l.operator, l.value, 'AND', l.inner_joining_clause ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_END_Clause( l.boost_query, 'OR', 'AND' ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Module_Product_Field_Query_OrderBy" PARAMETERS = "module var, query var, code, direction" STANDARDOUTPUTLEVEL = "">
