@@ -378,12 +378,12 @@ function Order_FulfillmentModule_Process( order_id, module_ids, callback )			{ r
 function Order_Authorize( order_id, module_id, module_data,
 						  amount, fields, callback )								{ return AJAX_Call_FieldList( callback, 'admin', 'Order_Authorize',				'Order_ID=' + encodeURIComponent( order_id ) + '&Module_ID=' + encodeURIComponent( module_id ) + '&Module_Data=' + encodeURIComponent( module_data ) + '&Amount=' + encodeURIComponent( amount ), fields ); }
 
-function Order_Authorize_GenerateMivaPayRequest( order_id, paymentcardtype_id, callback, delegator )
+function Order_Authorize_GenerateMivaPayRequest( order_id, paymentmethod, callback, delegator )
 {
 	return AJAX_Call_JSON( callback, 'admin', 'Order_Authorize_GenerateMivaPayRequest',
 	{
-		Order_ID:			order_id,
-		PaymentCardType_ID:	paymentcardtype_id
+		Order_ID:		order_id,
+		PaymentMethod:	paymentmethod
 	}, delegator );
 }
 

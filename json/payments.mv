@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-JSN-PAY-
@@ -475,8 +475,17 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT JSON_Input_Integer(	'R', 'PaymentCardType_ID', l.paymentcardtype_id ) }">
+	<MvIF EXPR = "{ NOT JSON_Input_Text( 'R', 'PaymentMethod', l.paymentmethod ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.module_code" 		VALUE = "">
+	<MvASSIGN NAME = "l.module_data" 		VALUE = "">
+	<MvASSIGN NAME = "l.paymentcard" 		VALUE = "">
+	<MvASSIGN NAME = "l.paymentcardtype"	VALUE = "">
+	
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_UT ].PaymentMethod_Parse( l.paymentmethod, l.order:cust_id, l.order:id, l.module_code, l.module_data, l.paymentcard, l.paymentcardtype ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].MivaPaySettings_Load_Cached( l.mivapay_settings ) OR
@@ -490,23 +499,13 @@
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00036', 'MivaPay Vault has not been enabled/configured. Please enable MivaPay Vault in settings and link at least one Payment Card Type to a payment method supporting MivaPay Vault.' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ l.paymentcardtype_id EQ -1 }">
+	<MvIF EXPR = "{ l.paymentcardtype:id EQ -1 }">
 		<MvIF EXPR = "{ NOT l.mivapay_settings:pct_group }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00041', 'Invalid payment method' ) }">
 		<MvELSEIF EXPR = "{ l.paymentcardtype_count EQ 0 }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00039', 'No payment card types have been configured.' ) }">
 		</MvIF>
 	<MvELSE>
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].PaymentCardType_Load_ID( l.paymentcardtype_id, l.paymentcardtype ) }">
-			<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-				<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-			</MvIF>
-
-			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
-		</MvIF>
-
-		<MvASSIGN NAME = "l.module_code" VALUE = "{ l.paymentcardtype:mod_code }">
-
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Module_Load_Code_Cached( l.module_code, l.module ) OR
 						NOT [ g.Module_Library_DB ].StoreModule_Load_Cached( l.module:id, 'payment', l.storemodule ) }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
@@ -518,7 +517,7 @@
 		<MvASSIGN NAME = "l.method_capabilities"	VALUE = "">
 
 		<MvIF EXPR = "{ l.module:api_ver GE 9.03 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Capabilities( l.module, l.capabilities ) }"> </MvIF>
-		<MvIF EXPR = "{ l.module:api_ver GE 9.06 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.paymentcardtype:meth_code, l.method_capabilities ) }"> </MvIF>
+		<MvIF EXPR = "{ l.module:api_ver GE 9.06 }"> <MvEVAL EXPR = "{ [ g.Module_Root $ l.module:module ].PaymentModule_Method_Capabilities( l.module, l.module_data, l.method_capabilities ) }"> </MvIF>
 
 		<MvIF EXPR = "{ NOT l.method_capabilities:mivapay }">
 			<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( 'MER-JSN-PAY-00037', 'MivaPay Vault is not supported for the selected payment. Please ensure that the linked payment method supports MivaPay Vault.' ) }">
@@ -561,36 +560,59 @@
 			<Prompts>
 				<FirstName />
 				<LastName />
-				<MvIF EXPR = "{ l.paymentcardtype_id EQ -1 }">
+
+				<MvIF EXPR = "{ l.paymentcardtype:id EQ -1 }">
 					<CardType />
 				</MvIF>
+
 				<CardNumber />
 				<ExpirationDate />
 
-				<MvIF EXPR = "{ l.mivapay_settings:cvv_ad_pct NE 'hidden' }">
+				<MvIF EXPR = "{ ( l.paymentcardtype:id NE 0 AND l.mivapay_settings:cvv_ad_pct NE 'hidden' ) OR
+								( l.paymentcard:id GT 0 AND l.mivapay_settings:cvv_ad_pc NE 'hidden' ) }">
 					<CVV />
 				</MvIF>
 			</Prompts>
 
-			<MvIF EXPR = "{ l.paymentcardtype_id EQ -1 }">
-				<PermittedCardTypes>
-					<MvFOREACH ITERATOR = "l.paymentcardtype" ARRAY = "l.paymentcardtypes" COUNT = "{ l.paymentcardtype_count }">
+			<MvIF EXPR = "{ l.paymentcardtype:id NE 0 }">
+				<MvIF EXPR = "{ l.paymentcardtype:id NE -1 }">
+					<PermittedCardTypes>
 						<PermittedCardType prefixes="{ encodeentities( l.paymentcardtype:prefixes ) }" lengths="{ encodeentities( l.paymentcardtype:lengths ) }" cvv="{ encodeentities( [ g.Module_Feature_PAY_UT ].MivaPay_Map_CVV_Setting( l.mivapay_settings:cvv_ad_pct, l.paymentcardtype:cvv ) ) }"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></PermittedCardType>
-					</MvFOREACH>
-				</PermittedCardTypes>
-			<MvELSE>
+					</PermittedCardTypes>
+				<MvELSE>
+					<PermittedCardTypes>
+						<MvFOREACH ITERATOR = "l.paymentcardtype" ARRAY = "l.paymentcardtypes" COUNT = "{ l.paymentcardtype_count }">
+							<PermittedCardType prefixes="{ encodeentities( l.paymentcardtype:prefixes ) }" lengths="{ encodeentities( l.paymentcardtype:lengths ) }" cvv="{ encodeentities( [ g.Module_Feature_PAY_UT ].MivaPay_Map_CVV_Setting( l.mivapay_settings:cvv_ad_pct, l.paymentcardtype:cvv ) ) }"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></PermittedCardType>
+						</MvFOREACH>
+					</PermittedCardTypes>
+				</MvIF>
+			<MvELSEIF EXPR = "{ l.paymentcard:id GT 0 }">
 				<PermittedCardTypes>
-					<PermittedCardType prefixes="{ encodeentities( l.paymentcardtype:prefixes ) }" lengths="{ encodeentities( l.paymentcardtype:lengths ) }" cvv="{ encodeentities( [ g.Module_Feature_PAY_UT ].MivaPay_Map_CVV_Setting( l.mivapay_settings:cvv_ad_pct, l.paymentcardtype:cvv ) ) }"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></PermittedCardType>
+					<PermittedCardType prefixes="{ encodeentities( l.paymentcard:prefixes ) }" lengths="{ encodeentities( l.paymentcard:lengths ) }" cvv="{ encodeentities( [ g.Module_Feature_PAY_UT ].MivaPay_Map_CVV_Setting( l.mivapay_settings:cvv_ad_pc, l.paymentcard:cvv ) ) }"><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></PermittedCardType>
 				</PermittedCardTypes>
 			</MvIF>
 
 			<ExistingCard>
-				<MvIF EXPR = "{ l.paymentcardtype_id NE -1 }">
-					<CardType><MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].CDATA_Encode( l.paymentcardtype:type ) }"></CardType>
-				</MvIF>
+				<MvIF EXPR = "{ l.paymentcardtype:id NE 0 }">
+					<MvIF EXPR = "{ l.paymentcardtype:id NE -1 }">
+						<CardType><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcardtype:type ) }"></CardType>
+					</MvIF>
 
-				<MvIF EXPR = "{ l.mivapay_settings:cvv_ad_pct NE 'hidden' }">
-					<TokenCVVNonce><MvEVAL EXPR = "{ miva_cdata_encode( [ g.Module_Feature_PAY_UT ].MivaPay_Generate_CVV_Nonce() ) }"></TokenCVVNonce>
+					<MvIF EXPR = "{ l.mivapay_settings:cvv_ad_pct NE 'hidden' }">
+						<TokenCVVNonce><MvEVAL EXPR = "{ miva_cdata_encode( [ g.Module_Feature_PAY_UT ].MivaPay_Generate_CVV_Nonce() ) }"></TokenCVVNonce>
+					</MvIF>
+				<MvELSEIF EXPR = "{ l.paymentcard:id GT 0 }">
+					<CardType><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:type ) }"></CardType>
+					<FirstName><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:fname ) }"></FirstName>
+					<LastName><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:lname ) }"></LastName>
+					<CardPlaceholder><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:type $ ' ending in ' $ l.paymentcard:lastfour ) }"></CardPlaceholder>
+					<Token><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:token ) }"></Token>
+					<ExpirationMonth><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:exp_month ) }"></ExpirationMonth>
+					<ExpirationYear><MvEVAL EXPR = "{ miva_cdata_encode( l.paymentcard:exp_year ) }"></ExpirationYear>
+
+					<MvIF EXPR = "{ l.mivapay_settings:cvv_ad_pc NE 'hidden' }">
+						<TokenCVVNonce><MvEVAL EXPR = "{ miva_cdata_encode( [ g.Module_Feature_PAY_UT ].MivaPay_Generate_CVV_Nonce() ) }"></TokenCVVNonce>
+					</MvIF>
 				</MvIF>
 			</ExistingCard>
 
@@ -780,6 +802,10 @@
 
 		<MvIF EXPR = "{ l.paymentcard:id }">
 			<MvIF EXPR = "{ l.paymentcard:cust_id }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Update( l.paymentcard ) }">
+					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+				</MvIF>
+
 				<MvIF EXPR = "{ NOT [ g.Module_Feature_PAY_DB ].CustomerPaymentCard_Update_LastUsed( l.paymentcard ) }">
 					<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 				</MvIF>

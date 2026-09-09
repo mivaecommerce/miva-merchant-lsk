@@ -23,7 +23,7 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-customfields">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Custom Fields">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0200">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0201">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.08">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "Custom Fields allow you to add your own fields to categories, products, customer records, etc.  For example, you can add a custom product field called 'MSRP' to display the manufacturer suggested retail price on the product page.  You must enable the Custom Fields module before you can create custom fields.  You can add, edit and delete custom fields from the Store Utility Settings page.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, vis_util, vis_category, not_cat, fields_cat, fields_cat_map, vis_product, not_prod, fields_prod, fields_prod_map, vis_cust, not_cust, fields_cust, fields_cust_map, data_store, provision_store, component, component_frag, clientside, clientside_sri, json, fulfill, vis_order, not_order, fields_ordr, fields_ordr_map, not_search, prod_facet, upload, copy_prod, fields_page, not_page">
@@ -1436,10 +1436,47 @@
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SUB_WHERE_BEGIN( l.boost_query ) }">
 
 	<MvIF EXPR = "{ l.data:field:fieldtype EQ 'multitext' }">
-		<MvASSIGN NAME = "l.alias" VALUE = "{ CustomFields_Generic_Query_MultiText_Field_Alias( l.element:field, ++l.element:join_count ) }">
+		<MvASSIGN NAME = "l.multitext_query" VALUE = "">
 
-		<MvIF EXPR = "{ NOT l.data:field:separate }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues ' $ l.alias $ ' WHERE ' $ l.alias $ '.field_id = ? AND ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	[ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
-		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.data:field:id ) $ ' ' $ l.alias $ ' WHERE ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	[ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.multitext_query, 'product_id' ) }">
+
+		<MvIF EXPR = "{ NOT l.data:field:separate }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.multitext_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues', '' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.multitext_query, 'field_id = ? AND product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.multitext_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.data:field:id ), '' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.multitext_query, 'product_id = prod.id', '' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( l.operator EQ 'EQ' ) OR
+						( l.operator EQ 'CO' ) OR
+						( l.operator EQ 'IN' ) OR
+						( l.operator EQ 'LIKE' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.multitext_query, 'CHAR', 'value', l.operator, l.value, '', '' ) }">
+
+			<MvASSIGN NAME = "l.multitext_query_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.multitext_query, l.multitext_query_fields ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, 'prod.id = ( ' $ l.multitext_query_sql $ ' LIMIT 1 )', l.multitext_query_fields ) }">
+		<MvELSEIF EXPR = "{ ( l.operator EQ 'NE' )		OR
+							( l.operator EQ 'NC' )		OR
+							( l.operator EQ 'NOT_IN' )	OR
+							( l.operator EQ 'NOTLIKE' )	OR
+							( l.operator EQ 'NULL' ) }">
+			<MvIF EXPR = "{ l.operator EQ 'NULL' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.multitext_query, '( value IS NOT NULL AND value <> \'\' )', '' ) }">
+			<MvELSE>
+				<MvIF EXPR = "{ l.operator EQ 'NE' }">			<MvASSIGN NAME = "l.operator" VALUE = "EQ">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NC' }">		<MvASSIGN NAME = "l.operator" VALUE = "CO">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NOT_IN' }">	<MvASSIGN NAME = "l.operator" VALUE = "IN">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.operator" VALUE = "LIKE">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.multitext_query, 'CHAR', 'value', l.operator, l.value, '', '' ) }">			
+			</MvIF>
+
+			<MvASSIGN NAME = "l.multitext_query_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.multitext_query, l.multitext_query_fields ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.boost_query, 'NOT EXISTS ( ' $ l.multitext_query_sql $ ' )', l.multitext_query_fields ) }">
 		</MvIF>
 	<MvELSE>
 		<MvIF EXPR = "{ ( l.operator EQ 'NC' )		OR
@@ -9495,10 +9532,47 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ l.data:field:fieldtype EQ 'multitext' }">
-		<MvASSIGN NAME = "l.alias" VALUE = "{ CustomFields_Generic_Query_MultiText_Field_Alias( l.element:field, ++l.element:join_count ) }">
+		<MvASSIGN NAME = "l.multitext_query" VALUE = "">
 
-		<MvIF EXPR = "{ NOT l.data:field:separate }">	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues ' $ l.alias $ ' WHERE ' $ l.alias $ '.field_id = ? AND ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',	[ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) $ ',' $ [ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
-		<MvELSE>										<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ( SELECT product_id FROM ' $ g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.data:field:id ) $ ' ' $ l.alias $ ' WHERE ' $ l.alias $ '.product_id = prod.id AND ' $ l.alias $ '.value LIKE ? LIMIT 1 )',		[ g.Module_Library_DB ].SQL_Query_Field( '%' $ l.value $ '%' ) ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT( l.multitext_query, 'product_id' ) }">
+
+		<MvIF EXPR = "{ NOT l.data:field:separate }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.multitext_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues', '' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.multitext_query, 'field_id = ? AND product_id = prod.id', [ g.Module_Library_DB ].SQL_Query_Field( l.data:field:id ) ) }">
+		<MvELSE>
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM( l.multitext_query, g.Store_Table_Prefix $ 'CFM_ProdMultiValues_' $ int( l.data:field:id ), '' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.multitext_query, 'product_id = prod.id', '' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( l.operator EQ 'EQ' ) OR
+						( l.operator EQ 'CO' ) OR
+						( l.operator EQ 'IN' ) OR
+						( l.operator EQ 'LIKE' ) }">
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.multitext_query, 'CHAR', 'value', l.operator, l.value, '', '' ) }">
+
+			<MvASSIGN NAME = "l.multitext_query_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.multitext_query, l.multitext_query_fields ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'prod.id = ( ' $ l.multitext_query_sql $ ' LIMIT 1 )', l.multitext_query_fields ) }">
+		<MvELSEIF EXPR = "{ ( l.operator EQ 'NE' )		OR
+							( l.operator EQ 'NC' )		OR
+							( l.operator EQ 'NOT_IN' )	OR
+							( l.operator EQ 'NOTLIKE' )	OR
+							( l.operator EQ 'NULL' ) }">
+			<MvIF EXPR = "{ l.operator EQ 'NULL' }">
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.multitext_query, '( value IS NOT NULL AND value <> \'\' )', '' ) }">
+			<MvELSE>
+				<MvIF EXPR = "{ l.operator EQ 'NE' }">			<MvASSIGN NAME = "l.operator" VALUE = "EQ">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NC' }">		<MvASSIGN NAME = "l.operator" VALUE = "CO">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NOT_IN' }">	<MvASSIGN NAME = "l.operator" VALUE = "IN">
+				<MvELSEIF EXPR = "{ l.operator EQ 'NOTLIKE' }">	<MvASSIGN NAME = "l.operator" VALUE = "LIKE">
+				</MvIF>
+
+				<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.multitext_query, 'CHAR', 'value', l.operator, l.value, '', '' ) }">			
+			</MvIF>
+
+			<MvASSIGN NAME = "l.multitext_query_sql" VALUE = "{ [ g.Module_Library_DB ].SQL_Query_Build( l.multitext_query, l.multitext_query_fields ) }">
+
+			<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE( l.query, 'NOT EXISTS ( ' $ l.multitext_query_sql $ ' )', l.multitext_query_fields ) }">
 		</MvIF>
 	<MvELSE>
 		<MvIF EXPR = "{ ( l.operator EQ 'NC' )		OR
