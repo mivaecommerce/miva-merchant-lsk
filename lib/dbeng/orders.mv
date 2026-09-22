@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-ORD-
@@ -2042,16 +2042,29 @@
 	</MvWHILE>
 
 	<MvIF EXPR = "{ l.notify_count }">
-		<MvASSIGN NAME = "l.module_pos"			VALUE = 1>
-		<MvASSIGN NAME = "l.module_count"		VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_ordershpmnt', l.modules ) }">
+		<MvASSIGN NAME = "l.module_count" VALUE = "{ StoreModuleList_Load_Features_Cached( 'not_ordershpmnt', l.modules ) }">
 
-		<MvWHILE EXPR = "{ l.module_pos LE l.module_count }">
-			<MvDO FILE = "{ g.Module_Root $ l.modules[ l.module_pos ]:module }" NAME = "l.ok" VALUE = "{ Module_Notify_OrderShipment_StatusChange( l.modules[ l.module_pos ],
-																																				   l.notify_count,
-																																				   l.notify_original_ordershipments,
-																																				   l.notify_ordershipments ) }">
-			<MvASSIGN NAME = "l.module_pos"		VALUE = "{ l.module_pos + 1 }">
-		</MvWHILE>
+		<MvFOREACH ITERATOR = "l.notify_ordershipment" ARRAY = "l.notify_ordershipments" INDEX = "l.pos" COUNT = "{ l.notify_count }">
+			<MvREFERENCEARRAY NAME = "l.lookup" VARIABLE = "l.grouped_ordershipments_lookup">
+				<MvMEMBER NAME = "{ l.notify_ordershipment:order_id }">
+			</MvREFERENCEARRAY>
+
+			<MvASSIGN NAME = "l.lookup:notify_count"	VALUE = "{ miva_array_insert_var( l.lookup:notify_original_ordershipments,	l.notify_original_ordershipments[ l.pos ],	-1 ) }">
+			<MvASSIGN NAME = "l.null"					VALUE = "{ miva_array_insert_var( l.lookup:notify_ordershipments,			l.notify_ordershipment,						-1 ) }">
+		</MvFOREACH>
+
+		<MvFOREACH ITERATOR = "l.order_id" ARRAY = "l.members" COUNT = "{ miva_struct_members( l.grouped_ordershipments_lookup, l.members ) }">
+			<MvREFERENCEARRAY NAME = "l.lookup" VARIABLE = "l.grouped_ordershipments_lookup">
+				<MvMEMBER NAME = "{ l.order_id }">
+			</MvREFERENCEARRAY>
+
+			<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ l.module_count }">
+				<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Root $ l.module:module ].Module_Notify_OrderShipment_StatusChange( l.module,
+																																   l.lookup:notify_count,
+																																   l.lookup:notify_original_ordershipments,
+																																   l.lookup:notify_ordershipments ) }">
+			</MvFOREACH>
+		</MvFOREACH>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
