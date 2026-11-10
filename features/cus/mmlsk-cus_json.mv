@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-CUS-JSN-
-| Next Error Code: 82   
+| Next Error Code: 83   
 |
 </MvCOMMENT>
 
@@ -390,8 +390,8 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "JSON_CustomerCustomFieldList_Load" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">					<MvFUNCTIONRETURN>	</MvIF>
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }">		<MvFUNCTIONRETURN>	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Store_Open() }">				<MvFUNCTIONRETURN>																	</MvIF>
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].CanI( 'CUST', 1, 0, 0, 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Access_Denied() }">	</MvIF>
 
 	<MvASSIGN NAME = "l.count" VALUE = 0>
 
@@ -2777,7 +2777,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
-	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT(		l.query, 'session_id' ) }">
+	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_SELECT(		l.query, 'session_id, urlctx_id' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_FROM(		l.query, g.Store_Table_Prefix $ 'Baskets', '' ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE(		l.query, 'cust_id = ?',		[ g.Module_Library_DB ].SQL_Query_Field( l.customer:id ) ) }">
 	<MvEVAL EXPR = "{ [ g.Module_Library_DB ].SQL_Query_WHERE(		l.query, 'lastupdate > ?',	[ g.Module_Library_DB ].SQL_Query_Field( s.dyn_time_t - ( g.Store:baskexp * 60 ) ) ) }">
@@ -2789,9 +2789,22 @@
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-CUS-JSN-00067', g.MvOPENVIEW_Error ) }">
 	</MvIF>
 
+	<MvASSIGN NAME = "l.context_name" VALUE = "">
+
+	<MvIF EXPR = "{ NOT ISNULL ShopAsCustomer.d.urlctx_id }">
+		<MvFOREACH ITERATOR = "l.context" ARRAY = "l.contexts" COUNT = "{ [ g.Module_Feature_URI_UT ].Store_URL_Context_List( l.contexts ) }">
+			<MvIF EXPR = "{ strcmp( l.context:id, ShopAsCustomer.d.urlctx_id ) EQ 0 }">
+				<MvASSIGN NAME = "l.context_name" VALUE = "{ l.context:name }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
 	{
-		"basket_session_id": "<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( ShopAsCustomer.d.session_id ) }">"
+		"basket_session_id":	"<MvEVAL EXPR = "{ encodejavascriptstring( ShopAsCustomer.d.session_id ) }">",
+		"basket_urlctx_id":		"<MvEVAL EXPR = "{ encodejavascriptstring( ShopAsCustomer.d.urlctx_id ) }">",
+		"context_name":			"<MvEVAL EXPR = "{ encodejavascriptstring( l.context_name ) }">"
 	}
 	<MvCLOSEVIEW NAME = "Merchant" VIEW = "ShopAsCustomer">
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
@@ -2814,15 +2827,27 @@
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-CUS-JSN-00068', 'Failed to load basket session' ) }">
 		</MvIF>
 
+		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_URI_UT ].Store_URL_Context_Load_ID( l.basket:urlctx_id, l.context ) }">
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Module_Feature_FEL_DB ].FeatureEngagement_Increment_Counter( 'shopascustomer_session_shared', 1 ) }">
 	<MvELSE>
 		<MvIF EXPR = "{ NOT JSON_Customer_Load( l.customer ) }">
 			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 		</MvIF>
 
+		<MvIF EXPR = "{ [ g.Module_JSON ].JSON_Input_Exists( 'URL_Context_ID' ) }">
+			<MvIF EXPR = "{ NOT [ g.Module_JSON ].JSON_Input_Text( 'R', 'URL_Context_ID', l.context_id ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_InputErrors() }">
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT [ g.Module_Feature_URI_UT ].Store_URL_Context_Load_ID( l.context_id, l.context ) }">
+				<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_Error( 'MER-CUS-JSN-00082', 'Failed to load URL Context' ) }">
+			</MvIF>
+		</MvIF>
+
 		<MvASSIGN NAME = "l.basket"				VALUE = "">
 		<MvASSIGN NAME = "l.basket:session_id" 	VALUE = "{ MakeSessionID() }">
 		<MvASSIGN NAME = "l.basket:cussess_id" 	VALUE = "{ MakeSessionID() }">
+		<MvASSIGN NAME = "l.basket:urlctx_id"	VALUE = "{ l.context:id }">
 		<MvASSIGN NAME = "l.basket:order_id"	VALUE = 0>
 		<MvASSIGN NAME = "l.basket:order_proc"	VALUE = 0>
 		<MvASSIGN NAME = "l.basket:ship_id"		VALUE = 0>
@@ -2855,14 +2880,18 @@
 
 	<MvASSIGN NAME = "l.flags"				VALUE = "">
 	<MvASSIGN NAME = "l.flags:nosession"	VALUE = 1>
-	<MvASSIGN NAME = "l.flags:secure"		VALUE = 1>
+	<MvASSIGN NAME = "l.flags:force_secure"	VALUE = 1>
 	<MvASSIGN NAME = "l.flags:sep"			VALUE = 1>
+	<MvASSIGN NAME = "l.flags:context_id"	VALUE = "{ l.basket:urlctx_id }">
 	<MvASSIGN NAME = "l.redirect_url"		VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Page_Code_URL( 'SFNT', l.flags ) }">
 
 	<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Response_Start() }">
 	{
-		"session_id":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.shopascustomersession:session_id ) }">",
-		"redirect_url":	"<MvEVAL EXPR = "{ [ g.Module_JSON ].JSON_Encode( l.redirect_url $ 'Session_ID=' $ encodeattribute( l.basket:session_id ) ) }">"
+		"session_id":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.shopascustomersession:session_id ) }">",
+		"redirect_url":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.redirect_url $ 'Session_ID=' $ encodeattribute( l.basket:session_id ) ) }">",
+		"runtime_json_url":	"<MvEVAL EXPR = "{ encodejavascriptstring( [ g.Module_Feature_URI_UT ].Runtime_JSON_URL_WithContext( l.context ) ) }">",
+		"basket_urlctx_id":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.context:id ) }">",
+		"context_name":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.context:name ) }">"
 	}
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_Response_End() }">
 </MvFUNCTION>

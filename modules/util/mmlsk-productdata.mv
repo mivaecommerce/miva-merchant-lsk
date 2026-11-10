@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-UTIL-PDF-
-| Next Error Code: 134
+| Next Error Code: 136
 |
 </MvCOMMENT>
 
@@ -23,8 +23,8 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-productdata">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Product Data Fields and Feeds">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0200">
-	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "10.04">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0300">
+	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "26.03">
 	<MvASSIGN NAME = "l.module:description"	VALUE = "The Product Data Fields and Feeds module provides a mechanism for template-based generation of complex product data upon modification of the data. The primary goal of this module is to allow for extremely fast and efficient output of large dataset feeds which can then be consumed by other external systems. A secondary use case is to precalculate dynamic data on change of each product record so they it can be loaded as static data for faster performance in runtime.">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "util, data_store, provision_store, clientside, component, component_prov, skins, feed, scheduledtask, fields_prod, not_prod, not_attr, not_attemp, not_relprod, not_inventory, not_prodimage, not_variant, not_pricegroup, not_availgroup, not_cat, not_uri, vis_util, json, json_api">
 </MvFUNCTION>
@@ -446,6 +446,45 @@
 	</MvIF>
 
 	<MvFUNCTIONRETURN>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Update_Requires_Version" PARAMETERS = "module var, page var, item, field_prefix, fields var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 0>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_PostUpdate" PARAMETERS = "module var, page var, item, field_prefix, fields var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ComponentModule_Page_Copy" PARAMETERS = "module var, item, source_branch var, source_page var, source_settings var, dest_branch var, dest_page var, dest_settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateVersion_Load_Filename_Branch_Head( l.source_branch:id, l.source_settings:template_filename, l.source_templateversion ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_DB ].ManagedTemplateAndVersion_Load_Branch_Filename( l.dest_branch:id, l.dest_settings:template_filename, l.dest_managedtemplate ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.dest_settings"						VALUE = "{ l.source_settings }">
+	<MvASSIGN NAME = "l.dest_settings:template_filename"	VALUE = "{ l.dest_managedtemplate:version:settings:template_filename }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_CreateIfModified_ManagedTemplateVersion( l.dest_managedtemplate, '', l.source_templateversion:source, l.dest_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.source_branch:id EQ l.dest_branch:id }">	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTIL-PDF-00134', l.module:name $ ' settings copied from page \'' $ l.source_page:code $ '\' to page \'' $ l.dest_page:code $ '\' for item \'' $ l.item $ '\' on branch \'' $ l.dest_branch:name $ '\'' ) }">
+	<MvELSE>													<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-UTIL-PDF-00135', l.module:name $ ' settings copied from page \'' $ l.source_page:code $ '\' to page \'' $ l.dest_page:code $ '\' for item \'' $ l.item $ '\' from branch \'' $ l.source_branch:name $ '\' to branch \'' $ l.dest_branch:name $ '\'' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -1036,105 +1075,174 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.operation_count }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ScheduledTaskModule_Fields" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.task:operation NE 'generate' }">
-		<MvFUNCTIONRETURN VALUE = "">
-	</MvIF>
+<MvFUNCTION NAME = "ScheduledTaskModule_Property_Template" PARAMETERS = "module var, operation" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.operation EQ 'generate' }">
+		<mm-grid columns="6" column-sizes="repeat( 6, 1fr )">
+			<mm-grid-row>
+				<mm-grid-column grid-column="span 4">
+					<mm-module-field-ui code="field_code" size="full"></mm-module-field-ui>
+				</mm-grid-column>
 
-	<MvIF EXPR = "{ l.task:id }">
-		<MvASSIGN NAME = "g.ProductDataTask_Field"				VALUE = "{ l.task:config:field_code }">
-		<MvASSIGN NAME = "g.ProductDataTask_Generation"			VALUE = "{ l.task:config:generation }">
-		<MvASSIGN NAME = "g.ProductDataTask_MaxProducts"		VALUE = "{ l.task:config:max_products }">
-		<MvASSIGN NAME = "g.ProductDataTask_MaxSeconds"			VALUE = "{ l.task:config:max_seconds }">
-		<MvASSIGN NAME = "g.ProductDataTask_CompletionTrigger"	VALUE = "{ l.task:config:completiontrigger }">
-	<MvELSE>
-		<MvASSIGN NAME = "g.ProductDataTask_Field"				VALUE = "">
-		<MvASSIGN NAME = "g.ProductDataTask_Generation"			VALUE = "queued">
-		<MvASSIGN NAME = "g.ProductDataTask_MaxProducts"		VALUE = 0>
-		<MvASSIGN NAME = "g.ProductDataTask_MaxSeconds"			VALUE = 0>
-		<MvASSIGN NAME = "g.ProductDataTask_CompletionTrigger"	VALUE = "">
-	</MvIF>
+				<mm-grid-column grid-column="span 2">
+					<mm-module-field-ui code="generation" size="full"></mm-module-field-ui>
+				</mm-grid-column>
+			</mm-grid-row>
 
-	<MvFUNCTIONRETURN VALUE = "field,generation,limit,completiontrigger">
-</MvFUNCTION>
+			<mm-grid-row>
+				<mm-grid-column grid-column="span 3">
+					<mm-module-field-ui code="max_products" size="full"></mm-module-field-ui>
+				</mm-grid-column>
 
-<MvFUNCTION NAME = "ScheduledTaskModule_Invalid" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
-	<MvFUNCTIONRETURN VALUE = 0>
-</MvFUNCTION>
+				<mm-grid-column grid-column="span 3">
+					<mm-module-field-ui code="max_seconds" size="full"></mm-module-field-ui>
+				</mm-grid-column>
+			</mm-grid-row>
 
-<MvFUNCTION NAME = "ScheduledTaskModule_Prompt" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.field_id EQ 'field' }">					<MvFUNCTIONRETURN VALUE = "<b>Product Data Field:</b>">
-	<MvELSEIF EXPR = "{ l.field_id EQ 'generation' }">			<MvFUNCTIONRETURN VALUE = "<b>Generation:</b>">
-	<MvELSEIF EXPR = "{ l.field_id EQ 'limit' }">				<MvFUNCTIONRETURN VALUE = "Process No More Than:">
-	<MvELSEIF EXPR = "{ l.field_id EQ 'completiontrigger' }">	<MvFUNCTIONRETURN VALUE = "Trigger on Completion:">
-	</MvIF>
-
-	<MvFUNCTIONRETURN VALUE = "">
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "ScheduledTaskModule_Field" PARAMETERS = "module var, field_id" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
-	<MvIF EXPR = "{ l.field_id EQ 'field' }">
-		<input type="text" size="20" name="ProductDataTask_Field" value="{ encodeentities( g.ProductDataTask_Field ) }">
-	<MvELSEIF EXPR = "{ l.field_id EQ 'generation' }">
-		<select name="ProductDataTask_Generation">
-		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'queued',	g.ProductDataTask_Generation, 'Queued Products' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'all',		g.ProductDataTask_Generation, 'All Products' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawOption( 'active',	g.ProductDataTask_Generation, 'All Active Products' ) }">
-		</select>
-	<MvELSEIF EXPR = "{ l.field_id EQ 'limit' }">
-		<label><input type="text" size="5" name="ProductDataTask_MaxProducts" value="{ encodeentities( g.ProductDataTask_MaxProducts ) }"> Product(s) (0 = no limit)</label><br />
-		<label><input type="text" size="5" name="ProductDataTask_MaxSeconds" value="{ encodeentities( g.ProductDataTask_MaxSeconds ) }"> Second(s) (0 = no limit)</label>
-	<MvELSEIF EXPR = "{ l.field_id EQ 'completiontrigger' }">
-		<input type="text" size="20" name="ProductDataTask_CompletionTrigger" value="{ encodeentities( g.ProductDataTask_CompletionTrigger ) }">
+			<mm-grid-row>
+				<mm-grid-column grid-column="span 4">
+					<mm-module-field-ui code="completiontrigger" size="full"></mm-module-field-ui>
+				</mm-grid-column>
+			</mm-grid-row>
+		</mm-grid>
 	</MvIF>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ScheduledTaskModule_Validate" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ l.task:operation NE 'generate' }">
-		<MvFUNCTIONRETURN VALUE = 1>
+<MvFUNCTION NAME = "ScheduledTaskModule_Properties" PARAMETERS = "module var, operation" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	<MvIF EXPR = "{ l.operation EQ 'generate' }">
+		{
+			"field_code":
+			{
+				"type": "customlookup",
+				"prompt": "Product Data Field",
+				"required": true,
+				"lookup":
+				{
+					"module_code": "productdata",
+					"module_function": "ProductDataFieldList_Load_Query",
+					"title": "Product Data Fields",
+					"selection_column": "code",
+					"columns":
+					[
+						{
+							"code": "code",
+							"header": "Code",
+							"type": "text"
+						},
+						{
+							"code": "name",
+							"header": "Name",
+							"type": "text"
+						},
+						{
+							"code": "is_public",
+							"header": "Public",
+							"type": "text"
+						},
+						{
+							"code": "trig",
+							"header": "Trigger",
+							"type": "text"
+						}
+					]
+				}
+			},
+			"generation":
+			{
+				"type": "select",
+				"prompt": "Generation",
+				"required": true,
+				"options":
+				[
+					{
+						"text": "Queued Products",
+						"value": "queued"
+					},
+					{
+						"text": "All Products",
+						"value": "all"
+					},
+					{
+						"text": "All Active Products",
+						"value": "active"
+					}
+				]
+			},
+			"max_products":
+			{
+				"type": "text",
+				"prompt": "Max Products",
+				"text_type": "number",
+				"label": "products",
+				"min": 0,
+				"wholenumber": true
+			},
+			"max_seconds":
+			{
+				"type": "text",
+				"prompt": "Max Seconds",
+				"text_type": "number",
+				"label": "seconds",
+				"min": 0,
+				"wholenumber": true
+			},
+			"completiontrigger":
+			{
+				"type": "text",
+				"prompt": "Trigger on Completion"
+			}
+		}
 	</MvIF>
+</MvFUNCTION>
 
-	<MvASSIGN NAME = "g.ProductDataTask_Field"				VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.ProductDataTask_Field ) }">
-	<MvASSIGN NAME = "g.ProductDataTask_Generation"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.ProductDataTask_Generation ) }">
-	<MvASSIGN NAME = "g.ProductDataTask_MaxProducts"		VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.ProductDataTask_MaxProducts ) }">
-	<MvASSIGN NAME = "g.ProductDataTask_MaxSeconds"			VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.ProductDataTask_MaxSeconds ) }">
-	<MvASSIGN NAME = "g.ProductDataTask_CompletionTrigger"	VALUE = "{ [ g.Module_JSON ].JSON_Decode( g.ProductDataTask_CompletionTrigger ) }">
-
-	<MvIF EXPR = "{ ISNULL g.ProductDataTask_Field }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductDataTask_Field', 'Please specify a product data field' ) }">
-	<MvELSEIF EXPR = "{ NOT ProductDataField_Load_Code( g.ProductDataTask_Field, l.productdatafield ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductDataTask_Field', 'Field \'' $ g.ProductDataTask_Field $ '\' does not exist' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_Value_In_List( g.ProductDataTask_Generation, 'queued,all,active' ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductDataTask_Generation', 'Please select the products to process' ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.ProductDataTask_MaxProducts ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductDataTask_MaxProducts', g.Validation_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( g.ProductDataTask_MaxSeconds ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductDataTask_MaxSeconds', g.Validation_Message ) }">
-	</MvIF>
-
-	<MvIF EXPR = "{ ( NOT ISNULL g.ProductDataTask_CompletionTrigger ) AND ( NOT strcasecmp( g.ProductDataTask_CompletionTrigger, l.task:trig ) ) }">
-		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', 'ProductDataTask_CompletionTrigger', 'A task cannot trigger itself on completion' ) }">
+<MvFUNCTION NAME = "ScheduledTaskModule_Settings_Default" PARAMETERS = "module var, operation, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.operation EQ 'generate' }">
+		<MvASSIGN NAME = "l.settings:field_code:value"			VALUE = "">
+		<MvASSIGN NAME = "l.settings:generation:value"			VALUE = "queued">
+		<MvASSIGN NAME = "l.settings:max_products:value"		VALUE = 0>
+		<MvASSIGN NAME = "l.settings:max_seconds:value"			VALUE = 0>
+		<MvASSIGN NAME = "l.settings:completiontrigger:value"	VALUE = "">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "ScheduledTaskModule_Update" PARAMETERS = "module var, task var" STANDARDOUTPUTLEVEL = "">
+<MvFUNCTION NAME = "ScheduledTaskModule_Settings_Load" PARAMETERS = "module var, task var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.task:operation EQ 'generate' }">
+		<MvASSIGN NAME = "l.settings"							VALUE = "">
+		<MvASSIGN NAME = "l.settings:field_code:value"			VALUE = "{ l.task:config:field_code }">
+		<MvASSIGN NAME = "l.settings:generation:value"			VALUE = "{ l.task:config:generation }">
+		<MvASSIGN NAME = "l.settings:max_products:value"		VALUE = "{ l.task:config:max_products }">
+		<MvASSIGN NAME = "l.settings:max_seconds:value"			VALUE = "{ l.task:config:max_seconds }">
+		<MvASSIGN NAME = "l.settings:completiontrigger:value"	VALUE = "{ l.task:config:completiontrigger }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Settings_Validate" PARAMETERS = "module var, task var, settings var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.task:operation EQ 'generate' }">
+		<MvIF EXPR = "{ NOT ProductDataField_Load_Code( l.settings:field_code:value, l.productdatafield ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_ModuleFieldUI_Error( 'field_code:value', 'Field \'' $ l.settings:field_code:value $ '\' does not exist' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ ( NOT ISNULL l.settings:completiontrigger:value ) AND ( NOT strcasecmp( l.settings:completiontrigger:value, l.task:trig ) ) }">
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Module_JSON ].JSON_ModuleFieldUI_Error( 'completiontrigger:value', 'A task cannot trigger itself on completion' ) }">
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "ScheduledTaskModule_Settings_Update" PARAMETERS = "module var, task var, settings var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ l.task:operation NE 'generate' }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-UTIL-PDF-00008', 'Unsupported operation' ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.task:config:field_code"			VALUE = "{ g.ProductDataTask_Field }">
-	<MvASSIGN NAME = "l.task:config:generation"			VALUE = "{ g.ProductDataTask_Generation }">
-	<MvASSIGN NAME = "l.task:config:max_products"		VALUE = "{ g.ProductDataTask_MaxProducts }">
-	<MvASSIGN NAME = "l.task:config:max_seconds"		VALUE = "{ g.ProductDataTask_MaxSeconds }">
-	<MvASSIGN NAME = "l.task:config:completiontrigger"	VALUE = "{ g.ProductDataTask_CompletionTrigger }">
+	<MvASSIGN NAME = "l.task:config:field_code"			VALUE = "{ l.settings:field_code:value }">
+	<MvASSIGN NAME = "l.task:config:generation"			VALUE = "{ l.settings:generation:value }">
+	<MvASSIGN NAME = "l.task:config:max_products"		VALUE = "{ l.settings:max_products:value }">
+	<MvASSIGN NAME = "l.task:config:max_seconds"		VALUE = "{ l.settings:max_seconds:value }">
+	<MvASSIGN NAME = "l.task:config:completiontrigger"	VALUE = "{ l.settings:completiontrigger:value }">
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -2520,6 +2628,10 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "StoreUtilityModule_Screen_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
+	<MvFUNCTIONRETURN VALUE = -1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "StoreUtilityModule_LeftNavigation_Privileges" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
 	<MvFUNCTIONRETURN VALUE = -1>
 </MvFUNCTION>
 

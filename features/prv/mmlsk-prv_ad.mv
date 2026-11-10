@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-PRV-ADM-
-| Next Error Code: 179
+| Next Error Code: 184
 |
 </MvCOMMENT>
 
@@ -193,6 +193,7 @@
 		<MvELSEIF EXPR = "{ l.name EQ 'printqueue_delete' }">				<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_PrintQueue_Delete( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'module' }">							<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_Module( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'insightsettings_update' }">			<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_InsightSettings_Update( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'upgradesettings_update' }">			<MvEVAL EXPR = "{ PRV_Action_Provision_Domain_UpgradeSettings_Update( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSE>															<MvEVAL EXPR = "{ PRV_LogMessage( l.provide_xml:children[ l.child_pos ], 'Unknown tag' ) }">
 		</MvIF>
 
@@ -445,6 +446,9 @@
 		<MvELSEIF EXPR = "{ l.name EQ 'productvariant_generate' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ProductVariant_Generate( l.provide_xml:children[ l.child_pos ] ) }">
 
 		<MvELSEIF EXPR = "{ l.name EQ 'themelayout_update' }">													<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeLayout_Update( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'themebadge_add' }">														<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeBadge_Add( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'themebadge_delete' }">													<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeBadge_Delete( l.provide_xml:children[ l.child_pos ] ) }">
+		<MvELSEIF EXPR = "{ l.name EQ 'themebadge_delete_all' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeBadge_Delete_All( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'themebutton_add' }">														<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeButton_Add( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'themebutton_delete' }">													<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeButton_Delete( l.provide_xml:children[ l.child_pos ] ) }">
 		<MvELSEIF EXPR = "{ l.name EQ 'themebutton_delete_all' }">												<MvEVAL EXPR = "{ PRV_Action_Provision_Store_ThemeButton_Delete_All( l.provide_xml:children[ l.child_pos ] ) }">
@@ -1654,6 +1658,331 @@
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00145', 'Theme layout updated on branch \'' $ g.Store:branch:name $ '\'' ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_ThemeBadge_Add" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Load_Theme( l.theme ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Unable to load theme settings' ) }">
+	</MvIF>
+
+	<MvREFERENCEARRAY NAME = "l.badge" VARIABLE = "l.theme:badges">
+		<MvDIMENSION INDEX = "{ ++l.theme:badge_count }">
+	</MvREFERENCEARRAY>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_Code( 'R',		l.provide_xml, 'Code', l.badge:code ) OR
+					NOT PRV_Tag_Text( 'R:100',	l.provide_xml, 'Name', l.badge:name ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.existing_index" VALUE = "{ miva_array_search( l.theme:badges, 1, l.existing_badge, 'strcasecmp( l.existing_badge:code, l.badge:code ) EQ 0' ) }">
+
+	<MvIF EXPR = "{ l.existing_index GT 0 AND l.existing_index NE l.theme:badge_count }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Badge \'' $ l.existing_badge:code $ '\' already exists' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_Exists( l.provide_xml, 'ClassName' ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGB_UT ].Theme_Generate_Badge_Classname( l.theme, l.badge, l.badge:classname ) }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, g.Error_Message ) }">
+		</MvIF>
+	<MvELSEIF EXPR = "{ NOT PRV_Tag_Text( 'O',	l.provide_xml, 'ClassName',	l.badge:classname ) }">
+		<MvFUNCTIONRETURN>
+	<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PGB_UT ].Theme_Validate_Badge_ClassName( l.theme, l.badge:code, l.badge:classname ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'Styles' ) }">
+		<MvIF EXPR = "{ NOT PRV_Theme_ThemeBadge_Styles( l.provide_xml:tags:Styles[ 1 ], l.badge:styles ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Theme_ThemeBadge_Sizes( l.provide_xml, l.theme, l.badge, l.badge:sizes, l.badge:size_count ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Update_Theme( l.theme ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00179', 'Theme badge \'' $ l.badge:code $ '\' inserted on branch \'' $ g.Store:branch:name $ '\'' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_ThemeBadge_Delete" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Load_Theme( l.theme ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Unable to load theme settings' ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Attribute_Text( l.provide_xml, 'code', l.code ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.index" VALUE = "{ miva_array_search( l.theme:badges, 1, l.badge, 'strcasecmp( l.badge:code, l.code ) EQ 0' ) }">
+
+	<MvIF EXPR = "{ l.index EQ 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Theme badge \'' $ l.code $ '\' not found' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.theme:badge_count" VALUE = "{ miva_array_delete( l.theme:badges, l.index, 1 ) }">
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Update_Theme( l.theme ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00180', 'Theme badge \'' $ l.code $ '\' deleted from branch \'' $ g.Store:branch:name $ '\'' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Store_ThemeBadge_Delete_All" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Load_Theme( l.theme ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Unable to load theme settings' ) }">
+	</MvIF>
+
+	<MvASSIGN NAME = "l.theme:badges"		VALUE = "">
+	<MvASSIGN NAME = "l.theme:badge_count"	VALUE = 0>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Update_Theme( l.theme ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00181', 'All theme badges deleted from branch \'' $ g.Store:branch:name $ '\'' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Theme_ThemeBadge_Styles" PARAMETERS = "provide_xml var, styles var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'BorderRadius' ) }">
+		<MvIF EXPR = "{ NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'BorderRadius', l.border_radius ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.styles:border_top_left_radius"		VALUE = "{ l.border_radius }">
+		<MvASSIGN NAME = "l.styles:border_top_right_radius"		VALUE = "{ l.border_radius }">
+		<MvASSIGN NAME = "l.styles:border_bottom_right_radius"	VALUE = "{ l.border_radius }">
+		<MvASSIGN NAME = "l.styles:border_bottom_left_radius"	VALUE = "{ l.border_radius }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_Text(				'o', l.provide_xml, 'Color',					l.styles:color:value )															OR
+					NOT PRV_Tag_Text(				'o', l.provide_xml, 'BackgroundColor',			l.styles:background_color:value )												OR
+					NOT PRV_Theme_Tag_Font(			'o', l.provide_xml, 'Font',						l.styles:font )																	OR
+					NOT PRV_Tag_List(				'o', l.provide_xml, 'TextTransform',			l.styles:text_transform:value,		'None,Uppercase,Lowercase,Capitalize',
+																																		'none,uppercase,lowercase,capitalize' )		OR
+					NOT PRV_Tag_List(				'o', l.provide_xml, 'OverflowWrap',				l.styles:overflow_wrap:value,		'Normal,Break-Word,Anywhere',
+																																		'normal,break-word,anywhere' )				OR
+					NOT PRV_Tag_List(				'o', l.provide_xml, 'WhiteSpace',				l.styles:white_space:value,			'Normal,Nowrap,Pre,Pre-Wrap,Pre-Line',
+																																		'normal,nowrap,pre,pre-wrap,pre-line' )		OR
+					NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml, 'BorderTopLeftRadius',		l.styles:border_top_left_radius )												OR
+					NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml, 'BorderTopRightRadius',		l.styles:border_top_right_radius )												OR
+					NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml, 'BorderBottomRightRadius',	l.styles:border_bottom_right_radius )											OR
+					NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml, 'BorderBottomLeftRadius',	l.styles:border_bottom_left_radius ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'Border' ) }">
+		<MvASSIGN NAME = "l.styles:border_enabled:value" VALUE = 1>
+
+		<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml:tags:Border[ 1 ], 'BorderWidth' ) }">
+			<MvIF EXPR = "{ NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml:tags:Border[ 1 ], 'BorderWidth', l.border_width ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.styles:border_top_width"	VALUE = "{ l.border_width }">
+			<MvASSIGN NAME = "l.styles:border_right_width"	VALUE = "{ l.border_width }">
+			<MvASSIGN NAME = "l.styles:border_bottom_width"	VALUE = "{ l.border_width }">
+			<MvASSIGN NAME = "l.styles:border_left_width"	VALUE = "{ l.border_width }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT PRV_Tag_List(				'o', l.provide_xml:tags:Border[ 1 ], 'BorderStyle',			l.styles:border_style:value,		'Dotted,Dashed,Solid',
+																																						'dotted,dashed,solid' )	OR
+						NOT PRV_Tag_Text(				'o', l.provide_xml:tags:Border[ 1 ], 'BorderColor',			l.styles:border_color:value )								OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:Border[ 1 ], 'BorderTopWidth',		l.styles:border_top_width )									OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:Border[ 1 ], 'BorderRightWidth',	l.styles:border_right_width )								OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:Border[ 1 ], 'BorderBottomWidth',	l.styles:border_bottom_width )								OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:Border[ 1 ], 'BorderLeftWidth',		l.styles:border_left_width ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'BoxShadow' ) }">
+		<MvASSIGN NAME = "l.styles:box_shadow_enabled:value" VALUE = 1>
+
+		<MvIF EXPR = "{ NOT PRV_Tag_List(				'o', l.provide_xml:tags:BoxShadow[ 1 ], 'BoxShadowInset',	l.styles:box_shadow_inset:value,	'None,Inset',
+																																						',inset' )	OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:BoxShadow[ 1 ], 'BoxShadowOffsetX',	l.styles:box_shadow_offset_x )					OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:BoxShadow[ 1 ], 'BoxShadowOffsetY',	l.styles:box_shadow_offset_y )					OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:BoxShadow[ 1 ], 'BoxShadowBlur',	l.styles:box_shadow_blur )						OR
+						NOT PRV_Theme_Tag_LengthUnit(	'o', l.provide_xml:tags:BoxShadow[ 1 ], 'BoxShadowSpread',	l.styles:box_shadow_spread )					OR
+						NOT PRV_Tag_Text(				'o', l.provide_xml:tags:BoxShadow[ 1 ], 'BoxShadowColor',	l.styles:box_shadow_color:value ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'TextUnderline' ) }">
+		<MvASSIGN NAME = "l.styles:text_underline_enabled:value" VALUE = 1>
+
+		<MvIF EXPR = "{ NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml:tags:TextUnderline[ 1 ], 'TextUnderlineThickness',	l.styles:text_underline_thickness ) OR
+						NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml:tags:TextUnderline[ 1 ], 'TextUnderlineOffset',	l.styles:text_underline_offset ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Theme_ThemeBadge_Sizes" PARAMETERS = "provide_xml var, theme var, badge var, sizes var, size_count var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.sizes"				VALUE = "">
+	<MvASSIGN NAME = "l.size_count"			VALUE = 0>
+	<MvASSIGN NAME = "l.default_assigned"	VALUE = 0>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'Sizes' ) }">
+		<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:tags:Sizes[ 1 ]:children">
+			<MvASSIGN NAME = "l.tag" VALUE = "{ tolower( l.child_xml:name ) }">
+
+			<MvIF EXPR = "{ l.tag NE 'size' }">
+				<MvEVAL EXPR = "{ PRV_LogMessage( l.child_xml, 'Unknown tag' ) }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.size"			VALUE = "">
+			<MvASSIGN NAME = "l.size:default"	VALUE = 0>
+			<MvASSIGN NAME = "l.size:classname" VALUE = "">
+
+			<MvIF EXPR = "{ NOT PRV_Tag_Code(		'R',		l.child_xml, 'Code',	l.size:code ) OR
+							NOT PRV_Tag_Text(		'R:100',	l.child_xml, 'Name',	l.size:name ) OR
+							NOT PRV_Tag_Boolean(	'O',		l.child_xml, 'Default', l.size:default ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+
+			<MvIF EXPR = "{ miva_array_search( l.sizes, 1, l.existing_size, 'strcasecmp( l.existing_size:code, l.size:code ) EQ 0' ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.child_xml, 'Size \'' $ l.existing_size:code $ '\' already exists' ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ l.size:default }">
+				<MvASSIGN NAME = "l.default_assigned" VALUE = 1>
+
+				<MvIF EXPR = "{ miva_array_search( l.sizes, 1, l.existing_size, 'l.existing_size:default' ) }">
+					<MvASSIGN NAME = "l.existing_size:default" VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ NOT PRV_Tag_Exists( l.child_xml, 'ClassName' ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Feature_PGB_UT ].Theme_Generate_Badge_Size_Classname( l.theme, l.badge, l.size, l.size:classname ) }">
+					<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.child_xml, g.Error_Message ) }">
+				</MvIF>
+			<MvELSEIF EXPR = "{ NOT PRV_Tag_Text( 'O', l.child_xml, 'ClassName', l.size:classname ) }">
+				<MvFUNCTIONRETURN>
+			<MvELSEIF EXPR = "{ NOT [ g.Module_Feature_PGB_UT ].Theme_Validate_Badge_Size_ClassName( l.theme, l.badge:code, l.size:code, l.size:classname ) }">
+				<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.child_xml, g.Validation_Message ) }">
+			</MvIF>
+
+			<MvIF EXPR = "{ PRV_Tag_Exists( l.child_xml, 'Styles' ) }">
+				<MvIF EXPR = "{ NOT PRV_Theme_ThemeBadge_Size_Styles( l.child_xml:tags:Styles[ 1 ], l.size:styles ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvIF EXPR = "{ PRV_Tag_Exists( l.child_xml, 'BreakpointStyles' ) }">
+				<MvIF EXPR = "{ NOT PRV_Theme_ThemeBadge_Size_BreakpointStyles( l.child_xml:tags:BreakpointStyles[ 1 ], l.size:breakpoint_styles ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.size_count" VALUE = "{ miva_array_insert_var( l.sizes, l.size, -1 ) }">
+		</MvFOREACH>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.size_count EQ 0 }">
+		<MvASSIGN NAME = "l.default_size"					VALUE = "">
+		<MvASSIGN NAME = "l.default_size:code"				VALUE = "default">
+		<MvASSIGN NAME = "l.default_size:name"				VALUE = "Default">
+		<MvASSIGN NAME = "l.default_size:default"			VALUE = 1>
+		<MvASSIGN NAME = "l.default_size:styles"			VALUE = "">
+		<MvASSIGN NAME = "l.default_size:breakpoint_styles"	VALUE = "">
+
+		<MvIF EXPR = "{ NOT [ g.Module_Feature_PGB_UT ].Theme_Generate_Badge_Size_Classname( l.theme, l.badge, l.default_size, l.default_size:classname ) }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, g.Error_Message ) }">
+		</MvIF>
+
+		<MvASSIGN NAME = "l.size_count" VALUE = "{ miva_array_insert_var( l.sizes, l.default_size, -1 ) }">
+	<MvELSEIF EXPR = "{ NOT l.default_assigned }">
+		<MvREFERENCEARRAY NAME = "l.first_size" VARIABLE = "l.sizes">
+			<MvDIMENSION INDEX = 1>
+		</MvREFERENCEARRAY>
+
+		<MvASSIGN NAME = "l.first_size:default" VALUE = 1>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Theme_ThemeBadge_Size_Styles" PARAMETERS = "provide_xml var, styles var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Grouped Styles
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml, 'Padding' ) }">
+		<MvIF EXPR = "{ NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'Padding', l.padding ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.styles:padding_top"		VALUE = "{ l.padding }">
+		<MvASSIGN NAME = "l.styles:padding_right"	VALUE = "{ l.padding }">
+		<MvASSIGN NAME = "l.styles:padding_bottom"	VALUE = "{ l.padding }">
+		<MvASSIGN NAME = "l.styles:padding_left"	VALUE = "{ l.padding }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Individual Styles
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'FontSize',		l.styles:font_size )		OR
+					NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'LineHeight',		l.styles:line_height )		OR
+					NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'LetterSpacing',	l.styles:letter_spacing )	OR
+					NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'PaddingTop',		l.styles:padding_top )		OR
+					NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'PaddingRight',	l.styles:padding_right )	OR
+					NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'PaddingBottom',	l.styles:padding_bottom )	OR
+					NOT PRV_Theme_Tag_LengthUnit( 'o', l.provide_xml, 'PaddingLeft',	l.styles:padding_left ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Theme_ThemeBadge_Size_BreakpointStyles" PARAMETERS = "provide_xml var, breakpoint_styles var" STANDARDOUTPUTLEVEL = "">
+	<MvFOREACH ITERATOR = "l.child_xml" ARRAY = "l.provide_xml:children">
+		<MvASSIGN NAME = "l.tag" VALUE = "{ tolower( l.child_xml:name ) }">
+
+		<MvIF EXPR = "{ l.tag NE 'breakpoint' }">
+			<MvEVAL EXPR = "{ PRV_LogMessage( l.child_xml, 'Unknown tag' ) }">
+			<MvFOREACHCONTINUE>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT PRV_Attribute_Text( l.child_xml, 'code', l.code ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvREFERENCEARRAY NAME = "l.styles" VARIABLE = "l.breakpoint_styles">
+			<MvMEMBER NAME = "{ l.code }">
+		</MvREFERENCEARRAY>
+
+		<MvIF EXPR = "{ NOT PRV_Theme_ThemeBadge_Size_Styles( l.child_xml, l.styles ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_ThemeButton_Add" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT [ g.Module_Feature_TUI_MGR ].TemplateManager_Load_Theme( l.theme ) }">
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
@@ -2138,8 +2467,8 @@
 																																	'none,uppercase,lowercase,capitalize' )		OR
 					NOT PRV_Tag_List(				'o', l.provide_xml, 'OverflowWrap',				l.styles:overflow_wrap:value,	'Normal,Break-Word,Anywhere',
 																																	'normal,break-word,anywhere' )				OR
-					NOT PRV_Tag_List(				'o', l.provide_xml, 'WhiteSpace',				l.styles:white_space:value,		'Normal,Nowrap,Pre,PreWrap,PreLine',
-																																	'normal,nowrap,pre,prewrap,preline' ) }">
+					NOT PRV_Tag_List(				'o', l.provide_xml, 'WhiteSpace',				l.styles:white_space:value,		'Normal,Nowrap,Pre,PreWrap,PreLine,Pre-Wrap,Pre-Line',
+																																	'normal,nowrap,pre,pre-wrap,pre-line,pre-wrap,pre-line' ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
@@ -11551,6 +11880,22 @@
 			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
 		</MvIF>
 	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00183', 'Image \'' $ l.image:image $ '\' created' ) }">
+
+	<MvIF EXPR = "{ PRV_Attribute_Exists( l.provide_xml, 'alt_text' ) }">
+		<MvIF EXPR = "{ NOT PRV_Attribute_Text( l.provide_xml, 'alt_text', l.image:alt_text ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+
+		<MvIF EXPR = "{ len_var( l.image:alt_text ) GT 125 }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Value for alt_text must be 125 characters or less' ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Image_Update( l.image ) }">
+			<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+		</MvIF>
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_Image_Delete" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
@@ -12668,13 +13013,17 @@
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'A box with the description \'' $ l.existing_box:descrip $ '\' already exists' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].Box_Insert( l.box ) }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
-	</MvIF>
+	<MvASSIGN NAME = "l.box:id" VALUE = "{ [ g.Module_Library_DB ].StoreKey_Generate( 'Boxes' ) }">
 
 	<MvIF EXPR = "{ g.Store:boxpack_mod:id AND PRV_Tag_Exists( l.provide_xml, 'BoxPackingSettings' ) }">
 		<MvEVAL EXPR = "{ [ g.Module_Root $ g.Store:boxpack_mod:module ].BoxPackingModule_Box_Provision( g.Store:boxpack_mod, l.box, l.provide_xml:tags:BoxPackingSettings[ 1 ] ) }">
 	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_SHP_DB ].Box_Insert_LowLevel( l.box ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00182', 'Box \'' $ l.box:descrip $ '\' created' ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Store_Skin_Add" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
@@ -17141,9 +17490,9 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_Action_Provision_Domain_Country_Add" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT PRV_Tag_Text( 		'R', l.provide_xml,	'Name',		l.country:name )	OR
-					NOT PRV_Tag_Text( 		'R', l.provide_xml,	'Code',		l.country:alpha )	OR
-					NOT PRV_Tag_Integer(	'R', l.provide_xml,	'ISO_Code',	l.country:iso_code ) }">
+	<MvIF EXPR = "{ NOT PRV_Tag_Text( 		'R:50',	l.provide_xml,	'Name',		l.country:name )	OR
+					NOT PRV_Tag_Text( 		'R:2',	l.provide_xml,	'Code',		l.country:alpha )	OR
+					NOT PRV_Tag_Integer(	'R',	l.provide_xml,	'ISO_Code',	l.country:iso_code ) }">
 		<MvFUNCTIONRETURN>
 	</MvIF>
 
@@ -17151,7 +17500,7 @@
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Country with the name \'' $ l.country:name $ '\' already exists' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ 'x' $ l.country:alpha EQ 'x0' }">
+	<MvIF EXPR = "{ strcmp( l.country:alpha, '0' ) EQ 0 }">
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'A country code cannot be \'0\'' ) }">
 	</MvIF>
 	
@@ -17255,7 +17604,12 @@
 					NOT PRV_Tag_Integer( 	'o',		l.provide_xml,	'FailedLoginDelay',							l.working_domain:logindelay )	OR
 					NOT PRV_Tag_Boolean( 	'o',		l.provide_xml, 	'VerifyIP',									l.working_domain:verify_ip ) 	OR
 					NOT PRV_Tag_Text( 		'o',		l.provide_xml, 	'ImageExtensions',							l.working_domain:img_ext )		OR
-					NOT PRV_Tag_Integer( 	'o',		l.provide_xml, 	'ImageJPEGQuality',							l.working_domain:img_qual )		OR
+					NOT PRV_Tag_List( 		'o',		l.provide_xml, 	'ImageResizeFormat',						l.working_domain:img_rszfmt,
+																		'source,jpg,gif,png,webp,avif',				',jpg,gif,png,webp,avif' )		OR
+					NOT PRV_Tag_Integer( 	'o',		l.provide_xml, 	'ImageJPEGQuality',							l.working_domain:jpg_qual )		OR
+					NOT PRV_Tag_Integer( 	'o',		l.provide_xml, 	'ImageWebPQuality',							l.working_domain:webp_qual )	OR
+					NOT PRV_Tag_Integer( 	'o',		l.provide_xml, 	'ImageAVIFQuality',							l.working_domain:avif_qual )	OR
+					NOT PRV_Tag_Integer( 	'o',		l.provide_xml, 	'ImageAVIFSpeed',							l.working_domain:avif_speed )	OR
 					NOT PRV_Tag_Integer(  	'o',		l.provide_xml, 	'ForcePasswordAfterDays',					l.working_domain:pw_max_age )	OR
 					NOT PRV_Tag_Integer(  	'o',		l.provide_xml, 	'RevalidateBrowserAfterDays',				l.working_domain:bv_max_age )	OR
 					NOT PRV_Tag_Integer(  	'o',		l.provide_xml, 	'PasswordReuse',							l.working_domain:pw_reuse )		OR
@@ -17296,8 +17650,20 @@
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'HelpManifestURL must start with \'https://\'' ) }">
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Positive_Required( l.working_domain:img_qual ) OR l.working_domain:img_qual GT 100 }">
-		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Please choose an image quality percentage number between 1 and 100' ) }">
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.working_domain:jpg_qual, 1, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:ImageJPEGQuality[ 1 ], g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.working_domain:webp_qual, 0, 101 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:ImageWebPQuality[ 1 ], g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.working_domain:avif_qual, 0, 100 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:ImageAVIFQuality[ 1 ], g.Validation_Message ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_Range_Required( l.working_domain:avif_speed, 0, 10 ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml:tags:ImageAVIFSpeed[ 1 ], g.Validation_Message ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Module_Admin ].Validate_WholeNumber_NonNegative_Required( l.working_domain:pw_max_age ) }">
@@ -17660,6 +18026,7 @@
 	<MvASSIGN NAME = "l.store:mnt_time"		VALUE = 0>
 	<MvASSIGN NAME = "l.store:mnt_no_new"	VALUE = 0>
 	<MvASSIGN NAME = "l.store:mnt_ips"		VALUE = 0>
+	<MvASSIGN NAME = "l.store:mnt_upg"		VALUE = 0>
 	<MvASSIGN NAME = "l.store:omin_quant" 	VALUE = 0>
 	<MvASSIGN NAME = "l.store:omin_price" 	VALUE = 0>
 	<MvASSIGN NAME = "l.store:omin_all" 	VALUE = 0>
@@ -17889,7 +18256,8 @@
 		<MvFUNCTIONRETURN VALUE = "{ PRV_LogMessage( l.provide_xml, 'Store \'' $ l.code $ '\' not found' ) }">
 	</MvIF>
 
-	<MvASSIGN NAME = "l.store"	VALUE = "{ g.Store }">
+	<MvASSIGN NAME = "l.store"			VALUE = "{ g.Store }">
+	<MvASSIGN NAME = "l.original_store"	VALUE = "{ l.store }">
 
 	<MvIF EXPR = "{ l.store:mnt_time }">
 		<MvASSIGN NAME = "l.store_offline_time" VALUE = "{ padl( time_t_hour( l.store:mnt_time, g.Merchant_Local_Timezone ), 2, '0' ) $ ':' $ padl( time_t_min( l.store:mnt_time, g.Merchant_Local_Timezone ), 2, '0' ) }">
@@ -18061,6 +18429,10 @@
 
 	<MvIF EXPR = "{ PRV_Tag_Exists( l.provide_xml,	'MaintenanceSet_Online'	) }">
 		<MvASSIGN NAME = "l.store:mnt_time" VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ l.original_store:mnt_time NE l.store:mnt_time }">
+		<MvASSIGN NAME = "l.store:mnt_upg" VALUE = 0>
 	</MvIF>
 
 	<MvCOMMENT>
@@ -18929,6 +19301,23 @@
 	</MvIF>
 
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00165', 'Insight Settings updated' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "PRV_Action_Provision_Domain_UpgradeSettings_Update" PARAMETERS = "provide_xml var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_UPG_DB ].UpgradeSettings_Load( l.upgradesettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT PRV_Tag_List( 'O', l.provide_xml, 'Poll',	l.upgradesettings:poll,		'Login,Daily,Weekly,Never',							'L,D,W,N' ) OR
+					NOT PRV_Tag_List( 'O', l.provide_xml, 'Stream',	l.upgradesettings:stream,	'Production,Beta,Development,LocalAutomatedTests',	'prod,beta,dev,localtest' ) }">
+		<MvFUNCTIONRETURN>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_UPG_DB ].UpgradeSettings_Update( l.upgradesettings ) }">
+		<MvFUNCTIONRETURN VALUE = "{ PRV_LogError( l.provide_xml ) }">
+	</MvIF>
+
+	<MvEVAL EXPR = "{ [ g.Module_Admin ].Admin_Log_Action( 'MER-PRV-ADM-00167', 'Upgrade Settings updated' ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "PRV_URISettings_Regenerate_Handler" PARAMETERS = "provide_xml var, tag_name, output var" STANDARDOUTPUTLEVEL = "">

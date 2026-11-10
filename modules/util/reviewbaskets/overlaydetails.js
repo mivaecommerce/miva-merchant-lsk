@@ -7,7 +7,7 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2025 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
@@ -800,7 +800,7 @@ ReviewBasketsListDetailOverlayDetails.prototype.ShopAsCustomer = function()
 
 	if ( this.customer != null ) 
 	{
-		dialog = new ShopAsCustomer_Dialog( this.customer.login );
+		dialog = new ShopAsCustomerDialog( this.customer.login );
 		dialog.Show();
 	}
 }

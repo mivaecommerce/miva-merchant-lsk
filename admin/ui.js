@@ -213,6 +213,19 @@ function MMServerTimezoneOffsetDisplay( server_timezone )
 	return '(UTC' + ( ( server_timezone > 0 ) ? '+' : '-' ) + padl( fixed_timezone.split( '.' )[ 0 ], 2, '0' ) + ':' + padl( Math.floor( ( fixed_timezone.split( '.' )[ 1 ] * 60 ) / 100 ), 2, '0' ) + ')';
 }
 
+function FormattedFileSize( size )
+{
+	if ( size === 0 )
+	{
+		return 'Unknown';
+	}
+
+	const units			= [ 'Bytes', 'KB', 'MB', 'GB', 'TB' ];
+	const unit_position	= Math.floor( Math.log( size ) / Math.log( 1024 ) );
+
+	return `${stod( size / Math.pow( 1024, unit_position ) ).toLocaleString( 'en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2, useGrouping: false } )} ${units[ unit_position ]}`;
+}
+
 function OrdinalNumber( n )
 {
 	if ( ( n | 0 ) != n )
@@ -4865,14 +4878,18 @@ MMSelect.prototype.Event_OnKeyDown_Select = function( e )
 	return eventPreventDefault( e );
 }
 
-MMSelect.prototype.Validate_ValueSelected = function()
+MMSelect.prototype.Validate_ValueSelected = function( { set_focus = true } = {} )
 {
 	var error = new Object();
 
 	if ( !this.Validate_ValueSelected_Silent( error ) )
 	{
 		this.SetInvalid( error.error_message );
-		this.Focus();
+
+		if ( set_focus )
+		{
+			this.Focus();
+		}
 
 		return false;
 	}
@@ -5882,14 +5899,18 @@ MMInput.prototype.Validate_NonEmpty_Silent = function( error /* optional */ )
 	return false;
 }
 
-MMInput.prototype.Validate_String_NonEmpty_WithMaxLength = function( max_length )
+MMInput.prototype.Validate_String_NonEmpty_WithMaxLength = function( max_length, { set_focus = true } = {} )
 {
 	var error = new Object();
 
 	if ( !this.Validate_String_NonEmpty_WithMaxLength_Silent( max_length, error ) )
 	{
 		this.SetInvalid( error.error_message );
-		this.Select();
+
+		if ( set_focus )
+		{
+			this.Select();
+		}
 
 		return false;
 	}
@@ -10282,14 +10303,18 @@ MMTextArea.prototype.Validate_NonEmpty_Silent = function( error /* optional */ )
 	return false;
 }
 
-MMTextArea.prototype.Validate_String_NonEmpty_WithMaxLength = function( max_length )
+MMTextArea.prototype.Validate_String_NonEmpty_WithMaxLength = function( max_length, { set_focus = true } = {} )
 {
 	var error = new Object();
 
 	if ( !this.Validate_String_NonEmpty_WithMaxLength_Silent( max_length, error ) )
 	{
 		this.SetInvalid( error.error_message );
-		this.Select();
+
+		if ( set_focus )
+		{
+			this.Select();
+		}
 
 		return false;
 	}
@@ -10315,6 +10340,36 @@ MMTextArea.prototype.Validate_String_NonEmpty_WithMaxLength_Silent = function( m
 		if ( getVariableType( error ) === 'object' )
 		{
 			error.error_message = `Value must be ${max_length} characters or less`;
+		}
+
+		return false;
+	}
+
+	return true;
+}
+
+MMTextArea.prototype.Validate_String_Optional_WithMaxLength = function( max_length )
+{
+	var error = new Object();
+
+	if ( !this.Validate_String_Optional_WithMaxLength_Silent( max_length, error ) )
+	{
+		this.SetInvalid( error.error_message );
+		this.Select();
+
+		return false;
+	}
+
+	return true;
+}
+
+MMTextArea.prototype.Validate_String_Optional_WithMaxLength_Silent = function( max_length, error /* optional */ )
+{
+	if ( this.GetValue().length > max_length )
+	{
+		if ( getVariableType( error ) === 'object' )
+		{
+			error.error_message = `Value must be less than ${max_length} characters`;
 		}
 
 		return false;
@@ -11161,6 +11216,12 @@ function MivaSVGIconMap( icon )
 		{
 			return `<svg width="15" height="15" viewBox="0 0 15 15" fill="none" xmlns="http://www.w3.org/2000/svg">
 				<path class="mm10_svg_icon_color" d="M11.417 0C12.9356 0.000307681 14.167 1.23142 14.167 2.75V11.417C14.1666 12.9353 12.9353 14.1667 11.417 14.167H2.75C1.23144 14.167 0.000350955 12.9355 0 11.417V2.75C0 1.23122 1.23122 0 2.75 0H11.417ZM5.83301 12.667H11.417C12.1069 12.6667 12.6666 12.1069 12.667 11.417V2.75C12.667 2.05983 12.1071 1.50031 11.417 1.5H5.83301V12.667ZM2.75 1.5C2.05965 1.5 1.5 2.05965 1.5 2.75V11.417C1.50035 12.1071 2.05986 12.667 2.75 12.667H4.33301V1.5H2.75Z" />
+			</svg>`;
+		}
+		case 'mm-screen-left-navigation-link-urlcontext':
+		{
+			return `<svg width="18" height="18" viewBox="0 0 18 18" fill="none" xmlns="http://www.w3.org/2000/svg">
+				<path class="mm10_svg_icon_color" d="M9 0.75C13.5563 0.75 17.25 4.44365 17.25 9C17.25 13.5563 13.5563 17.25 9 17.25C4.44365 17.25 0.75 13.5563 0.75 9C0.75 4.44365 4.44365 0.75 9 0.75ZM2.29297 9.75C2.5962 12.4923 4.54115 14.7374 7.12402 15.4834C6.97981 15.2863 6.82983 15.0733 6.68164 14.8428C5.88237 13.5994 5.06814 11.8531 4.90625 9.75H2.29297ZM13.0938 9.75C12.9319 11.8531 12.1176 13.5994 11.3184 14.8428C11.17 15.0735 11.0193 15.2861 10.875 15.4834C13.4583 14.7376 15.4038 12.4926 15.707 9.75H13.0938ZM6.41016 9.75C6.56788 11.4825 7.24684 12.9488 7.94336 14.0322C8.3256 14.6268 8.70877 15.0972 9 15.4238C9.29123 15.0972 9.6744 14.6268 10.0566 14.0322C10.7532 12.9488 11.4321 11.4825 11.5898 9.75H6.41016ZM7.12402 2.51562C4.54102 3.26158 2.59621 5.50759 2.29297 8.25H4.90625C5.06809 6.14683 5.88236 4.40063 6.68164 3.15723C6.82997 2.92649 6.97969 2.71292 7.12402 2.51562ZM9 2.5752C8.7087 2.90185 8.3258 3.37289 7.94336 3.96777C7.24683 5.05128 6.56784 6.51746 6.41016 8.25H11.5898C11.4322 6.51746 10.7532 5.05128 10.0566 3.96777C9.6742 3.37289 9.2913 2.90185 9 2.5752ZM10.875 2.51562C11.0194 2.71305 11.1699 2.9263 11.3184 3.15723C12.1176 4.40063 12.9319 6.14683 13.0938 8.25H15.707C15.4038 5.50727 13.4585 3.26132 10.875 2.51562Z" />
 			</svg>`;
 		}
 		case 'mm-screen-left-navigation-link-home':
@@ -12347,10 +12408,10 @@ MMMRUImageCache.prototype.ImageData_Load_Constrained = function( requested_width
 		if ( width <= requested_width && height <= requested_height )
 		{
 			//
-			// Don't downsample, just draw it at the original size
+			// Don't downsample, just draw it centered at the original size
 			//
 
-			context.drawImage( image, 0, 0 );
+			context.drawImage( image, ( final_width - width ) / 2, ( final_height - height ) / 2 );
 		}
 		else
 		{

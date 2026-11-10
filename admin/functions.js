@@ -708,6 +708,19 @@ function CustomerLoginList_Load_Match_Initialize( http_request,
 
 function Store_Load( callback, delegator )											{ return AJAX_Call( callback, 'admin', 'Store_Load',							'', delegator ); }
 
+function Store_URL_Context_Cookie_Clear( callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'Store_URL_Context_Cookie_Clear', null, delegator );
+}
+
+function Store_URL_Context_Cookie_Set( context_id, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'Store_URL_Context_Cookie_Set',
+	{
+		Context_ID:	context_id
+	}, delegator );
+}
+
 function TrackingLinkList_Load( callback )											{ return AJAX_Call( callback, 'admin', 'TrackingLinkList_Load',					'' ); }
 
 function ProductKitList_Load_Query( product_id, filter, sort, offset, count, callback, delegator )
@@ -869,16 +882,25 @@ function ProductImageList_Delete( delete_ids,
 									callback )										{ return AJAX_Call( callback, 'admin', 'ProductImageList_Delete',				'ProductImage_IDs=' + EncodeArray( delete_ids ) ); }
 
 function ImageList_Load_Query( filter, sort, offset, count, callback, delegator )
-																					{ return AJAX_Call( callback, 'admin', 'ImageList_Load_Query',					'Filter=' + EncodeArray( filter ) + '&Sort=' + encodeURIComponent( sort ) + '&Offset=' + encodeURIComponent( offset ) + '&Count=' + encodeURIComponent( count ), delegator ); }
+{
+	return AJAX_Call_JSON( callback, 'admin', 'ImageList_Load_Query',
+	{
+		Filter:		filter,
+		Sort: 		sort,
+		Offset:		offset,
+		Count:		count
+	}, delegator );
+}
 
 function ImageListWithGeneratedImages_Load_Query( filter, sort, offset, count, callback, delegator )
 {
-	return AJAX_Call( callback, 'admin', 'ImageListWithGeneratedImages_Load_Query',
-					  'Filter='		+ EncodeArray( filter )			+
-					  '&Sort='		+ encodeURIComponent( sort )	+
-					  '&Offset='	+ encodeURIComponent( offset )	+
-					  '&Count='		+ encodeURIComponent( count ),
-					  delegator );
+	return AJAX_Call_JSON( callback, 'admin', 'ImageListWithGeneratedImages_Load_Query',
+	{
+		Filter:		filter,
+		Sort: 		sort,
+		Offset:		offset,
+		Count:		count
+	}, delegator );
 }
 
 function GeneratedImageList_Load_Image( image_id, callback, delegator )
@@ -886,6 +908,15 @@ function GeneratedImageList_Load_Image( image_id, callback, delegator )
 	return AJAX_Call( callback, 'admin', 'GeneratedImageList_Load_Image',
 					  'Image_ID=' + encodeURIComponent( image_id ),
 					  delegator );
+}
+
+function GeneratedImageList_Delete( generatedimage_ids, image_delete, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'GeneratedImageList_Delete',
+	{
+		GeneratedImage_IDs:	generatedimage_ids,
+		Image_Delete:		image_delete
+	}, delegator );
 }
 
 function GeneratedImage_Load_NearestConstrained( image_id, width, height, callback, delegator )
@@ -909,6 +940,15 @@ function Image_AddGeneratedImage( image_id, width, height, callback, delegator )
 					  '&GeneratedImage_Width='	+ encodeURIComponent( width )		+ 
 					  '&GeneratedImage_Height='	+ encodeURIComponent( height ),
 					  delegator );
+}
+
+function Image_Update( id, data, callback, delegator )
+{
+	return AJAX_Call_JSON( callback, 'admin', 'Image_Update',
+	{
+		Image_ID: 	id,
+		AltText:	data.alt_text
+	}, delegator );
 }
 
 function Image_Delete( id, image_delete, callback, delegator )

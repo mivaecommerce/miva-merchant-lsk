@@ -1577,11 +1577,7 @@
 	<MvFUNCTIONRETURN VALUE = "{ TemplateManager_Render_Page_LowLevel( l.code, l.page ) }">
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "TemplateManager_Render_Page_LowLevel" PARAMETERS = "code, page var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_ID( l.page:templ_id, l.template ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
-	</MvIF>
-
+<MvFUNCTION NAME = "TemplateManager_Initialize_Page" PARAMETERS = "page var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "l.page:settings:page:id"				VALUE = "{ l.page:id }">
 	<MvASSIGN NAME = "l.page:settings:page:templ_id"		VALUE = "{ l.page:templ_id }">
 	<MvASSIGN NAME = "l.page:settings:page:version_id"		VALUE = "{ l.page:version_id }">
@@ -1632,6 +1628,18 @@
 
 		<MvASSIGN NAME = "l.item_pos"	VALUE = "{ l.item_pos + 1 }">
 	</MvWHILE>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateManager_Render_Page_LowLevel" PARAMETERS = "code, page var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT [ g.Feature_Filename_TUI_DB ].ManagedTemplate_Load_ID( l.page:templ_id, l.template ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT TemplateManager_Initialize_Page( l.page ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
 
 	<MvIF EXPR = "{ ISNULL s.HTTP_X_Miva_Partial_Render }">
 		<MvASSIGN NAME = "l.null" VALUE = "{ [ g.Store_Template_Path $ l.template:filename ].Template_Render( l.page, l.page:settings ) }">
@@ -2517,6 +2525,7 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 	</MvIF>
 
 	<MvASSIGN NAME = "l.flags"							VALUE = "{ [ g.Module_Feature_URI_UT ].URL_Build_Flags( 'sep,nosession' ) }">
+	<MvASSIGN NAME = "l.flags:context_id"				VALUE = "{ [ g.Module_Admin ].Store_Cookie_URL_Context_ID() }">
 	<MvASSIGN NAME = "l.preview_url"					VALUE = "{ [ g.Module_Feature_URI_UT ].Store_Page_Code_URL( 'SFNT', l.flags )  }">
 
 	<style type="text/css">
@@ -2541,9 +2550,22 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 		}
 	</style>
 
+	<MvASSIGN NAME = "l.context_id"			VALUE = "{ [ g.Module_Feature_URI_UT ].Store_URL_Context_ID() }">
+	<MvASSIGN NAME = "l.current_context"	VALUE = "">
+
+	<MvIF EXPR = "{ NOT ISNULL l.context_id }">
+		<MvFOREACH ITERATOR = "l.context" ARRAY = "l.contexts" COUNT = "{ [ g.Module_Feature_URI_UT ].Store_URL_Context_List( l.contexts ) }">
+			<MvIF EXPR = "{ l.context_id EQ l.context:id }">
+				<MvASSIGN NAME = "l.current_context" VALUE = "{ l.context }">
+				<MvFOREACHSTOP>
+			</MvIF>
+		</MvFOREACH>
+	</MvIF>
+
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].Element_Admin_Core_Theme_CSS() }">
 
 	<template id="mm_runtimebranchpreview_template">
+		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Output_Link_CSS( 'admin/core/theme.css' ) }"> <MvCOMMENT> Output theme.css to be rendered inside the shadow DOM as well </MvCOMMENT>
 		<MvEVAL EXPR = "{ [ g.Module_Clientside ].Output_Link_CSS( 'features/tui/branchpreview.css' ) }">
 	</template>
 
@@ -2551,6 +2573,7 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 		<mm-runtimebranchpreview-datepicker></mm-runtimebranchpreview-datepicker>
 		<mm-runtimebranchpreview data-name="{ encodeentities( g.Store:branch:name ) }"
 								 data-color="{ encodeentities( g.Store:branch:color ) }"
+								 data-urlcontext-name="{ encodeentities( l.current_context:name ) }"
 								 data-branchkey="{ encodeentities( g.Store:branch:branchkey ) }"
 								 data-branch-datetime="{ int( l.time_t ) }"
 								 data-preview-url="{ encodeentities( l.preview_url ) }"
@@ -5737,6 +5760,21 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "TemplateManager_Determine_Branch" PARAMETERS = "store var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT TemplateManager_Determine_Branch_LowLevel( l.store ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.store:framework" VALUE = "{ l.store:branch:framework }">
+
+	<MvEVAL EXPR = "{ TemplateManager_Update_WorkingBranchStack_Branch( l.store:branch ) }">
+
+	<MvASSIGN NAME = "g.Store_Template_Path"	VALUE = "{ g.Module_Root $ 'templates/s' $ padl( l.store:id , 2, '0' ) $ '/' $ l.store:branch:tmpldir }">
+	<MvASSIGN NAME = "g.Store_Framework_Inuse"	VALUE = "{ l.store:framework }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "TemplateManager_Determine_Branch_LowLevel" PARAMETERS = "store var" STANDARDOUTPUTLEVEL = "">
 	<MvASSIGN NAME = "g.BranchKey"						VALUE = "{ trim( g.BranchKey ) }">
 
 	<MvIF EXPR = "{ NOT ISNULL g.Session:branch_id AND g.Session:branch_id EQ 0 }">
@@ -5745,10 +5783,6 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 		<MvASSIGN NAME = "l.branchkey"					VALUE = "">
 
 		<MvIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].Branch_Load_ID_Cached( g.Session:branch_id, l.store:branch ) }">
-			<MvASSIGN NAME = "g.Store_Template_Path"	VALUE = "{ g.Module_Root $ 'templates/s' $ padl( l.store:id , 2, '0' ) $ '/' $ l.store:branch:tmpldir }">
-
-			<MvEVAL EXPR = "{ TemplateManager_Update_WorkingBranchStack_Branch( l.store:branch ) }">
-
 			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
 	<MvELSEIF EXPR = "{ NOT ISNULL g.Session:branchkey }">
@@ -5774,13 +5808,9 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 
 	<MvIF EXPR = "{ NOT ISNULL l.branchkey }">
 		<MvIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].Branch_Load_BranchKey_Cached( l.branchkey, l.store:branch ) }">
-			<MvASSIGN NAME = "g.Store_Template_Path"	VALUE = "{ g.Module_Root $ 'templates/s' $ padl( l.store:id , 2, '0' ) $ '/' $ l.store:branch:tmpldir }">
-
 			<MvIF EXPR = "{ NOT ISNULL g.BranchKey AND g.Session:source NE 'admin' }">
 				<MvASSIGN NAME = "l.null"				VALUE = "{ TemplateManager_Set_RuntimeBranchCookie( l.store:branch ) }">
 			</MvIF>
-
-			<MvEVAL EXPR = "{ TemplateManager_Update_WorkingBranchStack_Branch( l.store:branch ) }">
 
 			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
@@ -5788,15 +5818,23 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 
 	<MvCOMMENT>
 	|
-	| Set the primary branch as the working branch
+	| Set the default branch as the working branch, if specified
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT ISNULL g.Session:default_branch_id }">
+		<MvIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].Branch_Load_ID_Cached( g.Session:default_branch_id, l.store:branch ) }">
+			<MvFUNCTIONRETURN VALUE = 1>
+		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Set the store's primary branch as the working branch
 	|
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ [ g.Feature_Filename_TUI_DB ].Branch_Load_ID_Cached( l.store:branch_id, l.store:branch ) }">
-		<MvASSIGN NAME = "g.Store_Template_Path"		VALUE = "{ g.Module_Root $ 'templates/s' $ padl( l.store:id , 2, '0' ) $ '/' $ l.store:branch:tmpldir }">
-
-		<MvEVAL EXPR = "{ TemplateManager_Update_WorkingBranchStack_Branch( l.store:branch ) }">
-
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
@@ -5965,6 +6003,12 @@ var Store_Code = <MvEVAL EXPR = "{ '"' $ [ g.Module_Admin ].JavaScriptEncode( g.
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "TemplateManager_Primary_Branch_ID" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.context" VALUE = "{ [ g.Module_Admin ].Store_Cookie_URL_Context() }">
+
+	<MvIF EXPR = "{ l.context:branch_id }">
+		<MvFUNCTIONRETURN VALUE = "{ l.context:branch_id }">
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = "{ g.Store:branch_id }">
 </MvFUNCTION>
 

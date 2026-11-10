@@ -243,6 +243,31 @@
 				<MvASSIGN NAME = "l.null"						VALUE = "{ miva_output_header( 'Content-Type', l.response_content_type $ '; charset=utf-8' ) }">
 			</MvIF>
 		</MvIF>
+	<MvELSEIF EXPR = "{ g.Session_Type EQ 'upgrade' }">
+		<MvIF EXPR = "{ NOT [ g.Library_Utilities ].Validate_AdminOrigin() }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].Screen_RejectOrigin() }">
+			<MvEXIT>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].AdminSession_SetPaths() }">
+		<MvEVAL EXPR = "{ [ g.Library_Utilities ].AdminSession_SetURLs() }">
+
+		<MvASSIGN NAME = "l.result"	VALUE = "{ file_read( 'upgrade.nonce', 'data', l.expected_nonce_data ) }">
+		<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( 'upgrade.nonce' ) }">
+
+		<MvIF EXPR = "{ l.result LE 0 }">
+			<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Upgrade_Call_Failure( 'Missing or empty upgrade.nonce' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'access_denied', 'Access Denied' ) }">
+		</MvIF>
+		
+		<MvIF EXPR = "{ strcmp( g.Nonce, l.expected_nonce_data ) NE 0 }">
+			<MvEVAL EXPR = "{ [ g.Filename_Admin ].Admin_Log_Upgrade_Call_Failure( 'Nonce mismatch in request' ) }">
+			<MvEVAL EXPR = "{ [ g.Library_Utilities ].FailedLoginDelay() }">
+
+			<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Utilities ].Error( 'access_denied', 'Access Denied' ) }">
+		</MvIF>
 	<MvELSE>
 		<MvIF EXPR = "{ g.Function EQ 'ValidateAdminSession' OR 
 						g.Function EQ 'User_ForgotPassword' OR	
@@ -386,6 +411,7 @@
 		<MvELSEIF EXPR = "{ g.Function EQ 'CSSCombinedResource_Output' }">													<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_TUI_JSON ].JSON_CSSCombinedResource_Output() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'JavaScriptResource_Output' }">													<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_TUI_JSON ].JSON_JavaScriptResource_Output() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'JavaScriptCombinedResource_Output' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_TUI_JSON ].JSON_JavaScriptCombinedResource_Output() }">
+		<MvELSEIF EXPR = "{ g.Function EQ 'Runtime_Image_Resize' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_Runtime_Image_Resize() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'ValidateAdminSession' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_ValidateAdminSession() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'User_ForgotPassword' }">															<MvFUNCTIONRETURN VALUE = "{ JSON_User_ForgotPassword() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'User_ResetPassword' }">															<MvFUNCTIONRETURN VALUE = "{ JSON_User_ResetPassword() }">
@@ -398,6 +424,14 @@
 	</MvCOMMENT>
 
 	<MvELSEIF EXPR = "{ g.Session_Type EQ 'runtime' }">
+		<MvIF EXPR = "{ JSON_Is_Store_Open() }">
+			<MvFOREACH ITERATOR = "l.module" ARRAY = "l.modules" COUNT = "{ [ g.Library_DB ].StoreModuleList_Load_Features( 'json_captcha', l.modules ) }">
+				<MvIF EXPR = "{ NOT [ g.Module_Root $ l.module:module ].Module_JSON_CAPTCHA( l.module ) }">
+					<MvFUNCTIONRETURN VALUE = 0>
+				</MvIF>
+			</MvFOREACH>
+		</MvIF>
+
 		<MvIF EXPR = "{ g.Function EQ 'Module' }">																			<MvFUNCTIONRETURN VALUE = "{ JSON_Module_JSON() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'CSSResource_Output' }">															<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_TUI_JSON ].JSON_CSSResource_Output() }">
 		<MvELSEIF EXPR = "{ g.Function EQ 'CSSCombinedResource_Output' }">													<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_TUI_JSON ].JSON_CSSCombinedResource_Output() }">
@@ -564,6 +598,7 @@
 				<MvELSEIF EXPR = "{ g.Function EQ 'BoxList_Load_Enabled' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_BoxList_Load_Enabled() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'BoxList_Load_Query' }">													<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_BoxList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'BoxPackingModule_BoxFieldList_Load' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_BoxPackingModule_BoxFieldList_Load() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'BoxPackingModule_BoxSettings_Load' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_BoxPackingModule_BoxSettings_Load() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Box_Delete' }">															<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_Box_Delete() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Box_Insert' }">															<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_Box_Insert() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Box_Update' }">															<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SHP_JSON ].JSON_Box_Update() }">
@@ -752,6 +787,7 @@
 				</MvIF>
 			<MvELSEIF EXPR = "{ l.letter EQ 'D' }">
 				<MvIF EXPR = "{ g.Function EQ 'DiscountModuleFieldList_Load' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_DiscountModuleFieldList_Load() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'DiscountModuleSettings_Load' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_DiscountModuleSettings_Load() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'DomainCountryList_Load_Query' }">										<MvFUNCTIONRETURN VALUE = "{ JSON_DomainCountryList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'DomainCountry_Delete' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_DomainCountry_Delete() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'DomainCountry_Insert' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_DomainCountry_Insert() }">
@@ -801,6 +837,7 @@
 				</MvIF>
 			<MvELSEIF EXPR = "{ l.letter EQ 'G' }">
 				<MvIF EXPR = "{ g.Function EQ 'GeneratedImageList_Load_Image' }">											<MvFUNCTIONRETURN VALUE = "{ JSON_GeneratedImageList_Load_Image() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'GeneratedImageList_Delete' }">											<MvFUNCTIONRETURN VALUE = "{ JSON_GeneratedImageList_Delete() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'GeneratedImage_Load_NearestConstrained' }">								<MvFUNCTIONRETURN VALUE = "{ JSON_GeneratedImage_Load_NearestConstrained() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'GiftCertificateList_Load_Query' }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_GFT_JSON ].JSON_GiftCertificateList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'GiftCertificate_Insert' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_GFT_JSON ].JSON_GiftCertificate_Insert() }">
@@ -849,6 +886,7 @@
 				<MvELSEIF EXPR = "{ g.Function EQ 'Image_Add' }">															<MvFUNCTIONRETURN VALUE = "{ JSON_Image_Add() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Image_Delete' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_Image_Delete() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Image_AddGeneratedImage' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_Image_AddGeneratedImage() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Image_Update' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_Image_Update() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Image_Upload' }">														<MvFUNCTIONRETURN VALUE = "{ JSON_Image_Upload() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Image_Assign_OptionParts' }">											<MvFUNCTIONRETURN VALUE = "{ JSON_Image_Assign_OptionParts() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'ImportList_Load_Query' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_IMP_JSON ].JSON_ImportList_Load_Query() }">
@@ -1219,6 +1257,7 @@
 				<MvIF EXPR = "{ g.Function EQ 'ScheduledTaskList_Load_Query' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTaskList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'ScheduledTaskOperationList_Load' }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTaskOperationList_Load() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'ScheduledTaskModuleFieldList_Load' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTaskModuleFieldList_Load() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'ScheduledTaskModuleSettings_Load' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTaskModuleSettings_Load() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'ScheduledTask_Insert' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTask_Insert() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'ScheduledTask_Update' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTask_Update() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'ScheduledTask_Update_Enabled' }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SCH_JSON ].JSON_ScheduledTask_Update_Enabled() }">
@@ -1271,6 +1310,8 @@
 				<MvELSEIF EXPR = "{ g.Function EQ 'StoreList_Load_Query' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_StoreList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'StoreList_Load_All' }">													<MvFUNCTIONRETURN VALUE = "{ JSON_StoreList_Load_All() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'Store_Load' }">															<MvFUNCTIONRETURN VALUE = "{ JSON_Store_Load() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Store_URL_Context_Cookie_Clear' }">										<MvFUNCTIONRETURN VALUE = "{ JSON_Store_URL_Context_Cookie_Clear() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Store_URL_Context_Cookie_Set' }">										<MvFUNCTIONRETURN VALUE = "{ JSON_Store_URL_Context_Cookie_Set() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'StandardFields_Load' }">													<MvFUNCTIONRETURN VALUE = "{ JSON_StandardFields_Load() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'StateList_Load_Query' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_StateList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'StateIndex_Load_Code' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_StateIndex_Load_Code() }">
@@ -1306,6 +1347,11 @@
 			<MvELSEIF EXPR = "{ l.letter EQ 'U' }">
 				<MvIF EXPR = "{ g.Function EQ 'UniversalSearchList_Load_Context' }">										<MvFUNCTIONRETURN VALUE = "{ JSON_UniversalSearchList_Load_Context() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'UniversalSearch_Initialize' }">											<MvFUNCTIONRETURN VALUE = "{ JSON_UniversalSearch_Initialize() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Available_Patches' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Available_Patches() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_Status' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_Status() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_Initialize' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_Initialize() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_Execute' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_Execute() }">
+				<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_RequestSupport' }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_RequestSupport() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'UpsellIndex_Load_ID' }">													<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_USL_JSON ].JSON_UpsellIndex_Load_ID() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'UpsellList_Load_Query' }">												<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_USL_JSON ].JSON_UpsellList_Load_Query() }">
 				<MvELSEIF EXPR = "{ g.Function EQ 'UpsellProductIndex_Load_ID' }">											<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_USL_JSON ].JSON_UpsellProductIndex_Load_ID() }">
@@ -1351,6 +1397,19 @@
 				<MvELSEIF EXPR = "{ g.Function EQ 'UpdateAdministrativeSession' }">											<MvFUNCTIONRETURN VALUE = "{ JSON_UpdateAdministrativeSession() }">
 				</MvIF>
 			</MvIF>
+		</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Functions for unattended upgrade
+	|
+	</MvCOMMENT>
+
+	<MvELSEIF EXPR = "{ g.Session_Type EQ 'upgrade' }">
+		<MvIF EXPR = "{ g.Function EQ 'Upgrade_Available_Patches' }">														<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Available_Patches() }">
+		<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_Status' }">														<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_Status() }">
+		<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_Initialize' }">													<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_Initialize() }">
+		<MvELSEIF EXPR = "{ g.Function EQ 'Upgrade_Session_Execute' }">														<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_UPG_JSON ].JSON_Upgrade_Session_Execute() }">
 		</MvIF>
 
 	<MvCOMMENT>
@@ -1903,7 +1962,8 @@
 		<MvELSEIF EXPR = "{ l.function EQ 'BusinessAccountCustomer_Update_Assigned' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_BusinessAccountCustomer_Update_Assigned() }">
 		</MvIF>
 	<MvELSEIF EXPR = "{ l.letter EQ 'C' }">
-		<MvIF EXPR = "{ l.function EQ 'CategoryList_Load_Parent' }">								<MvFUNCTIONRETURN VALUE = "{ JSON_CategoryList_Load_Parent() }">
+		<MvIF EXPR = "{ l.function EQ 'CategoryCustomFieldList_Load' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_CategoryCustomFieldList_Load() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'CategoryList_Load_Parent' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_CategoryList_Load_Parent() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CategoryList_Load_Query' }">								<MvFUNCTIONRETURN VALUE = "{ JSON_CategoryList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CategoryProductList_Load_Query' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_CategoryProductList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CategoryProduct_Update_Assigned' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_CategoryProduct_Update_Assigned() }">
@@ -1959,6 +2019,7 @@
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerAddress_Delete' }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerAddress_Delete() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerAddressList_Delete' }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerAddressList_Delete() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerAddress_Update_Residential' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerAddress_Update_Residential() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'CustomerCustomFieldList_Load' }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerCustomFieldList_Load() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerList_Load_Query' }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerPriceGroupList_Load_Query' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerPriceGroupList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'Customer_Delete' }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_Customer_Delete() }">
@@ -1969,10 +2030,12 @@
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerCreditHistory_Delete' }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_CUS_JSON ].JSON_CustomerCreditHistory_Delete() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerPaymentCard_Register' }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PAY_JSON ].JSON_CustomerPaymentCard_Register() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerPaymentCardList_Load_Query' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PAY_JSON ].JSON_CustomerPaymentCardList_Load_Query() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'CustomerSearchLogEntryList_Load_Query' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SEA_JSON ].JSON_CustomerSearchLogEntryList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'CustomerSubscriptionList_Load_Query' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SUB_JSON ].JSON_CustomerSubscriptionList_Load_Query() }">
 		</MvIF>		
 	<MvELSEIF EXPR = "{ l.letter EQ 'I' }">
-		<MvIF EXPR = "{ l.function EQ 'ImageTypeList_Load_Query' }">								<MvFUNCTIONRETURN VALUE = "{ JSON_ImageTypeList_Load_Query() }">
+		<MvIF EXPR = "{ l.function EQ 'Image_Add' }">												<MvFUNCTIONRETURN VALUE = "{ JSON_Image_Add() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'ImageTypeList_Load_Query' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_ImageTypeList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'InventoryProductSettings_Update' }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_INV_JSON ].JSON_InventoryProductSettings_Update() }">
 		</MvIF>
 	<MvELSEIF EXPR = "{ l.letter EQ 'F' }">
@@ -2045,6 +2108,7 @@
 		<MvELSEIF EXPR = "{ l.function EQ 'PageURIList_Load_Query' }">								<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_URI_JSON ].JSON_PageURIList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'PageURIList_Delete' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_URI_JSON ].JSON_PageURIList_Delete() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'PageURI_Redirect' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_URI_JSON ].JSON_PageURI_Redirect() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'PageCustomFieldList_Load' }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_TUI_JSON ].JSON_PageCustomFieldList_Load() }">			
 		<MvELSEIF EXPR = "{ l.function EQ 'PaymentMethodList_Load' }">								<MvFUNCTIONRETURN VALUE = "{ JSON_PaymentMethodList_Load() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'PriceGroupCustomerList_Load_Query' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_PriceGroupCustomerList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'PriceGroupCustomer_Update_Assigned' }">					<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_PriceGroupCustomer_Update_Assigned() }">
@@ -2064,6 +2128,7 @@
 		<MvELSEIF EXPR = "{ l.function EQ 'PriceGroup_Delete' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_PriceGroup_Delete() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'PriceGroup_Insert' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_PriceGroup_Insert() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'PriceGroup_Update' }">									<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_PGR_JSON ].JSON_PriceGroup_Update() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'ProductCustomFieldList_Load' }">							<MvFUNCTIONRETURN VALUE = "{ JSON_ProductCustomFieldList_Load() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'ProductAndSubscriptionTermList_Load_Query' }">			<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SUB_JSON ].JSON_ProductAndSubscriptionTermList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'ProductSubscriptionTermList_Load_Query' }">				<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SUB_JSON ].JSON_ProductSubscriptionTermList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'ProductAttributeAndOptionList_Load_Query' }">			<MvFUNCTIONRETURN VALUE = "{ JSON_ProductAttributeAndOptionList_Load_Query() }">
@@ -2118,6 +2183,8 @@
 		<MvELSEIF EXPR = "{ l.function EQ 'SubscriptionList_Load_Query' }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SUB_JSON ].JSON_SubscriptionList_Load_Query() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'SubscriptionAndOrderItem_Add' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_SubscriptionAndOrderItem_Add() }">
 		<MvELSEIF EXPR = "{ l.function EQ 'SubscriptionAndOrderItem_Update' }">						<MvFUNCTIONRETURN VALUE = "{ JSON_SubscriptionAndOrderItem_Update() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'SearchLogEntryList_Delete' }">							<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SEA_JSON ].JSON_SearchLogEntryList_Delete() }">
+		<MvELSEIF EXPR = "{ l.function EQ 'SearchLogEntryList_Load_Query' }">						<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_SEA_JSON ].JSON_SearchLogEntryList_Load_Query() }">
 		</MvIF>
 	<MvELSEIF EXPR = "{ l.letter EQ 'U' }">
 		<MvIF EXPR = "{ l.function EQ 'URIList_Load_Query' }">										<MvFUNCTIONRETURN VALUE = "{ [ g.Feature_URI_JSON ].JSON_URIList_Load_Query() }">

@@ -7,197 +7,243 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 
-// Image List
+// Image Management: Image List
 ////////////////////////////////////////////////////
 
-function ImageManagement_ImageList()
+var ImageManagement_ImageList = ImageManagement_ImageList || class ImageManagement_ImageList extends MMList
 {
-	MMBatchList.call( this, 'mm9_batchlist_imagemanagementlist' );
+	#mru_cache;
+	#can_delete;
+	#delete_image;
 
-	this.processingdialog						= new ProcessingDialog();
+	constructor()
+	{
+		super( 'imagemanagement_imagelist' );
 
-	if ( CanI_IsAdministrator() || CanI_IsStoreManager() )
+		this.#delete_image	= false;
+		this.#can_delete	= CanI( 'IMGS', 0, 0, 0, 1 );
+		this.#mru_cache		= new MMMRUImageCache();
+	}
+
+	Attach( parent_id )
+	{
+		setTimeout( () =>
+		{
+			super.Attach( parent_id );
+			this.#delayedConstructor();
+		} );
+	}
+
+	#delayedConstructor()
 	{
 		this.Feature_EditDialog_Enable( 'Edit Image' );
-		this.Feature_RowDoubleClick_Enable();
 
-		this.Feature_Delete_Enable( 'Delete Image(s)' );
-
-		this.button_checkforupdatedimages		= this.Feature_Buttons_AddButton_Persistent( 'Check for Updated Images',	'',	'',			this.ImageManagement_CheckForUpdatedImages );
-		this.button_partitionimages				= this.Feature_Buttons_AddButton_Persistent( 'Partition Images',			'',	'',			this.ImageManagement_PartitionImages );
-		this.button_deletegenerated				= this.Feature_Buttons_AddButton_Dynamic( 'Delete Resized',					'',	'delete',	this.ImageManagement_DeleteResizedImages );
-
-		if ( this.button_recorddelete_delete )	this.button_recorddelete_delete.SetText( 'Delete Image' );
-	}
-
-	this.Feature_SearchBar_SetPlaceholderText( 'Search Images...' );
-	this.SetDefaultSort( 'image', '-' );
-}
-
-DeriveFrom( MMBatchList, ImageManagement_ImageList );
-
-ImageManagement_ImageList.prototype.onLoad = ImageManagement_ImageList_Load_Query;
-
-ImageManagement_ImageList.prototype.onCreateRootColumnList = function()
-{
-	var columnlist =
-	[
-		new MMBatchList_Column_Name( 'Image', 'image', '' ),
-		new MMBatchList_Column_DateTime( 'Modified', 'image_mtime', '' )
-				.SetSearchable( false )
-				.SetSortByField( '' ),
-		new MMBatchList_Column_Numeric( 'Width', 'width', '', 0 ),
-		new MMBatchList_Column_Numeric( 'Height', 'height', '', 0 ),
-		new MMBatchList_Column_Numeric( 'Size', 'image_size', '', 0 )
-				.SetSearchable( false )
-				.SetSortByField( '' )
-				.SetOnDisplayData( function( record ) { return document.createTextNode( record.image_size == 0 ? 'Unknown' : ( Math.round( record.image_size / 1024  ) + ' KB' ) ); } ),
-		new MMBatchList_Column_Numeric( 'Reference Count', 'refcount', '', 0 )
-	];
-
-	return columnlist;
-}
-
-ImageManagement_ImageList.prototype.onEdit = function( item )
-{
-	const self = this;
-	var dialog;
-
-	dialog					= new ImageManagement_ImageDialog( item.record );
-	dialog.ondeletemaster	= function() { self.Refresh(); }
-
-	dialog.Show();
-}
-
-ImageManagement_ImageList.prototype.onDelete = function( item, callback, delegator )
-{
-	ImageManagement_Image_Delete( item.record.id, callback, delegator );
-}
-
-ImageManagement_ImageList.prototype.onDeleteConfirmationMessage = function()
-{
-	return ( 'You are about to delete ' + ( this.ActiveItemList_Count() > 1 ? ( this.ActiveItemList_Count() + ' images.\n' ) : '1 image.\n' ) +
-		     '\n' +
-		     'The images will be removed from any products to which they are assigned.  Any resized ' +
-		     'versions of the master image will also be deleted. The image files will be permanently ' +
-		     'removed from the server.\n' +
-		     '\n' +
-		     'This cannot be undone.' );
-}
-
-ImageManagement_ImageList.prototype.ImageManagement_DeleteResizedImages = function()
-{
-	const self = this;
-	var dialog;
-
-	dialog			= new ConfirmationDialog();
-	dialog.onYes	= function() { self.ImageManagement_DeleteResizedImages_LowLevel(); };
-
-	dialog.SetButtonNoText( 'Cancel' );
-	dialog.SetButtonYesText( 'Continue' );
-	dialog.SetTitle( 'Delete Resized Images?' );
-	dialog.Show( `Any resized versions of the selected images will be deleted.<br />
-				  The resized image files will be permanently removed from the server.<br />
-				  <br />
-				  Continue?` );
-}
-
-ImageManagement_ImageList.prototype.ImageManagement_DeleteResizedImages_LowLevel = function()
-{
-	const self = this;
-	var i, i_len, item, list;
-
-	list = new Array();
-	
-	for ( i = 0, i_len = this.ActiveItemList_Count(); i < i_len; i++ )
-	{
-		if ( ( item = this.ActiveItemList_ItemAtIndex( i ) ) === null )
+		if ( this.#can_delete )
 		{
-			continue;
+			this.Feature_Delete_Enable( 'Delete Image(s)', 'Delete Image(s)' );
 		}
 
-		list.push( item.record.id );
+		if ( CanI_IsAdministrator() || CanI_IsStoreManager() )
+		{
+			const button_checkforupdated	= this.Feature_Controls_Create_Action(	'Check for Updated Images',	'', this.#actionCheckForUpdatedImages );
+			const button_partition			= this.Feature_Controls_Create_Action(	'Partition Images',			'', this.#actionPartitionImages );
+			const button_deleteresized		= this.Feature_Selection_Create_Action(	'Delete Resized',			'', this.#actionDeleteResizedImages );
+
+			this.Feature_Controls_SetPrimary_Action( button_checkforupdated );
+			this.Feature_Controls_SetSecondary_Action( button_partition );
+			this.Feature_Selection_SetSecondary_Action( button_deleteresized );
+		}
+
+		this.Feature_Controls_SetSearchPlaceholderText( 'Search Images...' );
+		this.SetDefaultSort( 'image', '-' );
 	}
 
-	this.processingdialog.Show( 'Deleting Resized Images...' );
-	ImageManagement_ImageList_Delete_GeneratedImages( list, function( response ) { self.ImageManagement_ImageList_Delete_GeneratedImages_Callback( response ); } );
-}
-
-ImageManagement_ImageList.prototype.ImageManagement_ImageList_Delete_GeneratedImages_Callback = function( response )
-{
-	this.processingdialog.Hide();
-
-	if ( !response.success )
+	onLoad( filter, sort, offset, count, callback, delegator )
 	{
-		return this.onError( response.error_message );
+		ImageListWithGeneratedImages_Load_Query( filter, sort, offset, count, callback, delegator );
 	}
 
-	this.Refresh();
-}
+	onCreateRootColumnList()
+	{
+		const columnlist =
+		[
+			new MMList_Column_CachedImagePreview( 'Image Preview', 'imagepreview', this.#mru_cache )
+				.SetOnRetrieveValue( ( record ) => { return record.id; } ),
+			new MMList_Column_Name( 'Image', 'image', '' ),
+			new MMList_Column_DateTime( 'Modified', 'image_mtime', '' )
+					.SetDefaultActive( false )
+					.SetSearchable( false )
+					.SetSortByField( '' ),
+			new MMList_Column_Numeric( 'Width', 'width', '', 0 ),
+			new MMList_Column_Numeric( 'Height', 'height', '', 0 ),
+			new MMList_Column_Numeric( 'Size', 'image_size', '', 0 )
+					.SetDefaultActive( false )
+					.SetSearchable( false )
+					.SetSortByField( '' )
+					.SetOnDisplayData( ( record ) => { return document.createTextNode( record.image_size == 0 ? 'Unknown' : FormattedFileSize( record.image_size ) ); } ),
+			new MMList_Column_Numeric( 'Reference Count', 'refcount', '', 0 )
+					.SetDefaultActive( false ),
+			new MMList_Column_TextArea( 'Image Alt Text', 'Alt Text', 'alt_text', '', false )
+		];
 
-ImageManagement_ImageList.prototype.ImageManagement_CheckForUpdatedImages = function()
-{
-	const self = this;
-	var dialog;
+		return columnlist;
+	}
 
-	dialog			= new ConfirmationDialog();
-	dialog.onYes	= function() { self.ImageManagement_CheckForUpdatedImages_LowLevel(); };
+	onEdit( item )
+	{
+		const dialog	= new ImageEditDialog( item.record );
+		dialog.onDelete	= () => { this.Refresh(); }
+		dialog.onClose	= ( changes_saved ) =>
+		{
+			if ( changes_saved )
+			{
+				this.Refresh( true );
+			}
+		}
 
-	dialog.SetButtonNoText( 'Cancel' );
-	dialog.SetButtonYesText( 'Continue' );
-	dialog.SetTitle( 'Check for Updated Images?' );
-	dialog.Show( `This function will check for images that have been updated outside of the<br />
-				  Miva Merchant Administrative interface (for example, via FTP).<br />
-				  <br />
-				  Any resized versions of a master image that are older than the master image will<br />
-				  be discarded, allowing them to be regenerated from the updated master image.<br />
-				  <br />
-				  Depending on the number of images present, this process may take a long time.<br />
-				  <br />
-				  Continue?` );
-}
+		dialog.Show();
+	}
 
-ImageManagement_ImageList.prototype.ImageManagement_CheckForUpdatedImages_LowLevel = function()
-{
-	const self = this;
-	var dialog;
+	onDelete( item, callback, delegator )
+	{
+		Image_Delete( item.record.id, this.#delete_image, callback, delegator );
+	}
 
-	dialog			= new UpdatedImagesDialog();
-	dialog.onHide	= function() { self.Refresh(); };
+	onDeleteConfirmationTitle()
+	{
+		return `Delete selected ${Plural( this.ActiveItemList_Count(), 'image', 'images' )}?`;
+	}
 
-	dialog.Show();
-}
+	onDeleteConfirmationButton()
+	{
+		return `Delete ${Plural( this.ActiveItemList_Count(), 'Image', 'Images' )}`;
+	}
 
-ImageManagement_ImageList.prototype.ImageManagement_PartitionImages = function()
-{
-	const self = this;
-	var dialog;
+	onDeleteConfirmationMessage()
+	{
+		const element_container 						= newElement( 'mm-flex-section',	{ 'width': '450px', 'row-gap': 'spacing-300' },							null, null );
+		const element_radio_remove						= newElement( 'mm-radio',			{ 'group-name': 'imagemanagement-imageeditdialog-deletemasterimage' },	null, element_container );
+		const element_radio_removeanddelete				= newElement( 'mm-radio',			{ 'group-name': 'imagemanagement-imageeditdialog-deletemasterimage' },	null, element_container );
+		const element_remove_container					= newElement( 'mm-flex-group',		{ 'direction': 'column', 'align-items': 'start', 'row-gap': '0' },		null, element_radio_remove );
+		const element_remove_title						= newElement( 'mm-text',			{ 'type': 'paragraph-medium', 'tone': '900', 'weight': '500' },			null, element_remove_container );
+		const element_remove_subtitle					= newElement( 'mm-text',			{ 'type': 'paragraph-medium' },											null, element_remove_container );
+		const element_removeanddelete_container			= newElement( 'mm-flex-group',		{ 'direction': 'column', 'align-items': 'start', 'row-gap': '0' },		null, element_radio_removeanddelete );
+		const element_removeanddelete_title				= newElement( 'mm-text',			{ 'type': 'paragraph-medium', 'tone': '900', 'weight': '500' },			null, element_removeanddelete_container );
+		const element_removeanddelete_subtitle			= newElement( 'mm-text',			{ 'type': 'paragraph-medium' },											null, element_removeanddelete_container );
 
-	dialog			= new ConfirmationDialog();
-	dialog.onYes	= function() { self.ImageManagement_PartitionImages_LowLevel(); };
+		element_remove_title.textContent				= 'Remove from library';
+		element_remove_subtitle.textContent				= 'The image file stays on your server';
+		element_removeanddelete_title.textContent		= 'Delete from library and server';
+		element_removeanddelete_subtitle.textContent	= `Permanently deletes the file. Any pages still using it will show a broken image. This can't be undone.`;
 
-	dialog.SetButtonNoText( 'Cancel' );
-	dialog.SetButtonYesText( 'Continue' );
-	dialog.SetTitle( 'Partition Images?' );
-	dialog.Show( `This function will check for images as well as generated images that have not been partitioned<br />
-				  into subdirectories and move them into their respective partition directory.<br />
-				  <br />
-				  Depending on the number of images present, this process may take a long time.<br />
-				  <br />
-				  Continue?` );
-}
+		element_radio_remove.text						= element_remove_container;
+		element_radio_removeanddelete.text				= element_removeanddelete_container;
 
-ImageManagement_ImageList.prototype.ImageManagement_PartitionImages_LowLevel = function()
-{
-	const self = this;
-	var dialog;
+		element_radio_remove.onchange					= ( checked ) => { this.#delete_image = !checked; };
+		element_radio_removeanddelete.onchange			= ( checked ) => { this.#delete_image = checked; };
 
-	dialog = new PartitionImagesDialog();
-	dialog.onHide = function() { self.Refresh(); }
+		if ( !this.#delete_image )	element_radio_remove.checked			= true;
+		else						element_radio_removeanddelete.checked	= true;
 
-	dialog.Show();
+		return element_container;
+	}
+
+	#actionDeleteResizedImages()
+	{
+		const dialog	= new ConfirmationDialog();
+		dialog.onYes	= () => { this.#actionDeleteResizedImagesLowLevel(); };
+
+		dialog.SetButtonNoText( 'Cancel' );
+		dialog.SetButtonYesText( 'Continue' );
+		dialog.SetTitle( 'Delete Resized Images?' );
+		dialog.Show( `Any resized versions of the selected images will be deleted.<br />
+					  The resized image files will be permanently removed from the server.<br />
+					  <br />
+					  Continue?` );
+	}
+
+	#actionDeleteResizedImagesLowLevel()
+	{
+		const list = new Array();
+
+		for ( let i = 0, i_len = this.ActiveItemList_Count(); i < i_len; i++ )
+		{
+			const item = this.ActiveItemList_ItemAtIndex( i );
+
+			if ( item !== null )
+			{
+				list.push( item.record.id );
+			}
+		}
+
+		const processingdialog = new ProcessingDialog();
+		processingdialog.Show( 'Deleting Resized Images...' );
+
+		ImageManagement_ImageList_Delete_GeneratedImages( list, ( response ) =>
+		{
+			processingdialog.Hide();
+
+			if ( !response.success )
+			{
+				return this.onError( response.error_message );
+			}
+
+			this.Refresh();
+		} );
+	}
+
+	#actionCheckForUpdatedImages()
+	{
+		const dialog	= new ConfirmationDialog();
+		dialog.onYes	= () => { this.#actionCheckForUpdatedImagesLowLevel(); };
+
+		dialog.SetButtonNoText( 'Cancel' );
+		dialog.SetButtonYesText( 'Continue' );
+		dialog.SetTitle( 'Check for Updated Images?' );
+		dialog.Show( `This function will check for images that have been updated outside of the<br />
+					  Miva Merchant Administrative interface (for example, via FTP).<br />
+					  <br />
+					  Any resized versions of a master image that are older than the master image will<br />
+					  be discarded, allowing them to be regenerated from the updated master image.<br />
+					  <br />
+					  Depending on the number of images present, this process may take a long time.<br />
+					  <br />
+					  Continue?` );
+	}
+
+	#actionCheckForUpdatedImagesLowLevel()
+	{
+		const dialog	= new UpdatedImagesDialog();
+		dialog.onHide	= () => { this.Refresh(); };
+
+		dialog.Show();
+	}
+
+	#actionPartitionImages()
+	{
+		const dialog	= new ConfirmationDialog();
+		dialog.onYes	= () => { this.#actionPartitionImagesLowLevel(); };
+
+		dialog.SetButtonNoText( 'Cancel' );
+		dialog.SetButtonYesText( 'Continue' );
+		dialog.SetTitle( 'Partition Images?' );
+		dialog.Show( `This function will check for images as well as generated images that have not been partitioned<br />
+					  into subdirectories and move them into their respective partition directory.<br />
+					  <br />
+					  Depending on the number of images present, this process may take a long time.<br />
+					  <br />
+					  Continue?` );
+	}
+
+	#actionPartitionImagesLowLevel()
+	{
+		const dialog = new PartitionImagesDialog();
+		dialog.onHide = () => { this.Refresh(); }
+
+		dialog.Show();
+	}
 }

@@ -7,11 +7,11 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
 // Prefix         : MER-AJX-
-// Next Error Code: 18
+// Next Error Code: 19
 //
 
 // Order Processing Server-side AJAX calls
@@ -187,6 +187,72 @@ function AJAX_Append_FieldList_JSON_SetPathValue( parameters, name, value )
 	else												parameters[ name ].push( value );
 }
 
+(() =>
+{
+	if ( !window.AJAX_Runtime_CAPTCHA_Register || !window.AJAX_Runtime_CAPTCHA_Prepare )
+	{
+		const registry = new Array();
+	
+		window.AJAX_Runtime_CAPTCHA_Register = ( implementation ) =>
+		{
+			registry.push( implementation );
+		}
+
+		window.AJAX_Runtime_CAPTCHA_Prepare = ( endpoint, parameters ) =>
+		{
+			return registry.reduce( ( chain, implementation ) => chain.then( accumulated => Promise.resolve( implementation( endpoint, accumulated ) ).then( added => ( { ...accumulated, ...added } ) ) ),
+									Promise.resolve( { ...parameters } ) );
+		}
+	}
+})();
+
+function AJAX_Runtime_CAPTCHA_Wrap( callback, endpoint, parameters, error_callback )
+{
+	let aborted			= false;
+	const http_request	= AJAX_New();
+	http_request.abort	= () =>
+	{
+		aborted							= true;
+		http_request.onload				= () => {};
+		http_request.onreadystatechange	= () => {};
+
+		return XMLHttpRequest.prototype.abort.apply( http_request, arguments );
+	};
+
+	AJAX_Call_Initialize( http_request, callback, 'application/json',
+						  `Store_Code=${AJAX_CharsetEncodeAttribute( Store_Code )}&${Object.entries( endpoint ).map( ( [ name, value ] ) => `${name}=${AJAX_CharsetEncodeAttribute( value )}` ).join( '&' )}`,
+						  error_callback );
+
+	AJAX_Runtime_CAPTCHA_Prepare( endpoint, parameters )
+		.then( ( prepared_parameters ) =>
+		{
+			if ( !aborted )
+			{
+				http_request.send( JSON.stringify( prepared_parameters ) );
+			}
+		} )
+		.catch( ( error ) =>
+		{
+			if ( aborted )
+			{
+				return;
+			}
+
+			const response =
+			{
+				success:		0,
+				error_code:		'MER-AJX-00018',
+				error_message:	'Verification failed.\n' +
+								Object.entries( endpoint ).map( ( [ name, value ] ) => name + ': ' + value + '\n' ).join( '' ) +
+								`Error: ${( error && error.message ? error.message : error )}`
+			};
+
+			callback( response );
+		} );
+
+	return http_request;
+}
+
 function AJAX_Call_Module( callback, session_type, module_code, func, parameters, delegator )
 {
 	if ( delegator )
@@ -216,33 +282,42 @@ function AJAX_Call_Module( callback, session_type, module_code, func, parameters
 							   } );
 }
 
-function AJAX_Call_Module_JSON( callback, session_type, module_code, func, data, delegator )
+function AJAX_Call_Module_JSON( callback, session_type, module_code, func, parameters, delegator )
 {
 	if ( delegator )
 	{
-		return delegator.AJAX_Call_Module_JSON( callback, session_type, module_code, func, data );
+		return delegator.AJAX_Call_Module_JSON( callback, session_type, module_code, func, parameters );
 	}
 
 	AJAX_Initialize();
+
+	const parameters_with_session	= AJAX_Append_SessionParameters_JSON( parameters, session_type );
+	const error_callback			= ( http_request ) =>
+	{
+		const response =
+		{
+			status:			http_request.status,
+			success:		0,
+			error_code:		'MER-AJX-00013',
+			error_message:	'Miva Merchant returned an invalid response.\n' +
+							`Function: ${func}\n` +
+							`Status: ${http_request.status}\n` +
+							`Response: ${http_request.responseText}`
+		}
+
+		return response;
+	};
+
+	if ( session_type === 'runtime' && typeof window.Promise === 'function' )
+	{
+		return AJAX_Runtime_CAPTCHA_Wrap( callback, { Function: 'Module', Module_Code: module_code, Module_Function: func }, parameters_with_session, error_callback );
+	}
+
 	return AJAX_Call_LowLevel( null,
 							   callback,
-							   'application/json', JSON.stringify( AJAX_Append_SessionParameters_JSON( data, session_type ) ),
+							   'application/json', JSON.stringify( parameters_with_session ),
 							   'Store_Code=' + AJAX_CharsetEncodeAttribute( Store_Code ) + '&Function=Module&Module_Code=' + AJAX_CharsetEncodeAttribute( module_code ) + '&Module_Function=' + AJAX_CharsetEncodeAttribute( func ),
-							   function( http_request )
-							   {
-									var response;
-
-									response				= new Object();
-									response.status			= http_request.status;
-									response.success		= 0;
-									response.error_code		= 'MER-AJX-00013';
-									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
-															  'Function: ' + func + '\n' +
-															  'Status: ' + http_request.status + '\n' +
-															  'Response: ' + http_request.responseText;
-
-									return response;
-							   } );
+							   error_callback );
 }
 
 function AJAX_Call_Module_FieldList( callback, session_type, module_code, func, parameters, fields, delegator )
@@ -485,25 +560,34 @@ function AJAX_Call_JSON( callback, session_type, func, parameters, delegator )
 	}
 
 	AJAX_Initialize();
+
+	const parameters_with_session	= AJAX_Append_SessionParameters_JSON( parameters, session_type );
+	const error_callback			= ( http_request ) =>
+	{
+		const response =
+		{
+			status:			http_request.status,
+			success:		0,
+			error_code:		'MER-AJX-00015',
+			error_message:	'Miva Merchant returned an invalid response.\n' +
+							`Function: ${func}\n` +
+							`Status: ${http_request.status}\n` +
+							`Response: ${http_request.responseText}`
+		}
+
+		return response;
+	};
+
+	if ( session_type === 'runtime' && typeof window.Promise === 'function' )
+	{
+		return AJAX_Runtime_CAPTCHA_Wrap( callback, { Function: func }, parameters_with_session, error_callback );
+	}
+
 	return AJAX_Call_LowLevel( null,
 							   callback,
-							   'application/json', JSON.stringify( AJAX_Append_SessionParameters_JSON( parameters, session_type ) ),
+							   'application/json', JSON.stringify( parameters_with_session ),
 							   'Store_Code=' + AJAX_CharsetEncodeAttribute( Store_Code ) + '&Function=' + AJAX_CharsetEncodeAttribute( func ),
-							   function( http_request )
-							   {
-									var response;
-
-									response				= new Object();
-									response.status			= http_request.status;
-									response.success		= 0;
-									response.error_code		= 'MER-AJX-00015';
-									response.error_message	= 'Miva Merchant returned an invalid response.\n' +
-															  'Function: ' + func + '\n' +
-															  'Status: ' + http_request.status + '\n' +
-															  'Response: ' + http_request.responseText;
-
-									return response;
-							   } );
+							   error_callback );
 }
 
 function AJAX_Call_FieldList( callback, session_type, func, parameters, fields, delegator )

@@ -23,13 +23,14 @@
 	<MvASSIGN NAME = "l.module:code"		VALUE = "mmlsk-flatord">
 	<MvASSIGN NAME = "l.module:name"		VALUE = "Export Orders to Flat File">
 	<MvASSIGN NAME = "l.module:provider"	VALUE = "Miva Merchant">
-	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0100">
+	<MvASSIGN NAME = "l.module:version"		VALUE = "26.0300">
 	<MvASSIGN NAME = "l.module:api_ver"		VALUE = "5.00">
 	<MvASSIGN NAME = "l.module:features"	VALUE = "export">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "ExportModule_Validate" PARAMETERS = "module var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "g.FlatOrder_File" VALUE = "{ trim( g.FlatOrder_File ) }">
+	<MvASSIGN NAME = "g.FlatOrder_File"						VALUE = "{ trim( g.FlatOrder_File ) }">
+	<MvASSIGN NAME = "g.FlatOrder_SpreadsheetCompatible"	VALUE = "{ [ g.Module_Admin ].Trim_Boolean( g.FlatOrder_SpreadsheetCompatible ) }">
 
 	<MvIF EXPR = "{ len( g.FlatOrder_Batch ) EQ 0 }">
 		<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Admin ].FieldError( '', '', 'Please select a batch' ) }">
@@ -111,7 +112,7 @@
 		<MvHIDE FIELDS = "g.Order_Count, g.FlatOrder_Batch, FlatOrderExport_Initialized, g.FlatOrder_Delimiter_Tab, g.FlatOrder_Delimiter, 
 				  		  g.FlatOrder_Export_LastOrder, g.FlatOrder_Export_LastOrderItem, g.FlatOrder_Export_Count, g.FlatOrder_CustomFields,
 				  		  g.FlatOrder_File, g.FlatOrder_Append, g.FlatOrder_Export_Time_Start, 
-				  		  g.Module_Code, g.FlatOrder_Total_Count, g.FlatOrder_Email, g.FlatOrder_SendEmail, g.FlatOrder_Header">
+				  		  g.Module_Code, g.FlatOrder_Total_Count, g.FlatOrder_Email, g.FlatOrder_SendEmail, g.FlatOrder_Header, g.FlatOrder_SpreadsheetCompatible">
 
 		<script type="text/javascript">
 			function exp_continue()
@@ -135,10 +136,11 @@
 			<MvASSIGN NAME = "g.FlatOrder_File" 		VALUE = "bestellungen.csv">
 		</MvIF>
 
-		<MvASSIGN NAME = "g.FlatOrder_Append" 			VALUE = 1>
-		<MvASSIGN NAME = "g.FlatOrder_Delimiter_Tab" 	VALUE = 1>
-		<MvASSIGN NAME = "g.FlatOrder_Delimiter" 		VALUE = ",">
-		<MvASSIGN NAME = "g.FlatOrder_Header"			VALUE = "">
+		<MvASSIGN NAME = "g.FlatOrder_Append" 					VALUE = 1>
+		<MvASSIGN NAME = "g.FlatOrder_Delimiter_Tab" 			VALUE = 1>
+		<MvASSIGN NAME = "g.FlatOrder_Delimiter" 				VALUE = ",">
+		<MvASSIGN NAME = "g.FlatOrder_Header"					VALUE = "">
+		<MvASSIGN NAME = "g.FlatOrder_SpreadsheetCompatible"	VALUE = 1>
 
 		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].InitializeCustomFieldSelect( l.null, g.FlatOrder_CustomFields ) }">
 	</MvIF>
@@ -161,6 +163,40 @@
 
 	<input type="hidden" name="Reset" value="No">
 	<MvHIDE FIELDS = "g.Module_Code">
+
+	<script type="text/javascript">
+		function HideSpreadsheetCompatible( optval )
+		{
+			if ( optval == '1' )
+			{
+				document.getElementById( "flatorder_spreadsheetcompatible1" ).style.visibility = "hidden";
+				document.getElementById( "flatorder_spreadsheetcompatible2" ).style.visibility = "hidden";
+			}
+			else
+			{
+				document.getElementById( "flatorder_spreadsheetcompatible1" ).style.visibility = "visible";
+				document.getElementById( "flatorder_spreadsheetcompatible2" ).style.visibility = "visible";
+			}
+		}
+
+		MMScreen_LoadFinished( () =>
+		{
+			document.querySelectorAll( 'input[name="FlatOrder_Append"]' ).forEach( input =>
+			{
+				input.addEventListener( 'change', event => { HideSpreadsheetCompatible( event.target.value ); } );
+			} );
+		} );
+	</script>
+
+	<MvIF EXPR = "{ g.FlatOrder_Append }">
+		<style type="text/css">
+			#flatorder_spreadsheetcompatible1,
+			#flatorder_spreadsheetcompatible2
+			{
+				visibility: hidden;
+			}
+		</style>
+	</MvIF>
 
 	<MvEVAL EXPR = "{ [ g.Module_Admin ].BeginContent() }">
 	<table border=0 cellpadding = 2 cellspacing = 0 width = "100%">
@@ -212,6 +248,17 @@
 					&nbsp;
 				</td><td width="100%">
 					<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawCheckbox( g.FlatOrder_Header, 'FlatOrder_Header', 'Yes', 'Export Field Names as Header' ) }">
+				</td></tr>
+
+				<tr><td valign="top" nowrap>
+					<div id="flatorder_spreadsheetcompatible1">
+						<b>Output Format:</b>
+					</div>
+				</td><td width="100%">
+					<div id="flatorder_spreadsheetcompatible2">
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio_With_Label( 'FlatOrder_SpreadsheetCompatible', '1', g.FlatOrder_SpreadsheetCompatible, 'Spreadsheet-Compatible CSV' ) }"><br>
+						<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].DrawRadio_With_Label( 'FlatOrder_SpreadsheetCompatible', '0', g.FlatOrder_SpreadsheetCompatible, 'Traditional CSV' ) }">
+					</div>
 				</td></tr>
 			<MvEVAL EXPR = "{ [ g.Module_Admin ].Draw_FieldSet_Close() }">
 		</td></tr>
@@ -591,9 +638,13 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvIF EXPR = "{ fexists( l.output ) }">
-		<MvIF EXPR = "{ NOT g.FlatOrder_Append }">
-			<MvASSIGN NAME = "l.null"	VALUE = "{ fdelete( l.output ) }">
+	<MvIF EXPR = "{ NOT g.FlatOrder_Append }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ fdelete( l.output ) }">
+
+		<MvIF EXPR = "{ g.FlatOrder_SpreadsheetCompatible }">
+			<MvIF EXPR = "{ NOT Miva_FwriteBOM( l.output ) }">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
 		</MvIF>
 	</MvIF>
 

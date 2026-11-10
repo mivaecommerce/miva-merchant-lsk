@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-PGB-UT-
@@ -229,9 +229,23 @@
 	<MvCOMMENT>
 	|
 	| Verify classname is not already used within the theme, excluding the matches
-	| against the specified button, button size, or typography
+	| against the specified badge, badge size, button, button size, or typography
 	|
 	</MvCOMMENT>
+
+	<MvFOREACH ITERATOR = "l.badge" ARRAY = "l.theme:badges" COUNT = "{ l.theme:badge_count }">
+		<MvIF EXPR = "{ strcasecmp( l.badge:code, l.data:badge_code ) NE 0 AND strcasecmp( l.badge:classname, l.classname ) EQ 0 }">
+			<MvASSIGN NAME = "g.Validation_Message" VALUE = "Classname already exists">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.size" ARRAY = "l.badge:sizes" COUNT = "{ l.badge:size_count }">
+			<MvIF EXPR = "{ ( strcasecmp( l.badge:code, l.data:badge_code ) NE 0 OR strcasecmp( l.size:code, l.data:size_code ) NE 0 ) AND strcasecmp( l.size:classname, l.classname ) EQ 0 }">
+				<MvASSIGN NAME = "g.Validation_Message" VALUE = "Classname already exists">
+				<MvFUNCTIONRETURN VALUE = 0>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
 
 	<MvFOREACH ITERATOR = "l.button" ARRAY = "l.theme:buttons" COUNT = "{ l.theme:button_count }">
 		<MvIF EXPR = "{ strcasecmp( l.button:code, l.data:button_code ) NE 0 AND strcasecmp( l.button:classname, l.classname ) EQ 0 }">
@@ -255,6 +269,21 @@
 	</MvFOREACH>
 
 	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Theme_Validate_Badge_ClassName" PARAMETERS = "theme var, badge_code, classname" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"				VALUE = "">
+	<MvASSIGN NAME = "l.data:badge_code"	VALUE = "{ l.badge_code }">
+
+	<MvFUNCTIONRETURN VALUE = "{ Theme_Validate_ClassName( l.theme, l.data, l.classname ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Theme_Validate_Badge_Size_ClassName" PARAMETERS = "theme var, badge_code, size_code, classname" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.data"				VALUE = "">
+	<MvASSIGN NAME = "l.data:badge_code"	VALUE = "{ l.badge_code }">
+	<MvASSIGN NAME = "l.data:size_code"		VALUE = "{ l.size_code }">
+
+	<MvFUNCTIONRETURN VALUE = "{ Theme_Validate_ClassName( l.theme, l.data, l.classname ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Theme_Validate_Button_ClassName" PARAMETERS = "theme var, button_code, classname" STANDARDOUTPUTLEVEL = "">
@@ -282,11 +311,27 @@
 <MvFUNCTION NAME = "Theme_Generate_Classname" PARAMETERS = "theme var, data var, base_classname, classname var" STANDARDOUTPUTLEVEL = "">
 	<MvCOMMENT>
 	|
-	| Build existing classname lookup for theme, excluding current button, button size, or typography (if present)
+	| Build existing classname lookup for theme, excluding current badge, badge size, button, button size, or typography (if present)
 	|
 	</MvCOMMENT>
 
 	<MvASSIGN NAME = "l.classname_lookup" VALUE = "">
+
+	<MvFOREACH ITERATOR = "l.badge" ARRAY = "l.theme:badges" COUNT = "{ l.theme:badge_count }">
+		<MvIF EXPR = "{ strcasecmp( l.badge:code, l.data:badge:code ) NE 0 }">
+			<MvASSIGNARRAY NAME = "l.classname_lookup" VALUE = 1>
+				<MvMEMBER NAME = "{ l.badge:classname }">
+			</MvASSIGNARRAY>
+		</MvIF>
+
+		<MvFOREACH ITERATOR = "l.size" ARRAY = "l.badge:sizes" COUNT = "{ l.badge:size_count }">
+			<MvIF EXPR = "{ strcasecmp( l.badge:code, l.data:badge:code ) NE 0 OR strcasecmp( l.size:code, l.data:size:code ) NE 0 }">
+				<MvASSIGNARRAY NAME = "l.classname_lookup" VALUE = 1>
+					<MvMEMBER NAME = "{ l.size:classname }">
+				</MvASSIGNARRAY>
+			</MvIF>
+		</MvFOREACH>
+	</MvFOREACH>
 
 	<MvFOREACH ITERATOR = "l.button" ARRAY = "l.theme:buttons" COUNT = "{ l.theme:button_count }">
 		<MvIF EXPR = "{ strcasecmp( l.button:code, l.data:button:code ) NE 0 }">
@@ -334,6 +379,19 @@
 	</MvWHILE>
 
 	<MvFUNCTIONRETURN VALUE = "{ [ g.Module_Library_Utilities ].Error( 'MER-PGB-UT-00003', 'Unable to generate unique classname after 1000 attempts' ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Theme_Generate_Badge_Classname" PARAMETERS = "theme var, badge var, classname var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.data:badge" VARIABLE = "l.badge">
+
+	<MvFUNCTIONRETURN VALUE = "{ Theme_Generate_Classname( l.theme, l.data, 'mm-theme-badge-' $ slugify( tolower( l.badge:name ) ), l.classname ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Theme_Generate_Badge_Size_Classname" PARAMETERS = "theme var, badge var, size var, classname var" STANDARDOUTPUTLEVEL = "">
+	<MvREFERENCE NAME = "l.data:badge"	VARIABLE = "l.badge">
+	<MvREFERENCE NAME = "l.data:size"	VARIABLE = "l.size">
+
+	<MvFUNCTIONRETURN VALUE = "{ Theme_Generate_Classname( l.theme, l.data, l.badge:classname $ '__' $ slugify( tolower( l.size:name ) ), l.classname ) }">
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Theme_Generate_Button_Classname" PARAMETERS = "theme var, button var, classname var" STANDARDOUTPUTLEVEL = "">

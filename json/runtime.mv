@@ -41,7 +41,7 @@
 	</MvIF>
 
 	[
-	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ [ g.Library_DB ].AttributeList_Load_Product( l.product:id, l.attributes ) }">
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ [ g.Library_DB ].AttributeList_Load_Product_Cached( l.product:id, l.attributes ) }">
 		<MvASSIGN NAME = "l.attribute_price" VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.attribute:price, l.attribute:cost ) }">
 
 		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.attribute_output_count ) }">
@@ -67,7 +67,7 @@
 
 				,"options":
 				[
-				<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ [ g.Library_DB ].OptionList_Load_Attribute( l.attribute:id, l.options ) }">
+				<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ [ g.Library_DB ].OptionList_Load_Attribute_Cached( l.attribute:id, l.options ) }">
 					<MvASSIGN NAME = "l.option_price" VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.option:price, l.option:cost ) }">
 
 					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.option_output_count ) }">
@@ -101,7 +101,7 @@
 
 			,"attributes":
 			[
-			<MvFOREACH ITERATOR = "l.template_attr" ARRAY = "l.template_attrs" COUNT = "{ [ g.Feature_ATT_DB ].AttributeTemplateAttrList_Load_Template( l.attribute:attemp_id, l.template_attrs )  }">
+			<MvFOREACH ITERATOR = "l.template_attr" ARRAY = "l.template_attrs" COUNT = "{ [ g.Feature_ATT_DB ].AttributeTemplateAttrList_Load_Template_Cached( l.attribute:attemp_id, l.template_attrs )  }">
 				<MvASSIGN NAME = "l.attribute_price" VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.template_attr:price, l.template_attr:cost ) }">
 
 				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.template_attr_output_count ) }">
@@ -125,7 +125,7 @@
 
 					,"options":
 					[
-					<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ [ g.Feature_ATT_DB ].AttributeTemplateOptionList_Load_Attribute( l.template_attr:id, l.options ) }">						
+					<MvFOREACH ITERATOR = "l.option" ARRAY = "l.options" COUNT = "{ [ g.Feature_ATT_DB ].AttributeTemplateOptionList_Load_Attribute_Cached( l.template_attr:id, l.options ) }">						
 						<MvASSIGN NAME = "l.option_price" VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.option:price, l.option:cost ) }">
 
 						<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.option_output_count ) }">
@@ -162,6 +162,176 @@
 		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 	</MvFOREACH>
 	]
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_Product_VariantPossible" PARAMETERS = "product var, data var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Combine attributes and attribute template attributes into a single inventory attributes array
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.attributes"			VALUE = "">
+	<MvASSIGN NAME = "l.attribute_count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.product_attribute" ARRAY = "l.product_attributes" COUNT = "{ [ g.Module_Library_DB ].AttributeList_Load_Product_Cached( l.product:id, l.product_attributes ) }">
+		<MvIF EXPR = "{ l.product_attribute:type NE 'template' }">
+			<MvIF EXPR = "{ NOT l.product_attribute:inventory }">
+				<MvFOREACHCONTINUE>
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attribute"						VALUE = "{ l.product_attribute }">
+			<MvASSIGN NAME = "l.attribute:attmpat_id"			VALUE = 0>
+
+			<MvIF EXPR = "{ ( l.product_attribute:type EQ 'radio' ) OR ( l.product_attribute:type EQ 'select' ) OR ( l.product_attribute:type EQ 'swatch-select' ) }">
+				<MvASSIGN NAME = "l.attribute:option_count"		VALUE = "{ [ g.Module_Library_DB ].OptionList_Load_Attribute_Cached( l.product_attribute:id, l.attribute:options ) }">
+			</MvIF>
+
+			<MvASSIGN NAME = "l.attribute_count"				VALUE = "{ miva_array_insert_var( l.attributes, l.attribute, -1 ) }">
+		<MvELSE>
+			<MvFOREACH ITERATOR = "l.template_attribute" ARRAY = "l.template_attributes" COUNT = "{ [ g.Module_Feature_ATT_DB ].AttributeTemplateAttrList_Load_Template_Cached( l.product_attribute:attemp_id, l.template_attributes ) }">
+				<MvIF EXPR = "{ NOT l.template_attribute:inventory }">
+					<MvFOREACHCONTINUE>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.attribute"					VALUE = "{ l.template_attribute }">
+				<MvASSIGN NAME = "l.attribute:id"				VALUE = "{ l.product_attribute:id }">
+				<MvASSIGN NAME = "l.attribute:attmpat_id"		VALUE = "{ l.template_attribute:id }">
+
+				<MvIF EXPR = "{ ( l.template_attribute:type EQ 'radio' ) OR ( l.template_attribute:type EQ 'select' ) OR ( l.template_attribute:type EQ 'swatch-select' ) }">
+					<MvASSIGN NAME = "l.attribute:option_count"	VALUE = "{ [ g.Module_Feature_ATT_DB ].AttributeTemplateOptionList_Load_Attribute_Cached( l.template_attribute:id, l.attribute:options ) }">
+				</MvIF>
+
+				<MvASSIGN NAME = "l.attribute_count"			VALUE = "{ miva_array_insert_var( l.attributes, l.attribute, -1 ) }">
+			</MvFOREACH>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Build a list of selected / unselected inventory attributes
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.selected_inventory_attributes"				VALUE = "">
+	<MvASSIGN NAME = "l.selected_inventory_count"					VALUE = 0>
+	<MvASSIGN NAME = "l.unselected_inventory_attributes"			VALUE = "">
+	<MvASSIGN NAME = "l.unselected_inventory_count"					VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.attribute" ARRAY = "l.attributes" COUNT = "{ l.attribute_count }">
+		<MvIF EXPR = "{ ( l.attribute:type EQ 'text' ) OR ( l.attribute:type EQ 'memo' ) OR ( l.attribute:type EQ 'checkbox' ) }">
+			<MvASSIGN NAME = "l.selected"							VALUE = "">
+			<MvASSIGN NAME = "l.selected:attr_id"					VALUE = "{ l.attribute:id }">
+			<MvASSIGN NAME = "l.selected:attmpat_id"				VALUE = "{ l.attribute:attmpat_id }">
+			<MvASSIGN NAME = "l.selected:option_id"					VALUE = 0>
+			<MvASSIGN NAME = "l.selected:type"						VALUE = "{ l.attribute:type }">
+			<MvASSIGN NAME = "l.selected:inventory"					VALUE = "{ l.attribute:inventory }">
+			<MvASSIGN NAME = "l.selected:price"						VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.attribute:price, l.attribute:cost ) }">
+			<MvASSIGN NAME = "l.selected:cost"						VALUE = "{ l.attribute:cost }">
+			<MvASSIGN NAME = "l.selected:weight"					VALUE = "{ l.attribute:weight }">
+			<MvASSIGN NAME = "l.selected_inventory_count"			VALUE = "{ miva_array_insert_var( l.selected_inventory_attributes, l.selected, -1 ) }">
+		<MvELSEIF EXPR = "{ ( l.attribute:type EQ 'radio' ) OR ( l.attribute:type EQ 'select' ) OR ( l.attribute:type EQ 'swatch-select' ) }">
+			<MvASSIGN NAME = "l.have_selection"						VALUE = 0>
+
+			<MvFOREACH ITERATOR = "l.option" ARRAY = "l.attribute:options" COUNT = "{ l.attribute:option_count }">
+				<MvIF EXPR = "{ l.option:id EQ l.attribute:default_id }">
+					<MvASSIGN NAME = "l.have_selection"				VALUE = 1>
+					<MvASSIGN NAME = "l.selected"					VALUE = "">
+					<MvASSIGN NAME = "l.selected:attr_id"			VALUE = "{ l.attribute:id }">
+					<MvASSIGN NAME = "l.selected:attmpat_id"		VALUE = "{ l.attribute:attmpat_id }">
+					<MvASSIGN NAME = "l.selected:option_id"			VALUE = "{ l.option:id }">
+					<MvASSIGN NAME = "l.selected:type"				VALUE = "{ l.attribute:type }">
+					<MvASSIGN NAME = "l.selected:inventory"			VALUE = "{ l.attribute:inventory }">
+					<MvASSIGN NAME = "l.selected:price"				VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.option:price, l.option:cost ) }">
+					<MvASSIGN NAME = "l.selected:cost"				VALUE = "{ l.option:cost }">
+					<MvASSIGN NAME = "l.selected:weight"			VALUE = "{ l.option:weight }">
+					<MvASSIGN NAME = "l.selected_inventory_count"	VALUE = "{ miva_array_insert_var( l.selected_inventory_attributes, l.selected, -1 ) }">
+
+					<MvFOREACHSTOP>
+				</MvIF>
+			</MvFOREACH>
+
+			<MvCOMMENT>
+			|
+			| If a select has no default and no existing value, the browser will automatically select the first option, unless there
+			| is a select-one choice (filters:productvariant_possible:select_one value of "1").
+			|
+			| If a radio has no default and no existing value, it will have no selection, and must be added to the unselected list for
+			| proper processing.
+			|
+			</MvCOMMENT>
+
+			<MvIF EXPR = "{ NOT l.have_selection }">
+				<MvIF EXPR = "{ ( l.attribute:type EQ 'radio' ) OR ( ( l.data:filters:productvariant_possible:select_one ) AND
+																	 ( ( l.attribute:type EQ 'select' ) OR
+																	   ( l.attribute:type EQ 'swatch-select' ) ) ) }">
+					<MvASSIGN NAME = "l.unselected"					VALUE = "">
+					<MvASSIGN NAME = "l.unselected:attr_id"			VALUE = "{ l.attribute:id }">
+					<MvASSIGN NAME = "l.unselected:attmpat_id"		VALUE = "{ l.attribute:attmpat_id }">
+					<MvASSIGN NAME = "l.unselected:inventory"		VALUE = "{ l.attribute:inventory }">
+					<MvASSIGN NAME = "l.unselected_inventory_count"	VALUE = "{ miva_array_insert_var( l.unselected_inventory_attributes, l.unselected, -1 ) }">
+				<MvELSEIF EXPR = "{ ( l.attribute:type EQ 'select' ) OR ( l.attribute:type EQ 'swatch-select' ) }">
+					<MvASSIGN NAME = "l.selected"					VALUE = "">
+					<MvASSIGN NAME = "l.selected:attr_id"			VALUE = "{ l.attribute:id }">
+					<MvASSIGN NAME = "l.selected:attmpat_id"		VALUE = "{ l.attribute:attmpat_id }">
+					<MvASSIGN NAME = "l.selected:option_id"			VALUE = "{ l.attribute:options[ 1 ]:id }">
+					<MvASSIGN NAME = "l.selected:type"				VALUE = "{ l.attribute:type }">
+					<MvASSIGN NAME = "l.selected:inventory"			VALUE = "{ l.attribute:inventory }">
+					<MvASSIGN NAME = "l.selected:price"				VALUE = "{ [ g.Module_Library_Utilities ].Adjusted_Price( l.product, l.attribute:options[ 1 ]:price, l.attribute:options[ 1 ]:cost ) }">
+					<MvASSIGN NAME = "l.selected:cost"				VALUE = "{ l.attribute:options[ 1 ]:cost }">
+					<MvASSIGN NAME = "l.selected:weight"			VALUE = "{ l.attribute:options[ 1 ]:weight }">
+					<MvASSIGN NAME = "l.selected_inventory_count"	VALUE = "{ miva_array_insert_var( l.selected_inventory_attributes, l.selected, -1 ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+	</MvFOREACH>
+
+	<MvCOMMENT>
+	|
+	| Load applied facets
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.applied_facet_count" VALUE = "{ JSON_Runtime_Product_AppliedFacets( l.applied_facets ) }">
+
+	<MvCOMMENT>
+	|
+	| Determine possibilities
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.have_incomplete_variants"	VALUE = 0>
+	<MvASSIGN NAME = "l.have_complete_variant"		VALUE = 0>
+	<MvASSIGN NAME = "l.output_attribute_count"		VALUE = 0>
+	<MvASSIGN NAME = "l.output_attributes"			VALUE = "">
+
+	<MvIF EXPR = "{ l.selected_inventory_count + l.unselected_inventory_count GT 0 }">
+		<MvCOMMENT>
+		|
+		| Determine the last selected inventory attribute
+		|
+		</MvCOMMENT>
+
+		<MvASSIGN NAME = "l.last_selected_count"		VALUE = 0>
+		<MvASSIGN NAME = "l.last_selected"				VALUE = "">
+
+		<MvIF EXPR = "{ l.selected_inventory_count GT 0 }">
+			<MvASSIGN NAME = "l.last_selected_count"	VALUE = "{ miva_array_insert_var( l.last_selected, l.selected_inventory_attributes[ 1 ], -1 ) }">
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT JSON_Possible( l.product, l.data:filters:productvariant_possible:dependency_resolution,
+										   l.last_selected, l.last_selected_count,
+										   l.selected_inventory_attributes, l.selected_inventory_count,
+										   l.unselected_inventory_attributes, l.unselected_inventory_count,
+										   l.applied_facets, l.applied_facet_count,
+										   l.have_incomplete_variants, l.have_complete_variant, l.complete_variant,
+										   l.output_attributes, l.output_attribute_count ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
+			<MvFUNCTIONRETURN>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ JSON_Possible_Output( l.product, l.null, l.have_complete_variant, l.complete_variant, l.data:ondemandcolumns:discounts, l.data:ondemandcolumns:sale_price, l.selected_inventory_attributes, l.selected_inventory_count, l.output_attributes, l.output_attribute_count ) }">
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -1306,24 +1476,31 @@
 		<MvFUNCTIONRETURN>
 	</MvIF>
 	
-	<MvASSIGN NAME = "l.variant_id"				VALUE = "{ int( g.Variant_ID ) }">
-	<MvASSIGN NAME = "l.imagesize_count"		VALUE = "{ JSON_Array_String( g.Image_Sizes, l.image_sizes ) }">
+	<MvIF EXPR = "{ NOT JSON_Input_Integer(		'O', 'Variant_ID',			l.variant_id )			OR
+					NOT JSON_Input_Text(		'o', 'Image_Fragment_Code',	l.image_fragment_code )	OR
+					NOT JSON_Input_Text_Array(	'o', 'Image_Sizes',			l.image_sizes, l.imagesize_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_InputErrors() }">
+	</MvIF>
 
 	<MvIF EXPR = "{ NOT [ g.Library_DB ].Runtime_Product_Load_Code( g.Product_Code, l.product ) }">
 		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_Error( g.Error_Code, g.Error_Message ) }">
 	</MvIF>
 
+	<MvASSIGN NAME = "l.original"				VALUE = 0>
 	<MvASSIGN NAME = "l.constraints"			VALUE = "">
 	<MvASSIGN NAME = "l.constraint_count"		VALUE = 0>
 
 	<MvFOREACH ITERATOR = "l.image_size" ARRAY = "l.image_sizes" COUNT = "{ l.imagesize_count }">
-		<MvIF EXPR = "{ l.image_size NE 'original' }">
+		<MvIF EXPR = "{ l.image_size EQ 'original' }">
+			<MvASSIGN NAME = "l.original"		VALUE = 1>
+		<MvELSE>
 			<MvASSIGN NAME = "l.dimensions"		VALUE = "{ trim( gettoken( l.image_size, ':', 1 ) ) }">
 			<MvASSIGN NAME = "l.width"			VALUE = "{ int( gettoken( l.dimensions, 'x', 1 ) ) }">
 			<MvASSIGN NAME = "l.height"			VALUE = "{ int( gettoken( l.dimensions, 'x', 2 ) ) }">
 
 			<MvIF EXPR = "{ ( l.width LE 0 ) OR ( l.height LE 0 ) }">
 				<MvASSIGN NAME = "l.image_size"	VALUE = "original">
+				<MvASSIGN NAME = "l.original"	VALUE = 1>
 			<MvELSE>
 				<MvASSIGN NAME = "l.constraint_count"														VALUE = "{ l.constraint_count + 1 }">
 				<MvASSIGN NAME = "l.constraints"		INDEX = "{ l.constraint_count }" MEMBER = "width"	VALUE = "{ l.width }">
@@ -1339,6 +1516,71 @@
 		</MvIF>
 	</MvIF>
 
+	<MvIF EXPR = "{ NOT ISNULL l.image_fragment_code }">
+		<MvASSIGN NAME = "l.productimages"				VALUE = "">
+		<MvASSIGN NAME = "l.productimage_count"			VALUE = 0>
+
+		<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ l.productimagedata_count }">
+			<MvASSIGN NAME = "l.image"					VALUE = "">
+			<MvASSIGN NAME = "l.image:code"				VALUE = "{ l.productimagedata:imagetype:code }">
+			<MvASSIGN NAME = "l.image:descrip"			VALUE = "{ l.productimagedata:imagetype:descrip }">
+			<MvASSIGN NAME = "l.image:alt_text"			VALUE = "{ l.productimagedata:image:alt_text }">
+			<MvASSIGN NAME = "l.image:sizes"			VALUE = "">
+			<MvASSIGN NAME = "l.image:size_count"		VALUE = 0>
+
+			<MvIF EXPR = "{ l.original }">
+				<MvASSIGN NAME = "l.image_size"			VALUE = "">
+				<MvASSIGN NAME = "l.image_size:code"	VALUE = "original">
+				<MvASSIGN NAME = "l.image_size:url"		VALUE = "{ l.productimagedata:image:image }">
+				<MvASSIGN NAME = "l.image_size:width"	VALUE = "{ l.productimagedata:image:width }">
+				<MvASSIGN NAME = "l.image_size:height"	VALUE = "{ l.productimagedata:image:height }">
+				<MvASSIGN NAME = "l.image:size_count"	VALUE = "{ miva_array_insert_var( l.image:sizes, l.image_size, -1 ) }">
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.constraint" ARRAY = "l.constraints" INDEX = "l.pos" COUNT = "{ l.constraint_count }">
+				<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+					<MvDIMENSION INDEX = "{ l.pos }">
+				</MvREFERENCEARRAY>
+
+				<MvIF EXPR = "{ ISNULL l.generatedimage:image }">
+					<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
+						<MvFOREACHCONTINUE>
+					</MvIF>
+				</MvIF>
+
+				<MvASSIGN NAME = "l.image_size"			VALUE = "">
+				<MvASSIGN NAME = "l.image_size:code"	VALUE = "{ l.constraint:width $ 'x' $ l.constraint:height }">
+				<MvASSIGN NAME = "l.image_size:url"		VALUE = "{ l.generatedimage:image }">
+				<MvASSIGN NAME = "l.image_size:width"	VALUE = "{ l.generatedimage:width }">
+				<MvASSIGN NAME = "l.image_size:height"	VALUE = "{ l.generatedimage:height }">
+				<MvASSIGN NAME = "l.image:size_count"	VALUE = "{ miva_array_insert_var( l.image:sizes, l.image_size, -1 ) }">
+			</MvFOREACH>
+
+			<MvASSIGN NAME = "l.productimage_count"		VALUE = "{ miva_array_insert_var( l.productimages, l.image, -1 ) }">
+		</MvFOREACH>
+
+		<MvASSIGN NAME = "l.fragment_page_settings"							VALUE = "">
+		<MvASSIGN NAME = "l.fragment_share"									VALUE = "">
+		<MvASSIGN NAME = "l.fragment_page_settings:variant_id"				VALUE = "{ l.variant_id }">
+		<MvASSIGN NAME = "l.fragment_page_settings:sizes:original"			VALUE = "{ l.original }">
+		<MvASSIGN NAME = "l.fragment_page_settings:sizes:constraint_count"	VALUE = "{ l.constraint_count }">
+
+		<MvREFERENCE NAME = "l.fragment_page_settings:product"				VARIABLE = "l.product">
+		<MvREFERENCE NAME = "l.fragment_page_settings:sizes:constraints"	VARIABLE = "l.constraints">
+		<MvREFERENCE NAME = "l.fragment_share:productimages"				VARIABLE = "l.productimages">
+		<MvREFERENCE NAME = "l.fragment_share:productimage_count"			VARIABLE = "l.productimage_count">
+
+		<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.image_fragment_code, l.fragment ) AND l.fragment:fragment AND l.fragment:public }">
+			<MvCAPTURE VARIABLE = "l.null">
+				<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Fragment_Render_LowLevel( l.fragment_page_settings, l.fragment, l.fragment_share ) }">
+			</MvCAPTURE>
+		</MvIF>
+
+		<MvEVAL EXPR = "{ JSON_Response_Start() }">
+		<MvEVAL EXPR = "{ JSON_Runtime_ProductImageDataList_Output_ProductImages( l.productimages, l.productimage_count ) }">
+		<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
+	</MvIF>
+
 	<MvEVAL EXPR = "{ JSON_Response_Start() }">
 	<MvEVAL EXPR = "{ JSON_Runtime_ProductImageDataList_Output( l.productimagedatalist, l.productimagedata_count, l.image_sizes, l.imagesize_count ) }">
 	<MvFUNCTIONRETURN VALUE = "{ JSON_Response_End() }">
@@ -1346,9 +1588,12 @@
 
 <MvFUNCTION NAME = "JSON_Runtime_ProductImageDataList_Output" PARAMETERS = "productimagedatalist var, productimagedata_count, image_sizes var, imagesize_count" STANDARDOUTPUTLEVEL = "text,html,compresswhitespace">
 	[
+	<MvASSIGN NAME = "l.count"	VALUE = 0>
+
 	<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ l.productimagedata_count }">
-		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.scratch ) }">
-		"type_code":	"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:code ) }">",
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.count ) }">
+		"type_code":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimagedata:imagetype:code ) }">",
+		"alt_text":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimagedata:image:alt_text ) }">",
 		"image_data":
 		[
 		<MvASSIGN NAME = "l.generatedimage_pos"			VALUE = 0>
@@ -1385,6 +1630,73 @@
 		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
 	</MvFOREACH>
 	]
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_ProductImageDataList_Output_ProductImages" PARAMETERS = "productimages var, productimage_count" STANDARDOUTPUTLEVEL = "text, html, compresswhitespace">
+	[
+	<MvASSIGN NAME = "l.count"	VALUE = 0>
+
+	<MvFOREACH ITERATOR = "l.productimage" ARRAY = "l.productimages" COUNT = "{ l.productimage_count }">
+		<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.count ) }">
+		"type_code":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:code ) }">",
+		"alt_text":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:alt_text ) }">",
+		"image_data":
+		[
+		<MvFOREACH ITERATOR = "l.image_size" ARRAY = "l.productimage:sizes" INDEX = "l.pos" COUNT = "{ l.productimage:size_count }">
+			<MvIF EXPR = "{ l.pos GT 1 }">
+				,
+			</MvIF>
+			"<MvEVAL EXPR = "{ encodejavascriptstring( l.image_size:url ) }">"
+		</MvFOREACH>
+		]
+		<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+	</MvFOREACH>
+	]
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "JSON_Runtime_Image_Resize" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ NOT JSON_Store_Open() }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '400 Bad Request' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT JSON_Input_Text(	'R', 'File',	l.filepath )	OR
+					NOT JSON_Input_Integer(	'R', 'X',		l.width )		OR
+					NOT JSON_Input_Integer(	'R', 'Y',		l.height ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '400 Bad Request' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Image_Load_File( l.filepath, l.image ) }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '404 Not Found' ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].GeneratedImage_Load_Dimensions( l.image:id, l.width, l.height, l.generatedimage ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '500 Server Error' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvIF EXPR = "{ NOT [ g.Module_Library_Utilities ].Image_Size_CanBeDeferred( l.width, l.height ) }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '400 Bad Request' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+
+		<MvLOCKFILE FILE = "{ g.MerchantPath $ 'generatedimage_' $ int( g.Store:id ) $ '_' $ int( l.image:id ) }">
+			<MvASSIGN NAME = "l.result" VALUE = "{ [ g.Module_Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions_LowLevel( l.image, l.width, l.height, l.generatedimage ) }">
+		</MvLOCKFILE>
+
+		<MvIF EXPR = "{ l.result EQ 0 }">
+			<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '500 Server Error' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Status', '302 Found' ) }">
+	<MvASSIGN NAME = "l.null" VALUE = "{ miva_output_header( 'Location', ternary( g.Secure, g.secure_baseurl, g.baseurl ) $ l.generatedimage:image ) }">
+
+	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvCOMMENT>
@@ -3909,7 +4221,7 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.boosts, l.sorts ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Defer_BoostingRules( l.search_query, l.boosts, l.sorts ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
@@ -4072,7 +4384,7 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.boosts, l.sorts ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Defer_BoostingRules( l.search_query, l.boosts, l.sorts ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
@@ -4392,7 +4704,7 @@
 	</MvCOMMENT>
 
 	<MvIF EXPR = "{ ( ISNULL l.sort ) OR ( l.sort EQ 'disp_order' ) OR ( l.sort EQ 'relevance' ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.merchandisingshowcase:boosts, l.merchandisingshowcase:sorts ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_Defer_BoostingRules( l.search_query, l.merchandisingshowcase:boosts, l.merchandisingshowcase:sorts ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = "{ JSON_BaseRuntimeProductList_Load_Query( l.search_query ) }">
@@ -4532,6 +4844,16 @@
 		<MvIF EXPR = "{ [ g.Feature_PGR_UT ].DiscountSignature_Calculate_Cached( g.Basket:cust_id, l.data:discount_signature ) }">
 			<MvEVAL EXPR = "{ [ g.Library_DB ].Runtime_ProductList_Build_Query_Set_DiscountSignature( l.search_query, l.data:discount_signature ) }">
 		</MvIF>
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Apply deferred boosting rules
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ l.query_params:data:flags:deferred_boostingrules }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_DB ].Runtime_ProductList_Build_Query_BoostingRules( l.search_query, l.sort, l.query_params:data:deferred_boostingrules:boosts, l.query_params:data:deferred_boostingrules:sorts ) }">
 	</MvIF>
 
 	<MvCOMMENT>
@@ -5260,108 +5582,190 @@
 	</MvIF>
 
 	<MvIF EXPR = "{ l.data:filters:images }">
-		<MvASSIGN NAME = "l.image_output_count" VALUE = 0>
+		<MvASSIGN NAME = "l.image_output_count"	VALUE = 0>
+		<MvASSIGN NAME = "l.productimages"		VALUE = "">
+		<MvASSIGN NAME = "l.productimage_count"	VALUE = 0>
 
 		,"images":
 		[
 			<MvIF EXPR = "{ l.data:images:original OR l.data:images:constraint_count GT 0 }">
-				<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ [ g.Library_DB ].ProductImageDataList_Load_Product_Variant_Constrained( l.product:id, l.product:variant_id, l.data:images:constraints, l.data:images:constraint_count, l.productimagedatalist ) }">
-					<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.image_output_count ) }">
-					"code":		"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:code ) }">",
-					"descrip":	"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:descrip ) }">",
-					"sizes":
-					{
-						<MvASSIGN NAME = "l.size_image_count"		VALUE = 0>
+				<MvASSIGN NAME = "l.productimagedata_count"		VALUE = "{ [ g.Library_DB ].ProductImageDataList_Load_Product_Variant_Constrained( l.product:id, l.product:variant_id, l.data:images:constraints, l.data:images:constraint_count, l.productimagedatalist ) }">
 
-						<MvIF EXPR = "{ l.data:images:original }">
-							"original":
-							{
-								"url":		"<MvEVAL EXPR = "{ encodejavascriptstring( g.basehref $ l.productimagedata:image:image ) }">",
-								"width":	<MvEVAL EXPR = "{ int( l.productimagedata:image:width ) }">,
-								"height":	<MvEVAL EXPR = "{ int( l.productimagedata:image:height ) }">
-							}
+				<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ l.productimagedata_count }">
+					<MvASSIGN NAME = "l.image"					VALUE = "">
+					<MvASSIGN NAME = "l.image:code"				VALUE = "{ l.productimagedata:imagetype:code }">
+					<MvASSIGN NAME = "l.image:descrip"			VALUE = "{ l.productimagedata:imagetype:descrip }">
+					<MvASSIGN NAME = "l.image:alt_text"			VALUE = "{ l.productimagedata:image:alt_text }">
+					<MvASSIGN NAME = "l.image:sizes"			VALUE = "">
+					<MvASSIGN NAME = "l.image:size_count"		VALUE = 0>
 
-							<MvASSIGN NAME = "l.size_image_count"	VALUE = "{ l.size_image_count + 1 }">
+					<MvIF EXPR = "{ l.data:images:original }">
+						<MvASSIGN NAME = "l.image_size"			VALUE = "">
+						<MvASSIGN NAME = "l.image_size:code"	VALUE = "original">
+						<MvASSIGN NAME = "l.image_size:url"		VALUE = "{ g.basehref $ l.productimagedata:image:image }">
+						<MvASSIGN NAME = "l.image_size:width"	VALUE = "{ l.productimagedata:image:width }">
+						<MvASSIGN NAME = "l.image_size:height"	VALUE = "{ l.productimagedata:image:height }">
+						<MvASSIGN NAME = "l.image:size_count"	VALUE = "{ miva_array_insert_var( l.image:sizes, l.image_size, -1 ) }">
+					</MvIF>
+
+					<MvFOREACH INDEX = "l.pos" ITERATOR = "l.constraint" ARRAY = "l.data:images:constraints" COUNT = "{ l.data:images:constraint_count }">
+						<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+							<MvDIMENSION INDEX = "{ l.pos }">
+						</MvREFERENCEARRAY>
+
+						<MvIF EXPR = "{ ISNULL l.generatedimage:image }">
+							<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
+								<MvFOREACHCONTINUE>
+							</MvIF>
 						</MvIF>
 
-						<MvFOREACH INDEX = "l.pos" ITERATOR = "l.constraint" ARRAY = "l.data:images:constraints" COUNT = "{ l.data:images:constraint_count }">
-							<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
-								<MvDIMENSION INDEX = "{ l.pos }">
-							</MvREFERENCEARRAY>
+						<MvASSIGN NAME = "l.image_size"			VALUE = "">
+						<MvASSIGN NAME = "l.image_size:code"	VALUE = "{ l.constraint:width $ 'x' $ l.constraint:height }">
+						<MvASSIGN NAME = "l.image_size:url"		VALUE = "{ g.basehref $ l.generatedimage:image }">
+						<MvASSIGN NAME = "l.image_size:width"	VALUE = "{ l.generatedimage:width }">
+						<MvASSIGN NAME = "l.image_size:height"	VALUE = "{ l.generatedimage:height }">
+						<MvASSIGN NAME = "l.image:size_count"	VALUE = "{ miva_array_insert_var( l.image:sizes, l.image_size, -1 ) }">
+					</MvFOREACH>
 
-							<MvIF EXPR = "{ ISNULL l.generatedimages:image }">
-								<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
-									<MvFOREACHCONTINUE>
-								</MvIF>
-							</MvIF>
-
-							<MvIF EXPR = "{ ++l.size_image_count GT 1 }">
-								,
-							</MvIF>
-
-							"<MvEVAL EXPR = "{ encodejavascriptstring( l.constraint:width $ 'x' $ l.constraint:height ) }">":
-							{
-								"url":		"<MvEVAL EXPR = "{ JSON_Encode( g.basehref $ l.generatedimage:image ) }">",
-								"width":	<MvEVAL EXPR = "{ int( l.generatedimage:width ) }">,
-								"height":	<MvEVAL EXPR = "{ int( l.generatedimage:height ) }">
-							}
-						</MvFOREACH>
-					}
-					<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+					<MvASSIGN NAME = "l.productimage_count"		VALUE = "{ miva_array_insert_var( l.productimages, l.image, -1 ) }">
 				</MvFOREACH>
 			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.data:images:fragment_code }">
+				<MvASSIGN NAME = "l.fragment_page_settings"							VALUE = "">
+				<MvASSIGN NAME = "l.fragment_share"									VALUE = "">
+				<MvASSIGN NAME = "l.fragment_page_settings:variant_id"				VALUE = "{ l.product:variant_id }">
+				<MvASSIGN NAME = "l.fragment_page_settings:sizes:original"			VALUE = "{ l.data:images:original }">
+				<MvASSIGN NAME = "l.fragment_page_settings:sizes:constraint_count"	VALUE = "{ l.data:images:constraint_count }">
+
+				<MvREFERENCE NAME = "l.fragment_page_settings:product"				VARIABLE = "l.product">
+				<MvREFERENCE NAME = "l.fragment_page_settings:sizes:constraints"	VARIABLE = "l.data:images:constraints">
+				<MvREFERENCE NAME = "l.fragment_share:productimages"				VARIABLE = "l.productimages">
+				<MvREFERENCE NAME = "l.fragment_share:productimage_count"			VARIABLE = "l.productimage_count">
+
+				<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.data:images:fragment_code, l.fragment ) AND l.fragment:fragment AND l.fragment:public }">
+					<MvCAPTURE VARIABLE = "l.null">
+						<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Fragment_Render_LowLevel( l.fragment_page_settings, l.fragment, l.fragment_share ) }">
+					</MvCAPTURE>
+				</MvIF>
+			</MvIF>
+
+			<MvFOREACH ITERATOR = "l.productimage" ARRAY = "l.productimages" COUNT = "{ l.productimage_count }">
+				<MvEVAL EXPR = "{ JSON_ArrayElement_Start( l.image_output_count ) }">
+				"code":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:code ) }">",
+				"descrip":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:descrip ) }">",
+				"alt_text":	"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:alt_text ) }">",
+				"sizes":
+				{
+					<MvFOREACH ITERATOR = "l.image_size" ARRAY = "l.productimage:sizes" INDEX = "l.pos" COUNT = "{ l.productimage:size_count }">
+						<MvIF EXPR = "{ l.pos GT 1 }">
+							,
+						</MvIF>
+
+						"<MvEVAL EXPR = "{ encodejavascriptstring( l.image_size:code ) }">":
+						{
+							"url":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.image_size:url ) }">",
+							"width":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.image_size:width ) }">,
+							"height":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.image_size:height ) }">
+						}
+					</MvFOREACH>
+				}
+				<MvEVAL EXPR = "{ JSON_ArrayElement_End() }">
+			</MvFOREACH>
 		]
 	</MvIF>
 
 	<MvIF EXPR = "{ l.data:filters:imagetypes }">
-		<MvASSIGN NAME = "l.imagetype_output_count" VALUE = 0>
-
 		,"imagetypes":
 		{
+			<MvASSIGN NAME = "l.imagetypes_output_count"	VALUE = 0>
 			<MvFOREACH ITERATOR = "l.imagetype" ARRAY = "l.data:imagetypes" COUNT = "{ l.data:imagetype_count }">
-				<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ [ g.Library_DB ].ProductImageDataList_Load_Product_Variant_TypeCodes_Constrained( l.product:id, l.product:variant_id, l.imagetype:types, l.imagetype:type_count, l.imagetype:constraints, l.imagetype:constraint_count, l.productimagedatalist ) }">
-					<MvIF EXPR = "{ ++l.imagetype_output_count GT 1 }">
+				<MvASSIGN NAME = "l.productimagedata_count"		VALUE = "{ [ g.Library_DB ].ProductImageDataList_Load_Product_Variant_TypeCodes_Constrained( l.product:id, l.product:variant_id, l.imagetype:types, l.imagetype:type_count, l.imagetype:constraints, l.imagetype:constraint_count, l.productimagedatalist ) }">
+
+				<MvASSIGN NAME = "l.productimages"				VALUE = "">
+				<MvASSIGN NAME = "l.productimage_count"			VALUE = 0>
+
+				<MvFOREACH ITERATOR = "l.productimagedata" ARRAY = "l.productimagedatalist" COUNT = "{ l.productimagedata_count }">
+					<MvASSIGN NAME = "l.image"					VALUE = "">
+					<MvASSIGN NAME = "l.image:code"				VALUE = "{ l.productimagedata:imagetype:code }">
+					<MvASSIGN NAME = "l.image:descrip"			VALUE = "{ l.productimagedata:imagetype:descrip }">
+					<MvASSIGN NAME = "l.image:alt_text"			VALUE = "{ l.productimagedata:image:alt_text }">
+					<MvASSIGN NAME = "l.image:sizes"			VALUE = "">
+					<MvASSIGN NAME = "l.image:size_count"		VALUE = 0>
+
+					<MvIF EXPR = "{ l.imagetype:original }">
+						<MvASSIGN NAME = "l.image_size"			VALUE = "">
+						<MvASSIGN NAME = "l.image_size:code"	VALUE = "original">
+						<MvASSIGN NAME = "l.image_size:url"		VALUE = "{ g.basehref $ l.productimagedata:image:image }">
+						<MvASSIGN NAME = "l.image_size:width"	VALUE = "{ l.productimagedata:image:width }">
+						<MvASSIGN NAME = "l.image_size:height"	VALUE = "{ l.productimagedata:image:height }">
+						<MvASSIGN NAME = "l.image:size_count"	VALUE = "{ miva_array_insert_var( l.image:sizes, l.image_size, -1 ) }">
+					</MvIF>
+
+					<MvFOREACH INDEX = "l.pos" ITERATOR = "l.constraint" ARRAY = "l.imagetype:constraints" COUNT = "{ l.imagetype:constraint_count }">
+						<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
+							<MvDIMENSION INDEX = "{ l.pos }">
+						</MvREFERENCEARRAY>
+
+						<MvIF EXPR = "{ ISNULL l.generatedimage:image }">
+							<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
+								<MvFOREACHCONTINUE>
+							</MvIF>
+						</MvIF>
+
+						<MvASSIGN NAME = "l.image_size"			VALUE = "">
+						<MvASSIGN NAME = "l.image_size:code"	VALUE = "{ l.constraint:width $ 'x' $ l.constraint:height }">
+						<MvASSIGN NAME = "l.image_size:url"		VALUE = "{ g.basehref $ l.generatedimage:image }">
+						<MvASSIGN NAME = "l.image_size:width"	VALUE = "{ l.generatedimage:width }">
+						<MvASSIGN NAME = "l.image_size:height"	VALUE = "{ l.generatedimage:height }">
+						<MvASSIGN NAME = "l.image:size_count"	VALUE = "{ miva_array_insert_var( l.image:sizes, l.image_size, -1 ) }">
+					</MvFOREACH>
+
+					<MvASSIGN NAME = "l.productimage_count"		VALUE = "{ miva_array_insert_var( l.productimages, l.image, -1 ) }">
+				</MvFOREACH>
+
+				<MvIF EXPR = "{ NOT ISNULL l.imagetype:fragment_code }">
+					<MvASSIGN NAME = "l.fragment_page_settings"							VALUE = "">
+					<MvASSIGN NAME = "l.fragment_share"									VALUE = "">
+					<MvASSIGN NAME = "l.fragment_page_settings:variant_id"				VALUE = "{ l.product:variant_id }">
+					<MvASSIGN NAME = "l.fragment_page_settings:sizes:original"			VALUE = "{ l.imagetype:original }">
+					<MvASSIGN NAME = "l.fragment_page_settings:sizes:constraint_count"	VALUE = "{ l.imagetype:constraint_count }">
+
+					<MvREFERENCE NAME = "l.fragment_page_settings:product"				VARIABLE = "l.product">
+					<MvREFERENCE NAME = "l.fragment_page_settings:sizes:constraints"	VARIABLE = "l.imagetype:constraints">
+					<MvREFERENCE NAME = "l.fragment_share:productimages"				VARIABLE = "l.productimages">
+					<MvREFERENCE NAME = "l.fragment_share:productimage_count"			VARIABLE = "l.productimage_count">
+
+					<MvIF EXPR = "{ [ g.Module_Feature_TUI_DB ].Page_Load_Code_Cached( l.imagetype:fragment_code, l.fragment ) AND l.fragment:fragment AND l.fragment:public }">
+						<MvCAPTURE VARIABLE = "l.null">
+							<MvEVAL EXPR = "{ [ g.Module_Feature_TUI_MGR ].TemplateManager_Fragment_Render_LowLevel( l.fragment_page_settings, l.fragment, l.fragment_share ) }">
+						</MvCAPTURE>
+					</MvIF>
+				</MvIF>
+
+				<MvFOREACH ITERATOR = "l.productimage" ARRAY = "l.productimages" COUNT = "{ l.productimage_count }">
+					<MvIF EXPR = "{ l.imagetypes_output_count GT 0 }">
 						,
 					</MvIF>
 
-					"<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:code ) }">":
+					<MvASSIGN NAME = "l.imagetypes_output_count"	VALUE = "{ l.imagetypes_output_count + 1 }">
+
+					"<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:code ) }">":
 					{
-						"descrip": "<MvEVAL EXPR = "{ JSON_Encode( l.productimagedata:imagetype:descrip ) }">",
+						"descrip": "<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:descrip ) }">",
+						"alt_text": "<MvEVAL EXPR = "{ encodejavascriptstring( l.productimage:alt_text ) }">",
 						"sizes":
 						{
-							<MvASSIGN NAME = "l.size_image_count"		VALUE = 0>
-
-							<MvIF EXPR = "{ l.imagetype:original }">
-								"original":
-								{
-									"url":		"<MvEVAL EXPR = "{ encodejavascriptstring( g.basehref $ l.productimagedata:image:image ) }">",
-									"width":	<MvEVAL EXPR = "{ int( l.productimagedata:image:width ) }">,
-									"height":	<MvEVAL EXPR = "{ int( l.productimagedata:image:height ) }">
-								}
-
-								<MvASSIGN NAME = "l.size_image_count"	VALUE = "{ l.size_image_count + 1 }">
-							</MvIF>
-
-							<MvFOREACH INDEX = "l.pos" ITERATOR = "l.constraint" ARRAY = "l.imagetype:constraints" COUNT = "{ l.imagetype:constraint_count }">
-								<MvREFERENCEARRAY NAME = "l.generatedimage" VARIABLE = "l.productimagedata:generatedimages">
-									<MvDIMENSION INDEX = "{ l.pos }">
-								</MvREFERENCEARRAY>
-
-								<MvIF EXPR = "{ ISNULL l.generatedimages:image }">
-									<MvIF EXPR = "{ NOT [ g.Library_DB ].GeneratedImage_FindOrInsert_Image_Dimensions( l.productimagedata:image, l.constraint:width, l.constraint:height, l.generatedimage ) }">
-										<MvFOREACHCONTINUE>
-									</MvIF>
-								</MvIF>
-
-								<MvIF EXPR = "{ ++l.size_image_count GT 1 }">
+							<MvFOREACH ITERATOR = "l.image_size" ARRAY = "l.productimage:sizes" INDEX = "l.nested_pos" COUNT = "{ l.productimage:size_count }">
+								<MvIF EXPR = "{ l.nested_pos GT 1 }">
 									,
 								</MvIF>
 
-								"<MvEVAL EXPR = "{ encodejavascriptstring( l.constraint:width $ 'x' $ l.constraint:height ) }">":
+								"<MvEVAL EXPR = "{ encodejavascriptstring( l.image_size:code ) }">":
 								{
-									"url":		"<MvEVAL EXPR = "{ JSON_Encode( g.basehref $ l.generatedimage:image ) }">",
-									"width":	<MvEVAL EXPR = "{ int( l.generatedimage:width ) }">,
-									"height":	<MvEVAL EXPR = "{ int( l.generatedimage:height ) }">
+									"url":		"<MvEVAL EXPR = "{ encodejavascriptstring( l.image_size:url ) }">",
+									"width":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.image_size:width ) }">,
+									"height":	<MvEVAL EXPR = "{ encodejavascriptnumber( l.image_size:height ) }">
 								}
 							</MvFOREACH>
 						}
@@ -5369,6 +5773,10 @@
 				</MvFOREACH>
 			</MvFOREACH>
 		}
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.data:filters:productvariant_possible }">
+		,"productvariant_possible": <MvEVAL EXPR = "{ JSON_Runtime_Product_VariantPossible( l.product, l.data ) }">
 	</MvIF>
 </MvFUNCTION>
 
@@ -5579,13 +5987,16 @@
 		<MvFUNCTIONRETURN VALUE = 1>
 	<MvELSEIF EXPR = "{ l.filter_name EQ 'images' }">
 		<MvASSIGN NAME = "l.data:filters:images"							VALUE = 1>
-		<MvASSIGN NAME = "l.data:image:original"							VALUE = 0>
+		<MvASSIGN NAME = "l.data:images:original"							VALUE = 0>
 		<MvASSIGN NAME = "l.data:images:constraints"						VALUE = "">
 		<MvASSIGN NAME = "l.data:images:constraint_count"					VALUE = 0>
-		
+		<MvASSIGN NAME = "l.data:images:fragment_code"						VALUE = "">
+
 		<MvIF EXPR = "{ ISNULL l.filter_value }">
 			<MvASSIGN NAME = "l.data:images:original"						VALUE = 1>
 		<MvELSE>
+			<MvASSIGN NAME = "l.data:images:fragment_code"					VALUE = "{ l.filter_value:fragment_code }">
+
 			<MvFOREACH ITERATOR = "l.size" ARRAY = "l.filter_value:sizes">
 				<MvIF EXPR = "{ l.size EQ 'original' }">
 					<MvASSIGN NAME = "l.data:images:original"				VALUE = 1>
@@ -5630,6 +6041,8 @@
 		<MvASSIGN NAME = "l.imagetype:original"							VALUE = 0>
 		<MvASSIGN NAME = "l.imagetype:constraints"						VALUE = "">
 		<MvASSIGN NAME = "l.imagetype:constraint_count"					VALUE = 0>
+		<MvASSIGN NAME = "l.imagetype:fragment_code"					VALUE = "">
+		<MvASSIGN NAME = "l.imagetype:fragment_code"					VALUE = "{ l.filter_value:fragment_code }">
 
 		<MvIF EXPR = "{ NOT ISNULL l.filter_value:type }">		<MvASSIGN NAME = "l.imagetype:types[ 1 ]"	VALUE = "{ l.filter_value:type }">
 		<MvELSEIF EXPR = "{ NOT ISNULL l.filter_value:types }">	<MvASSIGN NAME = "l.imagetype:types"		VALUE = "{ l.filter_value:types }">
@@ -5694,6 +6107,10 @@
 		<MvASSIGN NAME = "l.data:filters:product_display" VALUE = 1>
 
 		<MvEVAL EXPR = "{ [ g.Library_DB ].SQL_Query_Search_Operator_Conversion_With_Type( l.query, 'CHAR', 'prod.code', 'EQ', l.filter_value, 'AND', 'AND' ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ l.filter_name EQ 'productvariant_possible' }">
+		<MvASSIGN NAME = "l.data:filters:productvariant_possible" VALUE = "{ l.filter_value }">
 
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>

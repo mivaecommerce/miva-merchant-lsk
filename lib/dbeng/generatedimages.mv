@@ -11,11 +11,11 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2017 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-DBE-GIM-
-| Next Error Code: 4    
+| Next Error Code: 5    
 |
 </MvCOMMENT>
 
@@ -41,6 +41,35 @@
 	<MvFUNCTIONRETURN VALUE = "{ l.result }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "GeneratedImage_FindOrInsert_Image_Dimensions_WithDeferredGeneration" PARAMETERS = "image var, width, height, generatedimage var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ( l.image:width LT l.width ) AND ( l.image:height LT l.height ) }">
+		<MvFUNCTIONRETURN VALUE = "{ [ g.Library_Filename_Utilities ].Error( 'MER-DBE-GIM-00004', 'Image dimensions are not large enough to be constrained' ) }">
+	<MvELSEIF EXPR = "{ GeneratedImage_Load_Dimensions( l.image:id, l.width, l.height, l.generatedimage ) }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	<MvELSEIF EXPR = "{ NOT Error_Is_EOF() }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_Size_CanBeDeferred( l.width, l.height ) }">
+		<MvASSIGN NAME = "l.generatedimage"				VALUE = "">
+		<MvASSIGN NAME = "l.generatedimage:id"			VALUE = 0>
+		<MvASSIGN NAME = "l.generatedimage:image_id"	VALUE = "{ l.image:id }">
+		<MvASSIGN NAME = "l.generatedimage:deferred"	VALUE = 1>
+		<MvASSIGN NAME = "l.generatedimage:image"		VALUE = "{ g.json_url $ 'Store_Code=' $ encodeattribute( g.Store:code ) $ '&Function=Runtime_Image_Resize&File=' $ encodeattribute( l.image:image ) $ '&X=' $ int( l.width ) $ '&Y=' $ int( l.height ) $ '&T=' $ encodeattribute( [ g.Module_Feature_TUI_MGR ].TemplateManager_Generate_ResourceToken( l.image:image $ ':' $ stime( g.imageroot $ l.image:image ) ) ) }">
+		<MvASSIGN NAME = "l.generatedimage:image_md5"	VALUE = "">
+
+		<MvEVAL EXPR = "{ [ g.Library_Filename_Utilities ].Image_BoundingBox_Dimensions( l.image:width, l.image:height, l.width, l.height, l.generatedimage:width, l.generatedimage:height ) }">
+
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvLOCKFILE FILE = "{ g.MerchantPath $ 'generatedimage_' $ int( g.Store:id ) $ '_' $ int( l.image:id ) }">
+		<MvASSIGN NAME = "l.result" VALUE = "{ GeneratedImage_FindOrInsert_Image_Dimensions_LowLevel( l.image, l.width, l.height, l.generatedimage ) }">
+	</MvLOCKFILE>
+
+	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "GeneratedImage_FindOrInsert_Image_Dimensions_LowLevel" PARAMETERS = "image var, width, height, generatedimage var" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ GeneratedImage_Load_Dimensions( l.image:id, l.width, l.height, l.generatedimage ) }">
 		<MvFUNCTIONRETURN VALUE = 1>
@@ -56,14 +85,23 @@
 	|
 	</MvCOMMENT>
 
-	<MvASSIGN NAME = "l.extension"			VALUE = "{ [ g.Library_Filename_Utilities ].Extension( l.image:image ) }">
-	<MvASSIGN NAME = "l.filepath_noext"		VALUE = "{ substring( l.image:image, 1, len( l.image:image ) - len( l.extension ) ) }">
+	<MvASSIGN NAME = "l.extension"				VALUE = "{ [ g.Library_Filename_Utilities ].Extension( l.image:image ) }">
+	<MvASSIGN NAME = "l.filepath_noext"			VALUE = "{ substring( l.image:image, 1, len( l.image:image ) - len( l.extension ) ) }">
 
 	<MvIF EXPR = "{ NOT [ g.Library_Filename_Utilities ].Image_Type( g.imageroot $ l.image:image, 'script', l.sourcefile_type ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.source_gdimage"		VALUE = "{ [ g.Library_Filename_Utilities ].Image_gdCreateFromFile_Type( l.sourcefile_type, g.imageroot $ l.image:image, 'script' ) }">
+	<MvASSIGN NAME = "l.destfile_type"			VALUE = "{ l.sourcefile_type }">
+	<MvASSIGN NAME = "l.destfile_ext"			VALUE = "{ l.extension }">
+
+	<MvIF EXPR = "{ NOT ISNULL g.Domain:img_rszfmt }">
+		<MvIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_Extension_From_Type( g.Domain:img_rszfmt, l.destfile_ext ) }">
+			<MvASSIGN NAME = "l.destfile_type"	VALUE = "{ g.Domain:img_rszfmt }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.source_gdimage"			VALUE = "{ [ g.Library_Filename_Utilities ].Image_gdCreateFromFile_Type( l.sourcefile_type, g.imageroot $ l.image:image, 'script' ) }">
 
 	<MvIF EXPR = "{ l.source_gdimage LE 0 }">
 		<MvFUNCTIONRETURN VALUE = 0>
@@ -76,12 +114,30 @@
 		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.result"					VALUE = "{ [ g.Library_Filename_Utilities ].Image_gdSaveToMemory_Type( l.output_gdimage, l.sourcefile_type, l.output_buffer ) }">
-	<MvASSIGN NAME = "l.null"			        VALUE = "{ gdImageDestroy( l.output_gdimage ) }">
+	<MvASSIGN NAME = "l.result"					VALUE = "{ [ g.Library_Filename_Utilities ].Image_gdSaveToMemory_Type( l.output_gdimage, l.destfile_type, l.output_buffer ) }">
+
+	<MvIF EXPR = "{ NOT l.result AND ( l.sourcefile_type NE l.destfile_type ) }">
+		<MvCOMMENT>
+		|
+		| If generation in the preferred type fails, fall back to generation using the source file type
+		|
+		</MvCOMMENT>
+
+		<MvIF EXPR = "{ [ g.Library_Filename_Utilities ].Image_gdSaveToMemory_Type( l.output_gdimage, l.sourcefile_type, l.output_buffer ) }">
+			<MvASSIGN NAME = "l.result"			VALUE = 1>
+			<MvASSIGN NAME = "l.destfile_ext"	VALUE = "{ l.extension }">
+		</MvIF>
+	</MvIF>
+
+	<MvASSIGN NAME = "l.null"					VALUE = "{ gdImageDestroy( l.output_gdimage ) }">
+
+	<MvIF EXPR = "{ NOT l.result }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
 
 	<MvFOR INDEX = "l.attempt" COUNT = "{ 100 }">
-		<MvIF EXPR = "{ l.attempt EQ 1 }">	<MvASSIGN NAME = "l.filepath" VALUE = "{ l.filepath_noext $ '_' $ l.output_width $ 'x' $ l.output_height $ l.extension }">
-		<MvELSE>							<MvASSIGN NAME = "l.filepath" VALUE = "{ l.filepath_noext $ '_' $ l.output_width $ 'x' $ l.output_height $ '_' $ l.attempt $ l.extension }">
+		<MvIF EXPR = "{ l.attempt EQ 1 }">	<MvASSIGN NAME = "l.filepath" VALUE = "{ l.filepath_noext $ '_' $ l.output_width $ 'x' $ l.output_height $ l.destfile_ext }">
+		<MvELSE>							<MvASSIGN NAME = "l.filepath" VALUE = "{ l.filepath_noext $ '_' $ l.output_width $ 'x' $ l.output_height $ '_' $ l.attempt $ l.destfile_ext }">
 		</MvIF>
 
 		<MvASSIGN NAME = "l.outputfile_path"	VALUE = "{ g.imageroot $ l.filepath }">

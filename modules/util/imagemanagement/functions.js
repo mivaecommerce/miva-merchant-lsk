@@ -7,31 +7,9 @@
 // Agreement is not allowed without a written agreement signed by an officer of
 // Miva, Inc.
 //
-// Copyright 1998-2024 Miva, Inc.  All rights reserved.
+// Copyright 1998-2026 Miva, Inc.  All rights reserved.
 // http://www.miva.com
 //
-
-function ImageManagement_ImageList_Load_Query( filter, sort, offset, count, callback, delegator )					
-{
-	return AJAX_Call_Module( callback, 'admin',
-							 'imagemanagement',
-							 'ImageManagement_ImageList_Load_Query',
-							 'Filter=' + EncodeArray( filter ) +
-							 '&Sort=' + encodeURIComponent( sort ) +
-							 '&Offset=' + encodeURIComponent( offset ) +
-							 '&Count=' + encodeURIComponent( count ),
-							 delegator );
-}
-
-function ImageManagement_Image_Delete( id, callback, delegator )
-{
-	return AJAX_Call_Module( callback,
-						     'admin',
-						     'imagemanagement',
-						     'ImageManagement_Image_Delete',
-						     'Image_ID=' + encodeURIComponent( id ),
-							 delegator );
-}
 
 function ImageManagement_ImageList_Delete_GeneratedImages( image_ids, callback )
 {
@@ -56,22 +34,6 @@ function ImageManagement_CheckForUpdatedGeneratedImages( last_generatedimage_id,
 		Last_GeneratedImage_ID: last_generatedimage_id
 	}, delegator );
 } 
-
-function ImageManagement_GeneratedImageList_Load_Image( image_id, callback )
-{
-	return AJAX_Call_Module( callback, 'admin',
-							 'imagemanagement',
-							 'ImageManagement_GeneratedImageList_Load_Image',
-							 'Image_ID=' + encodeURIComponent( image_id ) );
-}
-
-function ImageManagement_GeneratedImageList_Delete( generatedimage_ids, callback )
-{
-	return AJAX_Call_Module( callback, 'admin',
-							 'imagemanagement',
-							 'ImageManagement_GeneratedImageList_Delete',
-							 'GeneratedImage_IDs=' + EncodeArray( generatedimage_ids ) );
-}
 
 function ImageManagement_PartitionImages( last_image_id, callback, delegator )
 {

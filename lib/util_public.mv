@@ -15,7 +15,7 @@
 | http://www.miva.com
 |
 | Prefix         : MER-UTL-PUB-
-| Next Error Code: 71
+| Next Error Code: 82
 |
 </MvCOMMENT>
 
@@ -3511,6 +3511,18 @@
 	<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00005', 'Unable to determine image file format' ) }">
 </MvFUNCTION>
 
+<MvFUNCTION NAME = "Image_Extension_From_Type" PARAMETERS = "type, extension var" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ l.type EQ 'gif' }">			<MvASSIGN NAME = "l.extension" VALUE = ".gif">
+	<MvELSEIF EXPR = "{ l.type EQ 'jpg' }">		<MvASSIGN NAME = "l.extension" VALUE = ".jpg">
+	<MvELSEIF EXPR = "{ l.type EQ 'png' }">		<MvASSIGN NAME = "l.extension" VALUE = ".png">
+	<MvELSEIF EXPR = "{ l.type EQ 'webp' }">	<MvASSIGN NAME = "l.extension" VALUE = ".webp">
+	<MvELSEIF EXPR = "{ l.type EQ 'avif' }">	<MvASSIGN NAME = "l.extension" VALUE = ".avif">
+	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00071', 'Unsupported image type \'' $ l.type $ '\'' ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = 1>
+</MvFUNCTION>
+
 <MvFUNCTION NAME = "Image_gdCreateFromFile" PARAMETERS = "filepath, location" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT Image_Type( l.filepath, l.location, l.type ) }">
 		<MvFUNCTIONRETURN VALUE = 0>
@@ -3545,13 +3557,36 @@
 
 <MvFUNCTION NAME = "Image_gdSaveToFile_Type" PARAMETERS = "gd_image var, type, filepath, location" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ gdClearLastError() }">
-	
-	<MvIF EXPR = "{ l.type EQ 'jpg' }">			<MvASSIGN NAME = "l.result" VALUE = "{ gdImageJpeg( l.gd_image, l.filepath, l.location, g.Domain:img_qual ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'jpg' }">			<MvASSIGN NAME = "l.result" VALUE = "{ gdImageJpeg( l.gd_image, l.filepath, l.location, g.Domain:jpg_qual ) }">
 	<MvELSEIF EXPR = "{ l.type EQ 'gif' }">		<MvASSIGN NAME = "l.result" VALUE = "{ gdImageGif( l.gd_image, l.filepath, l.location ) }">
 	<MvELSEIF EXPR = "{ l.type EQ 'png' }">		<MvASSIGN NAME = "l.result" VALUE = "{ gdImagePng( l.gd_image, l.filepath, l.location ) }">
-	<MvELSEIF EXPR = "{ l.type EQ 'webp' }">	<MvASSIGN NAME = "l.result" VALUE = "{ gdImageWebp( l.gd_image, l.filepath, l.location, g.Domain:img_qual ) }">
-	<MvELSEIF EXPR = "{ l.type EQ 'avif' }">	<MvASSIGN NAME = "l.result" VALUE = "{ gdImageAvif( l.gd_image, l.filepath, l.location, g.Domain:img_qual, 6 ) }">
-	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00008', 'Unknown or unsupported image type' ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'webp' }">
+		<MvIF EXPR = "{ NOT gdImageTrueColor( l.gd_image ) }">
+			<MvIF EXPR = "{ gdImagePaletteToTrueColor( l.gd_image ) LE 0 }">
+				<MvASSIGN NAME = "l.gd_error_message"	VALUE = "{ gdLastError() }">
+
+				<MvIF EXPR = "{ ISNULL l.gd_error_message }">	<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00072', 'Unable to convert palette image to true color' ) }">
+				<MvELSE>										<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00073', l.gd_error_message ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.result" VALUE = "{ gdImageWebp( l.gd_image, l.filepath, l.location, g.Domain:webp_qual ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'avif' }">
+		<MvIF EXPR = "{ NOT gdImageTrueColor( l.gd_image ) }">
+			<MvIF EXPR = "{ gdImagePaletteToTrueColor( l.gd_image ) LE 0 }">
+				<MvASSIGN NAME = "l.gd_error_message"	VALUE = "{ gdLastError() }">
+
+				<MvIF EXPR = "{ ISNULL l.gd_error_message }">	<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00076', 'Unable to convert palette image to true color' ) }">
+				<MvELSE>										<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00077', l.gd_error_message ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.result" VALUE = "{ gdImageAvif( l.gd_image, l.filepath, l.location, g.Domain:avif_qual, g.Domain:avif_speed ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00008', 'Unknown or unsupported image type' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ l.result LT 0 }">
@@ -3564,18 +3599,49 @@
 		</MvIF>
 	</MvIF>
 
+	<MvIF EXPR = "{ l.location EQ 'script' }">	<MvASSIGN NAME = "l.size" VALUE = "{ ssize( l.filepath ) }">
+	<MvELSE>									<MvASSIGN NAME = "l.size" VALUE = "{ fsize( l.filepath ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ l.size LE 0 }">
+		<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00074', 'Unable to write destination file' ) }">
+	</MvIF>
+
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Image_gdSaveToMemory_Type" PARAMETERS = "gd_image var, type, buffer var" STANDARDOUTPUTLEVEL = "">
 	<MvEVAL EXPR = "{ gdClearLastError() }">
-	
-	<MvIF EXPR = "{ l.type EQ 'jpg' }">			<MvASSIGN NAME = "l.result" VALUE = "{ gdImageJpegMem( l.gd_image, l.buffer, g.Domain:img_qual ) }">
+
+	<MvIF EXPR = "{ l.type EQ 'jpg' }">			<MvASSIGN NAME = "l.result" VALUE = "{ gdImageJpegMem( l.gd_image, l.buffer, g.Domain:jpg_qual ) }">
 	<MvELSEIF EXPR = "{ l.type EQ 'gif' }">		<MvASSIGN NAME = "l.result" VALUE = "{ gdImageGifMem( l.gd_image, l.buffer ) }">
 	<MvELSEIF EXPR = "{ l.type EQ 'png' }">		<MvASSIGN NAME = "l.result" VALUE = "{ gdImagePngMem( l.gd_image, l.buffer ) }">
-	<MvELSEIF EXPR = "{ l.type EQ 'webp' }">	<MvASSIGN NAME = "l.result" VALUE = "{ gdImageWebpMem( l.gd_image, l.buffer, g.Domain:img_qual ) }">
-	<MvELSEIF EXPR = "{ l.type EQ 'avif' }">	<MvASSIGN NAME = "l.result" VALUE = "{ gdImageAvifMem( l.gd_image, l.buffer, g.Domain:img_qual, 6 ) }">
-	<MvELSE>									<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00010', 'Unknown or unsupported image type' ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'webp' }">
+		<MvIF EXPR = "{ NOT gdImageTrueColor( l.gd_image ) }">
+			<MvIF EXPR = "{ gdImagePaletteToTrueColor( l.gd_image ) LE 0 }">
+				<MvASSIGN NAME = "l.gd_error_message"	VALUE = "{ gdLastError() }">
+
+				<MvIF EXPR = "{ ISNULL l.gd_error_message }">	<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00078', 'Unable to convert palette image to true color' ) }">
+				<MvELSE>										<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00079', l.gd_error_message ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.result" VALUE = "{ gdImageWebpMem( l.gd_image, l.buffer, g.Domain:webp_qual ) }">
+	<MvELSEIF EXPR = "{ l.type EQ 'avif' }">
+		<MvIF EXPR = "{ NOT gdImageTrueColor( l.gd_image ) }">
+			<MvIF EXPR = "{ gdImagePaletteToTrueColor( l.gd_image ) LE 0 }">
+				<MvASSIGN NAME = "l.gd_error_message"	VALUE = "{ gdLastError() }">
+
+				<MvIF EXPR = "{ ISNULL l.gd_error_message }">	<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00080', 'Unable to convert palette image to true color' ) }">
+				<MvELSE>										<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00081', l.gd_error_message ) }">
+				</MvIF>
+			</MvIF>
+		</MvIF>
+
+		<MvASSIGN NAME = "l.result" VALUE = "{ gdImageAvifMem( l.gd_image, l.buffer, g.Domain:avif_qual, g.Domain:avif_speed ) }">
+	<MvELSE>
+		<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00010', 'Unknown or unsupported image type' ) }">
 	</MvIF>
 
 	<MvIF EXPR = "{ l.result LT 0 }">
@@ -3586,6 +3652,10 @@
 		<MvELSEIF EXPR = "{ l.type EQ 'avif' AND ( 'unable to load function' CIN l.gd_error_message ) }">	<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00063', 'Miva now supports AVIF, however, an underlying dependency has not yet been installed.  Please contact support to have this prioritized on your account.' ) }">
 		<MvELSE>																							<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00011', l.gd_error_message ) }">
 		</MvIF>
+	</MvIF>
+
+	<MvIF EXPR = "{ ISNULL l.buffer }">
+		<MvFUNCTIONRETURN VALUE = "{ Error( 'MER-UTL-PUB-00075', 'Unable to write image to memory' ) }">
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
@@ -3886,32 +3956,11 @@
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "Image_ResizeIntoBoundingBox_gdImage" PARAMETERS = "source_gdimage var, max_width, max_height, output_gdimage var, output_width var, output_height var" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.max_width"				VALUE = "{ int( l.max_width ) }">
-	<MvASSIGN NAME = "l.max_height"				VALUE = "{ int( l.max_height ) }">
-
-    <MvASSIGN NAME = "l.source_width"			VALUE = "{ gdImageSX( l.source_gdimage ) }">
+	<MvASSIGN NAME = "l.source_width"			VALUE = "{ gdImageSX( l.source_gdimage ) }">
 	<MvASSIGN NAME = "l.source_height"			VALUE = "{ gdImageSY( l.source_gdimage ) }">
 	<MvASSIGN NAME = "l.source_truecolor"		VALUE = "{ gdImageTrueColor( l.source_gdimage ) }">
 
-	<MvASSIGN NAME = "l.x_ratio"				VALUE = "{ l.max_width / l.source_width }">
-	<MvASSIGN NAME = "l.y_ratio"				VALUE = "{ l.max_height / l.source_height }">
-
-	<MvIF EXPR = "{ l.x_ratio LT l.y_ratio }">
-		<MvASSIGN NAME = "l.output_width"		VALUE = "{ l.max_width }">
-		<MvASSIGN NAME = "l.output_height"		VALUE = "{ ( l.source_height * l.x_ratio ) ROUND 0 }">
-	<MvELSE>
-		<MvASSIGN NAME = "l.output_width"		VALUE = "{ ( l.source_width * l.y_ratio ) ROUND 0 }">
-		<MvASSIGN NAME = "l.output_height"		VALUE = "{ l.max_height }">
-	</MvIF>
-
-	<MvCOMMENT>
-	|
-	| Prevent the ROUND operations above from rounding to a value greater than the maximum allowed
-	|
-	</MvCOMMENT>
-
-	<MvIF EXPR = "{ l.output_width GT l.max_width }">	<MvASSIGN NAME = "l.output_width"	VALUE = "{ l.max_width }">	</MvIF>
-	<MvIF EXPR = "{ l.output_height GT l.max_height }">	<MvASSIGN NAME = "l.output_height"	VALUE = "{ l.max_height }">	</MvIF>
+	<MvEVAL EXPR = "{ Image_BoundingBox_Dimensions( l.source_width, l.source_height, l.max_width, l.max_height, l.output_width, l.output_height ) }">
 
 	<MvEVAL EXPR = "{ gdClearLastError() }">
 	<MvASSIGN NAME = "l.gd_error"				VALUE = 1>
@@ -3983,6 +4032,40 @@
 	<MvASSIGN NAME = "l.null"				VALUE = "{ gdImageDestroy( l.output_gdimage ) }">
 
 	<MvFUNCTIONRETURN VALUE = "{ l.result }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_Size_CanBeDeferred" PARAMETERS = "width, height" STANDARDOUTPUTLEVEL = "">
+	<MvIF EXPR = "{ ISNULL g.Session:cache:deferred_image_sizes }">
+		<MvASSIGN NAME = "l.null" VALUE = "{ miva_json_decode( '[ { "width": 2560,	"height": 2560 },
+																  { "width": 1920,	"height": 1920 },
+																  { "width": 1440,	"height": 1440 },
+																  { "width": 1290,	"height": 1290 },
+																  { "width": 1100,	"height": 1100 },
+																  { "width": 828,	"height": 828 },
+																  { "width": 640,	"height": 640 },
+																  { "width": 480,	"height": 480 },
+																  { "width": 320,	"height": 320 },
+																  { "width": 240,	"height": 240 } ]',
+																g.Session:cache:deferred_image_sizes ) }">
+	</MvIF>
+
+	<MvFUNCTIONRETURN VALUE = "{ miva_array_search( g.Session:cache:deferred_image_sizes, 1, l.size, 'l.size:width EQ l.width AND l.size:height EQ l.height' ) GT 0 }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Image_BoundingBox_Dimensions" PARAMETERS = "source_width, source_height, max_width, max_height, output_width var, output_height var" STANDARDOUTPUTLEVEL = "">
+	<MvASSIGN NAME = "l.max_width"				VALUE = "{ int( l.max_width ) }">
+	<MvASSIGN NAME = "l.max_height"				VALUE = "{ int( l.max_height ) }">
+
+	<MvASSIGN NAME = "l.x_ratio"				VALUE = "{ l.max_width / l.source_width }">
+	<MvASSIGN NAME = "l.y_ratio"				VALUE = "{ l.max_height / l.source_height }">
+
+	<MvIF EXPR = "{ l.x_ratio LT l.y_ratio }">
+		<MvASSIGN NAME = "l.output_width"		VALUE = "{ l.max_width }">
+		<MvASSIGN NAME = "l.output_height"		VALUE = "{ min( ( l.source_height * l.x_ratio ) ROUND 0, l.max_height ) }">
+	<MvELSE>
+		<MvASSIGN NAME = "l.output_width"		VALUE = "{ min( ( l.source_width * l.y_ratio ) ROUND 0, l.max_width ) }">
+		<MvASSIGN NAME = "l.output_height"		VALUE = "{ l.max_height }">
+	</MvIF>
 </MvFUNCTION>
 
 <MvFUNCTION NAME = "GetBasehrefPath" PARAMETERS = "" STANDARDOUTPUTLEVEL = "">

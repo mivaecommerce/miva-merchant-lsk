@@ -11,7 +11,7 @@
 | Agreement is not allowed without a written agreement signed by an officer of
 | Miva, Inc.
 |
-| Copyright 1998-2025 Miva, Inc.  All rights reserved.
+| Copyright 1998-2026 Miva, Inc.  All rights reserved.
 | http://www.miva.com
 |
 | Prefix         : MER-INV-RNT-
@@ -202,7 +202,7 @@
 	</MvIF>
 
 	<MvASSIGN NAME = "l.invprod_pos"			VALUE = 1>
-	<MvWHILE EXPR = "{ l.invprod_pos LE L.invprod_count }">
+	<MvWHILE EXPR = "{ l.invprod_pos LE l.invprod_count }">
 		<MvIF EXPR = "{ NOT Inventory_Adjust_LowLevel( l.invprods[ l.invprod_pos ], l.adjustment * l.invprods[ l.invprod_pos ]:quantity ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
 		</MvIF>
@@ -302,32 +302,38 @@
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Inventory_Check_Available_Variant" PARAMETERS = "product var, variant_id, quantity" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.invprod_count"			VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.invprods ) }">
-	<MvIF EXPR = "{ l.invprod_count EQ 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
+<MvFUNCTION NAME = "Inventory_Check_Available_Variant" PARAMETERS = "product, variant_id, quantity" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| The product structure is purposefully not passed by reference as the call to Inventory_Load_Variant_LowLevel will modify
+	| product members that are necessary for this function but should not be exposed to the caller
+	|
+	</MvCOMMENT>
 
-		<MvASSIGN NAME = "l.result"	VALUE = "{ Inventory_Check_Available_LowLevel( l.product, l.quantity ) }">
-		<MvIF EXPR = "{ l.result LT 0 }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ l.result EQ 0 }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		</MvIF>
+	<MvIF EXPR = "{ NOT Inventory_Load_Variant_LowLevel( l.product, l.variant_id, l.messages ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.invprod_pos"			VALUE = 1>
-	<MvWHILE EXPR = "{ l.invprod_pos LE L.invprod_count }">
-		<MvASSIGN NAME = "l.result" VALUE = "{ Inventory_Check_Available_LowLevel( l.invprods[ l.invprod_pos ], l.quantity * l.invprods[ l.invprod_pos ]:quantity ) }">
-		<MvIF EXPR = "{ l.result LT 0 }">
+	<MvIF EXPR = "{ NOT l.product:inv_active OR
+					NOT l.product:inv_out_track }">
+		<MvFUNCTIONRETURN VALUE = 1>
+	</MvIF>
+
+	<MvIF EXPR = "{ ( l.product:inv_available LE 0 ) AND ( l.quantity GT 0 ) }">
+		<MvASSIGN NAME = "l.message" VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:out_long ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( l.message ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Merchant ].UIException( 'inventory_out' ) }">
 			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ l.result EQ 0 }">
-			<MvFUNCTIONRETURN VALUE = 1>
 		</MvIF>
-		
-		<MvASSIGN NAME = "l.invprod_pos"		VALUE = "{ l.invprod_pos + 1 }">
-	</MvWHILE>
+	<MvELSEIF EXPR = "{ l.product:inv_available LT l.quantity }">
+		<MvASSIGN NAME = "l.message" VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:ltd_long ) }">
+
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( l.message ) }">
+		<MvIF EXPR = "{ NOT [ g.Module_Merchant ].UIException( 'inventory_limited' ) }">
+			<MvFUNCTIONRETURN VALUE = 0>
+		</MvIF>
+	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
@@ -391,91 +397,92 @@
 	<MvFUNCTIONRETURN VALUE = 0>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Inventory_Is_Available_Variant" PARAMETERS = "product var, variant_id, quantity" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.invprod_count"			VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.invprods ) }">
-	<MvIF EXPR = "{ l.invprod_count EQ 0 }">
-		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		</MvIF>
+<MvFUNCTION NAME = "Inventory_Is_Available_Variant" PARAMETERS = "product, variant_id, quantity" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| The product structure is purposefully not passed by reference as the call to Inventory_Load_Variant_LowLevel will modify
+	| product members that are necessary for this function but should not be exposed to the caller
+	|
+	</MvCOMMENT>
 
-		<MvASSIGN NAME = "l.result"	VALUE = "{ Inventory_Is_Available_LowLevel( l.product, l.quantity ) }">
-		<MvIF EXPR = "{ l.result LT 0 }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ l.result EQ 0 }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		</MvIF>
+	<MvIF EXPR = "{ NOT Inventory_Load_Variant_LowLevel( l.product, l.variant_id, l.messages ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
-	<MvASSIGN NAME = "l.invprod_pos"			VALUE = 1>
-	<MvWHILE EXPR = "{ l.invprod_pos LE L.invprod_count }">
-		<MvASSIGN NAME = "l.result" VALUE = "{ Inventory_Is_Available_LowLevel( l.invprods[ l.invprod_pos ], l.quantity * l.invprods[ l.invprod_pos ]:quantity ) }">
-		<MvIF EXPR = "{ l.result LT 0 }">
-			<MvFUNCTIONRETURN VALUE = 0>
-		<MvELSEIF EXPR = "{ l.result EQ 0 }">
-			<MvFUNCTIONRETURN VALUE = 1>
-		</MvIF>
-		
-		<MvASSIGN NAME = "l.invprod_pos"		VALUE = "{ l.invprod_pos + 1 }">
-	</MvWHILE>
-
-	<MvFUNCTIONRETURN VALUE = 1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "Inventory_Is_Available_LowLevel" PARAMETERS = "product var, quantity" STANDARDOUTPUTLEVEL = "">
 	<MvIF EXPR = "{ NOT l.product:inv_active OR
 					NOT l.product:inv_out_track }">
 		<MvFUNCTIONRETURN VALUE = 1>
 	</MvIF>
 
-	<MvIF EXPR = "{ ( l.product:inv_available LE 0 ) AND ( l.quantity GT 0 ) }">	<MvFUNCTIONRETURN VALUE = "{ Inventory_Is_Available_Report_Inventory_Out( l.product ) }">
-	<MvELSEIF EXPR = "{ l.product:inv_available LT l.quantity }">					<MvFUNCTIONRETURN VALUE = "{ Inventory_Is_Available_Report_Inventory_Limited( l.product ) }">
+	<MvIF EXPR = "{ ( l.product:inv_available LE 0 ) AND ( l.quantity GT 0 ) }">
+		<MvASSIGN NAME = "l.message" VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:out_long ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( l.message ) }">
+
+		<MvFUNCTIONRETURN VALUE = 0>
+	<MvELSEIF EXPR = "{ l.product:inv_available LT l.quantity }">
+		<MvASSIGN NAME = "l.message" VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:ltd_long ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( l.message ) }">
+
+		<MvFUNCTIONRETURN VALUE = 0>
 	</MvIF>
 
 	<MvFUNCTIONRETURN VALUE = 1>
 </MvFUNCTION>
 
-<MvFUNCTION NAME = "Inventory_Is_Available_Report_Inventory_Out" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.product:id, l.ips ) }">
-		<MvFUNCTIONRETURN VALUE = -1>
-	</MvIF>
-
-	<MvIF EXPR = "{ len( l.ips:out_long ) }">
-		<MvASSIGN NAME = "l.message"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.ips:out_long ) }">
-	<MvELSE>
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.settings ) }">
-			<MvFUNCTIONRETURN VALUE = -1>
-		</MvIF>
-
-		<MvASSIGN NAME = "l.message"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.settings:out_long ) }">
-	</MvIF>
-
-	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( l.message ) }">
-
-	<MvFUNCTIONRETURN VALUE = -1>
-</MvFUNCTION>
-
-<MvFUNCTION NAME = "Inventory_Is_Available_Report_Inventory_Limited" PARAMETERS = "product var" STANDARDOUTPUTLEVEL = "">
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.product:id, l.ips ) }">
-		<MvFUNCTIONRETURN VALUE = -1>
-	</MvIF>
-
-	<MvIF EXPR = "{ len( l.ips:ltd_long ) }">
-		<MvASSIGN NAME = "l.message"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.ips:ltd_long ) }">
-	<MvELSE>
-		<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.settings ) }">
-			<MvFUNCTIONRETURN VALUE = -1>
-		</MvIF>
-
-		<MvASSIGN NAME = "l.message"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.settings:ltd_long ) }">
-	</MvIF>
-
-	<MvEVAL EXPR = "{ [ g.Module_Library_Utilities ].Message_Error( l.message ) }">
-
-	<MvFUNCTIONRETURN VALUE = -1>
-</MvFUNCTION>
-
 <MvFUNCTION NAME = "Inventory_Load_Variant" PARAMETERS = "product var, variant_id" STANDARDOUTPUTLEVEL = "">
-	<MvASSIGN NAME = "l.invprod_count"					VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.invprods ) }">
+	<MvFUNCTIONRETURN VALUE = "{ Inventory_Load_Variant_LowLevel( l.product, l.variant_id, l.messages ) }">
+</MvFUNCTION>
+
+<MvFUNCTION NAME = "Inventory_Load_Variant_LowLevel" PARAMETERS = "product var, variant_id, messages var" STANDARDOUTPUTLEVEL = "">
+	<MvCOMMENT>
+	|
+	| Reload the raw settings for the master product so we can provide the raw messages
+	|
+	</MvCOMMENT>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.global_settings ) }">
+		<MvFUNCTIONRETURN VALUE = 0>
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.product:id, l.product_settings ) }">
+		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.product_settings ) }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:in_short }">		<MvASSIGN NAME = "l.messages:in_short"	VALUE = "{ l.product_settings:in_short }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:in_short"	VALUE = "{ l.global_settings:in_short }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:in_long }">		<MvASSIGN NAME = "l.messages:in_long"	VALUE = "{ l.product_settings:in_long }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:in_long"	VALUE = "{ l.global_settings:in_long }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:low_short }">		<MvASSIGN NAME = "l.messages:low_short"	VALUE = "{ l.product_settings:low_short }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:low_short"	VALUE = "{ l.global_settings:low_short }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:low_long }">		<MvASSIGN NAME = "l.messages:low_long"	VALUE = "{ l.product_settings:low_long }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:low_long"	VALUE = "{ l.global_settings:low_long }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:out_short }">		<MvASSIGN NAME = "l.messages:out_short"	VALUE = "{ l.product_settings:out_short }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:out_short"	VALUE = "{ l.global_settings:out_short }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:out_long }">		<MvASSIGN NAME = "l.messages:out_long"	VALUE = "{ l.product_settings:out_long }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:out_long"	VALUE = "{ l.global_settings:out_long }">
+	</MvIF>
+
+	<MvIF EXPR = "{ NOT ISNULL l.product_settings:ltd_long }">		<MvASSIGN NAME = "l.messages:ltd_long"	VALUE = "{ l.product_settings:ltd_long }">
+	<MvELSE>														<MvASSIGN NAME = "l.messages:ltd_long"	VALUE = "{ l.global_settings:ltd_long }">
+	</MvIF>
+
+	<MvCOMMENT>
+	|
+	| Load variant parts and determine if we are handling variant inventory or not
+	|
+	</MvCOMMENT>
+
+	<MvASSIGN NAME = "l.invprod_count" VALUE = "{ [ g.Module_Library_DB ].ProductList_Load_Variant( l.product:id, l.variant_id, l.invprods ) }">
 	<MvIF EXPR = "{ l.invprod_count EQ 0 }">
 		<MvIF EXPR = "{ NOT [ g.Module_Library_DB ].Error_Is_EOF() }">
 			<MvFUNCTIONRETURN VALUE = 0>
@@ -492,42 +499,34 @@
 
 	<MvCOMMENT>
 	|
-	| Reload the raw settings for the master product so we can reformat the messages
+	| Reset tracking levels from product/global settings
 	|
 	</MvCOMMENT>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventorySettings_Load_Cached( l.global_settings ) }">
-		<MvFUNCTIONRETURN VALUE = 0>
+	<MvIF EXPR = "{ ( l.product_settings:out_track EQ 'y' ) OR ( ( l.product_settings:out_track EQ 'd' ) AND ( l.global_settings:out_track ) ) }">
+		<MvASSIGN NAME = "l.product:inv_out_track"		VALUE = 1>
+
+		<MvIF EXPR = "{ l.product_settings:out_lvl_d }">
+			<MvASSIGN NAME = "l.product:inv_out_level"	VALUE = "{ l.global_settings:out_level }">
+		<MvELSE>
+			<MvASSIGN NAME = "l.product:inv_out_level"	VALUE = "{ l.product_settings:out_level }">
+		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.product:inv_out_track"		VALUE = 0>
+		<MvASSIGN NAME = "l.product:inv_out_level"		VALUE = 0>
 	</MvIF>
 
-	<MvIF EXPR = "{ NOT [ g.Module_Feature_INV_DB ].InventoryProductSettings_Load( l.product:id, l.product_settings ) }">
-		<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.product_settings ) }">
+	<MvIF EXPR = "{ ( l.product_settings:low_track EQ 'y' ) OR ( ( l.product_settings:low_track EQ 'd' ) AND ( l.global_settings:low_track ) ) }">
+		<MvASSIGN NAME = "l.product:inv_low_track"		VALUE = 1>
 
-		<MvIF EXPR = "{ ( l.product_settings:out_track EQ 'y' ) OR ( ( l.product_settings:out_track EQ 'd' ) AND ( l.global_settings:out_track ) ) }">
-			<MvASSIGN NAME = "l.product:inv_out_track"		VALUE = 1>
-
-			<MvIF EXPR = "{ l.product_settings:out_lvl_d }">
-				<MvASSIGN NAME = "l.product:inv_out_level"	VALUE = "{ l.global_settings:out_level }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_out_level"	VALUE = "{ l.product_settings:out_level }">
-			</MvIF>
+		<MvIF EXPR = "{ l.product_settings:low_lvl_d }">
+			<MvASSIGN NAME = "l.product:inv_low_level"	VALUE = "{ l.global_settings:low_level }">
 		<MvELSE>
-			<MvASSIGN NAME = "l.product:inv_out_track"		VALUE = 0>
-			<MvASSIGN NAME = "l.product:inv_out_level"		VALUE = 0>
+			<MvASSIGN NAME = "l.product:inv_low_level"	VALUE = "{ l.product_settings:low_level }">
 		</MvIF>
-
-		<MvIF EXPR = "{ ( l.product_settings:low_track EQ 'y' ) OR ( ( l.product_settings:low_track EQ 'd' ) AND ( l.global_settings:low_track ) ) }">
-			<MvASSIGN NAME = "l.product:inv_low_track"		VALUE = 1>
-
-			<MvIF EXPR = "{ l.product_settings:low_lvl_d }">
-				<MvASSIGN NAME = "l.product:inv_low_level"	VALUE = "{ l.global_settings:low_level }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_low_level"	VALUE = "{ l.product_settings:low_level }">
-			</MvIF>
-		<MvELSE>
-			<MvASSIGN NAME = "l.product:inv_low_track"		VALUE = 0>
-			<MvASSIGN NAME = "l.product:inv_low_level"		VALUE = 0>
-		</MvIF>
+	<MvELSE>
+		<MvASSIGN NAME = "l.product:inv_low_track"		VALUE = 0>
+		<MvASSIGN NAME = "l.product:inv_low_level"		VALUE = 0>
 	</MvIF>
 
 	<MvCOMMENT>
@@ -537,17 +536,34 @@
 	</MvCOMMENT>
 
 	<MvASSIGN NAME = "l.have_active"							VALUE = 0>
+	<MvASSIGN NAME = "l.invprod_low_track"						VALUE = 0>
+	<MvASSIGN NAME = "l.invprod_out_track"						VALUE = 0>
 
 	<MvFOREACH ITERATOR = "l.invprod" ARRAY = "l.invprods" COUNT = "{ l.invprod_count }">
 		<MvIF EXPR = "{ l.invprod:inv_active }">
+			<MvIF EXPR = "{ l.invprod:inv_low_track }">
+				<MvASSIGN NAME = "l.invprod_low_track"			VALUE = 1>
+			</MvIF>
+
+			<MvIF EXPR = "{ l.invprod:inv_out_track }">
+				<MvASSIGN NAME = "l.invprod_out_track"			VALUE = 1>
+			</MvIF>
+
 			<MvASSIGN NAME = "l.invprod_available_partlimits"	VALUE = "{ int( l.invprod:inv_available / l.invprod:quantity ) }">
 			<MvASSIGN NAME = "l.invprod_available_masterlimits"	VALUE = "{ int( ( l.invprod:inv_available + l.invprod:inv_out_level - l.product:inv_out_level ) / l.invprod:quantity ) }">
 
 			<MvASSIGN NAME = "l.invprod_instock_partlimits"		VALUE = "{ int( l.invprod:inv_instock / l.invprod:quantity ) }">
 			<MvASSIGN NAME = "l.invprod_instock_masterlimits"	VALUE = "{ int( ( l.invprod:inv_instock + l.invprod:inv_low_level - l.product:inv_low_level ) / l.invprod:quantity ) }">
 
-			<MvASSIGN NAME = "l.invprod_available"				VALUE = "{ min( l.invprod_available_partlimits, l.invprod_available_masterlimits ) }">
-			<MvASSIGN NAME = "l.invprod_instock"				VALUE = "{ min( l.invprod_instock_partlimits, l.invprod_instock_masterlimits ) }">
+			<MvIF EXPR = "{ l.product_settings:active	AND
+							l.product:inv_low_track		AND
+							l.product:inv_out_track }">
+				<MvASSIGN NAME = "l.invprod_available"			VALUE = "{ min( l.invprod_available_partlimits, l.invprod_available_masterlimits ) }">
+				<MvASSIGN NAME = "l.invprod_instock"			VALUE = "{ min( l.invprod_instock_partlimits, l.invprod_instock_masterlimits ) }">
+			<MvELSE>
+				<MvASSIGN NAME = "l.invprod_available"			VALUE = "{ l.invprod_available_partlimits }">
+				<MvASSIGN NAME = "l.invprod_instock"			VALUE = "{ l.invprod_instock_partlimits }">
+			</MvIF>
 
 			<MvIF EXPR = "{ l.have_active }">
 				<MvASSIGN NAME = "l.min_available"				VALUE = "{ min( l.min_available, l.invprod_available ) }">
@@ -566,6 +582,9 @@
 		<MvASSIGN NAME = "l.product:inv_available"		VALUE = 0>
 		<MvASSIGN NAME = "l.product:inv_instock"		VALUE = 0>
 	<MvELSE>
+		<MvASSIGN NAME = "l.product:inv_out_track"		VALUE = "{ ( l.product:inv_active AND l.product:inv_out_track ) OR l.invprod_out_track }">
+		<MvASSIGN NAME = "l.product:inv_low_track"		VALUE = "{ ( l.product:inv_active AND l.product:inv_low_track ) OR l.invprod_low_track }">
+
 		<MvASSIGN NAME = "l.product:inv_active"			VALUE = 1>
 		<MvASSIGN NAME = "l.product:inv_available"		VALUE = "{ l.min_available }">
 		<MvASSIGN NAME = "l.product:inv_instock"		VALUE = "{ l.min_instock }">
@@ -578,62 +597,31 @@
 
 				<MvEVAL EXPR = "{ [ g.Module_Feature_INV_DB ].InventoryDefaultProductSettings( l.invprod_product_settings ) }">
 			</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:in_long }">	<MvASSIGN NAME = "l.messages:in_long"	VALUE = "{ l.invprod_product_settings:in_long }">	</MvIF>
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:in_short }">	<MvASSIGN NAME = "l.messages:in_short"	VALUE = "{ l.invprod_product_settings:in_short }">	</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:low_long }">	<MvASSIGN NAME = "l.messages:low_long"	VALUE = "{ l.invprod_product_settings:low_long }">	</MvIF>
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:low_short }">	<MvASSIGN NAME = "l.messages:low_short"	VALUE = "{ l.invprod_product_settings:low_short }">	</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:out_long }">	<MvASSIGN NAME = "l.messages:out_long"	VALUE = "{ l.invprod_product_settings:out_long }">	</MvIF>
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:out_short }">	<MvASSIGN NAME = "l.messages:out_short"	VALUE = "{ l.invprod_product_settings:out_short }">	</MvIF>
+
+			<MvIF EXPR = "{ NOT ISNULL l.invprod_product_settings:ltd_long }">	<MvASSIGN NAME = "l.messages:ltd_long"	VALUE = "{ l.invprod_product_settings:ltd_long }">	</MvIF>
 		</MvIF>
 
-		<MvIF EXPR = "{ ( l.product:inv_available LE 0 ) AND l.product:inv_out_track }">
+		<MvIF EXPR = "{ ( l.product:inv_available LE 0 ) AND ( l.product:inv_out_track OR l.invprod_out_track ) }">
 			<MvASSIGN NAME = "l.product:inv_level"		VALUE = "out">
-
-			<MvIF EXPR = "{ ( l.invprod_count EQ 1 ) AND ( NOT ISNULL l.invprod_product_settings:out_short ) }">
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.invprod_product_settings:out_short ) }">
-			<MvELSEIF EXPR = "{ NOT ISNULL l.product_settings:out_short }">
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.product_settings:out_short ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.global_settings:out_short ) }">
-			</MvIF>
-
-			<MvIF EXPR = "{ ( l.invprod_count EQ 1 ) AND ( NOT ISNULL l.invprod_product_settings:out_long ) }">
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.invprod_product_settings:out_long ) }">
-			<MvELSEIF EXPR = "{ NOT ISNULL l.product_settings:out_long }">
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.product_settings:out_long ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.global_settings:out_long ) }">
-			</MvIF>
-		<MvELSEIF EXPR = "{ ( l.product:inv_instock LE 0 ) AND l.product:inv_low_track }">
+			<MvASSIGN NAME = "l.product:inv_short"		VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:out_short ) }">
+			<MvASSIGN NAME = "l.product:inv_long"		VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:out_long ) }">
+		<MvELSEIF EXPR = "{ ( l.product:inv_instock LE 0 ) AND ( l.product:inv_low_track OR l.invprod_low_track ) }">
 			<MvASSIGN NAME = "l.product:inv_level"		VALUE = "low">
-
-			<MvIF EXPR = "{ ( l.invprod_count EQ 1 ) AND ( NOT ISNULL l.invprod_product_settings:low_short ) }">
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.invprod_product_settings:low_short ) }">
-			<MvELSEIF EXPR = "{ NOT ISNULL l.product_settings:low_short }">
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.product_settings:low_short ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.global_settings:low_short ) }">
-			</MvIF>
-
-			<MvIF EXPR = "{ ( l.invprod_count EQ 1 ) AND ( NOT ISNULL l.invprod_product_settings:low_long ) }">
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.invprod_product_settings:low_long ) }">
-			<MvELSEIF EXPR = "{ NOT ISNULL l.product_settings:low_long }">
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.product_settings:low_long ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.global_settings:low_long ) }">
-			</MvIF>
+			<MvASSIGN NAME = "l.product:inv_short"		VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:low_short ) }">
+			<MvASSIGN NAME = "l.product:inv_long"		VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:low_long ) }">
 		<MvELSE>
 			<MvASSIGN NAME = "l.product:inv_level"		VALUE = "in">
-
-			<MvIF EXPR = "{ ( l.invprod_count EQ 1 ) AND ( NOT ISNULL l.invprod_product_settings:in_short ) }">
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.invprod_product_settings:in_short ) }">
-			<MvELSEIF EXPR = "{ NOT ISNULL l.product_settings:in_short }">
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.product_settings:in_short ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_short"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.global_settings:in_short ) }">
-			</MvIF>
-
-			<MvIF EXPR = "{ ( l.invprod_count EQ 1 ) AND ( NOT ISNULL l.invprod_product_settings:in_long ) }">
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.invprod_product_settings:in_long ) }">
-			<MvELSEIF EXPR = "{ NOT ISNULL l.product_settings:in_long }">
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.product_settings:in_long ) }">
-			<MvELSE>
-				<MvASSIGN NAME = "l.product:inv_long"	VALUE = "{ Inventory_Tokenize_Message( l.product, l.global_settings:in_long ) }">
-			</MvIF>
+			<MvASSIGN NAME = "l.product:inv_short"		VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:in_short ) }">
+			<MvASSIGN NAME = "l.product:inv_long"		VALUE = "{ Inventory_Tokenize_Message( l.product, l.messages:in_long ) }">
 		</MvIF>
 	</MvIF>
 
